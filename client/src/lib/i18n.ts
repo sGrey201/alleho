@@ -1,0 +1,314 @@
+export type Language = 'ru' | 'de' | 'en';
+
+export const translations = {
+  ru: {
+    // Navigation & Common
+    home: 'Главная',
+    articles: 'Статьи',
+    admin: 'Администрирование',
+    login: 'Войти',
+    logout: 'Выйти',
+    search: 'Поиск',
+    searchPlaceholder: 'Поиск статей по тегам и ключевым словам...',
+    noResults: 'Ничего не найдено',
+    loading: 'Загрузка...',
+    error: 'Ошибка',
+    save: 'Сохранить',
+    cancel: 'Отмена',
+    delete: 'Удалить',
+    edit: 'Редактировать',
+    create: 'Создать',
+    
+    // Language Selection
+    selectLanguage: 'Выберите язык',
+    languagePrompt: 'Выберите предпочитаемый язык для интерфейса и контента',
+    russian: 'Русский',
+    german: 'Немецкий',
+    english: 'Английский',
+    
+    // Landing Page
+    welcomeTitle: 'Профессиональная платформа по гомеопатии',
+    welcomeSubtitle: 'Специализированные статьи о пациентах и препаратах',
+    loginToStart: 'Войдите, чтобы начать',
+    features: 'Возможности',
+    feature1Title: 'Экспертный контент',
+    feature1Description: 'Тщательно подобранные статьи о гомеопатических препаратах',
+    feature2Title: 'Портреты пациентов',
+    feature2Description: 'Подробные клинические случаи и наблюдения',
+    feature3Title: 'Мультиязычность',
+    feature3Description: 'Контент доступен на русском, немецком и английском языках',
+    
+    // Subscription
+    subscriptionActive: 'Подписка активна до',
+    trialActive: 'Пробный период активен',
+    daysRemaining: 'дней',
+    subscriptionExpired: 'Подписка истекла',
+    upgradePromptTitle: 'Требуется подписка',
+    upgradePromptDescription: 'Полный доступ к статьям доступен только подписчикам',
+    contactAdmin: 'Свяжитесь с администратором для продления подписки',
+    readMore: 'Читать далее',
+    previewOnly: 'Предварительный просмотр',
+    
+    // Articles
+    allArticles: 'Все статьи',
+    tags: 'Теги',
+    readingTime: 'мин чтения',
+    publishedOn: 'Опубликовано',
+    noArticles: 'Статей пока нет',
+    articleNotFound: 'Статья не найдена',
+    
+    // Admin
+    adminPanel: 'Панель администратора',
+    manageArticles: 'Управление статьями',
+    manageSubscriptions: 'Управление подписками',
+    createArticle: 'Создать статью',
+    editArticle: 'Редактировать статью',
+    deleteArticle: 'Удалить статью',
+    articleDeleted: 'Статья удалена',
+    articleSaved: 'Статья сохранена',
+    
+    // Article Editor
+    russianVersion: 'Русская версия',
+    germanVersion: 'Немецкая версия',
+    englishVersion: 'Английская версия',
+    title: 'Заголовок',
+    content: 'Содержание',
+    tagsPlaceholder: 'Добавьте теги (например: Arnica, Belladonna)',
+    publish: 'Опубликовать',
+    saveDraft: 'Сохранить черновик',
+    
+    // Subscription Management
+    allUsers: 'Все пользователи',
+    email: 'Email',
+    role: 'Роль',
+    status: 'Статус',
+    expiresAt: 'Истекает',
+    actions: 'Действия',
+    user: 'Пользователь',
+    adminRole: 'Администратор',
+    activeStatus: 'Активна',
+    expiredStatus: 'Истекла',
+    trialStatus: 'Пробная',
+    extendSubscription: 'Продлить подписку',
+    extend7Days: '+7 дней',
+    extend30Days: '+30 дней',
+    extend1Year: '+1 год',
+    setExpiration: 'Установить дату истечения',
+    subscriptionUpdated: 'Подписка обновлена',
+    never: 'Никогда',
+    
+    // Errors
+    unauthorized: 'Не авторизован',
+    unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',
+    somethingWrong: 'Что-то пошло не так',
+    tryAgain: 'Попробуйте снова',
+  },
+  de: {
+    // Navigation & Common
+    home: 'Startseite',
+    articles: 'Artikel',
+    admin: 'Verwaltung',
+    login: 'Anmelden',
+    logout: 'Abmelden',
+    search: 'Suche',
+    searchPlaceholder: 'Artikel nach Tags und Stichwörtern durchsuchen...',
+    noResults: 'Keine Ergebnisse gefunden',
+    loading: 'Wird geladen...',
+    error: 'Fehler',
+    save: 'Speichern',
+    cancel: 'Abbrechen',
+    delete: 'Löschen',
+    edit: 'Bearbeiten',
+    create: 'Erstellen',
+    
+    // Language Selection
+    selectLanguage: 'Sprache wählen',
+    languagePrompt: 'Wählen Sie Ihre bevorzugte Sprache für Benutzeroberfläche und Inhalt',
+    russian: 'Russisch',
+    german: 'Deutsch',
+    english: 'Englisch',
+    
+    // Landing Page
+    welcomeTitle: 'Professionelle Homöopathie-Plattform',
+    welcomeSubtitle: 'Spezialisierte Artikel über Patienten und Heilmittel',
+    loginToStart: 'Melden Sie sich an, um zu beginnen',
+    features: 'Funktionen',
+    feature1Title: 'Experteninhalt',
+    feature1Description: 'Sorgfältig kuratierte Artikel über homöopathische Mittel',
+    feature2Title: 'Patientenporträts',
+    feature2Description: 'Detaillierte klinische Fälle und Beobachtungen',
+    feature3Title: 'Mehrsprachigkeit',
+    feature3Description: 'Inhalte in Russisch, Deutsch und Englisch verfügbar',
+    
+    // Subscription
+    subscriptionActive: 'Abonnement aktiv bis',
+    trialActive: 'Testzeitraum aktiv',
+    daysRemaining: 'Tage',
+    subscriptionExpired: 'Abonnement abgelaufen',
+    upgradePromptTitle: 'Abonnement erforderlich',
+    upgradePromptDescription: 'Vollzugriff auf Artikel nur für Abonnenten verfügbar',
+    contactAdmin: 'Kontaktieren Sie den Administrator zur Verlängerung des Abonnements',
+    readMore: 'Weiterlesen',
+    previewOnly: 'Nur Vorschau',
+    
+    // Articles
+    allArticles: 'Alle Artikel',
+    tags: 'Tags',
+    readingTime: 'Min. Lesezeit',
+    publishedOn: 'Veröffentlicht am',
+    noArticles: 'Noch keine Artikel',
+    articleNotFound: 'Artikel nicht gefunden',
+    
+    // Admin
+    adminPanel: 'Admin-Panel',
+    manageArticles: 'Artikel verwalten',
+    manageSubscriptions: 'Abonnements verwalten',
+    createArticle: 'Artikel erstellen',
+    editArticle: 'Artikel bearbeiten',
+    deleteArticle: 'Artikel löschen',
+    articleDeleted: 'Artikel gelöscht',
+    articleSaved: 'Artikel gespeichert',
+    
+    // Article Editor
+    russianVersion: 'Russische Version',
+    germanVersion: 'Deutsche Version',
+    englishVersion: 'Englische Version',
+    title: 'Titel',
+    content: 'Inhalt',
+    tagsPlaceholder: 'Tags hinzufügen (z.B.: Arnica, Belladonna)',
+    publish: 'Veröffentlichen',
+    saveDraft: 'Entwurf speichern',
+    
+    // Subscription Management
+    allUsers: 'Alle Benutzer',
+    email: 'E-Mail',
+    role: 'Rolle',
+    status: 'Status',
+    expiresAt: 'Läuft ab',
+    actions: 'Aktionen',
+    user: 'Benutzer',
+    adminRole: 'Administrator',
+    activeStatus: 'Aktiv',
+    expiredStatus: 'Abgelaufen',
+    trialStatus: 'Testversion',
+    extendSubscription: 'Abonnement verlängern',
+    extend7Days: '+7 Tage',
+    extend30Days: '+30 Tage',
+    extend1Year: '+1 Jahr',
+    setExpiration: 'Ablaufdatum festlegen',
+    subscriptionUpdated: 'Abonnement aktualisiert',
+    never: 'Nie',
+    
+    // Errors
+    unauthorized: 'Nicht autorisiert',
+    unauthorizedDescription: 'Sie sind abgemeldet. Erneut anmelden...',
+    somethingWrong: 'Etwas ist schief gelaufen',
+    tryAgain: 'Erneut versuchen',
+  },
+  en: {
+    // Navigation & Common
+    home: 'Home',
+    articles: 'Articles',
+    admin: 'Administration',
+    login: 'Log In',
+    logout: 'Log Out',
+    search: 'Search',
+    searchPlaceholder: 'Search articles by tags and keywords...',
+    noResults: 'No results found',
+    loading: 'Loading...',
+    error: 'Error',
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    edit: 'Edit',
+    create: 'Create',
+    
+    // Language Selection
+    selectLanguage: 'Select Language',
+    languagePrompt: 'Choose your preferred language for interface and content',
+    russian: 'Russian',
+    german: 'German',
+    english: 'English',
+    
+    // Landing Page
+    welcomeTitle: 'Professional Homeopathy Platform',
+    welcomeSubtitle: 'Specialized articles about patients and remedies',
+    loginToStart: 'Log in to get started',
+    features: 'Features',
+    feature1Title: 'Expert Content',
+    feature1Description: 'Carefully curated articles about homeopathic remedies',
+    feature2Title: 'Patient Portraits',
+    feature2Description: 'Detailed clinical cases and observations',
+    feature3Title: 'Multilingual',
+    feature3Description: 'Content available in Russian, German, and English',
+    
+    // Subscription
+    subscriptionActive: 'Subscription active until',
+    trialActive: 'Trial period active',
+    daysRemaining: 'days',
+    subscriptionExpired: 'Subscription expired',
+    upgradePromptTitle: 'Subscription Required',
+    upgradePromptDescription: 'Full access to articles is available for subscribers only',
+    contactAdmin: 'Contact administrator to extend your subscription',
+    readMore: 'Read more',
+    previewOnly: 'Preview only',
+    
+    // Articles
+    allArticles: 'All Articles',
+    tags: 'Tags',
+    readingTime: 'min read',
+    publishedOn: 'Published on',
+    noArticles: 'No articles yet',
+    articleNotFound: 'Article not found',
+    
+    // Admin
+    adminPanel: 'Admin Panel',
+    manageArticles: 'Manage Articles',
+    manageSubscriptions: 'Manage Subscriptions',
+    createArticle: 'Create Article',
+    editArticle: 'Edit Article',
+    deleteArticle: 'Delete Article',
+    articleDeleted: 'Article deleted',
+    articleSaved: 'Article saved',
+    
+    // Article Editor
+    russianVersion: 'Russian Version',
+    germanVersion: 'German Version',
+    englishVersion: 'English Version',
+    title: 'Title',
+    content: 'Content',
+    tagsPlaceholder: 'Add tags (e.g., Arnica, Belladonna)',
+    publish: 'Publish',
+    saveDraft: 'Save Draft',
+    
+    // Subscription Management
+    allUsers: 'All Users',
+    email: 'Email',
+    role: 'Role',
+    status: 'Status',
+    expiresAt: 'Expires',
+    actions: 'Actions',
+    user: 'User',
+    adminRole: 'Administrator',
+    activeStatus: 'Active',
+    expiredStatus: 'Expired',
+    trialStatus: 'Trial',
+    extendSubscription: 'Extend Subscription',
+    extend7Days: '+7 days',
+    extend30Days: '+30 days',
+    extend1Year: '+1 year',
+    setExpiration: 'Set expiration date',
+    subscriptionUpdated: 'Subscription updated',
+    never: 'Never',
+    
+    // Errors
+    unauthorized: 'Unauthorized',
+    unauthorizedDescription: 'You are logged out. Logging in again...',
+    somethingWrong: 'Something went wrong',
+    tryAgain: 'Try again',
+  },
+};
+
+export function getTranslation(lang: Language, key: keyof typeof translations.en): string {
+  return translations[lang][key] || translations.en[key];
+}

@@ -1,0 +1,140 @@
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useRoute } from 'wouter';
+import { Article } from '@shared/schema';
+import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Clock, Calendar, Lock } from 'lucide-react';
+import { format } from 'date-fns';
+
+export default function ArticleReader() {
+  const [, params] = useRoute('/article/:id');
+  const { t, language } = useLanguage();
+  const { hasActiveSubscription, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+
+  const { data: article, isLoading } = useQuery<Article>({
+    queryKey: ['/api/articles', params?.id],
+    enabled: !!params?.id,
+  });
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: t('unauthorized'),
+        description: t('unauthorizedDescription'),
+        variant: 'destructive',
+      });
+      setTimeout(() => {
+        window.location.href = '/api/login';
+      }, 500);
+    }
+  }, [isAuthenticated, authLoading, toast, t]);
+
+  if (isLoading || authLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="text-muted-foreground">{t('loading')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!article) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg text-muted-foreground">{t('articleNotFound')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const title = article[`title${language.charAt(0).toUpperCase() + language.slice(1)}` as 'titleRu' | 'titleDe' | 'titleEn'];
+  const content = article[`content${language.charAt(0).toUpperCase() + language.slice(1)}` as 'contentRu' | 'contentDe' | 'contentEn'];
+  
+  const wordCount = content.split(/\s+/).length;
+  const readingTime = Math.ceil(wordCount / 200);
+  
+  const previewContent = content.substring(0, 1000);
+  const isContentLocked = !hasActiveSubscription && content.length > 1000;
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <article className="prose prose-lg max-w-none">
+        <div className="mb-8 not-prose">
+          <h1 className="mb-4 text-5xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
+            {title}
+          </h1>
+
+          <div className="mb-6 flex flex-wrap gap-2">
+            {article.tags.map((tag, index) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="text-sm font-medium"
+                data-testid={`badge-article-tag-${tag}`}
+              >
+                {tag}
+              </Badge>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>{readingTime} {t('readingTime')}</span>
+            </div>
+            {article.createdAt && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <span>{format(new Date(article.createdAt), 'MMMM d, yyyy')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="relative">
+          <div
+            className={`font-serif text-lg leading-relaxed text-foreground ${
+              isContentLocked ? 'line-clamp-[20]' : ''
+            }`}
+            style={{ whiteSpace: 'pre-wrap' }}
+            data-testid="text-article-content"
+          >
+            {hasActiveSubscription ? content : previewContent}
+          </div>
+
+          {isContentLocked && (
+            <div className="absolute inset-x-0 bottom-0 h-96 bg-gradient-to-t from-background via-background/95 to-transparent flex items-end justify-center pb-12">
+              <Card className="max-w-md border-2 shadow-xl">
+                <CardContent className="p-8 text-center">
+                  <div className="mb-4 flex justify-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
+                      <Lock className="h-8 w-8 text-accent" />
+                    </div>
+                  </div>
+                  <h3 className="mb-2 text-2xl font-bold text-foreground">
+                    {t('upgradePromptTitle')}
+                  </h3>
+                  <p className="mb-6 text-muted-foreground">
+                    {t('upgradePromptDescription')}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('contactAdmin')}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </article>
+    </div>
+  );
+}
