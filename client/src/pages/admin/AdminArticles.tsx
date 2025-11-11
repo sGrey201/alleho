@@ -32,10 +32,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Command,
-  CommandInput,
-} from '@/components/ui/command';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -360,13 +356,16 @@ export default function AdminArticles() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput 
-                        placeholder={t('searchTags')} 
-                        value={tagSearchQuery}
-                        onValueChange={setTagSearchQuery}
-                      />
-                      <div className="overflow-y-auto max-h-96">
+                    <div className="flex flex-col">
+                      <div className="p-2 border-b">
+                        <Input 
+                          placeholder={t('searchTags')} 
+                          value={tagSearchQuery}
+                          onChange={(e) => setTagSearchQuery(e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="overflow-y-auto max-h-96" style={{ touchAction: 'pan-y' }}>
                         {filteredTags.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">
                             {t('noTagsFound')}
@@ -394,7 +393,7 @@ export default function AdminArticles() {
                           </div>
                         )}
                       </div>
-                    </Command>
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
