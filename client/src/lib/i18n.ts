@@ -52,6 +52,7 @@ export const translations = {
     // Articles
     allArticles: 'Все статьи',
     tags: 'Теги',
+    suggestedRemedies: 'Препараты:',
     readingTime: 'мин чтения',
     publishedOn: 'Опубликовано',
     noArticles: 'Статей пока нет',
@@ -154,6 +155,7 @@ export const translations = {
     // Articles
     allArticles: 'Alle Artikel',
     tags: 'Tags',
+    suggestedRemedies: 'Mittel:',
     readingTime: 'Min. Lesezeit',
     publishedOn: 'Veröffentlicht am',
     noArticles: 'Noch keine Artikel',
@@ -256,6 +258,7 @@ export const translations = {
     // Articles
     allArticles: 'All Articles',
     tags: 'Tags',
+    suggestedRemedies: 'Remedies:',
     readingTime: 'min read',
     publishedOn: 'Published on',
     noArticles: 'No articles yet',
