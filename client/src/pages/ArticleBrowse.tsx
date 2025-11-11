@@ -50,13 +50,15 @@ export default function ArticleBrowse() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 space-y-6">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          {!searchQuery && (
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          )}
           <Input
             type="search"
             placeholder={t('searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-12 h-12 text-base"
+            className={`h-12 text-base ${searchQuery ? 'pl-4 pr-12' : 'pl-10 pr-4'}`}
             data-testid="input-search"
           />
           {searchQuery && (
