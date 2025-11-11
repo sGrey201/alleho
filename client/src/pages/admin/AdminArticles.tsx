@@ -56,6 +56,7 @@ export default function AdminArticles() {
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
     titleRu: '',
@@ -143,15 +144,17 @@ export default function AdminArticles() {
   });
 
   const filteredTags = useMemo(() => {
-    if (!tagSearchQuery.trim()) return allTags;
+    let tags = allTags.filter(tag => tag.category === tagCategoryFilter);
+    
+    if (!tagSearchQuery.trim()) return tags;
     const query = tagSearchQuery.toLowerCase();
-    return allTags.filter(tag => {
+    return tags.filter(tag => {
       const nameWords = tag.name.toLowerCase().split(/\s+/);
       const slugWords = tag.slug.toLowerCase().split(/[-_]/);
       return nameWords.some(word => word.startsWith(query)) || 
              slugWords.some(word => word.startsWith(query));
     });
-  }, [allTags, tagSearchQuery]);
+  }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
   const selectedTags = useMemo(() => {
     return allTags.filter(tag => selectedTagIds.includes(tag.id));
@@ -364,33 +367,45 @@ export default function AdminArticles() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command shouldFilter={false}>
-                      <CommandInput 
-                        placeholder={t('searchTags')} 
-                        value={tagSearchQuery}
-                        onValueChange={setTagSearchQuery}
-                      />
-                      <CommandList className="max-h-96 overflow-auto">
-                        <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                        <CommandGroup>
-                          {filteredTags.map((tag) => (
-                            <CommandItem
-                              key={tag.id}
-                              value={tag.name}
-                              onSelect={() => {
-                                if (!selectedTagIds.includes(tag.id)) {
-                                  addTag(tag.id);
-                                }
-                              }}
-                              disabled={selectedTagIds.includes(tag.id)}
-                              data-testid={`tag-option-${tag.slug}`}
-                            >
-                              {tag.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
+                    <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
+                      <div className="border-b px-2 pt-2">
+                        <TabsList className="w-full grid grid-cols-2">
+                          <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
+                            {t('remedies')}
+                          </TabsTrigger>
+                          <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
+                            {t('situations')}
+                          </TabsTrigger>
+                        </TabsList>
+                      </div>
+                      <Command shouldFilter={false}>
+                        <CommandInput 
+                          placeholder={tagCategoryFilter === 'remedy' ? t('searchByRemedy') : t('searchBySituation')} 
+                          value={tagSearchQuery}
+                          onValueChange={setTagSearchQuery}
+                        />
+                        <CommandList className="max-h-96 overflow-auto">
+                          <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
+                          <CommandGroup>
+                            {filteredTags.map((tag) => (
+                              <CommandItem
+                                key={tag.id}
+                                value={tag.name}
+                                onSelect={() => {
+                                  if (!selectedTagIds.includes(tag.id)) {
+                                    addTag(tag.id);
+                                  }
+                                }}
+                                disabled={selectedTagIds.includes(tag.id)}
+                                data-testid={`tag-option-${tag.slug}`}
+                              >
+                                {tag.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </Tabs>
                   </PopoverContent>
                 </Popover>
               </div>
