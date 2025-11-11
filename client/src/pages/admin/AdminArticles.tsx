@@ -143,8 +143,8 @@ export default function AdminArticles() {
     },
   });
 
-  const createTagMutation = useMutation<Tag, Error, { name: string; category: 'remedy' | 'situation' }>({
-    mutationFn: async (data: { name: string; category: 'remedy' | 'situation' }) => {
+  const createTagMutation = useMutation<Tag, Error, { name: string; slug: string; category: 'remedy' | 'situation' }>({
+    mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
     onSuccess: (newTag: Tag) => {
@@ -233,10 +233,21 @@ export default function AdminArticles() {
     setSelectedTagIds(selectedTagIds.filter(id => id !== tagId));
   };
 
+  const generateSlug = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9а-яё\s-]/gi, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  };
+
   const handleCreateNewTag = () => {
     if (tagSearchQuery.trim()) {
+      const name = tagSearchQuery.trim();
       createTagMutation.mutate({
-        name: tagSearchQuery.trim(),
+        name,
+        slug: generateSlug(name),
         category: tagCategoryFilter,
       });
     }
