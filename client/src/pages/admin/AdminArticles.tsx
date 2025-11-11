@@ -370,9 +370,9 @@ export default function AdminArticles() {
                         value={tagSearchQuery}
                         onValueChange={setTagSearchQuery}
                       />
-                      <CommandList>
+                      <CommandList className="max-h-[32rem]">
                         <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                        <CommandGroup className="max-h-[32rem] overflow-auto">
+                        <CommandGroup>
                           {filteredTags.map((tag) => (
                             <CommandItem
                               key={tag.id}
