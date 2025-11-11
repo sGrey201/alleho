@@ -339,7 +339,11 @@ export default function AdminArticles() {
                 <Label>{t('tags')}</Label>
                 <div className="flex flex-wrap gap-2 mt-2 mb-2">
                   {selectedTags.map((tag) => (
-                    <Badge key={tag.id} variant="secondary" className="gap-1">
+                    <Badge 
+                      key={tag.id} 
+                      variant={tag.category === 'remedy' ? 'default' : 'secondary'} 
+                      className="gap-1"
+                    >
                       {tag.name}
                       <button
                         type="button"
@@ -444,7 +448,11 @@ export default function AdminArticles() {
                   </CardTitle>
                   <div className="flex flex-wrap gap-2">
                     {article.tags.map((tag) => (
-                      <Badge key={tag.id} variant="secondary" className="text-xs">
+                      <Badge 
+                        key={tag.id} 
+                        variant={tag.category === 'remedy' ? 'default' : 'secondary'} 
+                        className="text-xs"
+                      >
                         {tag.name}
                       </Badge>
                     ))}
