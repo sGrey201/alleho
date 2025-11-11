@@ -77,6 +77,13 @@ Preferred communication style: Simple, everyday language.
 - Featured status flag
 - Publishing status and timestamps
 
+**Tags Table**
+- Normalized tag storage with category classification
+- Two tag categories: "remedy" (homeopathic remedies from Boericke's Materia Medica) and "situation" (clinical scenarios)
+- SEO-friendly slug for each tag
+- Many-to-many relationship with articles via article_tags junction table
+- Index on category field for efficient filtering
+
 **Sessions Table**
 - PostgreSQL-based session storage
 - Automatic expiration handling
@@ -93,6 +100,9 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/articles` - List all articles (content filtered by subscription)
 - `GET /api/articles/:id` - Get single article (access controlled by subscription)
 
+**Tag Routes** (require authentication)
+- `GET /api/tags` - List all tags with optional category filter (?category=remedy|situation)
+
 **Admin Routes** (require admin role)
 - `POST /api/admin/articles` - Create new article
 - `PUT /api/admin/articles/:id` - Update article
@@ -100,6 +110,9 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/admin/users` - List all users
 - `PUT /api/admin/users/:id/subscription` - Update user subscription
 - `PUT /api/admin/users/:id/language` - Update user language preference
+- `POST /api/admin/tags` - Create new tag (with category: remedy|situation)
+- `PUT /api/admin/tags/:id` - Update tag
+- `DELETE /api/admin/tags/:id` - Delete tag
 
 ### Internationalization
 
@@ -116,6 +129,17 @@ Preferred communication style: Simple, everyday language.
 - UI translations for navigation, forms, and system messages
 
 ## Recent Changes
+
+**November 11, 2025 - Dual Tag Category System Implementation**
+- ✅ Normalized tag system with two categories: "remedy" (homeopathic remedies) and "situation" (clinical scenarios)
+- ✅ Database migration: added category field to tags table with index for performance
+- ✅ Migrated 439 remedy tags from Boericke's Materia Medica as baseline data
+- ✅ Dual search interface in ArticleBrowse: separate autocomplete fields for remedies and situations
+- ✅ Color-coded badge system: blue/default variant for remedies, green/secondary variant for situations
+- ✅ Admin tag management page with category-filtered views
+- ✅ AdminArticles enhanced with tabbed tag selector for categorized tag assignment
+- ✅ Fixed nested anchor tag issue in ArticleCard component
+- ✅ Backend tag CRUD with category filtering via query parameters (/api/tags?category=remedy|situation)
 
 **November 11, 2025 - MVP Completion**
 - ✅ Complete trilingual content platform implementation
@@ -174,11 +198,18 @@ Since automated E2E tests cannot run due to OIDC test environment configuration,
 4. Switch to English - return to English interface
 5. Language preference persists across page reloads
 
-### Testing Search with Tags
-1. Create an article with tags like "homeopathy,remedies,natural"
-2. In browse page, search for "remedies" - article should appear
-3. Search for article title keywords - should find relevant articles
-4. Content respects subscription status (preview vs full)
+### Testing Dual Search with Tag Categories
+1. Navigate to admin tag management page (`/admin/tags`)
+2. Create remedy tags (e.g., "Arnica", "Belladonna") and situation tags (e.g., "Headache", "Fever")
+3. In admin articles page, assign both remedy and situation tags to an article
+4. Return to browse page - observe two separate search fields:
+   - "Search by remedy..." (top field)
+   - "Search by situation..." (bottom field)
+5. Type partial remedy name (e.g., "Arni") - autocomplete should show remedy tags in blue badges
+6. Type partial situation name (e.g., "Head") - autocomplete should show situation tags in green badges
+7. Click a suggested tag - article list should filter to show matching articles
+8. Verify article cards display tags with correct color coding (remedies=blue, situations=green)
+9. Content filtering respects subscription status (preview vs full access)
 
 ## External Dependencies
 
