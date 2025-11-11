@@ -122,6 +122,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Tag routes (public - for browsing and searching)
+  app.get('/api/tags', async (_req, res) => {
+    try {
+      const tagsList = await storage.getAllTags();
+      res.json(tagsList);
+    } catch (error) {
+      console.error("Error fetching tags:", error);
+      res.status(500).json({ message: "Failed to fetch tags" });
+    }
+  });
+
+  app.get('/api/tags/search/:query', async (req, res) => {
+    try {
+      const { query } = req.params;
+      const results = await storage.searchTags(query);
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching tags:", error);
+      res.status(500).json({ message: "Failed to search tags" });
+    }
+  });
+
   // User preferences
   app.put('/api/user/language', isAuthenticated, async (req: any, res) => {
     try {
@@ -153,8 +175,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/admin/articles', isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const validatedData = insertArticleSchema.parse(req.body);
-      const article = await storage.createArticle(validatedData);
+      const { tagIds, ...articleData } = req.body;
+      const validatedData = insertArticleSchema.parse(articleData);
+      
+      // Validate tagIds
+      let validatedTagIds: string[] = [];
+      if (tagIds) {
+        if (!Array.isArray(tagIds)) {
+          return res.status(400).json({ message: "tagIds must be an array" });
+        }
+        
+        // Deduplicate and validate format
+        const uniqueTagIds = Array.from(new Set(tagIds));
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        for (const id of uniqueTagIds) {
+          if (typeof id !== 'string' || !uuidRegex.test(id)) {
+            return res.status(400).json({ message: "Invalid tag ID format" });
+          }
+        }
+        
+        // Verify all tags exist
+        const existingTags = await storage.getTagsByIds(uniqueTagIds);
+        if (existingTags.length !== uniqueTagIds.length) {
+          return res.status(400).json({ message: "One or more tag IDs do not exist" });
+        }
+        
+        validatedTagIds = uniqueTagIds;
+      }
+      
+      const article = await storage.createArticle(validatedData, validatedTagIds);
       res.json(article);
     } catch (error) {
       console.error("Error creating article:", error);
@@ -167,8 +216,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/admin/articles/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
-      const validatedData = updateArticleSchema.parse(req.body);
-      const article = await storage.updateArticle(req.params.id, validatedData);
+      const { tagIds, ...articleData } = req.body;
+      const validatedData = updateArticleSchema.parse(articleData);
+      
+      // Validate tagIds if provided
+      let validatedTagIds: string[] | undefined = undefined;
+      if (tagIds !== undefined) {
+        if (!Array.isArray(tagIds)) {
+          return res.status(400).json({ message: "tagIds must be an array" });
+        }
+        
+        // Deduplicate and validate format
+        const uniqueTagIds = Array.from(new Set(tagIds));
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        for (const id of uniqueTagIds) {
+          if (typeof id !== 'string' || !uuidRegex.test(id)) {
+            return res.status(400).json({ message: "Invalid tag ID format" });
+          }
+        }
+        
+        // Verify all tags exist
+        const existingTags = await storage.getTagsByIds(uniqueTagIds);
+        if (existingTags.length !== uniqueTagIds.length) {
+          return res.status(400).json({ message: "One or more tag IDs do not exist" });
+        }
+        
+        validatedTagIds = uniqueTagIds;
+      }
+      
+      const article = await storage.updateArticle(req.params.id, validatedData, validatedTagIds);
       res.json(article);
     } catch (error) {
       console.error("Error updating article:", error);

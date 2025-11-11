@@ -39,6 +39,27 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+// Tags table (homeopathic remedies - trilingual)
+export const tags = pgTable("tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: varchar("slug", { length: 255 }).unique().notNull(),
+  nameRu: text("name_ru").notNull(),
+  nameDe: text("name_de").notNull(),
+  nameEn: text("name_en").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertTagSchema = createInsertSchema(tags).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTag = z.infer<typeof insertTagSchema>;
+export type Tag = typeof tags.$inferSelect;
+
 // Articles table (trilingual content)
 export const articles = pgTable("articles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -48,10 +69,20 @@ export const articles = pgTable("articles", {
   contentRu: text("content_ru").notNull(),
   contentDe: text("content_de").notNull(),
   contentEn: text("content_en").notNull(),
-  tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Junction table for article-tag many-to-many relationship
+export const articleTags = pgTable("article_tags", {
+  articleId: varchar("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  tagId: varchar("tag_id").notNull().references(() => tags.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("article_tags_article_idx").on(table.articleId),
+  index("article_tags_tag_idx").on(table.tagId),
+  sql`CONSTRAINT article_tags_unique UNIQUE (article_id, tag_id)`,
+]);
 
 export const insertArticleSchema = createInsertSchema(articles).omit({
   id: true,

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Article, InsertArticle } from '@shared/schema';
+import { Article, InsertArticle, Tag } from '@shared/schema';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -31,13 +31,31 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+
+type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function AdminArticles() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [editingArticle, setEditingArticle] = useState<ArticleWithTags | null>(null);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   
   const [formData, setFormData] = useState<InsertArticle>({
     titleRu: '',
@@ -46,17 +64,19 @@ export default function AdminArticles() {
     contentRu: '',
     contentDe: '',
     contentEn: '',
-    tags: [],
   });
-  const [tagInput, setTagInput] = useState('');
 
-  const { data: articles, isLoading } = useQuery<Article[]>({
+  const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/admin/articles'],
     enabled: isAdmin,
   });
 
+  const { data: allTags = [], isLoading: isLoadingTags } = useQuery<Tag[]>({
+    queryKey: ['/api/tags'],
+  });
+
   const createMutation = useMutation({
-    mutationFn: async (data: InsertArticle) => {
+    mutationFn: async (data: InsertArticle & { tagIds: string[] }) => {
       return await apiRequest('POST', '/api/admin/articles', data);
     },
     onSuccess: () => {
@@ -79,7 +99,7 @@ export default function AdminArticles() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: InsertArticle }) => {
+    mutationFn: async ({ id, data }: { id: string; data: InsertArticle & { tagIds: string[] } }) => {
       return await apiRequest('PUT', `/api/admin/articles/${id}`, data);
     },
     onSuccess: () => {
