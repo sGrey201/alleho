@@ -10,7 +10,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { FileText, Users, Home } from 'lucide-react';
+import { FileText, Users, Home, Tags } from 'lucide-react';
 
 export function AppSidebar() {
   const { t } = useLanguage();
@@ -26,6 +26,11 @@ export function AppSidebar() {
       title: t('manageArticles'),
       url: '/admin/articles',
       icon: FileText,
+    },
+    {
+      title: t('manageTags'),
+      url: '/admin/tags',
+      icon: Tags,
     },
     {
       title: t('manageSubscriptions'),

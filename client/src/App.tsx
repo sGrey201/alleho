@@ -14,6 +14,7 @@ import ArticleReader from "@/pages/ArticleReader";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
+import AdminTags from "@/pages/admin/AdminTags";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -37,6 +38,7 @@ function Router() {
         <>
           <Route path="/admin" component={AdminHome} />
           <Route path="/admin/articles" component={AdminArticles} />
+          <Route path="/admin/tags" component={AdminTags} />
           <Route path="/admin/subscriptions" component={AdminSubscriptions} />
         </>
       )}
