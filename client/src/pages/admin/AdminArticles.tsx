@@ -143,6 +143,29 @@ export default function AdminArticles() {
     },
   });
 
+  const createTagMutation = useMutation<Tag, Error, { name: string; category: 'remedy' | 'situation' }>({
+    mutationFn: async (data: { name: string; category: 'remedy' | 'situation' }) => {
+      return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
+    },
+    onSuccess: (newTag: Tag) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+      toast({
+        title: t('tagSaved'),
+        variant: 'default',
+      });
+      setSelectedTagIds([...selectedTagIds, newTag.id]);
+      setTagSearchQuery('');
+      setTagPopoverOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: t('error'),
+        description: t('somethingWrong'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   const filteredTags = useMemo(() => {
     let tags = allTags.filter(tag => tag.category === tagCategoryFilter);
     
@@ -208,6 +231,15 @@ export default function AdminArticles() {
 
   const removeTag = (tagId: string) => {
     setSelectedTagIds(selectedTagIds.filter(id => id !== tagId));
+  };
+
+  const handleCreateNewTag = () => {
+    if (tagSearchQuery.trim()) {
+      createTagMutation.mutate({
+        name: tagSearchQuery.trim(),
+        category: tagCategoryFilter,
+      });
+    }
   };
 
   if (isLoading) {
@@ -389,24 +421,43 @@ export default function AdminArticles() {
                           onValueChange={setTagSearchQuery}
                         />
                         <CommandList className="max-h-96 overflow-auto">
-                          <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                          <CommandGroup>
-                            {filteredTags.map((tag) => (
-                              <CommandItem
-                                key={tag.id}
-                                value={tag.name}
-                                onSelect={() => {
-                                  if (!selectedTagIds.includes(tag.id)) {
-                                    addTag(tag.id);
-                                  }
-                                }}
-                                disabled={selectedTagIds.includes(tag.id)}
-                                data-testid={`tag-option-${tag.slug}`}
+                          {filteredTags.length === 0 && tagSearchQuery.trim() ? (
+                            <div className="p-4 text-center">
+                              <p className="text-sm text-muted-foreground mb-3">
+                                {t('noTagsFound')}
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleCreateNewTag}
+                                disabled={createTagMutation.isPending}
+                                data-testid="button-create-new-tag"
                               >
-                                {tag.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
+                                <Plus className="mr-2 h-4 w-4" />
+                                {t('createNewTag')}: "{tagSearchQuery.trim()}"
+                              </Button>
+                            </div>
+                          ) : filteredTags.length === 0 ? (
+                            <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {filteredTags.map((tag) => (
+                                <CommandItem
+                                  key={tag.id}
+                                  value={tag.name}
+                                  onSelect={() => {
+                                    if (!selectedTagIds.includes(tag.id)) {
+                                      addTag(tag.id);
+                                    }
+                                  }}
+                                  disabled={selectedTagIds.includes(tag.id)}
+                                  data-testid={`tag-option-${tag.slug}`}
+                                >
+                                  {tag.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
                         </CommandList>
                       </Command>
                     </Tabs>

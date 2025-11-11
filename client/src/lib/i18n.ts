@@ -117,6 +117,7 @@ export const translations = {
     tagSlug: 'Слаг тега',
     tagSaved: 'Тег сохранён',
     tagDeleted: 'Тег удалён',
+    createNewTag: 'Создать новый тег',
     
     // Errors
     unauthorized: 'Не авторизован',
@@ -240,6 +241,7 @@ export const translations = {
     tagSlug: 'Tag-Slug',
     tagSaved: 'Tag gespeichert',
     tagDeleted: 'Tag gelöscht',
+    createNewTag: 'Neuen Tag erstellen',
     
     // Errors
     unauthorized: 'Nicht autorisiert',
@@ -363,6 +365,7 @@ export const translations = {
     tagSlug: 'Tag Slug',
     tagSaved: 'Tag saved',
     tagDeleted: 'Tag deleted',
+    createNewTag: 'Create New Tag',
     
     // Errors
     unauthorized: 'Unauthorized',
