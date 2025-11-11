@@ -2,10 +2,8 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/hooks/useAuth';
 import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -13,43 +11,29 @@ type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
   const { t, language } = useLanguage();
-  const { hasActiveSubscription } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
   });
 
-  const allTags = useMemo(() => {
-    if (!articles) return [];
-    const tagMap = new Map<string, Tag>();
-    articles.forEach(article => {
-      article.tags.forEach(tag => tagMap.set(tag.id, tag));
-    });
-    return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [articles]);
-
   const filteredArticles = useMemo(() => {
     if (!articles) return [];
     
     return articles.filter(article => {
+      if (!searchQuery) return true;
+      
       const title = article[`title${language.charAt(0).toUpperCase() + language.slice(1)}` as 'titleRu' | 'titleDe' | 'titleEn'].toLowerCase();
       const content = article[`content${language.charAt(0).toUpperCase() + language.slice(1)}` as 'contentRu' | 'contentDe' | 'contentEn'].toLowerCase();
       const searchLower = searchQuery.toLowerCase();
       
-      const matchesSearch = !searchQuery || title.includes(searchLower) || content.includes(searchLower);
-      const matchesTags = selectedTags.length === 0 || selectedTags.some(tagId => article.tags.some(t => t.id === tagId));
+      const matchesTitle = title.includes(searchLower);
+      const matchesContent = content.includes(searchLower);
+      const matchesTags = article.tags.some(tag => tag.name.toLowerCase().includes(searchLower));
       
-      return matchesSearch && matchesTags;
+      return matchesTitle || matchesContent || matchesTags;
     });
-  }, [articles, searchQuery, selectedTags, language]);
-
-  const toggleTag = (tagId: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tagId) ? prev.filter(t => t !== tagId) : [...prev, tagId]
-    );
-  };
+  }, [articles, searchQuery, language]);
 
   if (isLoading) {
     return (
@@ -93,7 +77,7 @@ export default function ArticleBrowse() {
         <div className="flex min-h-[30vh] items-center justify-center">
           <div className="text-center">
             <p className="text-lg text-muted-foreground">
-              {searchQuery || selectedTags.length > 0 ? t('noResults') : t('noArticles')}
+              {searchQuery ? t('noResults') : t('noArticles')}
             </p>
           </div>
         </div>
