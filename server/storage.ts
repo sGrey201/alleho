@@ -97,7 +97,7 @@ export class DatabaseStorage implements IStorage {
 
   // Tag operations
   async getAllTags(): Promise<Tag[]> {
-    return await db.select().from(tags).orderBy(tags.nameEn);
+    return await db.select().from(tags).orderBy(tags.name);
   }
 
   async getTagsByIds(ids: string[]): Promise<Tag[]> {
@@ -111,13 +111,11 @@ export class DatabaseStorage implements IStorage {
       .from(tags)
       .where(
         or(
-          ilike(tags.nameEn, `%${query}%`),
-          ilike(tags.nameRu, `%${query}%`),
-          ilike(tags.nameDe, `%${query}%`),
+          ilike(tags.name, `%${query}%`),
           ilike(tags.slug, `%${query}%`)
         )
       )
-      .orderBy(tags.nameEn)
+      .orderBy(tags.name)
       .limit(50);
   }
 
@@ -218,7 +216,6 @@ export class DatabaseStorage implements IStorage {
   async searchArticles(query: string, language: 'ru' | 'de' | 'en'): Promise<ArticleWithTags[]> {
     const titleCol = language === 'ru' ? articles.titleRu : language === 'de' ? articles.titleDe : articles.titleEn;
     const contentCol = language === 'ru' ? articles.contentRu : language === 'de' ? articles.contentDe : articles.contentEn;
-    const tagNameCol = language === 'ru' ? tags.nameRu : language === 'de' ? tags.nameDe : tags.nameEn;
     
     // Search in articles and tags
     const results = await db
@@ -230,7 +227,7 @@ export class DatabaseStorage implements IStorage {
         or(
           ilike(titleCol, `%${query}%`),
           ilike(contentCol, `%${query}%`),
-          ilike(tagNameCol, `%${query}%`)
+          ilike(tags.name, `%${query}%`)
         )
       )
       .orderBy(sql`${articles.createdAt} DESC`);
