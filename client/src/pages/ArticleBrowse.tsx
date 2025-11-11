@@ -64,14 +64,6 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <p className="text-lg text-muted-foreground">
-          {hasActiveSubscription
-            ? t('feature1Description')
-            : t('previewOnly')}
-        </p>
-      </div>
-
       <div className="mb-8 space-y-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
