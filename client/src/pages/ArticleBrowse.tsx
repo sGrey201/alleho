@@ -49,9 +49,9 @@ export default function ArticleBrowse() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 space-y-6">
-        <div className="relative">
+        <div className="relative flex items-center">
           {!searchQuery && (
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 h-5 w-5 text-muted-foreground pointer-events-none" />
           )}
           <Input
             type="search"
@@ -65,7 +65,7 @@ export default function ArticleBrowse() {
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10"
+              className="absolute right-1 h-10 w-10"
               onClick={() => setSearchQuery('')}
               data-testid="button-clear-search"
             >
