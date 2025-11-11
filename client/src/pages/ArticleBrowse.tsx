@@ -87,37 +87,6 @@ export default function ArticleBrowse() {
             </Button>
           )}
         </div>
-
-        {allTags.length > 0 && (
-          <div>
-            <h3 className="mb-3 text-sm font-semibold text-foreground">{t('tags')}</h3>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map(tag => (
-                <Badge
-                  key={tag.id}
-                  variant={selectedTags.includes(tag.id) ? 'default' : 'outline'}
-                  className="cursor-pointer hover-elevate active-elevate-2 text-sm px-3 py-1"
-                  onClick={() => toggleTag(tag.id)}
-                  data-testid={`filter-tag-${tag.slug}`}
-                >
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
-            {selectedTags.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedTags([])}
-                className="mt-3"
-                data-testid="button-clear-filters"
-              >
-                <X className="mr-2 h-4 w-4" />
-                Clear filters
-              </Button>
-            )}
-          </div>
-        )}
       </div>
 
       {filteredArticles.length === 0 ? (
