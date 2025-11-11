@@ -44,6 +44,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -370,21 +371,23 @@ export default function AdminArticles() {
                         value={tagSearchQuery}
                         onValueChange={setTagSearchQuery}
                       />
-                      <CommandList className="max-h-96 overflow-y-auto">
+                      <CommandList>
                         <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                        <CommandGroup>
-                          {filteredTags.map((tag) => (
-                            <CommandItem
-                              key={tag.id}
-                              value={tag.id}
-                              onSelect={() => addTag(tag.id)}
-                              disabled={selectedTagIds.includes(tag.id)}
-                              data-testid={`tag-option-${tag.slug}`}
-                            >
-                              {tag.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                        <ScrollArea className="h-96">
+                          <CommandGroup>
+                            {filteredTags.map((tag) => (
+                              <CommandItem
+                                key={tag.id}
+                                value={tag.id}
+                                onSelect={() => addTag(tag.id)}
+                                disabled={selectedTagIds.includes(tag.id)}
+                                data-testid={`tag-option-${tag.slug}`}
+                              >
+                                {tag.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </ScrollArea>
                       </CommandList>
                     </Command>
                   </PopoverContent>
