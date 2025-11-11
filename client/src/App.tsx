@@ -9,7 +9,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
 import { AppSidebar } from "@/components/AppSidebar";
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import ArticleReader from "@/pages/ArticleReader";
 import AdminHome from "@/pages/admin/AdminHome";
@@ -17,7 +16,7 @@ import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
 
 function Router() {
-  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const { isLoading, isAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -26,14 +25,6 @@ function Router() {
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
           <p className="text-muted-foreground">Loading...</p>
         </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Landing />
       </div>
     );
   }
@@ -55,7 +46,7 @@ function Router() {
 }
 
 function AppContent() {
-  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { isAdmin, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -66,10 +57,6 @@ function AppContent() {
         </div>
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return <Router />;
   }
 
   if (isAdmin && window.location.pathname.startsWith('/admin')) {

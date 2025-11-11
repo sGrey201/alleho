@@ -23,20 +23,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public article routes (for browsing and reading)
-  app.get('/api/articles', isAuthenticated, async (req: any, res) => {
+  // Public article routes (accessible to everyone, preview for non-subscribers)
+  app.get('/api/articles', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
       const articlesList = await storage.getAllArticles();
       
-      // Check subscription status
-      const hasActiveSubscription = user?.subscriptionExpiresAt 
-        ? new Date(user.subscriptionExpiresAt) > new Date() 
-        : false;
+      // Check if user is authenticated and has active subscription
+      let hasActiveSubscription = false;
+      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+        const user = await storage.getUser(req.user.claims.sub);
+        hasActiveSubscription = user?.subscriptionExpiresAt 
+          ? new Date(user.subscriptionExpiresAt) > new Date() 
+          : false;
+      }
 
-      // If no active subscription, truncate content to preview
+      // If no active subscription (or not authenticated), truncate content to preview
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
@@ -54,22 +55,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/articles/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/articles/:id', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
       const article = await storage.getArticleById(req.params.id);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
 
-      // Check subscription status
-      const hasActiveSubscription = user?.subscriptionExpiresAt 
-        ? new Date(user.subscriptionExpiresAt) > new Date() 
-        : false;
+      // Check if user is authenticated and has active subscription
+      let hasActiveSubscription = false;
+      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+        const user = await storage.getUser(req.user.claims.sub);
+        hasActiveSubscription = user?.subscriptionExpiresAt 
+          ? new Date(user.subscriptionExpiresAt) > new Date() 
+          : false;
+      }
 
-      // If no active subscription, truncate content to preview (first 1000 characters)
+      // If no active subscription (or not authenticated), truncate content to preview
       if (!hasActiveSubscription) {
         const previewArticle = {
           ...article,
