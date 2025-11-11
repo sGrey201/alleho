@@ -32,6 +32,14 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -356,42 +364,33 @@ export default function AdminArticles() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[400px] p-0" align="start">
-                    <div className="flex flex-col">
-                      <div className="p-2 border-b">
-                        <Input 
-                          placeholder={t('searchTags')} 
-                          value={tagSearchQuery}
-                          onChange={(e) => setTagSearchQuery(e.target.value)}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="overflow-y-scroll max-h-96 p-1" style={{ overflowY: 'scroll', WebkitOverflowScrolling: 'touch' }}>
-                        {filteredTags.length === 0 ? (
-                          <div className="py-6 text-center text-sm text-muted-foreground">
-                            {t('noTagsFound')}
-                          </div>
-                        ) : (
-                          filteredTags.map((tag) => (
-                            <div
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder={t('searchTags')} 
+                        value={tagSearchQuery}
+                        onValueChange={setTagSearchQuery}
+                      />
+                      <CommandList className="max-h-96 overflow-auto">
+                        <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
+                        <CommandGroup>
+                          {filteredTags.map((tag) => (
+                            <CommandItem
                               key={tag.id}
-                              onClick={() => {
+                              value={tag.name}
+                              onSelect={() => {
                                 if (!selectedTagIds.includes(tag.id)) {
                                   addTag(tag.id);
                                 }
                               }}
-                              className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
-                                selectedTagIds.includes(tag.id) 
-                                  ? 'opacity-50 cursor-not-allowed' 
-                                  : ''
-                              }`}
+                              disabled={selectedTagIds.includes(tag.id)}
                               data-testid={`tag-option-${tag.slug}`}
                             >
                               {tag.name}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
                   </PopoverContent>
                 </Popover>
               </div>
