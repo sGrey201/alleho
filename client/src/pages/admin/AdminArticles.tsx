@@ -365,32 +365,30 @@ export default function AdminArticles() {
                           className="h-9"
                         />
                       </div>
-                      <div className="overflow-y-auto max-h-96" style={{ touchAction: 'pan-y' }}>
+                      <div className="overflow-y-scroll max-h-96 p-1" style={{ overflowY: 'scroll', WebkitOverflowScrolling: 'touch' }}>
                         {filteredTags.length === 0 ? (
                           <div className="py-6 text-center text-sm text-muted-foreground">
                             {t('noTagsFound')}
                           </div>
                         ) : (
-                          <div className="p-1">
-                            {filteredTags.map((tag) => (
-                              <div
-                                key={tag.id}
-                                onClick={() => {
-                                  if (!selectedTagIds.includes(tag.id)) {
-                                    addTag(tag.id);
-                                  }
-                                }}
-                                className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
-                                  selectedTagIds.includes(tag.id) 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : ''
-                                }`}
-                                data-testid={`tag-option-${tag.slug}`}
-                              >
-                                {tag.name}
-                              </div>
-                            ))}
-                          </div>
+                          filteredTags.map((tag) => (
+                            <div
+                              key={tag.id}
+                              onClick={() => {
+                                if (!selectedTagIds.includes(tag.id)) {
+                                  addTag(tag.id);
+                                }
+                              }}
+                              className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
+                                selectedTagIds.includes(tag.id) 
+                                  ? 'opacity-50 cursor-not-allowed' 
+                                  : ''
+                              }`}
+                              data-testid={`tag-option-${tag.slug}`}
+                            >
+                              {tag.name}
+                            </div>
+                          ))
                         )}
                       </div>
                     </div>
