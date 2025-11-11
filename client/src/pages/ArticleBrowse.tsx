@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Article } from '@shared/schema';
+import { Article, Tag } from '@shared/schema';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { ArticleCard } from '@/components/ArticleCard';
@@ -9,23 +9,25 @@ import { Badge } from '@/components/ui/badge';
 import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+type ArticleWithTags = Article & { tags: Tag[] };
+
 export default function ArticleBrowse() {
   const { t, language } = useLanguage();
   const { hasActiveSubscription } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const { data: articles, isLoading } = useQuery<Article[]>({
+  const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
   });
 
   const allTags = useMemo(() => {
     if (!articles) return [];
-    const tagSet = new Set<string>();
+    const tagMap = new Map<string, Tag>();
     articles.forEach(article => {
-      article.tags.forEach(tag => tagSet.add(tag));
+      article.tags.forEach(tag => tagMap.set(tag.id, tag));
     });
-    return Array.from(tagSet).sort();
+    return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [articles]);
 
   const filteredArticles = useMemo(() => {
@@ -37,15 +39,15 @@ export default function ArticleBrowse() {
       const searchLower = searchQuery.toLowerCase();
       
       const matchesSearch = !searchQuery || title.includes(searchLower) || content.includes(searchLower);
-      const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => article.tags.includes(tag));
+      const matchesTags = selectedTags.length === 0 || selectedTags.some(tagId => article.tags.some(t => t.id === tagId));
       
       return matchesSearch && matchesTags;
     });
   }, [articles, searchQuery, selectedTags, language]);
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = (tagId: string) => {
     setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+      prev.includes(tagId) ? prev.filter(t => t !== tagId) : [...prev, tagId]
     );
   };
 
@@ -101,13 +103,13 @@ export default function ArticleBrowse() {
             <div className="flex flex-wrap gap-2">
               {allTags.map(tag => (
                 <Badge
-                  key={tag}
-                  variant={selectedTags.includes(tag) ? 'default' : 'outline'}
+                  key={tag.id}
+                  variant={selectedTags.includes(tag.id) ? 'default' : 'outline'}
                   className="cursor-pointer hover-elevate active-elevate-2 text-sm px-3 py-1"
-                  onClick={() => toggleTag(tag)}
-                  data-testid={`filter-tag-${tag}`}
+                  onClick={() => toggleTag(tag.id)}
+                  data-testid={`filter-tag-${tag.slug}`}
                 >
-                  {tag}
+                  {tag.name}
                 </Badge>
               ))}
             </div>

@@ -1,4 +1,4 @@
-import { Article } from '@shared/schema';
+import { Article, Tag } from '@shared/schema';
 import { useLanguage } from '@/context/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,8 +6,10 @@ import { Link } from 'wouter';
 import { Clock, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
+type ArticleWithTags = Article & { tags: Tag[] };
+
 interface ArticleCardProps {
-  article: Article;
+  article: ArticleWithTags;
 }
 
 export function ArticleCard({ article }: ArticleCardProps) {
@@ -34,14 +36,14 @@ export function ArticleCard({ article }: ArticleCardProps) {
             </p>
 
             <div className="mb-4 flex flex-wrap gap-2">
-              {article.tags.slice(0, 4).map((tag, index) => (
+              {article.tags.slice(0, 4).map((tag) => (
                 <Badge
-                  key={index}
+                  key={tag.id}
                   variant="secondary"
                   className="text-xs font-medium"
-                  data-testid={`badge-tag-${tag}`}
+                  data-testid={`badge-tag-${tag.slug}`}
                 >
-                  {tag}
+                  {tag.name}
                 </Badge>
               ))}
               {article.tags.length > 4 && (

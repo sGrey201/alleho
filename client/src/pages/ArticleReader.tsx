@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
-import { Article } from '@shared/schema';
+import { Article, Tag } from '@shared/schema';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -11,13 +11,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Clock, Calendar, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 
+type ArticleWithTags = Article & { tags: Tag[] };
+
 export default function ArticleReader() {
   const [, params] = useRoute('/article/:id');
   const { t, language } = useLanguage();
   const { hasActiveSubscription, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
-  const { data: article, isLoading } = useQuery<Article>({
+  const { data: article, isLoading } = useQuery<ArticleWithTags>({
     queryKey: ['/api/articles', params?.id],
     enabled: !!params?.id,
   });
@@ -74,14 +76,14 @@ export default function ArticleReader() {
           </h1>
 
           <div className="mb-6 flex flex-wrap gap-2">
-            {article.tags.map((tag, index) => (
+            {article.tags.map((tag) => (
               <Badge
-                key={index}
+                key={tag.id}
                 variant="secondary"
                 className="text-sm font-medium"
-                data-testid={`badge-article-tag-${tag}`}
+                data-testid={`badge-article-tag-${tag.slug}`}
               >
-                {tag}
+                {tag.name}
               </Badge>
             ))}
           </div>

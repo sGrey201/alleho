@@ -142,6 +142,19 @@ export default function AdminArticles() {
     },
   });
 
+  const filteredTags = useMemo(() => {
+    if (!tagSearchQuery.trim()) return allTags;
+    const query = tagSearchQuery.toLowerCase();
+    return allTags.filter(tag => 
+      tag.name.toLowerCase().includes(query) || 
+      tag.slug.toLowerCase().includes(query)
+    );
+  }, [allTags, tagSearchQuery]);
+
+  const selectedTags = useMemo(() => {
+    return allTags.filter(tag => selectedTagIds.includes(tag.id));
+  }, [allTags, selectedTagIds]);
+
   const resetForm = () => {
     setFormData({
       titleRu: '',
@@ -150,13 +163,13 @@ export default function AdminArticles() {
       contentRu: '',
       contentDe: '',
       contentEn: '',
-      tags: [],
     });
-    setTagInput('');
+    setSelectedTagIds([]);
+    setTagSearchQuery('');
     setEditingArticle(null);
   };
 
-  const handleEdit = (article: Article) => {
+  const handleEdit = (article: ArticleWithTags) => {
     setEditingArticle(article);
     setFormData({
       titleRu: article.titleRu,
@@ -165,29 +178,31 @@ export default function AdminArticles() {
       contentRu: article.contentRu,
       contentDe: article.contentDe,
       contentEn: article.contentEn,
-      tags: article.tags,
     });
+    setSelectedTagIds(article.tags.map(tag => tag.id));
     setIsDialogOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const dataWithTags = { ...formData, tagIds: selectedTagIds };
     if (editingArticle) {
-      updateMutation.mutate({ id: editingArticle.id, data: formData });
+      updateMutation.mutate({ id: editingArticle.id, data: dataWithTags });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(dataWithTags);
     }
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData({ ...formData, tags: [...formData.tags, tagInput.trim()] });
-      setTagInput('');
+  const addTag = (tagId: string) => {
+    if (!selectedTagIds.includes(tagId)) {
+      setSelectedTagIds([...selectedTagIds, tagId]);
     }
+    setTagPopoverOpen(false);
+    setTagSearchQuery('');
   };
 
-  const removeTag = (tag: string) => {
-    setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
+  const removeTag = (tagId: string) => {
+    setSelectedTagIds(selectedTagIds.filter(id => id !== tagId));
   };
 
   if (isLoading) {
@@ -316,40 +331,62 @@ export default function AdminArticles() {
               </Tabs>
 
               <div>
-                <Label htmlFor="tags">{t('tags')}</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    id="tags"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                    placeholder={t('tagsPlaceholder')}
-                    data-testid="input-tags"
-                  />
-                  <Button type="button" onClick={addTag} variant="outline" data-testid="button-add-tag">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {formData.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
-                      {tag}
+                <Label>{t('tags')}</Label>
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  {selectedTags.map((tag) => (
+                    <Badge key={tag.id} variant="secondary" className="gap-1">
+                      {tag.name}
                       <button
                         type="button"
-                        onClick={() => removeTag(tag)}
+                        onClick={() => removeTag(tag.id)}
                         className="ml-1 hover:text-destructive"
-                        data-testid={`button-remove-tag-${tag}`}
+                        data-testid={`button-remove-tag-${tag.id}`}
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   ))}
                 </div>
+                <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={tagPopoverOpen}
+                      className="w-full justify-between"
+                      data-testid="button-select-tags"
+                    >
+                      {t('selectTags')}
+                      <Plus className="ml-2 h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder={t('searchTags')} 
+                        value={tagSearchQuery}
+                        onValueChange={setTagSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-auto">
+                          {filteredTags.map((tag) => (
+                            <CommandItem
+                              key={tag.id}
+                              value={tag.id}
+                              onSelect={() => addTag(tag.id)}
+                              disabled={selectedTagIds.includes(tag.id)}
+                              data-testid={`tag-option-${tag.slug}`}
+                            >
+                              {tag.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="flex justify-end gap-2">
@@ -386,8 +423,8 @@ export default function AdminArticles() {
                   </CardTitle>
                   <div className="flex flex-wrap gap-2">
                     {article.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">
-                        {tag}
+                      <Badge key={tag.id} variant="secondary" className="text-xs">
+                        {tag.name}
                       </Badge>
                     ))}
                   </div>

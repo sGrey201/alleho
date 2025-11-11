@@ -27,39 +27,39 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
-          <Link href="/">
-            <a className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md px-2 py-1" data-testid="link-home">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-                H
-              </div>
-              <span className="hidden text-lg font-bold text-foreground sm:inline-block">
-                Homeopathy
-              </span>
-            </a>
+          <Link 
+            href="/" 
+            className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md px-2 py-1" 
+            data-testid="link-home"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
+              H
+            </div>
+            <span className="hidden text-lg font-bold text-foreground sm:inline-block">
+              Homeopathy
+            </span>
           </Link>
           
           {isAuthenticated && (
             <nav className="hidden items-center gap-2 md:flex">
-              <Link href="/">
-                <a
-                  className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
-                    location === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
-                  }`}
-                  data-testid="link-articles"
-                >
-                  {t('articles')}
-                </a>
+              <Link 
+                href="/"
+                className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
+                  location === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                }`}
+                data-testid="link-articles"
+              >
+                {t('articles')}
               </Link>
               {isAdmin && (
-                <Link href="/admin">
-                  <a
-                    className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
-                      location.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-foreground'
-                    }`}
-                    data-testid="link-admin"
-                  >
-                    {t('admin')}
-                  </a>
+                <Link 
+                  href="/admin"
+                  className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
+                    location.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-foreground'
+                  }`}
+                  data-testid="link-admin"
+                >
+                  {t('admin')}
                 </Link>
               )}
             </nav>
@@ -116,11 +116,9 @@ export function Header() {
                 {isAdmin && (
                   <>
                     <DropdownMenuItem asChild>
-                      <Link href="/admin">
-                        <a className="flex w-full items-center" data-testid="link-admin-panel">
-                          <Settings className="mr-2 h-4 w-4" />
-                          {t('adminPanel')}
-                        </a>
+                      <Link href="/admin" className="flex w-full items-center" data-testid="link-admin-panel">
+                        <Settings className="mr-2 h-4 w-4" />
+                        {t('adminPanel')}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
