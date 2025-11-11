@@ -145,10 +145,12 @@ export default function AdminArticles() {
   const filteredTags = useMemo(() => {
     if (!tagSearchQuery.trim()) return allTags;
     const query = tagSearchQuery.toLowerCase();
-    return allTags.filter(tag => 
-      tag.name.toLowerCase().includes(query) || 
-      tag.slug.toLowerCase().includes(query)
-    );
+    return allTags.filter(tag => {
+      const nameWords = tag.name.toLowerCase().split(/\s+/);
+      const slugWords = tag.slug.toLowerCase().split(/[-_]/);
+      return nameWords.some(word => word.startsWith(query)) || 
+             slugWords.some(word => word.startsWith(query));
+    });
   }, [allTags, tagSearchQuery]);
 
   const selectedTags = useMemo(() => {
