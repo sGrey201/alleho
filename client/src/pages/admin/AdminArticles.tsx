@@ -372,7 +372,7 @@ export default function AdminArticles() {
                       />
                       <CommandList>
                         <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                        <CommandGroup className="max-h-64 overflow-auto">
+                        <CommandGroup className="max-h-[32rem] overflow-auto">
                           {filteredTags.map((tag) => (
                             <CommandItem
                               key={tag.id}
