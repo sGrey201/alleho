@@ -98,6 +98,23 @@ export const translations = {
     subscriptionUpdated: 'Подписка обновлена',
     never: 'Никогда',
     
+    // Tags & Categories
+    remedies: 'Препараты',
+    situations: 'Ситуации',
+    searchByRemedy: 'Поиск по препаратам',
+    searchBySituation: 'Поиск по ситуациям',
+    manageTags: 'Управление тегами',
+    createTag: 'Создать тег',
+    editTag: 'Редактировать тег',
+    deleteTag: 'Удалить тег',
+    tagCategory: 'Категория тега',
+    remedy: 'Препарат',
+    situation: 'Ситуация',
+    tagName: 'Название тега',
+    tagSlug: 'Слаг тега',
+    tagSaved: 'Тег сохранён',
+    tagDeleted: 'Тег удалён',
+    
     // Errors
     unauthorized: 'Не авторизован',
     unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',
@@ -201,6 +218,23 @@ export const translations = {
     subscriptionUpdated: 'Abonnement aktualisiert',
     never: 'Nie',
     
+    // Tags & Categories
+    remedies: 'Mittel',
+    situations: 'Situationen',
+    searchByRemedy: 'Nach Mittel suchen',
+    searchBySituation: 'Nach Situationen suchen',
+    manageTags: 'Tags verwalten',
+    createTag: 'Tag erstellen',
+    editTag: 'Tag bearbeiten',
+    deleteTag: 'Tag löschen',
+    tagCategory: 'Tag-Kategorie',
+    remedy: 'Mittel',
+    situation: 'Situation',
+    tagName: 'Tag-Name',
+    tagSlug: 'Tag-Slug',
+    tagSaved: 'Tag gespeichert',
+    tagDeleted: 'Tag gelöscht',
+    
     // Errors
     unauthorized: 'Nicht autorisiert',
     unauthorizedDescription: 'Sie sind abgemeldet. Erneut anmelden...',
@@ -303,6 +337,23 @@ export const translations = {
     setExpiration: 'Set expiration date',
     subscriptionUpdated: 'Subscription updated',
     never: 'Never',
+    
+    // Tags & Categories
+    remedies: 'Remedies',
+    situations: 'Situations',
+    searchByRemedy: 'Search by remedy',
+    searchBySituation: 'Search by situation',
+    manageTags: 'Manage Tags',
+    createTag: 'Create Tag',
+    editTag: 'Edit Tag',
+    deleteTag: 'Delete Tag',
+    tagCategory: 'Tag Category',
+    remedy: 'Remedy',
+    situation: 'Situation',
+    tagName: 'Tag Name',
+    tagSlug: 'Tag Slug',
+    tagSaved: 'Tag saved',
+    tagDeleted: 'Tag deleted',
     
     // Errors
     unauthorized: 'Unauthorized',
