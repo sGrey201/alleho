@@ -13,9 +13,11 @@ type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
   const { t, language } = useLanguage();
-  const [inputValue, setInputValue] = useState('');
+  const [remedyInput, setRemedyInput] = useState('');
+  const [situationInput, setSituationInput] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showRemedySuggestions, setShowRemedySuggestions] = useState(false);
+  const [showSituationSuggestions, setShowSituationSuggestions] = useState(false);
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
@@ -25,14 +27,23 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
-  const suggestedTags = useMemo(() => {
-    if (!allTags || !inputValue) return [];
+  const suggestedRemedyTags = useMemo(() => {
+    if (!allTags || !remedyInput) return [];
     
-    const searchLower = inputValue.toLowerCase();
+    const searchLower = remedyInput.toLowerCase();
     return allTags
-      .filter(tag => tag.name.toLowerCase().startsWith(searchLower))
+      .filter(tag => tag.category === 'remedy' && tag.name.toLowerCase().startsWith(searchLower))
       .slice(0, 10);
-  }, [allTags, inputValue]);
+  }, [allTags, remedyInput]);
+
+  const suggestedSituationTags = useMemo(() => {
+    if (!allTags || !situationInput) return [];
+    
+    const searchLower = situationInput.toLowerCase();
+    return allTags
+      .filter(tag => tag.category === 'situation' && tag.name.toLowerCase().startsWith(searchLower))
+      .slice(0, 10);
+  }, [allTags, situationInput]);
 
   const filteredArticles = useMemo(() => {
     if (!articles) return [];
@@ -52,27 +63,50 @@ export default function ArticleBrowse() {
     });
   }, [articles, appliedQuery, language]);
 
-  const handleSearch = () => {
-    setAppliedQuery(inputValue);
-    setShowSuggestions(false);
+  const handleRemedySearch = () => {
+    setAppliedQuery(remedyInput);
+    setShowRemedySuggestions(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSituationSearch = () => {
+    setAppliedQuery(situationInput);
+    setShowSituationSuggestions(false);
+  };
+
+  const handleRemedyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      handleSearch();
+      handleRemedySearch();
     }
   };
 
-  const handleTagClick = (tagName: string) => {
-    setInputValue(tagName);
-    setAppliedQuery(tagName);
-    setShowSuggestions(false);
+  const handleSituationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSituationSearch();
+    }
   };
 
-  const handleClear = () => {
-    setInputValue('');
+  const handleRemedyTagClick = (tagName: string) => {
+    setRemedyInput(tagName);
+    setAppliedQuery(tagName);
+    setShowRemedySuggestions(false);
+  };
+
+  const handleSituationTagClick = (tagName: string) => {
+    setSituationInput(tagName);
+    setAppliedQuery(tagName);
+    setShowSituationSuggestions(false);
+  };
+
+  const handleClearRemedy = () => {
+    setRemedyInput('');
     setAppliedQuery('');
-    setShowSuggestions(false);
+    setShowRemedySuggestions(false);
+  };
+
+  const handleClearSituation = () => {
+    setSituationInput('');
+    setAppliedQuery('');
+    setShowSituationSuggestions(false);
   };
 
   if (isLoading) {
@@ -88,33 +122,33 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 space-y-6">
-        <Popover open={showSuggestions && suggestedTags.length > 0} onOpenChange={setShowSuggestions}>
+      <div className="mb-8 space-y-4">
+        <Popover open={showRemedySuggestions && suggestedRemedyTags.length > 0} onOpenChange={setShowRemedySuggestions}>
           <PopoverTrigger asChild>
             <div className="relative flex items-center">
-              {!inputValue && (
+              {!remedyInput && (
                 <Search className="absolute left-3 h-5 w-5 text-muted-foreground pointer-events-none" />
               )}
               <Input
                 type="text"
-                placeholder={t('searchPlaceholder')}
-                value={inputValue}
+                placeholder={t('searchByRemedy')}
+                value={remedyInput}
                 onChange={(e) => {
-                  setInputValue(e.target.value);
-                  setShowSuggestions(e.target.value.length > 0);
+                  setRemedyInput(e.target.value);
+                  setShowRemedySuggestions(e.target.value.length > 0);
                 }}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setShowSuggestions(inputValue.length > 0)}
-                className={`h-12 text-base ${inputValue ? 'pl-4 pr-12' : 'pl-10 pr-4'}`}
-                data-testid="input-search"
+                onKeyDown={handleRemedyKeyDown}
+                onFocus={() => setShowRemedySuggestions(remedyInput.length > 0)}
+                className={`h-12 text-base ${remedyInput ? 'pl-4 pr-12' : 'pl-10 pr-4'}`}
+                data-testid="input-search-remedy"
               />
-              {inputValue && (
+              {remedyInput && (
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 h-10 w-10"
-                  onClick={handleClear}
-                  data-testid="button-clear-search"
+                  className="absolute right-1"
+                  onClick={handleClearRemedy}
+                  data-testid="button-clear-remedy"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -126,15 +160,69 @@ export default function ArticleBrowse() {
             align="start"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="text-xs text-muted-foreground mb-2 px-2">{t('suggestedRemedies') || 'Препараты:'}</div>
+            <div className="text-xs text-muted-foreground mb-2 px-2">{t('remedies')}</div>
             <div className="flex flex-wrap gap-2">
-              {suggestedTags.map(tag => (
+              {suggestedRemedyTags.map(tag => (
+                <Badge
+                  key={tag.id}
+                  variant="default"
+                  className="cursor-pointer"
+                  onClick={() => handleRemedyTagClick(tag.name)}
+                  data-testid={`badge-remedy-${tag.id}`}
+                >
+                  {tag.name}
+                </Badge>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover open={showSituationSuggestions && suggestedSituationTags.length > 0} onOpenChange={setShowSituationSuggestions}>
+          <PopoverTrigger asChild>
+            <div className="relative flex items-center">
+              {!situationInput && (
+                <Search className="absolute left-3 h-5 w-5 text-muted-foreground pointer-events-none" />
+              )}
+              <Input
+                type="text"
+                placeholder={t('searchBySituation')}
+                value={situationInput}
+                onChange={(e) => {
+                  setSituationInput(e.target.value);
+                  setShowSituationSuggestions(e.target.value.length > 0);
+                }}
+                onKeyDown={handleSituationKeyDown}
+                onFocus={() => setShowSituationSuggestions(situationInput.length > 0)}
+                className={`h-12 text-base ${situationInput ? 'pl-4 pr-12' : 'pl-10 pr-4'}`}
+                data-testid="input-search-situation"
+              />
+              {situationInput && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1"
+                  onClick={handleClearSituation}
+                  data-testid="button-clear-situation"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-[var(--radix-popover-trigger-width)] p-2" 
+            align="start"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="text-xs text-muted-foreground mb-2 px-2">{t('situations')}</div>
+            <div className="flex flex-wrap gap-2">
+              {suggestedSituationTags.map(tag => (
                 <Badge
                   key={tag.id}
                   variant="secondary"
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => handleTagClick(tag.name)}
-                  data-testid={`badge-tag-${tag.id}`}
+                  className="cursor-pointer"
+                  onClick={() => handleSituationTagClick(tag.name)}
+                  data-testid={`badge-situation-${tag.id}`}
                 >
                   {tag.name}
                 </Badge>
