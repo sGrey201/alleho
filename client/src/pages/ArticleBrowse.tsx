@@ -56,7 +56,7 @@ export default function ArticleBrowse() {
             placeholder={t('searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-10 h-12 text-base"
+            className="pl-10 pr-12 h-12 text-base"
             data-testid="input-search"
           />
           {searchQuery && (
