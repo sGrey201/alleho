@@ -33,18 +33,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Command,
-  CommandEmpty,
-  CommandGroup,
   CommandInput,
-  CommandItem,
-  CommandList,
 } from '@/components/ui/command';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -371,24 +366,34 @@ export default function AdminArticles() {
                         value={tagSearchQuery}
                         onValueChange={setTagSearchQuery}
                       />
-                      <CommandList>
-                        <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
-                        <ScrollArea className="h-96">
-                          <CommandGroup>
+                      <div className="overflow-y-auto max-h-96">
+                        {filteredTags.length === 0 ? (
+                          <div className="py-6 text-center text-sm text-muted-foreground">
+                            {t('noTagsFound')}
+                          </div>
+                        ) : (
+                          <div className="p-1">
                             {filteredTags.map((tag) => (
-                              <CommandItem
+                              <div
                                 key={tag.id}
-                                value={tag.id}
-                                onSelect={() => addTag(tag.id)}
-                                disabled={selectedTagIds.includes(tag.id)}
+                                onClick={() => {
+                                  if (!selectedTagIds.includes(tag.id)) {
+                                    addTag(tag.id);
+                                  }
+                                }}
+                                className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground ${
+                                  selectedTagIds.includes(tag.id) 
+                                    ? 'opacity-50 cursor-not-allowed' 
+                                    : ''
+                                }`}
                                 data-testid={`tag-option-${tag.slug}`}
                               >
                                 {tag.name}
-                              </CommandItem>
+                              </div>
                             ))}
-                          </CommandGroup>
-                        </ScrollArea>
-                      </CommandList>
+                          </div>
+                        )}
+                      </div>
                     </Command>
                   </PopoverContent>
                 </Popover>
