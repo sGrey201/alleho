@@ -9,6 +9,8 @@ import {
   type InsertArticle,
   type UpdateArticle,
   type Tag,
+  type InsertTag,
+  type UpdateTag,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray } from "drizzle-orm";
@@ -27,7 +29,11 @@ export interface IStorage {
   // Tag operations
   getAllTags(): Promise<Tag[]>;
   getTagsByIds(ids: string[]): Promise<Tag[]>;
+  getTagsByCategory(category: 'remedy' | 'situation'): Promise<Tag[]>;
   searchTags(query: string): Promise<Tag[]>;
+  createTag(tag: InsertTag): Promise<Tag>;
+  updateTag(id: string, tag: UpdateTag): Promise<Tag | undefined>;
+  deleteTag(id: string): Promise<boolean>;
   
   // Article operations
   getAllArticles(): Promise<ArticleWithTags[]>;
@@ -105,6 +111,14 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(tags).where(inArray(tags.id, ids));
   }
 
+  async getTagsByCategory(category: 'remedy' | 'situation'): Promise<Tag[]> {
+    return await db
+      .select()
+      .from(tags)
+      .where(eq(tags.category, category))
+      .orderBy(tags.name);
+  }
+
   async searchTags(query: string): Promise<Tag[]> {
     return await db
       .select()
@@ -117,6 +131,31 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(tags.name)
       .limit(50);
+  }
+
+  async createTag(tagData: InsertTag): Promise<Tag> {
+    const [tag] = await db
+      .insert(tags)
+      .values(tagData)
+      .returning();
+    return tag;
+  }
+
+  async updateTag(id: string, tagData: UpdateTag): Promise<Tag | undefined> {
+    const [tag] = await db
+      .update(tags)
+      .set({
+        ...tagData,
+        updatedAt: new Date(),
+      })
+      .where(eq(tags.id, id))
+      .returning();
+    return tag;
+  }
+
+  async deleteTag(id: string): Promise<boolean> {
+    const result = await db.delete(tags).where(eq(tags.id, id)).returning();
+    return result.length > 0;
   }
 
   async getArticleTags(articleId: string): Promise<Tag[]> {

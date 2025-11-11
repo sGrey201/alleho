@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
-import { insertArticleSchema, updateArticleSchema } from "@shared/schema";
+import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -123,8 +123,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tag routes (public - for browsing and searching)
-  app.get('/api/tags', async (_req, res) => {
+  app.get('/api/tags', async (req, res) => {
     try {
+      const { category } = req.query;
+      
+      // Validate category if provided
+      if (category) {
+        const parsed = tagCategoryEnum.safeParse(category);
+        if (!parsed.success) {
+          return res.status(400).json({ message: "Invalid category. Must be 'remedy' or 'situation'" });
+        }
+        const tagsList = await storage.getTagsByCategory(parsed.data);
+        return res.json(tagsList);
+      }
+      
       const tagsList = await storage.getAllTags();
       res.json(tagsList);
     } catch (error) {
@@ -141,6 +153,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching tags:", error);
       res.status(500).json({ message: "Failed to search tags" });
+    }
+  });
+
+  // Admin tag routes
+  app.post('/api/admin/tags', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const validatedData = insertTagSchema.parse(req.body);
+      const tag = await storage.createTag(validatedData);
+      res.json(tag);
+    } catch (error) {
+      console.error("Error creating tag:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid tag data" });
+      }
+      res.status(500).json({ message: "Failed to create tag" });
+    }
+  });
+
+  app.put('/api/admin/tags/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = updateTagSchema.parse(req.body);
+      const tag = await storage.updateTag(id, validatedData);
+      if (!tag) {
+        return res.status(404).json({ message: "Tag not found" });
+      }
+      res.json(tag);
+    } catch (error) {
+      console.error("Error updating tag:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid tag data" });
+      }
+      res.status(500).json({ message: "Failed to update tag" });
+    }
+  });
+
+  app.delete('/api/admin/tags/:id', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteTag(id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Tag not found" });
+      }
+      res.json({ message: "Tag deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting tag:", error);
+      res.status(500).json({ message: "Failed to delete tag" });
     }
   });
 

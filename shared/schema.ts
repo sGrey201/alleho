@@ -39,6 +39,10 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+// Tag category enum
+export const tagCategoryEnum = z.enum(['remedy', 'situation']);
+export type TagCategory = z.infer<typeof tagCategoryEnum>;
+
 // Tags table (homeopathic remedies and situations)
 export const tags = pgTable("tags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -48,15 +52,28 @@ export const tags = pgTable("tags", {
   category: varchar("category", { length: 50 }).notNull().default('remedy'),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("tags_category_idx").on(table.category),
+]);
 
 export const insertTagSchema = createInsertSchema(tags).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  category: tagCategoryEnum.default('remedy'),
 });
 
+export const updateTagSchema = createInsertSchema(tags).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  category: tagCategoryEnum.optional(),
+}).partial();
+
 export type InsertTag = z.infer<typeof insertTagSchema>;
+export type UpdateTag = z.infer<typeof updateTagSchema>;
 export type Tag = typeof tags.$inferSelect;
 
 // Articles table (trilingual content)
