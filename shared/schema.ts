@@ -39,12 +39,13 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-// Tags table (homeopathic remedies)
+// Tags table (homeopathic remedies and situations)
 export const tags = pgTable("tags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   slug: varchar("slug", { length: 255 }).unique().notNull(),
   name: text("name").notNull(),
   description: text("description"),
+  category: varchar("category", { length: 50 }).notNull().default('remedy'),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
