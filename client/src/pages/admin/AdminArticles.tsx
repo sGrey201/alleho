@@ -143,11 +143,15 @@ export default function AdminArticles() {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
     onSuccess: (newTag: Tag) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+      // Оптимистичное обновление: добавляем тег в кеш сразу
+      queryClient.setQueryData<Tag[]>(['/api/tags'], (oldTags = []) => [...oldTags, newTag]);
+      
       toast({
         title: t.tagSaved,
         variant: 'default',
       });
+      
+      // Автоматически присваиваем созданный тег статье
       setSelectedTagIds([...selectedTagIds, newTag.id]);
       setTagSearchQuery('');
       setTagPopoverOpen(false);
