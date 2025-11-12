@@ -150,8 +150,6 @@ export default function AdminArticles() {
         title: t.tagSaved,
         variant: 'default',
       });
-      
-      setTagSearchQuery('');
     },
     onError: () => {
       toast({
