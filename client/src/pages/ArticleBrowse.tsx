@@ -417,9 +417,13 @@ export default function ArticleBrowse() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredArticles.map(article => (
-            <ArticleCard key={article.id} article={article} />
+        <div>
+          {filteredArticles.map((article, index) => (
+            <ArticleCard 
+              key={article.id} 
+              article={article} 
+              isLast={index === filteredArticles.length - 1}
+            />
           ))}
         </div>
       )}
