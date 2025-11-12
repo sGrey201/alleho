@@ -143,12 +143,10 @@ export default function AdminArticles() {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
     onSuccess: async (newTag: Tag) => {
-      toast({
-        title: t.tagSaved,
-        variant: 'default',
-      });
+      // СНАЧАЛА обновляем список тегов с сервера
+      await refetchTags();
       
-      // Автоматически присваиваем созданный тег статье
+      // ПОТОМ присваиваем созданный тег статье
       setSelectedTagIds(prev => {
         if (prev.includes(newTag.id)) {
           return prev;
@@ -156,8 +154,10 @@ export default function AdminArticles() {
         return [...prev, newTag.id];
       });
       
-      // Обновляем список тегов с сервера
-      await refetchTags();
+      toast({
+        title: t.tagSaved,
+        variant: 'default',
+      });
       
       setTagSearchQuery('');
       setTagPopoverOpen(false);
