@@ -14,7 +14,8 @@ type ArticleWithTags = Article & { tags: Tag[] };
 export default function ArticleBrowse() {
   const [remedyInput, setRemedyInput] = useState('');
   const [situationInput, setSituationInput] = useState('');
-  const [appliedQuery, setAppliedQuery] = useState('');
+  const [appliedRemedyQuery, setAppliedRemedyQuery] = useState('');
+  const [appliedSituationQuery, setAppliedSituationQuery] = useState('');
   const [showRemedySuggestions, setShowRemedySuggestions] = useState(false);
   const [showSituationSuggestions, setShowSituationSuggestions] = useState(false);
 
@@ -48,27 +49,48 @@ export default function ArticleBrowse() {
     if (!articles) return [];
     
     return articles.filter(article => {
-      if (!appliedQuery) return true;
+      // Если ничего не выбрано - показываем все статьи
+      if (!appliedRemedyQuery && !appliedSituationQuery) return true;
       
       const title = article.title.toLowerCase();
       const content = article.content.toLowerCase();
-      const searchLower = appliedQuery.toLowerCase();
       
-      const matchesTitle = title.includes(searchLower);
-      const matchesContent = content.includes(searchLower);
-      const matchesTags = article.tags.some(tag => tag.name.toLowerCase().includes(searchLower));
+      // Проверка соответствия препарату
+      let matchesRemedy = true;
+      if (appliedRemedyQuery) {
+        const remedyLower = appliedRemedyQuery.toLowerCase();
+        matchesRemedy = 
+          title.includes(remedyLower) ||
+          content.includes(remedyLower) ||
+          article.tags.some(tag => 
+            tag.category === 'remedy' && tag.name.toLowerCase().includes(remedyLower)
+          );
+      }
       
-      return matchesTitle || matchesContent || matchesTags;
+      // Проверка соответствия ситуации
+      let matchesSituation = true;
+      if (appliedSituationQuery) {
+        const situationLower = appliedSituationQuery.toLowerCase();
+        matchesSituation = 
+          title.includes(situationLower) ||
+          content.includes(situationLower) ||
+          article.tags.some(tag => 
+            tag.category === 'situation' && tag.name.toLowerCase().includes(situationLower)
+          );
+      }
+      
+      // Логика AND: статья должна соответствовать И препарату И ситуации (если оба заполнены)
+      return matchesRemedy && matchesSituation;
     });
-  }, [articles, appliedQuery]);
+  }, [articles, appliedRemedyQuery, appliedSituationQuery]);
 
   const handleRemedySearch = () => {
-    setAppliedQuery(remedyInput);
+    setAppliedRemedyQuery(remedyInput);
     setShowRemedySuggestions(false);
   };
 
   const handleSituationSearch = () => {
-    setAppliedQuery(situationInput);
+    setAppliedSituationQuery(situationInput);
     setShowSituationSuggestions(false);
   };
 
@@ -86,25 +108,25 @@ export default function ArticleBrowse() {
 
   const handleRemedyTagClick = (tagName: string) => {
     setRemedyInput(tagName);
-    setAppliedQuery(tagName);
+    setAppliedRemedyQuery(tagName);
     setShowRemedySuggestions(false);
   };
 
   const handleSituationTagClick = (tagName: string) => {
     setSituationInput(tagName);
-    setAppliedQuery(tagName);
+    setAppliedSituationQuery(tagName);
     setShowSituationSuggestions(false);
   };
 
   const handleClearRemedy = () => {
     setRemedyInput('');
-    setAppliedQuery('');
+    setAppliedRemedyQuery('');
     setShowRemedySuggestions(false);
   };
 
   const handleClearSituation = () => {
     setSituationInput('');
-    setAppliedQuery('');
+    setAppliedSituationQuery('');
     setShowSituationSuggestions(false);
   };
 
@@ -235,7 +257,7 @@ export default function ArticleBrowse() {
         <div className="flex min-h-[30vh] items-center justify-center">
           <div className="text-center">
             <p className="text-lg text-muted-foreground">
-              {appliedQuery ? t.noResults : t.noArticles}
+              {appliedRemedyQuery || appliedSituationQuery ? t.noResults : t.noArticles}
             </p>
           </div>
         </div>
