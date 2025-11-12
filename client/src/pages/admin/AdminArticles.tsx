@@ -67,7 +67,7 @@ export default function AdminArticles() {
     enabled: isAdmin,
   });
 
-  const { data: allTags = [], isLoading: isLoadingTags } = useQuery<Tag[]>({
+  const { data: allTags = [], isLoading: isLoadingTags, refetch: refetchTags } = useQuery<Tag[]>({
     queryKey: ['/api/tags'],
   });
 
@@ -142,16 +142,7 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: (newTag: Tag) => {
-      // Немедленно добавляем новый тег в кеш
-      queryClient.setQueryData<Tag[]>(['/api/tags'], (oldTags = []) => {
-        // Проверяем, не добавлен ли уже этот тег
-        if (oldTags.some(t => t.id === newTag.id)) {
-          return oldTags;
-        }
-        return [...oldTags, newTag];
-      });
-      
+    onSuccess: async (newTag: Tag) => {
       toast({
         title: t.tagSaved,
         variant: 'default',
@@ -164,6 +155,10 @@ export default function AdminArticles() {
         }
         return [...prev, newTag.id];
       });
+      
+      // Обновляем список тегов с сервера
+      await refetchTags();
+      
       setTagSearchQuery('');
       setTagPopoverOpen(false);
     },
