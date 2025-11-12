@@ -8,16 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
-  const [remedySearchQuery, setRemedySearchQuery] = useState('');
-  const [situationSearchQuery, setSituationSearchQuery] = useState('');
-  const [remedyPopoverOpen, setRemedyPopoverOpen] = useState(false);
-  const [situationPopoverOpen, setSituationPopoverOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
@@ -27,13 +27,13 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
-  const filteredRemedyTags = useMemo(() => {
+  const filteredTags = useMemo(() => {
     if (!allTags) return [];
     
-    let tags = allTags.filter(tag => tag.category === 'remedy');
+    let tags = allTags.filter(tag => tag.category === tagCategoryFilter);
     
-    if (!remedySearchQuery.trim()) return tags;
-    const query = remedySearchQuery.toLowerCase().trim();
+    if (!tagSearchQuery.trim()) return tags;
+    const query = tagSearchQuery.toLowerCase().trim();
     return tags.filter(tag => {
       const tagNameLower = tag.name.toLowerCase();
       const tagSlugLower = tag.slug.toLowerCase();
@@ -47,29 +47,7 @@ export default function ArticleBrowse() {
       return nameWords.some(word => word.startsWith(query)) || 
              slugWords.some(word => word.startsWith(query));
     });
-  }, [allTags, remedySearchQuery]);
-
-  const filteredSituationTags = useMemo(() => {
-    if (!allTags) return [];
-    
-    let tags = allTags.filter(tag => tag.category === 'situation');
-    
-    if (!situationSearchQuery.trim()) return tags;
-    const query = situationSearchQuery.toLowerCase().trim();
-    return tags.filter(tag => {
-      const tagNameLower = tag.name.toLowerCase();
-      const tagSlugLower = tag.slug.toLowerCase();
-      
-      if (tagNameLower.includes(query) || tagSlugLower.includes(query)) {
-        return true;
-      }
-      
-      const nameWords = tagNameLower.split(/\s+/);
-      const slugWords = tagSlugLower.split(/[-_]/);
-      return nameWords.some(word => word.startsWith(query)) || 
-             slugWords.some(word => word.startsWith(query));
-    });
-  }, [allTags, situationSearchQuery]);
+  }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
   const selectedRemedyTags = useMemo(() => {
     if (!allTags) return [];
@@ -105,20 +83,17 @@ export default function ArticleBrowse() {
     });
   }, [articles, selectedRemedyTagIds, selectedSituationTagIds]);
 
-  const addRemedyTag = (tagId: string) => {
-    if (!selectedRemedyTagIds.includes(tagId)) {
+  const addTag = (tagId: string) => {
+    const tag = allTags?.find(t => t.id === tagId);
+    if (!tag) return;
+    
+    if (tag.category === 'remedy' && !selectedRemedyTagIds.includes(tagId)) {
       setSelectedRemedyTagIds([...selectedRemedyTagIds, tagId]);
-    }
-    setRemedyPopoverOpen(false);
-    setRemedySearchQuery('');
-  };
-
-  const addSituationTag = (tagId: string) => {
-    if (!selectedSituationTagIds.includes(tagId)) {
+    } else if (tag.category === 'situation' && !selectedSituationTagIds.includes(tagId)) {
       setSelectedSituationTagIds([...selectedSituationTagIds, tagId]);
     }
-    setSituationPopoverOpen(false);
-    setSituationSearchQuery('');
+    setTagPopoverOpen(false);
+    setTagSearchQuery('');
   };
 
   const removeRemedyTag = (tagId: string) => {
@@ -129,25 +104,14 @@ export default function ArticleBrowse() {
     setSelectedSituationTagIds(selectedSituationTagIds.filter(id => id !== tagId));
   };
 
-  const handleRemedyKeyDown = (e: React.KeyboardEvent) => {
+  const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (filteredRemedyTags.length > 0) {
-        const firstTag = filteredRemedyTags[0];
-        if (!selectedRemedyTagIds.includes(firstTag.id)) {
-          addRemedyTag(firstTag.id);
-        }
-      }
-    }
-  };
-
-  const handleSituationKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filteredSituationTags.length > 0) {
-        const firstTag = filteredSituationTags[0];
-        if (!selectedSituationTagIds.includes(firstTag.id)) {
-          addSituationTag(firstTag.id);
+      if (filteredTags.length > 0) {
+        const firstTag = filteredTags[0];
+        const selectedIds = tagCategoryFilter === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+        if (!selectedIds.includes(firstTag.id)) {
+          addTag(firstTag.id);
         }
       }
     }
@@ -166,144 +130,104 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 space-y-4">
-        {/* Препараты */}
-        <div>
-          <div className="text-sm font-medium mb-2">{t.remedies}</div>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {selectedRemedyTags.map((tag) => (
-              <Badge 
-                key={tag.id} 
-                variant="default" 
-                className="gap-1"
-              >
-                {tag.name}
-                <button
-                  type="button"
-                  onClick={() => removeRemedyTag(tag.id)}
-                  className="ml-1 hover:text-destructive"
-                  data-testid={`button-remove-remedy-${tag.id}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <Popover open={remedyPopoverOpen} onOpenChange={setRemedyPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
+      <div className="mb-8">
+        <div className="text-sm font-medium mb-2">{t.tags}</div>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {selectedRemedyTags.map((tag) => (
+            <Badge 
+              key={tag.id} 
+              variant="default" 
+              className="gap-1"
+            >
+              {tag.name}
+              <button
                 type="button"
-                variant="outline"
-                className="w-full justify-between"
-                data-testid="button-select-remedies"
+                onClick={() => removeRemedyTag(tag.id)}
+                className="ml-1 hover:text-destructive"
+                data-testid={`button-remove-remedy-${tag.id}`}
               >
-                {t.selectTags}
-                <Plus className="ml-2 h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
-              <Command shouldFilter={false} onKeyDown={handleRemedyKeyDown}>
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {selectedSituationTags.map((tag) => (
+            <Badge 
+              key={tag.id} 
+              variant="secondary" 
+              className="gap-1"
+            >
+              {tag.name}
+              <button
+                type="button"
+                onClick={() => removeSituationTag(tag.id)}
+                className="ml-1 hover:text-destructive"
+                data-testid={`button-remove-situation-${tag.id}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-between"
+              data-testid="button-select-tags"
+            >
+              {t.selectTags}
+              <Plus className="ml-2 h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[400px] p-0" align="start">
+            <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
+              <div className="border-b px-2 pt-2">
+                <TabsList className="w-full grid grid-cols-2">
+                  <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
+                    {t.remedies}
+                  </TabsTrigger>
+                  <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
+                    {t.situations}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
                 <CommandInput 
-                  placeholder={t.searchByRemedy} 
-                  value={remedySearchQuery}
-                  onValueChange={setRemedySearchQuery}
+                  placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
+                  value={tagSearchQuery}
+                  onValueChange={setTagSearchQuery}
                 />
                 <CommandList className="max-h-96 overflow-auto">
-                  {filteredRemedyTags.length === 0 ? (
+                  {filteredTags.length === 0 ? (
                     <CommandEmpty>{t.noTagsFound}</CommandEmpty>
                   ) : (
                     <CommandGroup>
-                      {filteredRemedyTags.map((tag) => (
-                        <CommandItem
-                          key={tag.id}
-                          value={tag.name}
-                          onSelect={() => {
-                            if (!selectedRemedyTagIds.includes(tag.id)) {
-                              addRemedyTag(tag.id);
-                            }
-                          }}
-                          disabled={selectedRemedyTagIds.includes(tag.id)}
-                          data-testid={`remedy-option-${tag.slug}`}
-                        >
-                          {tag.name}
-                        </CommandItem>
-                      ))}
+                      {filteredTags.map((tag) => {
+                        const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+                        return (
+                          <CommandItem
+                            key={tag.id}
+                            value={tag.name}
+                            onSelect={() => {
+                              if (!selectedIds.includes(tag.id)) {
+                                addTag(tag.id);
+                              }
+                            }}
+                            disabled={selectedIds.includes(tag.id)}
+                            data-testid={`tag-option-${tag.slug}`}
+                          >
+                            {tag.name}
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   )}
                 </CommandList>
               </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Ситуации */}
-        <div>
-          <div className="text-sm font-medium mb-2">{t.situations}</div>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {selectedSituationTags.map((tag) => (
-              <Badge 
-                key={tag.id} 
-                variant="secondary" 
-                className="gap-1"
-              >
-                {tag.name}
-                <button
-                  type="button"
-                  onClick={() => removeSituationTag(tag.id)}
-                  className="ml-1 hover:text-destructive"
-                  data-testid={`button-remove-situation-${tag.id}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <Popover open={situationPopoverOpen} onOpenChange={setSituationPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-between"
-                data-testid="button-select-situations"
-              >
-                {t.selectTags}
-                <Plus className="ml-2 h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
-              <Command shouldFilter={false} onKeyDown={handleSituationKeyDown}>
-                <CommandInput 
-                  placeholder={t.searchBySituation} 
-                  value={situationSearchQuery}
-                  onValueChange={setSituationSearchQuery}
-                />
-                <CommandList className="max-h-96 overflow-auto">
-                  {filteredSituationTags.length === 0 ? (
-                    <CommandEmpty>{t.noTagsFound}</CommandEmpty>
-                  ) : (
-                    <CommandGroup>
-                      {filteredSituationTags.map((tag) => (
-                        <CommandItem
-                          key={tag.id}
-                          value={tag.name}
-                          onSelect={() => {
-                            if (!selectedSituationTagIds.includes(tag.id)) {
-                              addSituationTag(tag.id);
-                            }
-                          }}
-                          disabled={selectedSituationTagIds.includes(tag.id)}
-                          data-testid={`situation-option-${tag.slug}`}
-                        >
-                          {tag.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  )}
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
+            </Tabs>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {filteredArticles.length === 0 ? (
