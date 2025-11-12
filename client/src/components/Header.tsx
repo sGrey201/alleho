@@ -37,31 +37,6 @@ export function Header() {
               Homeopathy
             </span>
           </Link>
-          
-          {isAuthenticated && (
-            <nav className="hidden items-center gap-2 md:flex">
-              <Link 
-                href="/"
-                className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
-                  location === '/' ? 'bg-accent text-accent-foreground' : 'text-foreground'
-                }`}
-                data-testid="link-articles"
-              >
-                {t.articles}
-              </Link>
-              {isAdmin && (
-                <Link 
-                  href="/admin"
-                  className={`px-3 py-2 text-sm font-medium rounded-md hover-elevate active-elevate-2 ${
-                    location.startsWith('/admin') ? 'bg-accent text-accent-foreground' : 'text-foreground'
-                  }`}
-                  data-testid="link-admin"
-                >
-                  {t.admin}
-                </Link>
-              )}
-            </nav>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
