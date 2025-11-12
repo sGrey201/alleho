@@ -75,9 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription) {
         const previewArticle = {
           ...article,
-          contentRu: article.contentRu.substring(0, 1000),
-          contentDe: article.contentDe.substring(0, 1000),
-          contentEn: article.contentEn.substring(0, 1000),
+          content: article.content.substring(0, 1000),
         };
         return res.json(previewArticle);
       }
@@ -96,8 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       
       const { query } = req.params;
-      const language = (req.query.lang as 'ru' | 'de' | 'en') || 'en';
-      const results = await storage.searchArticles(query, language);
+      const results = await storage.searchArticles(query);
       
       // Check subscription status
       const hasActiveSubscription = user?.subscriptionExpiresAt 
@@ -108,9 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription) {
         const previewResults = results.map(article => ({
           ...article,
-          contentRu: article.contentRu.substring(0, 1000),
-          contentDe: article.contentDe.substring(0, 1000),
-          contentEn: article.contentEn.substring(0, 1000),
+          content: article.content.substring(0, 1000),
         }));
         return res.json(previewResults);
       }
@@ -203,23 +198,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User preferences
-  app.put('/api/user/language', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const { language } = req.body;
-      
-      if (!['ru', 'de', 'en'].includes(language)) {
-        return res.status(400).json({ message: "Invalid language" });
-      }
-
-      const user = await storage.updateUserLanguage(userId, language);
-      res.json(user);
-    } catch (error) {
-      console.error("Error updating language:", error);
-      res.status(500).json({ message: "Failed to update language" });
-    }
-  });
 
   // Admin article routes
   app.get('/api/admin/articles', isAuthenticated, isAdmin, async (_req, res) => {

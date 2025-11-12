@@ -31,7 +31,6 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   isAdmin: boolean("is_admin").default(false).notNull(),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
-  preferredLanguage: varchar("preferred_language", { length: 2 }).default('en').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -76,15 +75,11 @@ export type InsertTag = z.infer<typeof insertTagSchema>;
 export type UpdateTag = z.infer<typeof updateTagSchema>;
 export type Tag = typeof tags.$inferSelect;
 
-// Articles table (trilingual content)
+// Articles table (Russian content only)
 export const articles = pgTable("articles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  titleRu: text("title_ru").notNull(),
-  titleDe: text("title_de").notNull(),
-  titleEn: text("title_en").notNull(),
-  contentRu: text("content_ru").notNull(),
-  contentDe: text("content_de").notNull(),
-  contentEn: text("content_en").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -24,7 +24,6 @@ export interface IStorage {
   updateUserProfile(id: string, profileData: Partial<User>): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserSubscription(id: string, expiresAt: Date | null): Promise<User>;
-  updateUserLanguage(id: string, language: string): Promise<User>;
 
   // Tag operations
   getAllTags(): Promise<Tag[]>;
@@ -41,7 +40,7 @@ export interface IStorage {
   createArticle(article: InsertArticle, tagIds: string[]): Promise<ArticleWithTags>;
   updateArticle(id: string, article: UpdateArticle, tagIds?: string[]): Promise<ArticleWithTags>;
   deleteArticle(id: string): Promise<void>;
-  searchArticles(query: string, language: 'ru' | 'de' | 'en'): Promise<ArticleWithTags[]>;
+  searchArticles(query: string): Promise<ArticleWithTags[]>;
   getArticleTags(articleId: string): Promise<Tag[]>;
   setArticleTags(articleId: string, tagIds: string[]): Promise<void>;
 }
@@ -89,17 +88,6 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserLanguage(id: string, language: string): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({
-        preferredLanguage: language,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
-  }
 
   // Tag operations
   async getAllTags(): Promise<Tag[]> {
@@ -252,10 +240,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(articles).where(eq(articles.id, id));
   }
 
-  async searchArticles(query: string, language: 'ru' | 'de' | 'en'): Promise<ArticleWithTags[]> {
-    const titleCol = language === 'ru' ? articles.titleRu : language === 'de' ? articles.titleDe : articles.titleEn;
-    const contentCol = language === 'ru' ? articles.contentRu : language === 'de' ? articles.contentDe : articles.contentEn;
-    
+  async searchArticles(query: string): Promise<ArticleWithTags[]> {
     // Search in articles and tags
     const results = await db
       .selectDistinct({ article: articles })
@@ -264,8 +249,8 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(tags, eq(articleTags.tagId, tags.id))
       .where(
         or(
-          ilike(titleCol, `%${query}%`),
-          ilike(contentCol, `%${query}%`),
+          ilike(articles.title, `%${query}%`),
+          ilike(articles.content, `%${query}%`),
           ilike(tags.name, `%${query}%`)
         )
       )
