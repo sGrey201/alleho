@@ -179,7 +179,8 @@ export default function AdminArticles() {
   }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
   const selectedTags = useMemo(() => {
-    return allTags.filter(tag => selectedTagIds.includes(tag.id));
+    if (!allTags) return [];
+    return allTags.filter(tag => tag && selectedTagIds.includes(tag.id));
   }, [allTags, selectedTagIds]);
 
   const resetForm = () => {
@@ -310,7 +311,7 @@ export default function AdminArticles() {
               <div>
                 <Label>{t.tags}</Label>
                 <div className="flex flex-wrap gap-2 mt-2 mb-2">
-                  {selectedTags.map((tag) => (
+                  {selectedTags.filter(tag => tag && tag.id && tag.name).map((tag) => (
                     <Badge 
                       key={tag.id} 
                       variant={tag.category === 'remedy' ? 'default' : 'secondary'} 
