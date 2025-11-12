@@ -260,6 +260,24 @@ export default function AdminArticles() {
     }
   };
 
+  const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      
+      // Если есть отфильтрованные теги, выбираем первый
+      if (filteredTags.length > 0) {
+        const firstTag = filteredTags[0];
+        if (!selectedTagIds.includes(firstTag.id)) {
+          addTag(firstTag.id);
+        }
+      } 
+      // Если тегов нет, создаем новый
+      else if (tagSearchQuery.trim()) {
+        handleCreateNewTag();
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -375,6 +393,7 @@ export default function AdminArticles() {
                           placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
                           value={tagSearchQuery}
                           onValueChange={setTagSearchQuery}
+                          onKeyDown={handleTagSearchKeyDown}
                         />
                         <CommandList className="max-h-96 overflow-auto">
                           {filteredTags.length === 0 && tagSearchQuery.trim() ? (
