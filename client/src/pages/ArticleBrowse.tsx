@@ -238,11 +238,11 @@ export default function ArticleBrowse() {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={clearAllTags}
               data-testid="button-clear-tags"
             >
-              {t.clear}
+              <X className="h-4 w-4" />
             </Button>
           )}
         </div>
