@@ -142,9 +142,12 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: (newTag: Tag) => {
-      // Оптимистичное обновление: добавляем тег в кеш сразу
-      queryClient.setQueryData<Tag[]>(['/api/tags'], (oldTags = []) => [...oldTags, newTag]);
+    onSuccess: async (newTag: Tag) => {
+      // Принудительно обновляем список тегов с сервера
+      await queryClient.invalidateQueries({ 
+        queryKey: ['/api/tags'],
+        refetchType: 'active'
+      });
       
       toast({
         title: t.tagSaved,
