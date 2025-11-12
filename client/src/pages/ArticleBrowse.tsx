@@ -13,6 +13,19 @@ import { useLocation } from 'wouter';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
+// Транслитерация русского текста в латиницу для поиска препаратов
+function transliterateRuToLatin(text: string): string {
+  const map: Record<string, string> = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+  };
+  
+  return text.toLowerCase().split('').map(char => map[char] || char).join('');
+}
+
 export default function ArticleBrowse() {
   const [location, setLocation] = useLocation();
   const [tagSearchQuery, setTagSearchQuery] = useState('');
@@ -96,18 +109,41 @@ export default function ArticleBrowse() {
     
     if (!tagSearchQuery.trim()) return tags;
     const query = tagSearchQuery.toLowerCase().trim();
+    
+    // Для препаратов также ищем по транслитерации русского текста
+    const transliteratedQuery = tagCategoryFilter === 'remedy' ? transliterateRuToLatin(query) : query;
+    
     return tags.filter(tag => {
       const tagNameLower = tag.name.toLowerCase();
       const tagSlugLower = tag.slug.toLowerCase();
       
+      // Поиск по оригинальному запросу
       if (tagNameLower.includes(query) || tagSlugLower.includes(query)) {
         return true;
       }
       
+      // Для препаратов: поиск по транслитерированному запросу
+      if (tagCategoryFilter === 'remedy' && transliteratedQuery !== query) {
+        if (tagNameLower.includes(transliteratedQuery) || tagSlugLower.includes(transliteratedQuery)) {
+          return true;
+        }
+      }
+      
+      // Поиск по началу слов
       const nameWords = tagNameLower.split(/\s+/);
       const slugWords = tagSlugLower.split(/[-_]/);
-      return nameWords.some(word => word.startsWith(query)) || 
-             slugWords.some(word => word.startsWith(query));
+      
+      if (nameWords.some(word => word.startsWith(query)) || slugWords.some(word => word.startsWith(query))) {
+        return true;
+      }
+      
+      // Для препаратов: поиск по началу слов в транслитерации
+      if (tagCategoryFilter === 'remedy' && transliteratedQuery !== query) {
+        return nameWords.some(word => word.startsWith(transliteratedQuery)) || 
+               slugWords.some(word => word.startsWith(transliteratedQuery));
+      }
+      
+      return false;
     });
   }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
