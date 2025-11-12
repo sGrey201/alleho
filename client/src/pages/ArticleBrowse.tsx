@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
@@ -9,12 +9,22 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLocation } from 'wouter';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
-  const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
-  const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
+  const [location, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  
+  const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>(() => {
+    const remedies = searchParams.get('remedies');
+    return remedies ? remedies.split(',').filter(Boolean) : [];
+  });
+  const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>(() => {
+    const situations = searchParams.get('situations');
+    return situations ? situations.split(',').filter(Boolean) : [];
+  });
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -26,6 +36,22 @@ export default function ArticleBrowse() {
   const { data: allTags } = useQuery<Tag[]>({
     queryKey: ['/api/tags'],
   });
+
+  // Обновляем URL при изменении выбранных тегов
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedRemedyTagIds.length > 0) {
+      params.set('remedies', selectedRemedyTagIds.join(','));
+    }
+    if (selectedSituationTagIds.length > 0) {
+      params.set('situations', selectedSituationTagIds.join(','));
+    }
+    
+    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
+    if (newUrl !== location) {
+      setLocation(newUrl, { replace: true });
+    }
+  }, [selectedRemedyTagIds, selectedSituationTagIds]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
