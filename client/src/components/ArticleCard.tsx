@@ -43,7 +43,7 @@ export function ArticleCard({ article, isLast = false }: ArticleCardProps) {
   return (
     <Link href={`/article/${article.id}`}>
       <div 
-        className={`py-6 cursor-pointer transition-colors hover:bg-muted/50 ${!isLast ? 'border-b' : ''}`}
+        className={`py-6 cursor-pointer ${!isLast ? 'border-b' : ''}`}
         data-testid={`card-article-${article.id}`}
       >
         <h3 className="mb-3 text-2xl font-bold text-foreground leading-tight font-serif">
