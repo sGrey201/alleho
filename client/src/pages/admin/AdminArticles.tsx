@@ -221,7 +221,6 @@ export default function AdminArticles() {
     if (!selectedTagIds.includes(tagId)) {
       setSelectedTagIds([...selectedTagIds, tagId]);
     }
-    setTagPopoverOpen(false);
     setTagSearchQuery('');
   };
 
