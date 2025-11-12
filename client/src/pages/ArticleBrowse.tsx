@@ -15,16 +15,6 @@ type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
   const [location, setLocation] = useLocation();
-  const searchParams = new URLSearchParams(location.split('?')[1] || '');
-  
-  const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>(() => {
-    const remedies = searchParams.get('remedies');
-    return remedies ? remedies.split(',').filter(Boolean) : [];
-  });
-  const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>(() => {
-    const situations = searchParams.get('situations');
-    return situations ? situations.split(',').filter(Boolean) : [];
-  });
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -37,21 +27,65 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
+  // Инициализация выбранных тегов из URL после загрузки allTags
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
+  const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Инициализируем теги из URL при загрузке allTags
+  useEffect(() => {
+    if (allTags && !isInitialized) {
+      const remedySlugs = searchParams.get('remedies');
+      const situationSlugs = searchParams.get('situations');
+      
+      if (remedySlugs) {
+        const slugs = remedySlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
+          .map(tag => tag.id);
+        setSelectedRemedyTagIds(ids);
+      }
+      
+      if (situationSlugs) {
+        const slugs = situationSlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
+          .map(tag => tag.id);
+        setSelectedSituationTagIds(ids);
+      }
+      
+      setIsInitialized(true);
+    }
+  }, [allTags, isInitialized]);
+
   // Обновляем URL при изменении выбранных тегов
   useEffect(() => {
+    if (!allTags || !isInitialized) return;
+    
     const params = new URLSearchParams();
+    
     if (selectedRemedyTagIds.length > 0) {
-      params.set('remedies', selectedRemedyTagIds.join(','));
+      const slugs = allTags
+        .filter(tag => selectedRemedyTagIds.includes(tag.id))
+        .map(tag => tag.slug)
+        .join(',');
+      if (slugs) params.set('remedies', slugs);
     }
+    
     if (selectedSituationTagIds.length > 0) {
-      params.set('situations', selectedSituationTagIds.join(','));
+      const slugs = allTags
+        .filter(tag => selectedSituationTagIds.includes(tag.id))
+        .map(tag => tag.slug)
+        .join(',');
+      if (slugs) params.set('situations', slugs);
     }
     
     const newUrl = params.toString() ? `/?${params.toString()}` : '/';
     if (newUrl !== location) {
       setLocation(newUrl, { replace: true });
     }
-  }, [selectedRemedyTagIds, selectedSituationTagIds]);
+  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
