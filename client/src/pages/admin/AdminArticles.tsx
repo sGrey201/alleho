@@ -387,12 +387,11 @@ export default function AdminArticles() {
                           </TabsTrigger>
                         </TabsList>
                       </div>
-                      <Command shouldFilter={false}>
+                      <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
                         <CommandInput 
                           placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
                           value={tagSearchQuery}
                           onValueChange={setTagSearchQuery}
-                          onKeyDown={handleTagSearchKeyDown}
                         />
                         <CommandList className="max-h-96 overflow-auto">
                           {filteredTags.length === 0 && tagSearchQuery.trim() ? (
