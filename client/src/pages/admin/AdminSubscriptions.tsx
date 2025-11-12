@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { User } from '@shared/schema';
-import { useLanguage } from '@/context/LanguageContext';
+import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -29,7 +29,6 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 import { format, addDays, addMonths, addYears } from 'date-fns';
 
 export default function AdminSubscriptions() {
-  const { t } = useLanguage();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -50,7 +49,7 @@ export default function AdminSubscriptions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
       toast({
-        title: t('subscriptionUpdated'),
+        title: t.subscriptionUpdated,
         variant: 'default',
       });
       setIsDialogOpen(false);
@@ -58,8 +57,8 @@ export default function AdminSubscriptions() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -92,9 +91,9 @@ export default function AdminSubscriptions() {
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; label: string }> = {
-      active: { variant: 'default' as const, label: t('activeStatus') },
-      trial: { variant: 'secondary' as const, label: t('trialStatus') },
-      expired: { variant: 'outline' as const, label: t('expiredStatus') },
+      active: { variant: 'default' as const, label: t.activeStatus },
+      trial: { variant: 'secondary' as const, label: t.trialStatus },
+      expired: { variant: 'outline' as const, label: t.expiredStatus },
     };
     const config = variants[status] || variants.expired;
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -105,7 +104,7 @@ export default function AdminSubscriptions() {
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
-          <p className="text-muted-foreground">{t('loading')}</p>
+          <p className="text-muted-foreground">{t.loading}</p>
         </div>
       </div>
     );
@@ -114,9 +113,9 @@ export default function AdminSubscriptions() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">{t('manageSubscriptions')}</h1>
+        <h1 className="text-3xl font-bold text-foreground">{t.manageSubscriptions}</h1>
         <p className="text-muted-foreground mt-1">
-          {users?.length || 0} {t('allUsers').toLowerCase()}
+          {users?.length || 0} {t.allUsers.toLowerCase()}
         </p>
       </div>
 
@@ -126,11 +125,11 @@ export default function AdminSubscriptions() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">{t('email')}</TableHead>
-                  <TableHead>{t('role')}</TableHead>
-                  <TableHead>{t('status')}</TableHead>
-                  <TableHead>{t('expiresAt')}</TableHead>
-                  <TableHead className="text-right">{t('actions')}</TableHead>
+                  <TableHead className="min-w-[200px]">{t.email}</TableHead>
+                  <TableHead>{t.role}</TableHead>
+                  <TableHead>{t.status}</TableHead>
+                  <TableHead>{t.expiresAt}</TableHead>
+                  <TableHead className="text-right">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -151,14 +150,14 @@ export default function AdminSubscriptions() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={user.isAdmin ? 'default' : 'outline'}>
-                            {user.isAdmin ? t('adminRole') : t('user')}
+                            {user.isAdmin ? t.adminRole : t.user}
                           </Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(status)}</TableCell>
                         <TableCell>
                           {user.subscriptionExpiresAt
                             ? format(new Date(user.subscriptionExpiresAt), 'MMM d, yyyy')
-                            : t('never')}
+                            : t.never}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -169,7 +168,7 @@ export default function AdminSubscriptions() {
                               disabled={updateSubscriptionMutation.isPending}
                               data-testid={`button-extend-7-${user.id}`}
                             >
-                              {t('extend7Days')}
+                              {t.extend7Days}
                             </Button>
                             <Button
                               variant="outline"
@@ -178,7 +177,7 @@ export default function AdminSubscriptions() {
                               disabled={updateSubscriptionMutation.isPending}
                               data-testid={`button-extend-30-${user.id}`}
                             >
-                              {t('extend30Days')}
+                              {t.extend30Days}
                             </Button>
                             <Dialog
                               open={isDialogOpen && editingUser?.id === user.id}
@@ -207,12 +206,12 @@ export default function AdminSubscriptions() {
                               </DialogTrigger>
                               <DialogContent>
                                 <DialogHeader>
-                                  <DialogTitle>{t('setExpiration')}</DialogTitle>
+                                  <DialogTitle>{t.setExpiration}</DialogTitle>
                                 </DialogHeader>
                                 <div className="space-y-4">
                                   <div>
                                     <Label htmlFor="expirationDate">
-                                      {t('expiresAt')}
+                                      {t.expiresAt}
                                     </Label>
                                     <Input
                                       id="expirationDate"
@@ -228,14 +227,14 @@ export default function AdminSubscriptions() {
                                       onClick={() => setIsDialogOpen(false)}
                                       data-testid="button-cancel-expiration"
                                     >
-                                      {t('cancel')}
+                                      {t.cancel}
                                     </Button>
                                     <Button
                                       onClick={handleSetExpiration}
                                       disabled={updateSubscriptionMutation.isPending}
                                       data-testid="button-save-expiration"
                                     >
-                                      {t('save')}
+                                      {t.save}
                                     </Button>
                                   </div>
                                 </div>
@@ -249,7 +248,7 @@ export default function AdminSubscriptions() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      {t('noResults')}
+                      {t.noResults}
                     </TableCell>
                   </TableRow>
                 )}

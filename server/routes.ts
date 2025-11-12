@@ -41,9 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
-          contentRu: article.contentRu.substring(0, 1000),
-          contentDe: article.contentDe.substring(0, 1000),
-          contentEn: article.contentEn.substring(0, 1000),
+          content: article.content.substring(0, 1000),
         }));
         return res.json(previewArticles);
       }

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Article, InsertArticle, Tag } from '@shared/schema';
-import { useLanguage } from '@/context/LanguageContext';
+import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Save, Trash2, X } from 'lucide-react';
 import {
@@ -48,7 +48,6 @@ import {
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function AdminArticles() {
-  const { t, language } = useLanguage();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -59,12 +58,8 @@ export default function AdminArticles() {
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
-    titleRu: '',
-    titleDe: '',
-    titleEn: '',
-    contentRu: '',
-    contentDe: '',
-    contentEn: '',
+    title: '',
+    content: '',
   });
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
@@ -84,7 +79,7 @@ export default function AdminArticles() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
-        title: t('articleSaved'),
+        title: t.articleSaved,
         variant: 'default',
       });
       resetForm();
@@ -92,8 +87,8 @@ export default function AdminArticles() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -107,7 +102,7 @@ export default function AdminArticles() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
-        title: t('articleSaved'),
+        title: t.articleSaved,
         variant: 'default',
       });
       resetForm();
@@ -115,8 +110,8 @@ export default function AdminArticles() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -130,14 +125,14 @@ export default function AdminArticles() {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
-        title: t('articleDeleted'),
+        title: t.articleDeleted,
         variant: 'default',
       });
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -150,7 +145,7 @@ export default function AdminArticles() {
     onSuccess: (newTag: Tag) => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       toast({
-        title: t('tagSaved'),
+        title: t.tagSaved,
         variant: 'default',
       });
       setSelectedTagIds([...selectedTagIds, newTag.id]);
@@ -159,8 +154,8 @@ export default function AdminArticles() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -185,12 +180,8 @@ export default function AdminArticles() {
 
   const resetForm = () => {
     setFormData({
-      titleRu: '',
-      titleDe: '',
-      titleEn: '',
-      contentRu: '',
-      contentDe: '',
-      contentEn: '',
+      title: '',
+      content: '',
     });
     setSelectedTagIds([]);
     setTagSearchQuery('');
@@ -200,12 +191,8 @@ export default function AdminArticles() {
   const handleEdit = (article: ArticleWithTags) => {
     setEditingArticle(article);
     setFormData({
-      titleRu: article.titleRu,
-      titleDe: article.titleDe,
-      titleEn: article.titleEn,
-      contentRu: article.contentRu,
-      contentDe: article.contentDe,
-      contentEn: article.contentEn,
+      title: article.title,
+      content: article.content,
     });
     setSelectedTagIds(article.tags.map(tag => tag.id));
     setIsDialogOpen(true);
@@ -258,7 +245,7 @@ export default function AdminArticles() {
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
-          <p className="text-muted-foreground">{t('loading')}</p>
+          <p className="text-muted-foreground">{t.loading}</p>
         </div>
       </div>
     );
@@ -268,9 +255,9 @@ export default function AdminArticles() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('manageArticles')}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t.manageArticles}</h1>
           <p className="text-muted-foreground mt-1">
-            {articles?.length || 0} {t('articles').toLowerCase()}
+            {articles?.length || 0} {t.articles.toLowerCase()}
           </p>
         </div>
         
@@ -281,105 +268,43 @@ export default function AdminArticles() {
           <DialogTrigger asChild>
             <Button data-testid="button-create-article">
               <Plus className="mr-2 h-4 w-4" />
-              {t('createArticle')}
+              {t.createArticle}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {editingArticle ? t('editArticle') : t('createArticle')}
+                {editingArticle ? t.editArticle : t.createArticle}
               </DialogTitle>
             </DialogHeader>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              <Tabs defaultValue="ru" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="ru" data-testid="tab-russian">
-                    {t('russianVersion')}
-                  </TabsTrigger>
-                  <TabsTrigger value="de" data-testid="tab-german">
-                    {t('germanVersion')}
-                  </TabsTrigger>
-                  <TabsTrigger value="en" data-testid="tab-english">
-                    {t('englishVersion')}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="ru" className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="titleRu">{t('title')}</Label>
-                    <Input
-                      id="titleRu"
-                      value={formData.titleRu}
-                      onChange={(e) => setFormData({ ...formData, titleRu: e.target.value })}
-                      required
-                      data-testid="input-title-ru"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="contentRu">{t('content')}</Label>
-                    <Textarea
-                      id="contentRu"
-                      value={formData.contentRu}
-                      onChange={(e) => setFormData({ ...formData, contentRu: e.target.value })}
-                      required
-                      rows={12}
-                      data-testid="textarea-content-ru"
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="de" className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="titleDe">{t('title')}</Label>
-                    <Input
-                      id="titleDe"
-                      value={formData.titleDe}
-                      onChange={(e) => setFormData({ ...formData, titleDe: e.target.value })}
-                      required
-                      data-testid="input-title-de"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="contentDe">{t('content')}</Label>
-                    <Textarea
-                      id="contentDe"
-                      value={formData.contentDe}
-                      onChange={(e) => setFormData({ ...formData, contentDe: e.target.value })}
-                      required
-                      rows={12}
-                      data-testid="textarea-content-de"
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="en" className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="titleEn">{t('title')}</Label>
-                    <Input
-                      id="titleEn"
-                      value={formData.titleEn}
-                      onChange={(e) => setFormData({ ...formData, titleEn: e.target.value })}
-                      required
-                      data-testid="input-title-en"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="contentEn">{t('content')}</Label>
-                    <Textarea
-                      id="contentEn"
-                      value={formData.contentEn}
-                      onChange={(e) => setFormData({ ...formData, contentEn: e.target.value })}
-                      required
-                      rows={12}
-                      data-testid="textarea-content-en"
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="title">{t.title}</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                    data-testid="input-title"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="content">{t.content}</Label>
+                  <Textarea
+                    id="content"
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                    required
+                    rows={12}
+                    data-testid="textarea-content"
+                  />
+                </div>
+              </div>
 
               <div>
-                <Label>{t('tags')}</Label>
+                <Label>{t.tags}</Label>
                 <div className="flex flex-wrap gap-2 mt-2 mb-2">
                   {selectedTags.map((tag) => (
                     <Badge 
@@ -409,7 +334,7 @@ export default function AdminArticles() {
                       className="w-full justify-between"
                       data-testid="button-select-tags"
                     >
-                      {t('selectTags')}
+                      {t.selectTags}
                       <Plus className="ml-2 h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
@@ -418,16 +343,16 @@ export default function AdminArticles() {
                       <div className="border-b px-2 pt-2">
                         <TabsList className="w-full grid grid-cols-2">
                           <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
-                            {t('remedies')}
+                            {t.remedies}
                           </TabsTrigger>
                           <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
-                            {t('situations')}
+                            {t.situations}
                           </TabsTrigger>
                         </TabsList>
                       </div>
                       <Command shouldFilter={false}>
                         <CommandInput 
-                          placeholder={tagCategoryFilter === 'remedy' ? t('searchByRemedy') : t('searchBySituation')} 
+                          placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
                           value={tagSearchQuery}
                           onValueChange={setTagSearchQuery}
                         />
@@ -435,7 +360,7 @@ export default function AdminArticles() {
                           {filteredTags.length === 0 && tagSearchQuery.trim() ? (
                             <div className="p-4 text-center">
                               <p className="text-sm text-muted-foreground mb-3">
-                                {t('noTagsFound')}
+                                {t.noTagsFound}
                               </p>
                               <Button
                                 type="button"
@@ -445,11 +370,11 @@ export default function AdminArticles() {
                                 data-testid="button-create-new-tag"
                               >
                                 <Plus className="mr-2 h-4 w-4" />
-                                {t('createNewTag')}: "{tagSearchQuery.trim()}"
+                                {t.createNewTag}: "{tagSearchQuery.trim()}"
                               </Button>
                             </div>
                           ) : filteredTags.length === 0 ? (
-                            <CommandEmpty>{t('noTagsFound')}</CommandEmpty>
+                            <CommandEmpty>{t.noTagsFound}</CommandEmpty>
                           ) : (
                             <CommandGroup>
                               {filteredTags.map((tag) => (
@@ -483,7 +408,7 @@ export default function AdminArticles() {
                   onClick={() => setIsDialogOpen(false)}
                   data-testid="button-cancel"
                 >
-                  {t('cancel')}
+                  {t.cancel}
                 </Button>
                 <Button
                   type="submit"
@@ -491,7 +416,7 @@ export default function AdminArticles() {
                   data-testid="button-save-article"
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  {t('save')}
+                  {t.save}
                 </Button>
               </div>
             </form>
@@ -506,7 +431,7 @@ export default function AdminArticles() {
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
                 <div className="space-y-2 flex-1">
                   <CardTitle className="text-xl font-serif">
-                    {article.titleEn}
+                    {article.title}
                   </CardTitle>
                   <div className="flex flex-wrap gap-2">
                     {article.tags.map((tag) => (
@@ -527,7 +452,7 @@ export default function AdminArticles() {
                     onClick={() => handleEdit(article)}
                     data-testid={`button-edit-${article.id}`}
                   >
-                    {t('edit')}
+                    {t.edit}
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -542,19 +467,19 @@ export default function AdminArticles() {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>{t('deleteArticle')}</AlertDialogTitle>
+                        <AlertDialogTitle>{t.deleteArticle}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {article.titleEn}
+                          {article.title}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                        <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={() => deleteMutation.mutate(article.id)}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           data-testid={`button-confirm-delete-${article.id}`}
                         >
-                          {t('delete')}
+                          {t.delete}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -566,7 +491,7 @@ export default function AdminArticles() {
         ) : (
           <Card>
             <CardContent className="p-12 text-center">
-              <p className="text-muted-foreground">{t('noArticles')}</p>
+              <p className="text-muted-foreground">{t.noArticles}</p>
             </CardContent>
           </Card>
         )}

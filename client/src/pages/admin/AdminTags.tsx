@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Tag, InsertTag } from '@shared/schema';
-import { useLanguage } from '@/context/LanguageContext';
+import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -39,7 +39,6 @@ import {
 } from '@/components/ui/select';
 
 export default function AdminTags() {
-  const { t } = useLanguage();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -67,7 +66,7 @@ export default function AdminTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       toast({
-        title: t('tagSaved'),
+        title: t.tagSaved,
         variant: 'default',
       });
       resetForm();
@@ -75,8 +74,8 @@ export default function AdminTags() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -89,7 +88,7 @@ export default function AdminTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       toast({
-        title: t('tagSaved'),
+        title: t.tagSaved,
         variant: 'default',
       });
       resetForm();
@@ -97,8 +96,8 @@ export default function AdminTags() {
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -111,14 +110,14 @@ export default function AdminTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       toast({
-        title: t('tagDeleted'),
+        title: t.tagDeleted,
         variant: 'default',
       });
     },
     onError: () => {
       toast({
-        title: t('error'),
-        description: t('somethingWrong'),
+        title: t.error,
+        description: t.somethingWrong,
         variant: 'destructive',
       });
     },
@@ -146,7 +145,7 @@ export default function AdminTags() {
   const handleSubmit = () => {
     if (!formData.name.trim() || !formData.slug.trim()) {
       toast({
-        title: t('error'),
+        title: t.error,
         description: 'Name and slug are required',
         variant: 'destructive',
       });
@@ -208,20 +207,20 @@ export default function AdminTags() {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>{t('deleteTag')}</AlertDialogTitle>
+                    <AlertDialogTitle>{t.deleteTag}</AlertDialogTitle>
                     <AlertDialogDescription>
                       Are you sure you want to delete "{tag.name}"?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel data-testid="button-cancel-delete">
-                      {t('cancel')}
+                      {t.cancel}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => deleteMutation.mutate(tag.id)}
                       data-testid="button-confirm-delete"
                     >
-                      {t('delete')}
+                      {t.delete}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -239,13 +238,13 @@ export default function AdminTags() {
   );
 
   if (isLoading) {
-    return <div className="flex items-center justify-center p-8">{t('loading')}</div>;
+    return <div className="flex items-center justify-center p-8">{t.loading}</div>;
   }
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">{t('manageTags')}</h1>
+        <h1 className="text-3xl font-bold mb-2">{t.manageTags}</h1>
         <p className="text-muted-foreground">
           Manage homeopathic remedies and clinical situations
         </p>
@@ -255,10 +254,10 @@ export default function AdminTags() {
         <div className="flex items-center justify-between mb-6">
           <TabsList>
             <TabsTrigger value="remedy" data-testid="tab-remedies">
-              {t('remedies')} ({remedyTags.length})
+              {t.remedies} ({remedyTags.length})
             </TabsTrigger>
             <TabsTrigger value="situation" data-testid="tab-situations">
-              {t('situations')} ({situationTags.length})
+              {t.situations} ({situationTags.length})
             </TabsTrigger>
           </TabsList>
 
@@ -266,18 +265,18 @@ export default function AdminTags() {
             <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog(selectedCategory)} data-testid="button-create-tag">
                 <Plus className="h-4 w-4 mr-2" />
-                {t('createTag')}
+                {t.createTag}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  {editingTag ? t('editTag') : t('createTag')}
+                  {editingTag ? t.editTag : t.createTag}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="category">{t('tagCategory')}</Label>
+                  <Label htmlFor="category">{t.tagCategory}</Label>
                   <Select
                     value={formData.category}
                     onValueChange={(value: 'remedy' | 'situation') =>
@@ -288,14 +287,14 @@ export default function AdminTags() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="remedy">{t('remedy')}</SelectItem>
-                      <SelectItem value="situation">{t('situation')}</SelectItem>
+                      <SelectItem value="remedy">{t.remedy}</SelectItem>
+                      <SelectItem value="situation">{t.situation}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="name">{t('tagName')}</Label>
+                  <Label htmlFor="name">{t.tagName}</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -306,7 +305,7 @@ export default function AdminTags() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="slug">{t('tagSlug')}</Label>
+                  <Label htmlFor="slug">{t.tagSlug}</Label>
                   <Input
                     id="slug"
                     value={formData.slug}
@@ -326,7 +325,7 @@ export default function AdminTags() {
                   }}
                   data-testid="button-cancel-tag"
                 >
-                  {t('cancel')}
+                  {t.cancel}
                 </Button>
                 <Button
                   onClick={handleSubmit}
@@ -334,7 +333,7 @@ export default function AdminTags() {
                   data-testid="button-save-tag"
                 >
                   <Save className="h-4 w-4 mr-2" />
-                  {t('save')}
+                  {t.save}
                 </Button>
               </div>
             </DialogContent>

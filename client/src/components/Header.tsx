@@ -1,7 +1,6 @@
-import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
-import { LanguageSelector } from './LanguageSelector';
 import { Button } from '@/components/ui/button';
+import { t } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
 import {
   DropdownMenu,
@@ -14,7 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Settings, LogOut } from 'lucide-react';
 
 export function Header() {
-  const { t } = useLanguage();
   const { user, isAuthenticated, isAdmin } = useAuth();
   const [location] = useLocation();
 
@@ -49,7 +47,7 @@ export function Header() {
                 }`}
                 data-testid="link-articles"
               >
-                {t('articles')}
+                {t.articles}
               </Link>
               {isAdmin && (
                 <Link 
@@ -59,7 +57,7 @@ export function Header() {
                   }`}
                   data-testid="link-admin"
                 >
-                  {t('admin')}
+                  {t.admin}
                 </Link>
               )}
             </nav>
@@ -67,8 +65,6 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2">
-          <LanguageSelector />
-          
           {isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -118,7 +114,7 @@ export function Header() {
                     <DropdownMenuItem asChild>
                       <Link href="/admin" className="flex w-full items-center" data-testid="link-admin-panel">
                         <Settings className="mr-2 h-4 w-4" />
-                        {t('adminPanel')}
+                        {t.adminPanel}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -131,14 +127,14 @@ export function Header() {
                     data-testid="link-logout"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    {t('logout')}
+                    {t.logout}
                   </a>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <Button asChild data-testid="button-login">
-              <a href="/api/login">{t('login')}</a>
+              <a href="/api/login">{t.login}</a>
             </Button>
           )}
         </div>

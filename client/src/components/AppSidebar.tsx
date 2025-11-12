@@ -1,4 +1,4 @@
-import { useLanguage } from '@/context/LanguageContext';
+import { t } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
 import {
   Sidebar,
@@ -13,27 +13,26 @@ import {
 import { FileText, Users, Home, Tags } from 'lucide-react';
 
 export function AppSidebar() {
-  const { t } = useLanguage();
   const [location] = useLocation();
 
   const menuItems = [
     {
-      title: t('home'),
+      title: t.home,
       url: '/',
       icon: Home,
     },
     {
-      title: t('manageArticles'),
+      title: t.manageArticles,
       url: '/admin/articles',
       icon: FileText,
     },
     {
-      title: t('manageTags'),
+      title: t.manageTags,
       url: '/admin/tags',
       icon: Tags,
     },
     {
-      title: t('manageSubscriptions'),
+      title: t.manageSubscriptions,
       url: '/admin/subscriptions',
       icon: Users,
     },
@@ -43,7 +42,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{t('adminPanel')}</SidebarGroupLabel>
+          <SidebarGroupLabel>{t.adminPanel}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (

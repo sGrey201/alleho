@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
-import { useLanguage } from '@/context/LanguageContext';
+import { t } from '@/lib/i18n';
 import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
 import { Search, X } from 'lucide-react';
@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleBrowse() {
-  const { t, language } = useLanguage();
   const [remedyInput, setRemedyInput] = useState('');
   const [situationInput, setSituationInput] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
@@ -51,8 +50,8 @@ export default function ArticleBrowse() {
     return articles.filter(article => {
       if (!appliedQuery) return true;
       
-      const title = article[`title${language.charAt(0).toUpperCase() + language.slice(1)}` as 'titleRu' | 'titleDe' | 'titleEn'].toLowerCase();
-      const content = article[`content${language.charAt(0).toUpperCase() + language.slice(1)}` as 'contentRu' | 'contentDe' | 'contentEn'].toLowerCase();
+      const title = article.title.toLowerCase();
+      const content = article.content.toLowerCase();
       const searchLower = appliedQuery.toLowerCase();
       
       const matchesTitle = title.includes(searchLower);
@@ -61,7 +60,7 @@ export default function ArticleBrowse() {
       
       return matchesTitle || matchesContent || matchesTags;
     });
-  }, [articles, appliedQuery, language]);
+  }, [articles, appliedQuery]);
 
   const handleRemedySearch = () => {
     setAppliedQuery(remedyInput);
@@ -114,7 +113,7 @@ export default function ArticleBrowse() {
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
           <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
-          <p className="text-muted-foreground">{t('loading')}</p>
+          <p className="text-muted-foreground">{t.loading}</p>
         </div>
       </div>
     );
@@ -131,7 +130,7 @@ export default function ArticleBrowse() {
               )}
               <Input
                 type="text"
-                placeholder={t('searchByRemedy')}
+                placeholder={t.searchByRemedy}
                 value={remedyInput}
                 onChange={(e) => {
                   setRemedyInput(e.target.value);
@@ -160,7 +159,7 @@ export default function ArticleBrowse() {
             align="start"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="text-xs text-muted-foreground mb-2 px-2">{t('remedies')}</div>
+            <div className="text-xs text-muted-foreground mb-2 px-2">{t.remedies}</div>
             <div className="flex flex-wrap gap-2">
               {suggestedRemedyTags.map(tag => (
                 <Badge
@@ -185,7 +184,7 @@ export default function ArticleBrowse() {
               )}
               <Input
                 type="text"
-                placeholder={t('searchBySituation')}
+                placeholder={t.searchBySituation}
                 value={situationInput}
                 onChange={(e) => {
                   setSituationInput(e.target.value);
@@ -214,7 +213,7 @@ export default function ArticleBrowse() {
             align="start"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="text-xs text-muted-foreground mb-2 px-2">{t('situations')}</div>
+            <div className="text-xs text-muted-foreground mb-2 px-2">{t.situations}</div>
             <div className="flex flex-wrap gap-2">
               {suggestedSituationTags.map(tag => (
                 <Badge
@@ -236,7 +235,7 @@ export default function ArticleBrowse() {
         <div className="flex min-h-[30vh] items-center justify-center">
           <div className="text-center">
             <p className="text-lg text-muted-foreground">
-              {appliedQuery ? t('noResults') : t('noArticles')}
+              {appliedQuery ? t.noResults : t.noArticles}
             </p>
           </div>
         </div>
