@@ -82,14 +82,12 @@ export default function ArticleBrowse() {
     }
     
     const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    const currentPath = location.split('?')[0];
-    const currentParams = location.split('?')[1] || '';
-    const currentUrl = currentParams ? `${currentPath}?${currentParams}` : currentPath;
+    const currentLocation = window.location.pathname + window.location.search;
     
-    if (newUrl !== currentUrl) {
+    if (newUrl !== currentLocation) {
       setLocation(newUrl, { replace: true });
     }
-  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized, location]);
+  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized, setLocation]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
