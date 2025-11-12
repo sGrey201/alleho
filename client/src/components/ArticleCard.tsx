@@ -30,7 +30,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </p>
 
           <div className="mb-4 flex flex-wrap gap-2">
-            {article.tags.slice(0, 4).map((tag) => (
+            {article.tags.map((tag) => (
               <Badge
                 key={tag.id}
                 variant={tag.category === 'remedy' ? 'default' : 'secondary'}
@@ -40,11 +40,6 @@ export function ArticleCard({ article }: ArticleCardProps) {
                 {tag.name}
               </Badge>
             ))}
-            {article.tags.length > 4 && (
-              <Badge variant="outline" className="text-xs">
-                +{article.tags.length - 4}
-              </Badge>
-            )}
           </div>
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
