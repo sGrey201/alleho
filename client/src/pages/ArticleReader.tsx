@@ -64,7 +64,7 @@ export default function ArticleReader() {
   const isContentLocked = !hasActiveSubscription && article.content.length > 1000;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
           <h1 className="mb-4 text-5xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
