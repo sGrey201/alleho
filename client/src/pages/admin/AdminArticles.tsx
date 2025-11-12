@@ -164,10 +164,19 @@ export default function AdminArticles() {
     let tags = allTags.filter(tag => tag.category === tagCategoryFilter);
     
     if (!tagSearchQuery.trim()) return tags;
-    const query = tagSearchQuery.toLowerCase();
+    const query = tagSearchQuery.toLowerCase().trim();
     return tags.filter(tag => {
-      const nameWords = tag.name.toLowerCase().split(/\s+/);
-      const slugWords = tag.slug.toLowerCase().split(/[-_]/);
+      const tagNameLower = tag.name.toLowerCase();
+      const tagSlugLower = tag.slug.toLowerCase();
+      
+      // Проверяем совпадение с полным именем или slug
+      if (tagNameLower.includes(query) || tagSlugLower.includes(query)) {
+        return true;
+      }
+      
+      // Проверяем совпадение с началом каждого слова
+      const nameWords = tagNameLower.split(/\s+/);
+      const slugWords = tagSlugLower.split(/[-_]/);
       return nameWords.some(word => word.startsWith(query)) || 
              slugWords.some(word => word.startsWith(query));
     });
