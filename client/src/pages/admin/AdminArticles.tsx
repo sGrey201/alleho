@@ -142,17 +142,9 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: async (newTag: Tag) => {
-      // СНАЧАЛА обновляем список тегов с сервера
+    onSuccess: async () => {
+      // Обновляем список тегов с сервера
       await refetchTags();
-      
-      // ПОТОМ присваиваем созданный тег статье
-      setSelectedTagIds(prev => {
-        if (prev.includes(newTag.id)) {
-          return prev;
-        }
-        return [...prev, newTag.id];
-      });
       
       toast({
         title: t.tagSaved,
@@ -160,7 +152,6 @@ export default function AdminArticles() {
       });
       
       setTagSearchQuery('');
-      setTagPopoverOpen(false);
     },
     onError: () => {
       toast({
