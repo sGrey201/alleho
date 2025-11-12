@@ -137,7 +137,7 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
+      <div className="mb-4">
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedRemedyTags.map((tag) => (
             <Badge 
@@ -255,7 +255,7 @@ export default function ArticleBrowse() {
                 className="w-full justify-between"
                 data-testid="button-select-tags"
               >
-                {t.selectTags}
+                {t.search}
                 <Plus className="ml-2 h-4 w-4" />
               </Button>
             </PopoverTrigger>
