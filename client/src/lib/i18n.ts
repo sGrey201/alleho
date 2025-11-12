@@ -16,6 +16,7 @@ export const t = {
   delete: 'Удалить',
   edit: 'Редактировать',
   create: 'Создать',
+  clear: 'Очистить',
   
   // Landing Page
   welcomeTitle: 'Профессиональная платформа по гомеопатии',

@@ -128,6 +128,13 @@ export default function ArticleBrowse() {
     );
   }
 
+  const hasSelectedTags = selectedRemedyTagIds.length > 0 || selectedSituationTagIds.length > 0;
+
+  const clearAllTags = () => {
+    setSelectedRemedyTagIds([]);
+    setSelectedSituationTagIds([]);
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -166,19 +173,92 @@ export default function ArticleBrowse() {
               </button>
             </Badge>
           ))}
-        </div>
-        <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-          <PopoverTrigger asChild>
+          {hasSelectedTags && (
+            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  data-testid="button-add-tag"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
+                  <div className="border-b px-2 pt-2">
+                    <TabsList className="w-full grid grid-cols-2">
+                      <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
+                        {t.remedies}
+                      </TabsTrigger>
+                      <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
+                        {t.situations}
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+                    <CommandInput 
+                      placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
+                      value={tagSearchQuery}
+                      onValueChange={setTagSearchQuery}
+                    />
+                    <CommandList className="max-h-96 overflow-auto">
+                      {filteredTags.length === 0 ? (
+                        <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                      ) : (
+                        <CommandGroup>
+                          {filteredTags.map((tag) => {
+                            const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+                            return (
+                              <CommandItem
+                                key={tag.id}
+                                value={tag.name}
+                                onSelect={() => {
+                                  if (!selectedIds.includes(tag.id)) {
+                                    addTag(tag.id);
+                                  }
+                                }}
+                                disabled={selectedIds.includes(tag.id)}
+                                data-testid={`tag-option-${tag.slug}`}
+                              >
+                                {tag.name}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </Tabs>
+              </PopoverContent>
+            </Popover>
+          )}
+          {hasSelectedTags && (
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-between"
-              data-testid="button-select-tags"
+              size="sm"
+              onClick={clearAllTags}
+              data-testid="button-clear-tags"
             >
-              {t.selectTags}
-              <Plus className="ml-2 h-4 w-4" />
+              {t.clear}
             </Button>
-          </PopoverTrigger>
+          )}
+        </div>
+        {!hasSelectedTags && (
+          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-between"
+                data-testid="button-select-tags"
+              >
+                {t.selectTags}
+                <Plus className="ml-2 h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
           <PopoverContent className="w-[400px] p-0" align="start">
             <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
               <div className="border-b px-2 pt-2">
@@ -226,7 +306,8 @@ export default function ArticleBrowse() {
               </Command>
             </Tabs>
           </PopoverContent>
-        </Popover>
+          </Popover>
+        )}
       </div>
 
       {filteredArticles.length === 0 ? (
