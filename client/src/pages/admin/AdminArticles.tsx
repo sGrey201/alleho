@@ -142,11 +142,14 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: async (newTag: Tag) => {
-      // Принудительно обновляем список тегов с сервера
-      await queryClient.invalidateQueries({ 
-        queryKey: ['/api/tags'],
-        refetchType: 'active'
+    onSuccess: (newTag: Tag) => {
+      // Немедленно добавляем новый тег в кеш
+      queryClient.setQueryData<Tag[]>(['/api/tags'], (oldTags = []) => {
+        // Проверяем, не добавлен ли уже этот тег
+        if (oldTags.some(t => t.id === newTag.id)) {
+          return oldTags;
+        }
+        return [...oldTags, newTag];
       });
       
       toast({
@@ -155,7 +158,12 @@ export default function AdminArticles() {
       });
       
       // Автоматически присваиваем созданный тег статье
-      setSelectedTagIds([...selectedTagIds, newTag.id]);
+      setSelectedTagIds(prev => {
+        if (prev.includes(newTag.id)) {
+          return prev;
+        }
+        return [...prev, newTag.id];
+      });
       setTagSearchQuery('');
       setTagPopoverOpen(false);
     },
