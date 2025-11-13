@@ -79,19 +79,6 @@ export default function ArticleReader() {
               </Badge>
             ))}
           </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>{readingTime} {t.readingTime}</span>
-            </div>
-            {article.createdAt && (
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span>{format(new Date(article.createdAt), 'MMMM d, yyyy')}</span>
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="relative">
