@@ -78,30 +78,35 @@ export default function ArticleBrowse() {
   useEffect(() => {
     if (!allTags || !hasInitialized.current) return;
     
-    const params = new URLSearchParams();
+    // Небольшая задержка чтобы state успел обновиться после инициализации
+    const timeoutId = setTimeout(() => {
+      const params = new URLSearchParams();
+      
+      if (selectedRemedyTagIds.length > 0) {
+        const slugs = allTags
+          .filter(tag => selectedRemedyTagIds.includes(tag.id))
+          .map(tag => tag.slug)
+          .join(',');
+        if (slugs) params.set('remedies', slugs);
+      }
+      
+      if (selectedSituationTagIds.length > 0) {
+        const slugs = allTags
+          .filter(tag => selectedSituationTagIds.includes(tag.id))
+          .map(tag => tag.slug)
+          .join(',');
+        if (slugs) params.set('situations', slugs);
+      }
+      
+      const newUrl = params.toString() ? `/?${params.toString()}` : '/';
+      const currentLocation = window.location.pathname + window.location.search;
+      
+      if (newUrl !== currentLocation) {
+        setLocation(newUrl, { replace: true });
+      }
+    }, 0);
     
-    if (selectedRemedyTagIds.length > 0) {
-      const slugs = allTags
-        .filter(tag => selectedRemedyTagIds.includes(tag.id))
-        .map(tag => tag.slug)
-        .join(',');
-      if (slugs) params.set('remedies', slugs);
-    }
-    
-    if (selectedSituationTagIds.length > 0) {
-      const slugs = allTags
-        .filter(tag => selectedSituationTagIds.includes(tag.id))
-        .map(tag => tag.slug)
-        .join(',');
-      if (slugs) params.set('situations', slugs);
-    }
-    
-    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    const currentLocation = window.location.pathname + window.location.search;
-    
-    if (newUrl !== currentLocation) {
-      setLocation(newUrl, { replace: true });
-    }
+    return () => clearTimeout(timeoutId);
   }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, setLocation]);
 
   const filteredTags = useMemo(() => {
