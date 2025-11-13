@@ -41,11 +41,11 @@ export function ArticleCard({ article, isLast = false }: ArticleCardProps) {
   };
 
   return (
-    <Link href={`/article/${article.id}`}>
-      <div 
-        className={`py-6 cursor-pointer ${!isLast ? 'border-b' : ''}`}
-        data-testid={`card-article-${article.id}`}
-      >
+    <div 
+      className={`py-6 ${!isLast ? 'border-b' : ''}`}
+      data-testid={`card-article-${article.id}`}
+    >
+      <Link href={`/article/${article.id}`} className="cursor-pointer">
         <h3 className="mb-3 text-2xl font-bold text-foreground leading-tight font-serif">
           {article.title}
         </h3>
@@ -53,21 +53,21 @@ export function ArticleCard({ article, isLast = false }: ArticleCardProps) {
         <p className="mb-4 text-base text-muted-foreground line-clamp-3 leading-relaxed">
           {preview}...
         </p>
+      </Link>
 
-        <div className="flex flex-wrap gap-2">
-          {article.tags.map((tag) => (
-            <Badge
-              key={tag.id}
-              variant={tag.category === 'remedy' ? 'default' : 'secondary'}
-              className="text-xs font-medium cursor-pointer hover-elevate"
-              data-testid={`badge-tag-${tag.slug}`}
-              onClick={(e) => handleTagClick(e, tag)}
-            >
-              {tag.name}
-            </Badge>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-2">
+        {article.tags.map((tag) => (
+          <Badge
+            key={tag.id}
+            variant={tag.category === 'remedy' ? 'default' : 'secondary'}
+            className="text-xs font-medium cursor-pointer hover-elevate"
+            data-testid={`badge-tag-${tag.slug}`}
+            onClick={(e) => handleTagClick(e, tag)}
+          >
+            {tag.name}
+          </Badge>
+        ))}
       </div>
-    </Link>
+    </div>
   );
 }
