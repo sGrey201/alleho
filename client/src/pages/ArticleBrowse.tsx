@@ -40,54 +40,67 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
-  // Вычисляем выбранные теги из URL (derived state)
-  const selectedRemedyTagIds = useMemo(() => {
-    if (!allTags) return [];
-    const searchParams = new URLSearchParams(location.split('?')[1] || '');
-    const remedySlugs = searchParams.get('remedies');
-    if (!remedySlugs) return [];
-    
-    return allTags
-      .filter(tag => remedySlugs.split(',').includes(tag.slug) && tag.category === 'remedy')
-      .map(tag => tag.id);
-  }, [location, allTags]);
+  // Инициализация выбранных тегов из URL после загрузки allTags
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
+  const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const selectedSituationTagIds = useMemo(() => {
-    if (!allTags) return [];
-    const searchParams = new URLSearchParams(location.split('?')[1] || '');
-    const situationSlugs = searchParams.get('situations');
-    if (!situationSlugs) return [];
-    
-    return allTags
-      .filter(tag => situationSlugs.split(',').includes(tag.slug) && tag.category === 'situation')
-      .map(tag => tag.id);
-  }, [location, allTags]);
+  // Инициализируем теги из URL при загрузке allTags
+  useEffect(() => {
+    if (allTags && !isInitialized) {
+      const remedySlugs = searchParams.get('remedies');
+      const situationSlugs = searchParams.get('situations');
+      
+      if (remedySlugs) {
+        const slugs = remedySlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
+          .map(tag => tag.id);
+        setSelectedRemedyTagIds(ids);
+      }
+      
+      if (situationSlugs) {
+        const slugs = situationSlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
+          .map(tag => tag.id);
+        setSelectedSituationTagIds(ids);
+      }
+      
+      setIsInitialized(true);
+    }
+  }, [allTags, isInitialized]);
 
-  // Функция для обновления URL с тегами
-  const updateUrlWithTags = (remedyIds: string[], situationIds: string[]) => {
-    if (!allTags) return;
+  // Обновляем URL при изменении выбранных тегов
+  useEffect(() => {
+    if (!allTags || !isInitialized) return;
     
     const params = new URLSearchParams();
     
-    if (remedyIds.length > 0) {
+    if (selectedRemedyTagIds.length > 0) {
       const slugs = allTags
-        .filter(tag => remedyIds.includes(tag.id))
+        .filter(tag => selectedRemedyTagIds.includes(tag.id))
         .map(tag => tag.slug)
         .join(',');
       if (slugs) params.set('remedies', slugs);
     }
     
-    if (situationIds.length > 0) {
+    if (selectedSituationTagIds.length > 0) {
       const slugs = allTags
-        .filter(tag => situationIds.includes(tag.id))
+        .filter(tag => selectedSituationTagIds.includes(tag.id))
         .map(tag => tag.slug)
         .join(',');
       if (slugs) params.set('situations', slugs);
     }
     
     const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    setLocation(newUrl, { replace: true });
-  };
+    const currentLocation = window.location.pathname + window.location.search;
+    
+    if (newUrl !== currentLocation) {
+      setLocation(newUrl, { replace: true });
+    }
+  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized, setLocation]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
@@ -173,20 +186,20 @@ export default function ArticleBrowse() {
     if (!tag) return;
     
     if (tag.category === 'remedy' && !selectedRemedyTagIds.includes(tagId)) {
-      updateUrlWithTags([...selectedRemedyTagIds, tagId], selectedSituationTagIds);
+      setSelectedRemedyTagIds([...selectedRemedyTagIds, tagId]);
     } else if (tag.category === 'situation' && !selectedSituationTagIds.includes(tagId)) {
-      updateUrlWithTags(selectedRemedyTagIds, [...selectedSituationTagIds, tagId]);
+      setSelectedSituationTagIds([...selectedSituationTagIds, tagId]);
     }
     setTagPopoverOpen(false);
     setTagSearchQuery('');
   };
 
   const removeRemedyTag = (tagId: string) => {
-    updateUrlWithTags(selectedRemedyTagIds.filter(id => id !== tagId), selectedSituationTagIds);
+    setSelectedRemedyTagIds(selectedRemedyTagIds.filter(id => id !== tagId));
   };
 
   const removeSituationTag = (tagId: string) => {
-    updateUrlWithTags(selectedRemedyTagIds, selectedSituationTagIds.filter(id => id !== tagId));
+    setSelectedSituationTagIds(selectedSituationTagIds.filter(id => id !== tagId));
   };
 
   const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -216,7 +229,8 @@ export default function ArticleBrowse() {
   const hasSelectedTags = selectedRemedyTagIds.length > 0 || selectedSituationTagIds.length > 0;
 
   const clearAllTags = () => {
-    updateUrlWithTags([], []);
+    setSelectedRemedyTagIds([]);
+    setSelectedSituationTagIds([]);
   };
 
   return (
