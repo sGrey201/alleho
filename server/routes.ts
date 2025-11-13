@@ -53,6 +53,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/articles/slug/:slug', async (req: any, res) => {
+    try {
+      const article = await storage.getArticleBySlug(req.params.slug);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      // Check if user is authenticated and has active subscription
+      let hasActiveSubscription = false;
+      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+        const user = await storage.getUser(req.user.claims.sub);
+        hasActiveSubscription = user?.subscriptionExpiresAt 
+          ? new Date(user.subscriptionExpiresAt) > new Date() 
+          : false;
+      }
+
+      // If no active subscription (or not authenticated), truncate content to preview
+      if (!hasActiveSubscription) {
+        const previewArticle = {
+          ...article,
+          content: article.content.substring(0, 1000),
+        };
+        return res.json(previewArticle);
+      }
+
+      res.json(article);
+    } catch (error) {
+      console.error("Error fetching article:", error);
+      res.status(500).json({ message: "Failed to fetch article" });
+    }
+  });
+
   app.get('/api/articles/:id', async (req: any, res) => {
     try {
       const article = await storage.getArticleById(req.params.id);
