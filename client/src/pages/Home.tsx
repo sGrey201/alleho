@@ -7,7 +7,7 @@ export default function Home() {
 
   return (
     <div>
-      {user && user.subscriptionExpiresAt && (
+      {user && user.subscriptionExpiresAt && !user.isAdmin && (
         <div className="mx-auto max-w-7xl px-6 py-4">
           <SubscriptionBanner />
         </div>
