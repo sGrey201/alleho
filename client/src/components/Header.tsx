@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut } from 'lucide-react';
+import { User, Settings, LogOut, Plus } from 'lucide-react';
 
 export function Header() {
   const { user, isAuthenticated, isAdmin } = useAuth();
@@ -40,6 +40,14 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button asChild variant="default" size="sm" data-testid="button-create-article">
+              <Link href="/admin/articles">
+                <Plus className="h-4 w-4 mr-2" />
+                {t.createArticle}
+              </Link>
+            </Button>
+          )}
           {isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
