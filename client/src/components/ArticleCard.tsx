@@ -138,7 +138,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     <>
       <Link href={`/article/${article.slug}`}>
         <div 
-          className="p-6 cursor-pointer rounded-lg relative md:border"
+          className="md:p-6 cursor-pointer rounded-lg relative md:border"
           data-testid={`card-article-${article.id}`}
         >
           {user?.isAdmin && (
