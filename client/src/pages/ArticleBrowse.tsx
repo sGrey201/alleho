@@ -441,12 +441,11 @@ export default function ArticleBrowse() {
           </div>
         </div>
       ) : (
-        <div>
-          {filteredArticles.map((article, index) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredArticles.map((article) => (
             <ArticleCard 
               key={article.id} 
-              article={article} 
-              isLast={index === filteredArticles.length - 1}
+              article={article}
             />
           ))}
         </div>

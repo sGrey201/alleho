@@ -7,16 +7,15 @@ type ArticleWithTags = Article & { tags: Tag[] };
 
 interface ArticleCardProps {
   article: ArticleWithTags;
-  isLast?: boolean;
 }
 
-export function ArticleCard({ article, isLast = false }: ArticleCardProps) {
+export function ArticleCard({ article }: ArticleCardProps) {
   const preview = article.content.substring(0, 600).replace(/<[^>]*>/g, '');
 
   return (
     <Link href={`/article/${article.id}`}>
       <div 
-        className={`py-6 cursor-pointer ${!isLast ? 'border-b' : ''}`}
+        className="p-6 cursor-pointer border rounded-lg"
         data-testid={`card-article-${article.id}`}
       >
         <div className="flex flex-wrap gap-2 mb-4">
