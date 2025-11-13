@@ -39,6 +39,7 @@ export const t = {
   upgradePromptDescription: 'Полный доступ к статьям доступен только подписчикам',
   contactAdmin: 'Свяжитесь с администратором для продления подписки',
   readMore: 'Читать далее',
+  readFull: 'Читать полностью',
   previewOnly: 'Предварительный просмотр',
   
   // Articles
