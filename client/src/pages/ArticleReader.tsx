@@ -63,10 +63,17 @@ export default function ArticleReader() {
   const previewContent = article.content.substring(0, 1000);
   const isContentLocked = !hasActiveSubscription && article.content.length > 1000;
 
+  const tagNames = article.tags.map(tag => tag.name).join(', ');
+  const title = tagNames.charAt(0).toUpperCase() + tagNames.slice(1).toLowerCase();
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
+          <h1 className="mb-6 text-4xl font-bold text-foreground leading-tight" data-testid="text-article-title">
+            {title}
+          </h1>
+          
           <div className="mb-6 flex flex-wrap gap-2">
             {article.tags.map((tag) => (
               <Badge

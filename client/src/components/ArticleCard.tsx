@@ -11,6 +11,9 @@ interface ArticleCardProps {
 
 export function ArticleCard({ article }: ArticleCardProps) {
   const preview = article.content.substring(0, 600).replace(/<[^>]*>/g, '');
+  
+  const tagNames = article.tags.map(tag => tag.name).join(', ');
+  const title = tagNames.charAt(0).toUpperCase() + tagNames.slice(1).toLowerCase();
 
   return (
     <Link href={`/article/${article.id}`}>
@@ -18,6 +21,10 @@ export function ArticleCard({ article }: ArticleCardProps) {
         className="p-6 cursor-pointer border rounded-lg"
         data-testid={`card-article-${article.id}`}
       >
+        <h3 className="text-xl font-semibold mb-4 text-foreground" data-testid={`text-article-title-${article.id}`}>
+          {title}
+        </h3>
+        
         <div className="flex flex-wrap gap-2 mb-4">
           {article.tags.map((tag) => (
             <Badge
