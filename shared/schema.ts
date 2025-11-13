@@ -78,7 +78,7 @@ export type Tag = typeof tags.$inferSelect;
 // Articles table (Russian content only)
 export const articles = pgTable("articles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
+  slug: varchar("slug", { length: 255 }).unique().notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -97,6 +97,7 @@ export const articleTags = pgTable("article_tags", {
 
 export const insertArticleSchema = createInsertSchema(articles).omit({
   id: true,
+  slug: true,
   createdAt: true,
   updatedAt: true,
 });

@@ -14,6 +14,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray } from "drizzle-orm";
+import { generateSlugFromTags } from "./utils/slug";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -37,6 +38,7 @@ export interface IStorage {
   // Article operations
   getAllArticles(): Promise<ArticleWithTags[]>;
   getArticleById(id: string): Promise<ArticleWithTags | undefined>;
+  getArticleBySlug(slug: string): Promise<ArticleWithTags | undefined>;
   createArticle(article: InsertArticle, tagIds: string[]): Promise<ArticleWithTags>;
   updateArticle(id: string, article: UpdateArticle, tagIds?: string[]): Promise<ArticleWithTags>;
   deleteArticle(id: string): Promise<void>;
@@ -206,10 +208,21 @@ export class DatabaseStorage implements IStorage {
     return { ...article, tags: articleTagsList };
   }
 
+  async getArticleBySlug(slug: string): Promise<ArticleWithTags | undefined> {
+    const [article] = await db.select().from(articles).where(eq(articles.slug, slug));
+    if (!article) return undefined;
+    
+    const articleTagsList = await this.getArticleTags(article.id);
+    return { ...article, tags: articleTagsList };
+  }
+
   async createArticle(articleData: InsertArticle, tagIds: string[]): Promise<ArticleWithTags> {
+    const tagsList = await this.getTagsByIds(tagIds);
+    const slug = generateSlugFromTags(tagsList);
+    
     const [article] = await db
       .insert(articles)
-      .values(articleData)
+      .values({ ...articleData, slug })
       .returning();
     
     await this.setArticleTags(article.id, tagIds);
@@ -219,18 +232,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateArticle(id: string, articleData: UpdateArticle, tagIds?: string[]): Promise<ArticleWithTags> {
-    const [article] = await db
-      .update(articles)
-      .set({
-        ...articleData,
-        updatedAt: new Date(),
-      })
-      .where(eq(articles.id, id))
-      .returning();
+    let updateData = { ...articleData, updatedAt: new Date() };
     
     if (tagIds !== undefined) {
+      const tagsList = await this.getTagsByIds(tagIds);
+      const slug = generateSlugFromTags(tagsList);
+      updateData = { ...updateData, slug };
       await this.setArticleTags(id, tagIds);
     }
+    
+    const [article] = await db
+      .update(articles)
+      .set(updateData)
+      .where(eq(articles.id, id))
+      .returning();
     
     const articleTagsList = await this.getArticleTags(id);
     return { ...article, tags: articleTagsList };
@@ -249,7 +264,6 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(tags, eq(articleTags.tagId, tags.id))
       .where(
         or(
-          ilike(articles.title, `%${query}%`),
           ilike(articles.content, `%${query}%`),
           ilike(tags.name, `%${query}%`)
         )
