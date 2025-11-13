@@ -63,8 +63,18 @@ export default function ArticleReader() {
   const previewContent = article.content.substring(0, 1000);
   const isContentLocked = !hasActiveSubscription && article.content.length > 1000;
 
-  const tagNames = article.tags.map(tag => tag.name).join(', ');
-  const title = tagNames.charAt(0).toUpperCase() + tagNames.slice(1).toLowerCase();
+  const formattedTags = article.tags.map(tag => {
+    if (tag.category === 'remedy') {
+      return tag.name.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    } else {
+      return tag.name.toLowerCase();
+    }
+  });
+  
+  const joined = formattedTags.join(', ');
+  const title = joined.charAt(0).toUpperCase() + joined.slice(1);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">

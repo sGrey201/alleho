@@ -12,8 +12,18 @@ interface ArticleCardProps {
 export function ArticleCard({ article }: ArticleCardProps) {
   const preview = article.content.substring(0, 600).replace(/<[^>]*>/g, '');
   
-  const tagNames = article.tags.map(tag => tag.name).join(', ');
-  const title = tagNames.charAt(0).toUpperCase() + tagNames.slice(1).toLowerCase();
+  const formattedTags = article.tags.map(tag => {
+    if (tag.category === 'remedy') {
+      return tag.name.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    } else {
+      return tag.name.toLowerCase();
+    }
+  });
+  
+  const joined = formattedTags.join(', ');
+  const title = joined.charAt(0).toUpperCase() + joined.slice(1);
 
   return (
     <Link href={`/article/${article.id}`}>
