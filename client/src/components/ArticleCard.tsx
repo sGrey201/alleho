@@ -155,12 +155,12 @@ export function ArticleCard({ article }: ArticleCardProps) {
             </div>
           )}
           
-          <h3 className="text-xl font-semibold mb-4 text-foreground pr-20" data-testid={`text-article-title-${article.id}`}>
+          <h3 className="text-3xl font-bold mb-5 text-foreground pr-20 font-serif leading-tight" data-testid={`text-article-title-${article.id}`}>
             {title}
           </h3>
           
           <div className="relative">
-            <p className="text-base text-muted-foreground leading-relaxed line-clamp-6">
+            <p className="text-lg text-muted-foreground leading-relaxed line-clamp-6 font-serif">
               {preview}
             </p>
             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background via-background/80 to-transparent flex items-end justify-center pb-2">

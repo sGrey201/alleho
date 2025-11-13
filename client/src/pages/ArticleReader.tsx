@@ -80,7 +80,7 @@ export default function ArticleReader() {
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
-          <h1 className="mb-6 text-4xl font-bold text-foreground leading-tight" data-testid="text-article-title">
+          <h1 className="mb-6 text-5xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
             {title}
           </h1>
           
@@ -100,7 +100,7 @@ export default function ArticleReader() {
 
         <div className="relative">
           <div
-            className={`font-serif text-lg leading-relaxed text-foreground ${
+            className={`font-serif text-xl leading-[1.8] text-foreground ${
               isContentLocked ? 'line-clamp-[20]' : ''
             }`}
             style={{ whiteSpace: 'pre-wrap' }}
