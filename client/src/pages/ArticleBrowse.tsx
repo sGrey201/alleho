@@ -49,11 +49,12 @@ export default function ArticleBrowse() {
   useEffect(() => {
     if (!allTags || hasInitialized.current || isInitializing.current) return;
     
-    const searchParams = new URLSearchParams(location.split('?')[1] || '');
+    // Используем window.location.search напрямую, а не location из wouter
+    const searchParams = new URLSearchParams(window.location.search);
     const remedySlugs = searchParams.get('remedies');
     const situationSlugs = searchParams.get('situations');
     
-    console.log('🔍 URL Init:', { remedySlugs, situationSlugs, location });
+    console.log('🔍 URL Init:', { remedySlugs, situationSlugs, search: window.location.search });
     
     // Если в URL нет параметров, просто помечаем как инициализированное
     if (!remedySlugs && !situationSlugs) {
@@ -85,7 +86,7 @@ export default function ArticleBrowse() {
     console.log('📌 Setting selected IDs:', { remedyIds, situationIds });
     setSelectedRemedyTagIds(remedyIds);
     setSelectedSituationTagIds(situationIds);
-  }, [allTags, location]);
+  }, [allTags]);
 
   // Отмечаем инициализацию как завершенную после обновления state
   useEffect(() => {
