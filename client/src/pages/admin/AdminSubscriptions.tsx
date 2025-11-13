@@ -111,7 +111,7 @@ export default function AdminSubscriptions() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">{t.manageSubscriptions}</h1>
         <p className="text-muted-foreground mt-1">

@@ -242,7 +242,7 @@ export default function AdminTags() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">{t.manageTags}</h1>
         <p className="text-muted-foreground">
