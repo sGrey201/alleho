@@ -41,8 +41,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
-        title: t.success,
-        description: 'Статья успешно удалена',
+        title: t.articleDeleted,
       });
     },
     onError: () => {

@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Article, InsertArticle, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ type ArticleWithTags = Article & { tags: Tag[] };
 export default function AdminArticles() {
   const { toast } = useToast();
   const { isAdmin } = useAuth();
+  const [location, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<ArticleWithTags | null>(null);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -70,6 +72,29 @@ export default function AdminArticles() {
   const { data: allTags = [], isLoading: isLoadingTags, refetch: refetchTags } = useQuery<Tag[]>({
     queryKey: ['/api/tags'],
   });
+
+  // Открываем форму редактирования, если в URL есть параметр edit
+  useEffect(() => {
+    if (!articles || isLoading) return;
+    
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get('edit');
+    
+    if (editId) {
+      const article = articles.find(a => a.id === editId);
+      if (article) {
+        setEditingArticle(article);
+        setFormData({
+          title: article.title,
+          content: article.content,
+        });
+        setSelectedTagIds(article.tags.map(tag => tag.id));
+        setIsDialogOpen(true);
+      }
+      // Убираем параметр из URL
+      setLocation('/admin/articles', { replace: true });
+    }
+  }, [articles, isLoading, setLocation]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertArticle & { tagIds: string[] }) => {
