@@ -40,8 +40,6 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
-  // Инициализация выбранных тегов из URL после загрузки allTags
-  const searchParams = new URLSearchParams(location.split('?')[1] || '');
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -49,6 +47,7 @@ export default function ArticleBrowse() {
   // Инициализируем теги из URL при загрузке allTags
   useEffect(() => {
     if (allTags && !isInitialized) {
+      const searchParams = new URLSearchParams(location.split('?')[1] || '');
       const remedySlugs = searchParams.get('remedies');
       const situationSlugs = searchParams.get('situations');
       
@@ -70,7 +69,7 @@ export default function ArticleBrowse() {
       
       setIsInitialized(true);
     }
-  }, [allTags, isInitialized]);
+  }, [allTags, isInitialized, location]);
 
   // Обновляем URL при изменении выбранных тегов
   useEffect(() => {
