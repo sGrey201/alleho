@@ -14,13 +14,13 @@ import { format } from 'date-fns';
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleReader() {
-  const [, params] = useRoute('/article/:id');
+  const [, params] = useRoute('/article/:slug');
   const { hasActiveSubscription, isLoading: authLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
   const { data: article, isLoading } = useQuery<ArticleWithTags>({
-    queryKey: ['/api/articles', params?.id],
-    enabled: !!params?.id,
+    queryKey: ['/api/articles/slug', params?.slug],
+    enabled: !!params?.slug,
   });
 
   useEffect(() => {

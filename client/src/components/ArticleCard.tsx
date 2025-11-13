@@ -48,7 +48,6 @@ export function ArticleCard({ article }: ArticleCardProps) {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(article.tags.map(t => t.id));
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [formData, setFormData] = useState<InsertArticle>({
-    title: article.title,
     content: article.content,
   });
 
@@ -112,7 +111,6 @@ export function ArticleCard({ article }: ArticleCardProps) {
     e.preventDefault();
     e.stopPropagation();
     setFormData({
-      title: article.title,
       content: article.content,
     });
     setSelectedTagIds(article.tags.map(t => t.id));
@@ -138,7 +136,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
 
   return (
     <>
-      <Link href={`/article/${article.id}`}>
+      <Link href={`/article/${article.slug}`}>
         <div 
           className="p-6 cursor-pointer border rounded-lg relative"
           data-testid={`card-article-${article.id}`}
@@ -180,16 +178,6 @@ export function ArticleCard({ article }: ArticleCardProps) {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">{t.title}</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                  data-testid="input-title"
-                />
-              </div>
               <div>
                 <Label htmlFor="content">{t.content}</Label>
                 <Textarea

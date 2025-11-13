@@ -60,7 +60,6 @@ export default function AdminArticles() {
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
-    title: '',
     content: '',
   });
 
@@ -85,7 +84,6 @@ export default function AdminArticles() {
       if (article) {
         setEditingArticle(article);
         setFormData({
-          title: article.title,
           content: article.content,
         });
         setSelectedTagIds(article.tags.map(tag => tag.id));
@@ -214,7 +212,6 @@ export default function AdminArticles() {
 
   const resetForm = () => {
     setFormData({
-      title: '',
       content: '',
     });
     setSelectedTagIds([]);
@@ -225,7 +222,6 @@ export default function AdminArticles() {
   const handleEdit = (article: ArticleWithTags) => {
     setEditingArticle(article);
     setFormData({
-      title: article.title,
       content: article.content,
     });
     setSelectedTagIds(article.tags.map(tag => tag.id));
@@ -343,16 +339,6 @@ export default function AdminArticles() {
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
-                <div>
-                  <Label htmlFor="title">{t.title}</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                    data-testid="input-title"
-                  />
-                </div>
                 <div>
                   <Label htmlFor="content">{t.content}</Label>
                   <Textarea
@@ -489,12 +475,26 @@ export default function AdminArticles() {
 
       <div className="grid gap-4">
         {articles && articles.length > 0 ? (
-          articles.map((article) => (
+          articles.map((article) => {
+            const formattedTags = article.tags.map(tag => {
+              if (tag.category === 'remedy') {
+                return tag.name.split(' ').map(word => 
+                  word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ');
+              } else {
+                return tag.name.toLowerCase();
+              }
+            });
+            
+            const joined = formattedTags.join(', ');
+            const title = joined.charAt(0).toUpperCase() + joined.slice(1);
+            
+            return (
             <Card key={article.id}>
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
                 <div className="space-y-2 flex-1">
                   <CardTitle className="text-xl font-serif">
-                    {article.title}
+                    {title}
                   </CardTitle>
                   <div className="flex flex-wrap gap-2">
                     {article.tags.map((tag) => (
@@ -532,7 +532,7 @@ export default function AdminArticles() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>{t.deleteArticle}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {article.title}
+                          {title}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -550,7 +550,8 @@ export default function AdminArticles() {
                 </div>
               </CardHeader>
             </Card>
-          ))
+            );
+          })
         ) : (
           <Card>
             <CardContent className="p-12 text-center">

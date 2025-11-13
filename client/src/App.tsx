@@ -32,7 +32,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/article/:id" component={ArticleReader} />
+      <Route path="/article/:slug" component={ArticleReader} />
       {isAdmin && (
         <>
           <Route path="/admin" component={AdminHome} />
