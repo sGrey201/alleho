@@ -75,7 +75,7 @@ export default function ArticleReader() {
             {article.tags.map((tag) => (
               <Badge
                 key={tag.id}
-                variant="secondary"
+                variant={tag.category === 'remedy' ? 'default' : 'secondary'}
                 className="text-sm font-medium"
                 data-testid={`badge-article-tag-${tag.slug}`}
               >
