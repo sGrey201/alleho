@@ -159,14 +159,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
             {title}
           </h3>
           
-          <div className="relative">
-            <p className="text-lg text-muted-foreground leading-relaxed line-clamp-6 font-serif">
-              {preview}
-            </p>
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background via-background/80 to-transparent flex items-end justify-center pb-2">
-              <span className="text-xl font-medium text-primary">{t.readFull}</span>
-            </div>
-          </div>
+          <p className="text-lg text-muted-foreground leading-relaxed line-clamp-4 font-serif">
+            {preview}
+          </p>
         </div>
       </Link>
 
