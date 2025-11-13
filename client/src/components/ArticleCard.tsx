@@ -1,13 +1,9 @@
 import { Article, Tag } from '@shared/schema';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'wouter';
-import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
-import { useMutation } from '@tanstack/react-query';
-import { Edit, Trash2 } from 'lucide-react';
-import { apiRequest, queryClient } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
+import { Edit } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -18,7 +14,6 @@ interface ArticleCardProps {
 export function ArticleCard({ article }: ArticleCardProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const preview = article.content.substring(0, 600).replace(/<[^>]*>/g, '');
   
   const formattedTags = article.tags.map(tag => {
@@ -34,37 +29,10 @@ export function ArticleCard({ article }: ArticleCardProps) {
   const joined = formattedTags.join(', ');
   const title = joined.charAt(0).toUpperCase() + joined.slice(1);
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest('DELETE', `/api/admin/articles/${article.id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
-      toast({
-        title: t.articleDeleted,
-      });
-    },
-    onError: () => {
-      toast({
-        title: t.error,
-        description: 'Ошибка при удалении статьи',
-        variant: 'destructive',
-      });
-    }
-  });
-
   const handleEdit = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setLocation(`/admin/articles?edit=${article.id}`);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (confirm('Вы уверены, что хотите удалить эту статью?')) {
-      deleteMutation.mutate();
-    }
   };
 
   return (
@@ -74,7 +42,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
         data-testid={`card-article-${article.id}`}
       >
         {user?.isAdmin && (
-          <div className="absolute top-4 right-4 flex gap-2">
+          <div className="absolute top-4 right-4">
             <Button
               type="button"
               size="icon"
@@ -83,16 +51,6 @@ export function ArticleCard({ article }: ArticleCardProps) {
               data-testid={`button-edit-article-${article.id}`}
             >
               <Edit className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-              data-testid={`button-delete-article-${article.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         )}
