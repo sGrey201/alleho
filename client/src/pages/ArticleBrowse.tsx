@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
@@ -42,38 +42,41 @@ export default function ArticleBrowse() {
 
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const hasInitialized = useRef(false);
 
-  // Инициализируем теги из URL при загрузке allTags
+  // Инициализируем теги из URL при первой загрузке allTags
   useEffect(() => {
-    if (allTags && !isInitialized) {
-      const searchParams = new URLSearchParams(location.split('?')[1] || '');
-      const remedySlugs = searchParams.get('remedies');
-      const situationSlugs = searchParams.get('situations');
-      
-      if (remedySlugs) {
-        const slugs = remedySlugs.split(',').filter(Boolean);
-        const ids = allTags
-          .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
-          .map(tag => tag.id);
-        setSelectedRemedyTagIds(ids);
-      }
-      
-      if (situationSlugs) {
-        const slugs = situationSlugs.split(',').filter(Boolean);
-        const ids = allTags
-          .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
-          .map(tag => tag.id);
-        setSelectedSituationTagIds(ids);
-      }
-      
-      setIsInitialized(true);
+    if (!allTags || hasInitialized.current) return;
+    
+    const searchParams = new URLSearchParams(location.split('?')[1] || '');
+    const remedySlugs = searchParams.get('remedies');
+    const situationSlugs = searchParams.get('situations');
+    
+    const remedyIds: string[] = [];
+    const situationIds: string[] = [];
+    
+    if (remedySlugs) {
+      const slugs = remedySlugs.split(',').filter(Boolean);
+      remedyIds.push(...allTags
+        .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
+        .map(tag => tag.id));
     }
-  }, [allTags, isInitialized, location]);
+    
+    if (situationSlugs) {
+      const slugs = situationSlugs.split(',').filter(Boolean);
+      situationIds.push(...allTags
+        .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
+        .map(tag => tag.id));
+    }
+    
+    setSelectedRemedyTagIds(remedyIds);
+    setSelectedSituationTagIds(situationIds);
+    hasInitialized.current = true;
+  }, [allTags, location]);
 
-  // Обновляем URL при изменении выбранных тегов
+  // Обновляем URL при изменении выбранных тегов (только после инициализации)
   useEffect(() => {
-    if (!allTags || !isInitialized) return;
+    if (!allTags || !hasInitialized.current) return;
     
     const params = new URLSearchParams();
     
@@ -99,7 +102,7 @@ export default function ArticleBrowse() {
     if (newUrl !== currentLocation) {
       setLocation(newUrl, { replace: true });
     }
-  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized, setLocation]);
+  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, setLocation]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
