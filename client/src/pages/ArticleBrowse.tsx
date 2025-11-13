@@ -53,6 +53,8 @@ export default function ArticleBrowse() {
     const remedySlugs = searchParams.get('remedies');
     const situationSlugs = searchParams.get('situations');
     
+    console.log('🔍 URL Init:', { remedySlugs, situationSlugs, location });
+    
     // Если в URL нет параметров, просто помечаем как инициализированное
     if (!remedySlugs && !situationSlugs) {
       hasInitialized.current = true;
@@ -66,18 +68,21 @@ export default function ArticleBrowse() {
     
     if (remedySlugs) {
       const slugs = remedySlugs.split(',').filter(Boolean);
-      remedyIds.push(...allTags
-        .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
-        .map(tag => tag.id));
+      console.log('🏷️ Looking for remedy slugs:', slugs);
+      const foundTags = allTags.filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy');
+      console.log('✅ Found remedy tags:', foundTags);
+      remedyIds.push(...foundTags.map(tag => tag.id));
     }
     
     if (situationSlugs) {
       const slugs = situationSlugs.split(',').filter(Boolean);
-      situationIds.push(...allTags
-        .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
-        .map(tag => tag.id));
+      console.log('🏷️ Looking for situation slugs:', slugs);
+      const foundTags = allTags.filter(tag => slugs.includes(tag.slug) && tag.category === 'situation');
+      console.log('✅ Found situation tags:', foundTags);
+      situationIds.push(...foundTags.map(tag => tag.id));
     }
     
+    console.log('📌 Setting selected IDs:', { remedyIds, situationIds });
     setSelectedRemedyTagIds(remedyIds);
     setSelectedSituationTagIds(situationIds);
   }, [allTags, location]);
