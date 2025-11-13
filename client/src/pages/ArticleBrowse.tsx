@@ -40,39 +40,67 @@ export default function ArticleBrowse() {
     queryKey: ['/api/tags'],
   });
 
+  // Инициализация выбранных тегов из URL после загрузки allTags
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Синхронизируем состояние с URL параметрами
+  // Инициализируем теги из URL при загрузке allTags
   useEffect(() => {
-    if (!allTags) return;
+    if (allTags && !isInitialized) {
+      const remedySlugs = searchParams.get('remedies');
+      const situationSlugs = searchParams.get('situations');
+      
+      if (remedySlugs) {
+        const slugs = remedySlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
+          .map(tag => tag.id);
+        setSelectedRemedyTagIds(ids);
+      }
+      
+      if (situationSlugs) {
+        const slugs = situationSlugs.split(',').filter(Boolean);
+        const ids = allTags
+          .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
+          .map(tag => tag.id);
+        setSelectedSituationTagIds(ids);
+      }
+      
+      setIsInitialized(true);
+    }
+  }, [allTags, isInitialized]);
+
+  // Обновляем URL при изменении выбранных тегов
+  useEffect(() => {
+    if (!allTags || !isInitialized) return;
     
-    const searchParams = new URLSearchParams(location.split('?')[1] || '');
-    const remedySlugs = searchParams.get('remedies');
-    const situationSlugs = searchParams.get('situations');
+    const params = new URLSearchParams();
     
-    // Обновляем remedy теги
-    if (remedySlugs) {
-      const slugs = remedySlugs.split(',').filter(Boolean);
-      const ids = allTags
-        .filter(tag => slugs.includes(tag.slug) && tag.category === 'remedy')
-        .map(tag => tag.id);
-      setSelectedRemedyTagIds(ids);
-    } else {
-      setSelectedRemedyTagIds([]);
+    if (selectedRemedyTagIds.length > 0) {
+      const slugs = allTags
+        .filter(tag => selectedRemedyTagIds.includes(tag.id))
+        .map(tag => tag.slug)
+        .join(',');
+      if (slugs) params.set('remedies', slugs);
     }
     
-    // Обновляем situation теги
-    if (situationSlugs) {
-      const slugs = situationSlugs.split(',').filter(Boolean);
-      const ids = allTags
-        .filter(tag => slugs.includes(tag.slug) && tag.category === 'situation')
-        .map(tag => tag.id);
-      setSelectedSituationTagIds(ids);
-    } else {
-      setSelectedSituationTagIds([]);
+    if (selectedSituationTagIds.length > 0) {
+      const slugs = allTags
+        .filter(tag => selectedSituationTagIds.includes(tag.id))
+        .map(tag => tag.slug)
+        .join(',');
+      if (slugs) params.set('situations', slugs);
     }
-  }, [allTags, location]);
+    
+    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
+    const currentLocation = window.location.pathname + window.location.search;
+    
+    if (newUrl !== currentLocation) {
+      setLocation(newUrl, { replace: true });
+    }
+  }, [selectedRemedyTagIds, selectedSituationTagIds, allTags, isInitialized, setLocation]);
 
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
@@ -157,62 +185,21 @@ export default function ArticleBrowse() {
     const tag = allTags?.find(t => t.id === tagId);
     if (!tag) return;
     
-    const params = new URLSearchParams(location.split('?')[1] || '');
-    
-    if (tag.category === 'remedy') {
-      const current = params.get('remedies')?.split(',').filter(Boolean) || [];
-      if (!current.includes(tag.slug)) {
-        current.push(tag.slug);
-        params.set('remedies', current.join(','));
-      }
-    } else if (tag.category === 'situation') {
-      const current = params.get('situations')?.split(',').filter(Boolean) || [];
-      if (!current.includes(tag.slug)) {
-        current.push(tag.slug);
-        params.set('situations', current.join(','));
-      }
+    if (tag.category === 'remedy' && !selectedRemedyTagIds.includes(tagId)) {
+      setSelectedRemedyTagIds([...selectedRemedyTagIds, tagId]);
+    } else if (tag.category === 'situation' && !selectedSituationTagIds.includes(tagId)) {
+      setSelectedSituationTagIds([...selectedSituationTagIds, tagId]);
     }
-    
-    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    setLocation(newUrl);
     setTagPopoverOpen(false);
     setTagSearchQuery('');
   };
 
   const removeRemedyTag = (tagId: string) => {
-    const tag = allTags?.find(t => t.id === tagId);
-    if (!tag) return;
-    
-    const params = new URLSearchParams(location.split('?')[1] || '');
-    const current = params.get('remedies')?.split(',').filter(Boolean) || [];
-    const updated = current.filter(slug => slug !== tag.slug);
-    
-    if (updated.length > 0) {
-      params.set('remedies', updated.join(','));
-    } else {
-      params.delete('remedies');
-    }
-    
-    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    setLocation(newUrl);
+    setSelectedRemedyTagIds(selectedRemedyTagIds.filter(id => id !== tagId));
   };
 
   const removeSituationTag = (tagId: string) => {
-    const tag = allTags?.find(t => t.id === tagId);
-    if (!tag) return;
-    
-    const params = new URLSearchParams(location.split('?')[1] || '');
-    const current = params.get('situations')?.split(',').filter(Boolean) || [];
-    const updated = current.filter(slug => slug !== tag.slug);
-    
-    if (updated.length > 0) {
-      params.set('situations', updated.join(','));
-    } else {
-      params.delete('situations');
-    }
-    
-    const newUrl = params.toString() ? `/?${params.toString()}` : '/';
-    setLocation(newUrl);
+    setSelectedSituationTagIds(selectedSituationTagIds.filter(id => id !== tagId));
   };
 
   const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -242,7 +229,8 @@ export default function ArticleBrowse() {
   const hasSelectedTags = selectedRemedyTagIds.length > 0 || selectedSituationTagIds.length > 0;
 
   const clearAllTags = () => {
-    setLocation('/');
+    setSelectedRemedyTagIds([]);
+    setSelectedSituationTagIds([]);
   };
 
   return (
