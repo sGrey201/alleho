@@ -48,10 +48,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(article.tags.map(t => t.id));
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [formData, setFormData] = useState<InsertArticle>({
+    preview: article.preview,
     content: article.content,
   });
-
-  const preview = article.content.substring(0, 600).replace(/<[^>]*>/g, '');
   
   const formattedTags = article.tags.map(tag => {
     if (tag.category === 'remedy') {
@@ -160,7 +159,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </h3>
           
           <p className="text-lg text-muted-foreground leading-relaxed line-clamp-4 font-serif">
-            {preview}
+            {article.preview}
           </p>
         </div>
       </Link>
@@ -173,6 +172,17 @@ export function ArticleCard({ article }: ArticleCardProps) {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="preview">{t.preview}</Label>
+                <Textarea
+                  id="preview"
+                  value={formData.preview}
+                  onChange={(e) => setFormData({ ...formData, preview: e.target.value })}
+                  required
+                  rows={3}
+                  data-testid="textarea-preview"
+                />
+              </div>
               <div>
                 <Label htmlFor="content">{t.content}</Label>
                 <Textarea

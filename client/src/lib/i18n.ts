@@ -66,6 +66,7 @@ export const t = {
   
   // Article Editor
   title: 'Заголовок',
+  preview: 'Превью',
   content: 'Содержание',
   tagsPlaceholder: 'Добавьте теги (например: Arnica, Belladonna)',
   publish: 'Опубликовать',
