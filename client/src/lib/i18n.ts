@@ -68,6 +68,7 @@ export const t = {
   title: 'Заголовок',
   preview: 'Превью',
   content: 'Содержание',
+  isFree: 'Без подписки',
   tagsPlaceholder: 'Добавьте теги (например: Arnica, Belladonna)',
   publish: 'Опубликовать',
   saveDraft: 'Сохранить черновик',

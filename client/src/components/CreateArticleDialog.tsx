@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Save, X } from 'lucide-react';
@@ -48,6 +49,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   const [formData, setFormData] = useState<InsertArticle>({
     preview: '',
     content: '',
+    isFree: false,
   });
 
   const { data: allTags = [] } = useQuery<Tag[]>({
@@ -92,7 +94,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   });
 
   const resetForm = () => {
-    setFormData({ preview: '', content: '' });
+    setFormData({ preview: '', content: '', isFree: false });
     setSelectedTagIds([]);
     setTagSearchQuery('');
   };
@@ -188,6 +190,15 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                 rows={12}
                 data-testid="textarea-content"
               />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isFree"
+                checked={formData.isFree}
+                onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
+                data-testid="checkbox-is-free"
+              />
+              <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
             </div>
           </div>
 
