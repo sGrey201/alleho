@@ -67,17 +67,14 @@ async function upsertUser(
     
     await storage.updateUserProfile(claims["sub"], updateData);
   } else {
-    // For new users, create with 7-day trial
-    const trialExpiration = new Date();
-    trialExpiration.setDate(trialExpiration.getDate() + 7);
-    
+    // For new users, create without subscription
     const newUserData: any = {
       id: claims["sub"],
       email: claims["email"],
       firstName: claims["first_name"],
       lastName: claims["last_name"],
       profileImageUrl: claims["profile_image_url"],
-      subscriptionExpiresAt: trialExpiration,
+      subscriptionExpiresAt: null,
       isAdmin: false,
       preferredLanguage: 'en',
     };
