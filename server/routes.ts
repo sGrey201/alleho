@@ -26,12 +26,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public article routes (accessible to everyone, preview for non-subscribers)
   app.get('/api/articles', async (req: any, res) => {
     try {
-      // Disable ALL caching (including ETag) for article content
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-      res.removeHeader('ETag');
-      
       const articlesList = await storage.getAllArticles();
       
       // Check if user is authenticated and has active subscription
@@ -43,11 +37,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription, show preview instead of full content (except for free articles)
+      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
-          content: article.isFree ? article.content : article.preview,
+          content: article.isFree ? article.content : article.content.substring(0, 1000),
         }));
         return res.json(previewArticles);
       }
@@ -61,12 +55,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/articles/slug/:slug', async (req: any, res) => {
     try {
-      // Disable ALL caching (including ETag) for article content
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-      res.removeHeader('ETag');
-      
       const article = await storage.getArticleBySlug(req.params.slug);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
@@ -76,38 +64,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let hasActiveSubscription = false;
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
-        const expiresAt = user?.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
-        const now = new Date();
-        hasActiveSubscription = expiresAt ? expiresAt > now : false;
-        
-        console.log('🔍 Subscription check:', {
-          userId: user?.id,
-          email: user?.email,
-          expiresAt: expiresAt?.toISOString(),
-          now: now.toISOString(),
-          hasActiveSubscription,
-          isAdmin: user?.isAdmin,
-          articleIsFree: article.isFree,
-          willTruncate: !hasActiveSubscription && !article.isFree
-        });
-      } else {
-        console.log('🔍 User not authenticated, will truncate unless article is free', {
-          articleIsFree: article.isFree,
-          willTruncate: !article.isFree
-        });
+        hasActiveSubscription = user?.subscriptionExpiresAt 
+          ? new Date(user.subscriptionExpiresAt) > new Date() 
+          : false;
       }
 
-      // If no active subscription, show preview instead of full content (except for free articles)
+      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
-        console.log('✂️ Returning preview instead of full content');
         const previewArticle = {
           ...article,
-          content: article.preview,
+          content: article.content.substring(0, 1000),
         };
         return res.json(previewArticle);
       }
 
-      console.log('✅ Returning full article');
       res.json(article);
     } catch (error) {
       console.error("Error fetching article:", error);
@@ -117,12 +87,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/articles/:id', async (req: any, res) => {
     try {
-      // Disable ALL caching (including ETag) for article content
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-      res.removeHeader('ETag');
-      
       const article = await storage.getArticleById(req.params.id);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
@@ -137,11 +101,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription, show preview instead of full content (except for free articles)
+      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
-          content: article.preview,
+          content: article.content.substring(0, 1000),
         };
         return res.json(previewArticle);
       }
