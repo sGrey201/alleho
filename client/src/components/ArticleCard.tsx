@@ -110,6 +110,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     e.preventDefault();
     e.stopPropagation();
     setFormData({
+      preview: article.preview,
       content: article.content,
     });
     setSelectedTagIds(article.tags.map(t => t.id));
