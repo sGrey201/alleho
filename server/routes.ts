@@ -43,11 +43,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription, truncate content to preview (except for free articles)
+      // If no active subscription, show preview instead of full content (except for free articles)
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
-          content: article.isFree ? article.content : article.content.substring(0, 1000),
+          content: article.isFree ? article.content : article.preview,
         }));
         return res.json(previewArticles);
       }
@@ -97,12 +97,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // If no active subscription, truncate content to preview (except for free articles)
+      // If no active subscription, show preview instead of full content (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
-        console.log('✂️ Truncating content to 1000 chars');
+        console.log('✂️ Returning preview instead of full content');
         const previewArticle = {
           ...article,
-          content: article.content.substring(0, 1000),
+          content: article.preview,
         };
         return res.json(previewArticle);
       }
@@ -137,11 +137,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription, truncate content to preview (except for free articles)
+      // If no active subscription, show preview instead of full content (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
-          content: article.content.substring(0, 1000),
+          content: article.preview,
         };
         return res.json(previewArticle);
       }

@@ -19,7 +19,7 @@ export default function ArticleReader() {
   const { toast } = useToast();
 
   const { data: article, isLoading } = useQuery<ArticleWithTags>({
-    queryKey: ['/api/articles/slug', params?.slug],
+    queryKey: ['/api/articles/slug', params?.slug, hasActiveSubscription],
     enabled: !!params?.slug,
   });
 
@@ -61,8 +61,7 @@ export default function ArticleReader() {
   const wordCount = article.content.split(/\s+/).length;
   const readingTime = Math.ceil(wordCount / 200);
   
-  const previewContent = article.content.substring(0, 1000);
-  const isContentLocked = !article.isFree && !hasActiveSubscription && article.content.length > 1000;
+  const isContentLocked = !article.isFree && !hasActiveSubscription;
 
   const formattedTags = article.tags.map(tag => {
     if (tag.category === 'remedy') {
@@ -92,7 +91,7 @@ export default function ArticleReader() {
             style={{ whiteSpace: 'pre-wrap' }}
             data-testid="text-article-content"
           >
-            {hasActiveSubscription || article.isFree ? article.content : previewContent}
+            {article.content}
           </div>
 
           {isContentLocked && (
