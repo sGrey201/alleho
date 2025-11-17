@@ -64,9 +64,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let hasActiveSubscription = false;
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
-        hasActiveSubscription = user?.subscriptionExpiresAt 
-          ? new Date(user.subscriptionExpiresAt) > new Date() 
-          : false;
+        const expiresAt = user?.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
+        const now = new Date();
+        hasActiveSubscription = expiresAt ? expiresAt > now : false;
+        
+        console.log('🔍 Subscription check:', {
+          userId: user?.id,
+          email: user?.email,
+          expiresAt: expiresAt?.toISOString(),
+          now: now.toISOString(),
+          hasActiveSubscription,
+          isAdmin: user?.isAdmin
+        });
       }
 
       // If no active subscription, truncate content to preview (except for free articles)
