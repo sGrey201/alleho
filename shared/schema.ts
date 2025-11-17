@@ -79,6 +79,7 @@ export type Tag = typeof tags.$inferSelect;
 export const articles = pgTable("articles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   slug: varchar("slug", { length: 255 }).unique().notNull(),
+  preview: text("preview").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
