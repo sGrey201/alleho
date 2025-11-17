@@ -46,6 +46,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
+    preview: '',
     content: '',
   });
 
@@ -91,7 +92,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   });
 
   const resetForm = () => {
-    setFormData({ content: '' });
+    setFormData({ preview: '', content: '' });
     setSelectedTagIds([]);
     setTagSearchQuery('');
   };
@@ -166,6 +167,17 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
+            <div>
+              <Label htmlFor="preview">{t.preview}</Label>
+              <Textarea
+                id="preview"
+                value={formData.preview}
+                onChange={(e) => setFormData({ ...formData, preview: e.target.value })}
+                required
+                rows={3}
+                data-testid="textarea-preview"
+              />
+            </div>
             <div>
               <Label htmlFor="content">{t.content}</Label>
               <Textarea
