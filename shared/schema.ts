@@ -81,6 +81,7 @@ export const articles = pgTable("articles", {
   slug: varchar("slug", { length: 255 }).unique().notNull(),
   preview: text("preview").notNull(),
   content: text("content").notNull(),
+  isFree: boolean("is_free").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
