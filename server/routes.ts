@@ -37,11 +37,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription (or not authenticated), truncate content to preview
+      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
-          content: article.content.substring(0, 1000),
+          content: article.isFree ? article.content : article.content.substring(0, 1000),
         }));
         return res.json(previewArticles);
       }
@@ -69,8 +69,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription (or not authenticated), truncate content to preview
-      if (!hasActiveSubscription) {
+      // If no active subscription, truncate content to preview (except for free articles)
+      if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
           content: article.content.substring(0, 1000),
@@ -101,8 +101,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : false;
       }
 
-      // If no active subscription (or not authenticated), truncate content to preview
-      if (!hasActiveSubscription) {
+      // If no active subscription, truncate content to preview (except for free articles)
+      if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
           content: article.content.substring(0, 1000),
@@ -131,11 +131,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? new Date(user.subscriptionExpiresAt) > new Date() 
         : false;
 
-      // If no active subscription, truncate content to preview
+      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription) {
         const previewResults = results.map(article => ({
           ...article,
-          content: article.content.substring(0, 1000),
+          content: article.isFree ? article.content : article.content.substring(0, 1000),
         }));
         return res.json(previewResults);
       }
