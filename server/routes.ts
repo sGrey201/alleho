@@ -86,12 +86,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiresAt: expiresAt?.toISOString(),
           now: now.toISOString(),
           hasActiveSubscription,
-          isAdmin: user?.isAdmin
+          isAdmin: user?.isAdmin,
+          articleIsFree: article.isFree,
+          willTruncate: !hasActiveSubscription && !article.isFree
+        });
+      } else {
+        console.log('🔍 User not authenticated, will truncate unless article is free', {
+          articleIsFree: article.isFree,
+          willTruncate: !article.isFree
         });
       }
 
       // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
+        console.log('✂️ Truncating content to 1000 chars');
         const previewArticle = {
           ...article,
           content: article.content.substring(0, 1000),
@@ -99,6 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(previewArticle);
       }
 
+      console.log('✅ Returning full article');
       res.json(article);
     } catch (error) {
       console.error("Error fetching article:", error);
