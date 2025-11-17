@@ -26,6 +26,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public article routes (accessible to everyone, preview for non-subscribers)
   app.get('/api/articles', async (req: any, res) => {
     try {
+      // Disable caching for article content (depends on user subscription status)
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const articlesList = await storage.getAllArticles();
       
       // Check if user is authenticated and has active subscription
@@ -55,6 +60,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/articles/slug/:slug', async (req: any, res) => {
     try {
+      // Disable caching for article content (depends on user subscription status)
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const article = await storage.getArticleBySlug(req.params.slug);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
@@ -96,6 +106,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/articles/:id', async (req: any, res) => {
     try {
+      // Disable caching for article content (depends on user subscription status)
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const article = await storage.getArticleById(req.params.id);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
