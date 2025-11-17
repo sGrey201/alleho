@@ -83,19 +83,6 @@ export default function ArticleReader() {
           <h1 className="mb-6 text-3xl md:text-4xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
             {title}
           </h1>
-          
-          <div className="mb-6 flex flex-wrap gap-2">
-            {article.tags.map((tag) => (
-              <Badge
-                key={tag.id}
-                variant={tag.category === 'remedy' ? 'default' : 'secondary'}
-                className="text-sm font-medium"
-                data-testid={`badge-article-tag-${tag.slug}`}
-              >
-                {tag.name}
-              </Badge>
-            ))}
-          </div>
         </div>
 
         <div className="relative">
@@ -131,6 +118,19 @@ export default function ArticleReader() {
               </Card>
             </div>
           )}
+        </div>
+
+        <div className="mt-8 flex flex-wrap gap-2">
+          {article.tags.map((tag) => (
+            <Badge
+              key={tag.id}
+              variant={tag.category === 'remedy' ? 'default' : 'secondary'}
+              className="text-sm font-medium"
+              data-testid={`badge-article-tag-${tag.slug}`}
+            >
+              {tag.name}
+            </Badge>
+          ))}
         </div>
       </article>
     </div>
