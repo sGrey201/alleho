@@ -29,19 +29,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const articlesList = await storage.getAllArticles();
       
       // Check if user is authenticated and has active subscription
-      let hasFullAccess = false;
+      let hasActiveSubscription = false;
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
-        const hasActiveSubscription = user?.subscriptionExpiresAt 
+        hasActiveSubscription = user?.subscriptionExpiresAt 
           ? new Date(user.subscriptionExpiresAt) > new Date() 
           : false;
-        
-        // Admins have full access, or users with active subscription
-        hasFullAccess = user?.isAdmin || hasActiveSubscription;
       }
 
-      // If no full access, truncate content to preview (except for free articles)
-      if (!hasFullAccess) {
+      // If no active subscription, truncate content to preview (except for free articles)
+      if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
           content: article.isFree ? article.content : article.content.substring(0, 1000),
@@ -64,15 +61,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user is authenticated and has active subscription
-      let hasFullAccess = false;
+      let hasActiveSubscription = false;
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
         const expiresAt = user?.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) : null;
         const now = new Date();
-        const hasActiveSubscription = expiresAt ? expiresAt > now : false;
-        
-        // Admins have full access, or users with active subscription
-        hasFullAccess = user?.isAdmin || hasActiveSubscription;
+        hasActiveSubscription = expiresAt ? expiresAt > now : false;
         
         console.log('🔍 Subscription check:', {
           userId: user?.id,
@@ -80,13 +74,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiresAt: expiresAt?.toISOString(),
           now: now.toISOString(),
           hasActiveSubscription,
-          isAdmin: user?.isAdmin,
-          hasFullAccess
+          isAdmin: user?.isAdmin
         });
       }
 
-      // If no full access, truncate content to preview (except for free articles)
-      if (!hasFullAccess && !article.isFree) {
+      // If no active subscription, truncate content to preview (except for free articles)
+      if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
           content: article.content.substring(0, 1000),
@@ -109,19 +102,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user is authenticated and has active subscription
-      let hasFullAccess = false;
+      let hasActiveSubscription = false;
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
-        const hasActiveSubscription = user?.subscriptionExpiresAt 
+        hasActiveSubscription = user?.subscriptionExpiresAt 
           ? new Date(user.subscriptionExpiresAt) > new Date() 
           : false;
-        
-        // Admins have full access, or users with active subscription
-        hasFullAccess = user?.isAdmin || hasActiveSubscription;
       }
 
-      // If no full access, truncate content to preview (except for free articles)
-      if (!hasFullAccess && !article.isFree) {
+      // If no active subscription, truncate content to preview (except for free articles)
+      if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
           content: article.content.substring(0, 1000),
