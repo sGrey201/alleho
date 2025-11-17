@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link } from 'wouter';
@@ -50,6 +51,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
   const [formData, setFormData] = useState<InsertArticle>({
     preview: article.preview,
     content: article.content,
+    isFree: article.isFree,
   });
   
   const formattedTags = article.tags.map(tag => {
@@ -112,6 +114,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     setFormData({
       preview: article.preview,
       content: article.content,
+      isFree: article.isFree,
     });
     setSelectedTagIds(article.tags.map(t => t.id));
     setIsEditDialogOpen(true);
@@ -194,6 +197,15 @@ export function ArticleCard({ article }: ArticleCardProps) {
                   rows={12}
                   data-testid="textarea-content"
                 />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isFree"
+                  checked={formData.isFree}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
+                  data-testid="checkbox-is-free"
+                />
+                <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
               </div>
             </div>
 
