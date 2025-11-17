@@ -36,6 +36,16 @@ export default function ArticleReader() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
+  useEffect(() => {
+    if (!authLoading && !isLoading && article && !article.isFree && !hasActiveSubscription) {
+      toast({
+        title: t.subscriptionRequired,
+        description: t.subscriptionRequiredDescription,
+        variant: 'default',
+      });
+    }
+  }, [article, hasActiveSubscription, authLoading, isLoading, toast]);
+
   if (isLoading || authLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">

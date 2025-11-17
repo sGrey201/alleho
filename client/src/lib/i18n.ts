@@ -91,6 +91,8 @@ export const t = {
   extend1Year: '+1 год',
   setExpiration: 'Установить дату истечения',
   subscriptionUpdated: 'Подписка обновлена',
+  subscriptionRequired: 'Требуется подписка',
+  subscriptionRequiredDescription: 'Эта статья доступна только подписчикам. Вы видите только превью.',
   never: 'Никогда',
   
   // Tags & Categories
