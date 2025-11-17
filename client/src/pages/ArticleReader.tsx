@@ -36,15 +36,6 @@ export default function ArticleReader() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  useEffect(() => {
-    if (!authLoading && !isLoading && article && !article.isFree && !hasActiveSubscription) {
-      toast({
-        title: t.subscriptionRequired,
-        description: t.subscriptionRequiredDescription,
-        variant: 'default',
-      });
-    }
-  }, [article, hasActiveSubscription, authLoading, isLoading, toast]);
 
   if (isLoading || authLoading) {
     return (
@@ -95,11 +86,9 @@ export default function ArticleReader() {
           </h1>
         </div>
 
-        <div className="relative">
+        <div>
           <div
-            className={`font-serif text-xl leading-[1.8] text-foreground ${
-              isContentLocked ? 'line-clamp-[20]' : ''
-            }`}
+            className="font-serif text-xl leading-[1.8] text-foreground"
             style={{ whiteSpace: 'pre-wrap' }}
             data-testid="text-article-content"
           >
@@ -107,23 +96,51 @@ export default function ArticleReader() {
           </div>
 
           {isContentLocked && (
-            <div className="absolute inset-x-0 bottom-0 h-96 bg-gradient-to-t from-background via-background/95 to-transparent flex items-end justify-center pb-12">
-              <Card className="max-w-md border-2 shadow-xl">
-                <CardContent className="p-8 text-center">
-                  <div className="mb-4 flex justify-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
-                      <Lock className="h-8 w-8 text-accent" />
+            <div className="mt-12">
+              <Card className="border-2 shadow-lg">
+                <CardContent className="p-8">
+                  <div className="mb-6 flex justify-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                      <Lock className="h-8 w-8 text-primary" />
                     </div>
                   </div>
-                  <h3 className="mb-2 text-2xl font-bold text-foreground">
+                  <h3 className="mb-3 text-3xl font-bold text-foreground text-center">
                     {t.upgradePromptTitle}
                   </h3>
-                  <p className="mb-6 text-muted-foreground">
+                  <p className="mb-6 text-lg text-muted-foreground text-center">
                     {t.upgradePromptDescription}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {t.contactAdmin}
-                  </p>
+                  
+                  <div className="mb-8 space-y-3">
+                    <p className="font-semibold text-foreground text-center">{t.subscriptionBenefits}</p>
+                    <ul className="space-y-2 max-w-md mx-auto">
+                      <li className="flex items-start gap-3">
+                        <span className="text-primary mt-1">✓</span>
+                        <span className="text-foreground">{t.benefitFullAccess}</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="text-primary mt-1">✓</span>
+                        <span className="text-foreground">{t.benefitNewContent}</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="text-primary mt-1">✓</span>
+                        <span className="text-foreground">{t.benefitExpertKnowledge}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="text-center">
+                    <Button 
+                      size="lg"
+                      onClick={() => window.location.href = '/admin/subscriptions'}
+                      data-testid="button-get-subscription"
+                    >
+                      {t.getSubscription}
+                    </Button>
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      {t.contactAdmin}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
