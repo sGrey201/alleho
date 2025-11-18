@@ -51,7 +51,7 @@ export function Header() {
               }
             />
           )}
-          {isAuthenticated && !hasActiveSubscription && (
+          {(!isAuthenticated || !hasActiveSubscription) && (
             <Button 
               variant="secondary" 
               size="sm" 
