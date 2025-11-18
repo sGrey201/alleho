@@ -88,7 +88,13 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
     },
     onSuccess: (newTag: Tag) => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
-      addTag(newTag.id);
+      
+      // Добавляем новый тег в выбранные
+      if (!selectedTagIds.includes(newTag.id)) {
+        setSelectedTagIds([...selectedTagIds, newTag.id]);
+      }
+      
+      // Очищаем поиск, но не закрываем поповер
       setTagSearchQuery('');
     },
   });
