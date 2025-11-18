@@ -53,7 +53,7 @@ export function Header() {
           )}
           {isAuthenticated && !hasActiveSubscription && (
             <Button 
-              variant="default" 
+              variant="secondary" 
               size="sm" 
               asChild
               data-testid="button-subscribe-header"
