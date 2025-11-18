@@ -84,7 +84,7 @@ export default function ArticleReader() {
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
-          <h1 className="mb-6 text-3xl md:text-4xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
+          <h1 className="mb-6 text-4xl md:text-5xl font-bold text-foreground leading-normal font-serif" data-testid="text-article-title">
             {title}
           </h1>
         </div>
@@ -93,7 +93,7 @@ export default function ArticleReader() {
           <>
             <div className="mb-8">
               <div
-                className="font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
+                className="font-serif text-2xl leading-[2.25] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
                 style={{ whiteSpace: 'pre-wrap' }}
               >
                 {article.preview}
@@ -102,7 +102,7 @@ export default function ArticleReader() {
 
             <div className="mb-8">
               <div
-                className="font-serif text-xl leading-[1.8] text-foreground"
+                className="font-serif text-3xl leading-[2.25] text-foreground"
                 style={{ whiteSpace: 'pre-wrap' }}
                 data-testid="text-article-preview"
               >
@@ -118,10 +118,10 @@ export default function ArticleReader() {
                       <Lock className="h-8 w-8 text-primary" />
                     </div>
                   </div>
-                  <h3 className="mb-3 text-3xl font-bold text-foreground text-center">
+                  <h3 className="mb-3 text-4xl font-bold text-foreground text-center">
                     {t.upgradePromptTitle}
                   </h3>
-                  <p className="mb-6 text-lg text-muted-foreground text-center">
+                  <p className="mb-6 text-xl text-muted-foreground text-center leading-relaxed">
                     {t.upgradePromptDescription}
                   </p>
                   
@@ -173,7 +173,7 @@ export default function ArticleReader() {
         ) : (
           <div>
             <div
-              className="font-serif text-xl leading-[1.8] text-foreground"
+              className="font-serif text-3xl leading-[2.25] text-foreground"
               style={{ whiteSpace: 'pre-wrap' }}
               data-testid="text-article-content"
             >
