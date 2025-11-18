@@ -14,7 +14,7 @@ import { User, Settings, LogOut, Plus } from 'lucide-react';
 import { CreateArticleDialog } from '@/components/CreateArticleDialog';
 
 export function Header() {
-  const { user, isAuthenticated, isAdmin } = useAuth();
+  const { user, isAuthenticated, isAdmin, hasActiveSubscription } = useAuth();
   const [location] = useLocation();
 
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
@@ -50,6 +50,16 @@ export function Header() {
                 </Button>
               }
             />
+          )}
+          {isAuthenticated && !hasActiveSubscription && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              asChild
+              data-testid="button-subscribe-header"
+            >
+              <Link href="/subscribe">{t.getSubscription}</Link>
+            </Button>
           )}
           {isAuthenticated && user ? (
             <DropdownMenu>
