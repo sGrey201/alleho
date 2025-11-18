@@ -102,7 +102,7 @@ export default function ArticleReader() {
           <>
             <div className="mb-8">
               <div
-                className="font-serif text-xl leading-[1.8] text-foreground"
+                className="font-serif text-xl leading-[1.8] text-foreground text-justify"
                 style={{ whiteSpace: 'pre-wrap' }}
                 data-testid="text-article-preview"
               >
@@ -173,7 +173,7 @@ export default function ArticleReader() {
         ) : (
           <div>
             <div
-              className="font-serif text-xl leading-[1.8] text-foreground"
+              className="font-serif text-xl leading-[1.8] text-foreground text-justify"
               style={{ whiteSpace: 'pre-wrap' }}
               data-testid="text-article-content"
             >
