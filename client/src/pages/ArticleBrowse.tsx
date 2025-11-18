@@ -268,25 +268,14 @@ export default function ArticleBrowse() {
             <span className="text-foreground">
               Для полного доступа к статьям нужна подписка
             </span>
-            <div className="flex gap-2 flex-shrink-0">
-              {!isAuthenticated && (
-                <Button 
-                  size="sm"
-                  onClick={() => window.location.href = '/api/login'}
-                  data-testid="button-banner-login"
-                >
-                  {t.login}
-                </Button>
-              )}
-              <Button 
-                size="sm"
-                variant="secondary"
-                onClick={() => window.location.href = '/subscribe'}
-                data-testid="button-banner-subscribe"
-              >
-                {t.getSubscription}
-              </Button>
-            </div>
+            <Button 
+              size="sm"
+              variant="secondary"
+              onClick={() => window.location.href = '/subscribe'}
+              data-testid="button-banner-subscribe"
+            >
+              {t.getSubscription}
+            </Button>
           </AlertDescription>
         </Alert>
       )}
