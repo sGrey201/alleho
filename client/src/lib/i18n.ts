@@ -124,4 +124,26 @@ export const t = {
   unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',
   somethingWrong: 'Что-то пошло не так',
   tryAgain: 'Попробуйте снова',
+  
+  // Footer
+  contacts: 'Контакты',
+  terms: 'Условия оказания услуги',
+  termsAndRefund: 'Условия и возврат',
+  allRightsReserved: 'Все права защищены',
+  
+  // Terms Page
+  termsPageTitle: 'Условия оказания услуги и возврата средств',
+  serviceDescription: 'Описание услуги',
+  serviceDescriptionText: 'MateriaMedica — это платформа подписки на образовательный контент по гомеопатии. Подписчики получают полный доступ к статьям о гомеопатических препаратах и клинических случаях.',
+  pricingTitle: 'Стоимость подписки',
+  initialSubscription: 'Первая подписка: 2000 ₽ на 6 месяцев',
+  renewalSubscription: 'Продление подписки: 1000 ₽ на 6 месяцев',
+  paymentMethods: 'Способы оплаты',
+  paymentMethodsText: 'Оплата любым удобным способом из доступных на сайте',
+  requisitesTitle: 'Реквизиты',
+  selfEmployed: 'Самозанятый',
+  inn: 'ИНН',
+  refundPolicy: 'Политика возврата',
+  noRefund: 'Возврат средств не предусмотрен',
+  contactUs: 'Связаться с нами',
 };
