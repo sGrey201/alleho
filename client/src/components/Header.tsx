@@ -35,7 +35,7 @@ export function Header() {
               M
             </div>
             <span className="hidden text-lg font-bold text-foreground sm:inline-block">
-              Materia Medica
+              MateriaMedica
             </span>
           </Link>
         </div>
