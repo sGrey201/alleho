@@ -267,9 +267,7 @@ export default function ArticleBrowse() {
           <AlertCircle className="h-4 w-4 text-secondary" />
           <AlertDescription className="flex items-center justify-between gap-4">
             <span className="text-foreground">
-              {!isAuthenticated 
-                ? "Войдите в систему или оформите подписку для доступа к полным статьям"
-                : "Оформите подписку для доступа к полным статьям"}
+              Для полного доступа к статьям нужна подписка
             </span>
             <div className="flex gap-2 flex-shrink-0">
               {!isAuthenticated && (
