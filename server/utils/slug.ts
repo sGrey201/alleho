@@ -21,11 +21,14 @@ export function transliterate(text: string): string {
 }
 
 export function generateSlugFromTags(tags: Tag[]): string {
-  // Если теги отсутствуют, генерируем уникальный slug на основе timestamp
+  // Генерируем уникальный суффикс
+  const timestamp = Date.now();
+  const randomPart = Math.random().toString(36).substring(2, 8);
+  const uniqueSuffix = `${timestamp}-${randomPart}`;
+  
+  // Если теги отсутствуют, возвращаем только уникальный slug
   if (!tags || tags.length === 0) {
-    const timestamp = Date.now();
-    const randomPart = Math.random().toString(36).substring(2, 8);
-    return `article-${timestamp}-${randomPart}`;
+    return `article-${uniqueSuffix}`;
   }
   
   const formattedTags = tags.map(tag => {
@@ -40,6 +43,8 @@ export function generateSlugFromTags(tags: Tag[]): string {
   
   const joined = formattedTags.join(', ');
   const title = joined.charAt(0).toUpperCase() + joined.slice(1);
+  const baseSlug = transliterate(title);
   
-  return transliterate(title);
+  // Добавляем уникальный суффикс к slug'у для гарантии уникальности
+  return `${baseSlug}-${uniqueSuffix}`;
 }
