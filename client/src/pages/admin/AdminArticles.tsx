@@ -60,7 +60,9 @@ export default function AdminArticles() {
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
+    preview: '',
     content: '',
+    isFree: false,
   });
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
@@ -84,7 +86,9 @@ export default function AdminArticles() {
       if (article) {
         setEditingArticle(article);
         setFormData({
+          preview: article.preview,
           content: article.content,
+          isFree: article.isFree,
         });
         setSelectedTagIds(article.tags.map(tag => tag.id));
         setIsDialogOpen(true);
@@ -165,9 +169,14 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: async () => {
+    onSuccess: async (newTag: Tag) => {
       // Обновляем список тегов с сервера
       await refetchTags();
+      
+      // Добавляем новый тег в выбранные
+      if (!selectedTagIds.includes(newTag.id)) {
+        setSelectedTagIds([...selectedTagIds, newTag.id]);
+      }
       
       toast({
         title: t.tagSaved,
@@ -212,7 +221,9 @@ export default function AdminArticles() {
 
   const resetForm = () => {
     setFormData({
+      preview: '',
       content: '',
+      isFree: false,
     });
     setSelectedTagIds([]);
     setTagSearchQuery('');
@@ -222,7 +233,9 @@ export default function AdminArticles() {
   const handleEdit = (article: ArticleWithTags) => {
     setEditingArticle(article);
     setFormData({
+      preview: article.preview,
       content: article.content,
+      isFree: article.isFree,
     });
     setSelectedTagIds(article.tags.map(tag => tag.id));
     setIsDialogOpen(true);
@@ -419,7 +432,7 @@ export default function AdminArticles() {
                                 data-testid="button-create-new-tag"
                               >
                                 <Plus className="mr-2 h-4 w-4" />
-                                {t.createNewTag}: "{tagSearchQuery.trim()}"
+                                {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
                               </Button>
                             </div>
                           ) : filteredTags.length === 0 ? (

@@ -118,6 +118,8 @@ export const t = {
   tagSaved: 'Тег сохранён',
   tagDeleted: 'Тег удалён',
   createNewTag: 'Создать новый тег',
+  createNewRemedy: 'Создать препарат',
+  createNewSituation: 'Создать ситуацию',
   
   // Errors
   unauthorized: 'Не авторизован',
