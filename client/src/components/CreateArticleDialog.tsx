@@ -86,13 +86,30 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       const result = await apiRequest('POST', '/api/admin/tags', data);
       return result as unknown as Tag;
     },
-    onSuccess: (newTag: Tag) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+    onSuccess: async (newTag: Tag) => {
+      console.log('New tag created in CreateArticleDialog:', newTag, 'ID:', newTag.id, 'Type:', typeof newTag.id);
       
-      // Добавляем новый тег в выбранные
-      if (!selectedTagIds.includes(newTag.id)) {
-        setSelectedTagIds([...selectedTagIds, newTag.id]);
+      // Обновляем список тегов и ждем завершения
+      await queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+      
+      // Добавляем новый тег в выбранные только после того как список обновился
+      if (newTag && newTag.id && typeof newTag.id === 'string') {
+        if (!selectedTagIds.includes(newTag.id)) {
+          console.log('Adding tag ID to selectedTagIds:', newTag.id);
+          setSelectedTagIds(prev => {
+            const newIds = [...prev, newTag.id];
+            console.log('New selectedTagIds:', newIds);
+            return newIds;
+          });
+        }
+      } else {
+        console.error('Invalid tag received:', newTag);
       }
+      
+      toast({
+        title: t.tagSaved,
+        variant: 'default',
+      });
     },
   });
 
@@ -104,7 +121,12 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ ...formData, tagIds: selectedTagIds });
+    
+    // Фильтруем null и undefined значения из tagIds перед отправкой
+    const validTagIds = selectedTagIds.filter(id => id && typeof id === 'string');
+    console.log('Submitting article with tagIds:', validTagIds, 'Original:', selectedTagIds);
+    
+    createMutation.mutate({ ...formData, tagIds: validTagIds });
   };
 
   const addTag = (tagId: string) => {
