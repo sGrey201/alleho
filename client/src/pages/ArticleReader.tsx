@@ -58,9 +58,6 @@ export default function ArticleReader() {
     );
   }
 
-  const wordCount = article.content.split(/\s+/).length;
-  const readingTime = Math.ceil(wordCount / 200);
-  
   const isContentLocked = !article.isFree && !hasActiveSubscription;
 
   const formattedTags = article.tags.map(tag => {
@@ -76,9 +73,17 @@ export default function ArticleReader() {
   const joined = formattedTags.join(', ');
   const title = joined.charAt(0).toUpperCase() + joined.slice(1);
 
-  const contentWords = article.content.split(/\s+/);
-  const twentyPercentWords = Math.ceil(contentWords.length * 0.2);
-  const partialContent = contentWords.slice(0, twentyPercentWords).join(' ');
+  const getPartialContent = (htmlContent: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+    const words = textContent.split(/\s+/);
+    const twentyPercentWords = Math.ceil(words.length * 0.2);
+    const partialText = words.slice(0, twentyPercentWords).join(' ');
+    return `<p>${partialText}...</p>`;
+  };
+
+  const partialContent = isContentLocked ? getPartialContent(article.content) : article.content;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
@@ -91,23 +96,19 @@ export default function ArticleReader() {
 
         <div className="mb-8">
           <div
-            className="font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
-            style={{ whiteSpace: 'pre-wrap' }}
-          >
-            {article.preview}
-          </div>
+            className="prose prose-lg font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
+            dangerouslySetInnerHTML={{ __html: article.preview }}
+          />
         </div>
 
         {isContentLocked ? (
           <>
             <div className="mb-8">
               <div
-                className="font-serif text-xl leading-[1.8] text-foreground text-justify"
-                style={{ whiteSpace: 'pre-wrap' }}
+                className="prose prose-lg font-serif text-xl leading-[1.8] text-foreground text-justify"
                 data-testid="text-article-preview"
-              >
-                {partialContent}
-              </div>
+                dangerouslySetInnerHTML={{ __html: partialContent }}
+              />
             </div>
 
             <div className="my-12">
@@ -173,12 +174,10 @@ export default function ArticleReader() {
         ) : (
           <div>
             <div
-              className="font-serif text-xl leading-[1.8] text-foreground text-justify"
-              style={{ whiteSpace: 'pre-wrap' }}
+              className="prose prose-lg font-serif text-xl leading-[1.8] text-foreground text-justify"
               data-testid="text-article-content"
-            >
-              {article.content}
-            </div>
+              dangerouslySetInnerHTML={{ __html: article.content }}
+            />
           </div>
         )}
 

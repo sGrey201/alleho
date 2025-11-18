@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { Article, Tag, InsertArticle } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +13,7 @@ import { Edit, Plus, X, Save } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,14 @@ export function ArticleCard({ article }: ArticleCardProps) {
   
   const joined = formattedTags.join(', ');
   const title = joined.charAt(0).toUpperCase() + joined.slice(1);
+
+  const getTextFromHTML = (html: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  };
+
+  const previewText = getTextFromHTML(article.preview);
 
   const { data: allTags = [] } = useQuery<Tag[]>({
     queryKey: ['/api/tags'],
@@ -163,7 +171,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </h3>
           
           <p className="text-base text-muted-foreground leading-snug line-clamp-4 font-serif">
-            {article.preview}
+            {previewText}
           </p>
         </div>
       </Link>
@@ -178,24 +186,18 @@ export function ArticleCard({ article }: ArticleCardProps) {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="preview">{t.preview}</Label>
-                <Textarea
-                  id="preview"
-                  value={formData.preview}
-                  onChange={(e) => setFormData({ ...formData, preview: e.target.value })}
-                  required
-                  rows={3}
-                  data-testid="textarea-preview"
+                <RichTextEditor
+                  content={formData.preview}
+                  onChange={(content) => setFormData({ ...formData, preview: content })}
+                  placeholder={t.preview}
                 />
               </div>
               <div>
                 <Label htmlFor="content">{t.content}</Label>
-                <Textarea
-                  id="content"
-                  value={formData.content}
-                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  required
-                  rows={12}
-                  data-testid="textarea-content"
+                <RichTextEditor
+                  content={formData.content}
+                  onChange={(content) => setFormData({ ...formData, content: content })}
+                  placeholder={t.content}
                 />
               </div>
               <div className="flex items-center space-x-2">
