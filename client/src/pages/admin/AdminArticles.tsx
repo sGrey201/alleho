@@ -214,6 +214,15 @@ export default function AdminArticles() {
     });
   }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
+  const hasExactMatch = useMemo(() => {
+    const query = tagSearchQuery.toLowerCase().trim();
+    if (!query) return false;
+    return allTags.some(tag => 
+      tag.category === tagCategoryFilter && 
+      tag.name.toLowerCase() === query
+    );
+  }, [allTags, tagSearchQuery, tagCategoryFilter]);
+
   const selectedTags = useMemo(() => {
     if (!allTags) return [];
     return allTags.filter(tag => tag && selectedTagIds.includes(tag.id));
@@ -419,11 +428,8 @@ export default function AdminArticles() {
                           onValueChange={setTagSearchQuery}
                         />
                         <CommandList className="max-h-96 overflow-auto">
-                          {filteredTags.length === 0 && tagSearchQuery.trim() ? (
-                            <div className="p-4 text-center">
-                              <p className="text-sm text-muted-foreground mb-3">
-                                {t.noTagsFound}
-                              </p>
+                          {!hasExactMatch && tagSearchQuery.trim() && (
+                            <div className="p-4 text-center border-b">
                               <Button
                                 type="button"
                                 size="sm"
@@ -435,7 +441,8 @@ export default function AdminArticles() {
                                 {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
                               </Button>
                             </div>
-                          ) : filteredTags.length === 0 ? (
+                          )}
+                          {filteredTags.length === 0 ? (
                             <CommandEmpty>{t.noTagsFound}</CommandEmpty>
                           ) : (
                             <CommandGroup>
