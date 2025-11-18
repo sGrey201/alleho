@@ -264,8 +264,7 @@ export default function ArticleBrowse() {
     <div className="mx-auto max-w-7xl px-6 py-8">
       {(!isAuthenticated || !hasActiveSubscription) && (
         <Alert className="mb-6 border-secondary bg-secondary/10">
-          <AlertCircle className="h-4 w-4 text-secondary" />
-          <AlertDescription className="flex items-center justify-between gap-4">
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-foreground">
               Для полного доступа к статьям нужна подписка
             </span>
