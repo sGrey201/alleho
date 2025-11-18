@@ -60,9 +60,7 @@ export default function AdminArticles() {
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
-    preview: '',
     content: '',
-    isFree: false,
   });
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
@@ -86,9 +84,7 @@ export default function AdminArticles() {
       if (article) {
         setEditingArticle(article);
         setFormData({
-          preview: article.preview,
           content: article.content,
-          isFree: article.isFree,
         });
         setSelectedTagIds(article.tags.map(tag => tag.id));
         setIsDialogOpen(true);
@@ -169,14 +165,9 @@ export default function AdminArticles() {
     mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
-    onSuccess: async (newTag: Tag) => {
+    onSuccess: async () => {
       // Обновляем список тегов с сервера
       await refetchTags();
-      
-      // Добавляем новый тег в выбранные
-      if (!selectedTagIds.includes(newTag.id)) {
-        setSelectedTagIds([...selectedTagIds, newTag.id]);
-      }
       
       toast({
         title: t.tagSaved,
@@ -214,15 +205,6 @@ export default function AdminArticles() {
     });
   }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
-  const hasExactMatch = useMemo(() => {
-    const query = tagSearchQuery.toLowerCase().trim();
-    if (!query) return false;
-    return allTags.some(tag => 
-      tag.category === tagCategoryFilter && 
-      tag.name.toLowerCase() === query
-    );
-  }, [allTags, tagSearchQuery, tagCategoryFilter]);
-
   const selectedTags = useMemo(() => {
     if (!allTags) return [];
     return allTags.filter(tag => tag && selectedTagIds.includes(tag.id));
@@ -230,9 +212,7 @@ export default function AdminArticles() {
 
   const resetForm = () => {
     setFormData({
-      preview: '',
       content: '',
-      isFree: false,
     });
     setSelectedTagIds([]);
     setTagSearchQuery('');
@@ -242,9 +222,7 @@ export default function AdminArticles() {
   const handleEdit = (article: ArticleWithTags) => {
     setEditingArticle(article);
     setFormData({
-      preview: article.preview,
       content: article.content,
-      isFree: article.isFree,
     });
     setSelectedTagIds(article.tags.map(tag => tag.id));
     setIsDialogOpen(true);
@@ -428,8 +406,11 @@ export default function AdminArticles() {
                           onValueChange={setTagSearchQuery}
                         />
                         <CommandList className="max-h-96 overflow-auto">
-                          {!hasExactMatch && tagSearchQuery.trim() && (
-                            <div className="p-4 text-center border-b">
+                          {filteredTags.length === 0 && tagSearchQuery.trim() ? (
+                            <div className="p-4 text-center">
+                              <p className="text-sm text-muted-foreground mb-3">
+                                {t.noTagsFound}
+                              </p>
                               <Button
                                 type="button"
                                 size="sm"
@@ -441,8 +422,7 @@ export default function AdminArticles() {
                                 {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
                               </Button>
                             </div>
-                          )}
-                          {filteredTags.length === 0 ? (
+                          ) : filteredTags.length === 0 ? (
                             <CommandEmpty>{t.noTagsFound}</CommandEmpty>
                           ) : (
                             <CommandGroup>

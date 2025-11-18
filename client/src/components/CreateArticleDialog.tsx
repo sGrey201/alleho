@@ -88,11 +88,8 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
     },
     onSuccess: (newTag: Tag) => {
       queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
-      
-      // Добавляем новый тег в выбранные
-      if (!selectedTagIds.includes(newTag.id)) {
-        setSelectedTagIds([...selectedTagIds, newTag.id]);
-      }
+      addTag(newTag.id);
+      setTagSearchQuery('');
     },
   });
 
@@ -173,15 +170,6 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       const matchesSearch = !query || tag.name.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
-  }, [allTags, tagSearchQuery, tagCategoryFilter]);
-
-  const hasExactMatch = useMemo(() => {
-    const query = tagSearchQuery.toLowerCase().trim();
-    if (!query) return false;
-    return allTags.some(tag => 
-      tag.category === tagCategoryFilter && 
-      tag.name.toLowerCase() === query
-    );
   }, [allTags, tagSearchQuery, tagCategoryFilter]);
 
   const dialogOpen = open !== undefined ? open : isDialogOpen;
@@ -290,8 +278,11 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                       onValueChange={setTagSearchQuery}
                     />
                     <CommandList className="max-h-96 overflow-auto">
-                      {!hasExactMatch && tagSearchQuery.trim() && (
-                        <div className="p-4 text-center border-b">
+                      {filteredTags.length === 0 && tagSearchQuery.trim() ? (
+                        <div className="p-4 text-center">
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {t.noTagsFound}
+                          </p>
                           <Button
                             type="button"
                             size="sm"
@@ -303,8 +294,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                             {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
                           </Button>
                         </div>
-                      )}
-                      {filteredTags.length === 0 ? (
+                      ) : filteredTags.length === 0 ? (
                         <CommandEmpty>{t.noTagsFound}</CommandEmpty>
                       ) : (
                         <CommandGroup>
