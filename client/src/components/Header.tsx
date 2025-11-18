@@ -51,16 +51,6 @@ export function Header() {
               }
             />
           )}
-          {(!isAuthenticated || !hasActiveSubscription) && (
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              asChild
-              data-testid="button-subscribe-header"
-            >
-              <Link href="/subscribe">{t.getSubscription}</Link>
-            </Button>
-          )}
           {isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

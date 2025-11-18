@@ -3,13 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { ArticleCard } from '@/components/ArticleCard';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocation } from 'wouter';
+import { useAuth } from '@/hooks/useAuth';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -31,6 +33,7 @@ export default function ArticleBrowse() {
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const { isAuthenticated, hasActiveSubscription } = useAuth();
 
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
@@ -259,6 +262,37 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
+      {(!isAuthenticated || !hasActiveSubscription) && (
+        <Alert className="mb-6 border-secondary bg-secondary/10">
+          <AlertCircle className="h-4 w-4 text-secondary" />
+          <AlertDescription className="flex items-center justify-between gap-4">
+            <span className="text-foreground">
+              {!isAuthenticated 
+                ? "Войдите в систему или оформите подписку для доступа к полным статьям"
+                : "Оформите подписку для доступа к полным статьям"}
+            </span>
+            <div className="flex gap-2 flex-shrink-0">
+              {!isAuthenticated && (
+                <Button 
+                  size="sm"
+                  onClick={() => window.location.href = '/api/login'}
+                  data-testid="button-banner-login"
+                >
+                  {t.login}
+                </Button>
+              )}
+              <Button 
+                size="sm"
+                variant="secondary"
+                onClick={() => window.location.href = '/subscribe'}
+                data-testid="button-banner-subscribe"
+              >
+                {t.getSubscription}
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="mb-8">
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedRemedyTags.map((tag) => (
