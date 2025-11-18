@@ -32,10 +32,10 @@ export function Header() {
             data-testid="link-home"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-              H
+              M
             </div>
             <span className="hidden text-lg font-bold text-foreground sm:inline-block">
-              Homeopathy
+              Materia Medica
             </span>
           </Link>
         </div>
