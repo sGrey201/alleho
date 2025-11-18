@@ -36,7 +36,7 @@ export const t = {
   daysRemaining: 'дней',
   subscriptionExpired: 'Подписка истекла',
   upgradePromptTitle: 'Требуется подписка',
-  upgradePromptDescription: 'Оформи подписку, чтобы получить доступ ко всем статьям и поддержать автора',
+  upgradePromptDescription: 'Чтобы читать эту и все остальные статьи без ограничения',
   contactAdmin: 'Свяжитесь с администратором для оформления подписки',
   getSubscription: 'Оформить подписку',
   aboutAuthor: 'Об авторе',
