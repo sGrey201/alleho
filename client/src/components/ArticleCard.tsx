@@ -158,11 +158,11 @@ export function ArticleCard({ article }: ArticleCardProps) {
             </div>
           )}
           
-          <h3 className="text-3xl md:text-4xl font-bold mb-5 text-foreground pr-20 font-serif leading-normal" data-testid={`text-article-title-${article.id}`}>
+          <h3 className="text-2xl md:text-3xl font-bold mb-5 text-foreground pr-20 font-serif leading-tight" data-testid={`text-article-title-${article.id}`}>
             {title}
           </h3>
           
-          <p className="text-2xl text-muted-foreground leading-loose line-clamp-4 font-serif">
+          <p className="text-lg text-muted-foreground leading-relaxed line-clamp-4 font-serif">
             {article.preview}
           </p>
         </div>
