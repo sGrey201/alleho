@@ -58,6 +58,9 @@ export default function Terms() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
+              <p className="text-foreground font-semibold">
+                Воробьева Евгения Михайловна
+              </p>
               <p className="text-foreground">
                 <span className="font-semibold">{t.selfEmployed}</span>
               </p>
