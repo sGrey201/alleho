@@ -257,6 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         for (const id of uniqueTagIds) {
           if (typeof id !== 'string' || !uuidRegex.test(id)) {
+            console.error('Invalid tag ID:', id, 'Type:', typeof id, 'All tagIds:', JSON.stringify(tagIds));
             return res.status(400).json({ message: "Invalid tag ID format" });
           }
         }
