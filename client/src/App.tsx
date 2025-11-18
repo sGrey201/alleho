@@ -6,10 +6,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { AppSidebar } from "@/components/AppSidebar";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ArticleReader from "@/pages/ArticleReader";
+import Terms from "@/pages/Terms";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
@@ -33,6 +35,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/article/:slug" component={ArticleReader} />
+      <Route path="/terms" component={Terms} />
       {isAdmin && (
         <>
           <Route path="/admin" component={AdminHome} />
@@ -84,11 +87,12 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main>
+      <main className="flex-1">
         <Router />
       </main>
+      <Footer />
     </div>
   );
 }
