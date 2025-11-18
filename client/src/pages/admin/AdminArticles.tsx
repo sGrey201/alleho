@@ -9,11 +9,12 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Save, Trash2, X } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -353,15 +354,29 @@ export default function AdminArticles() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="content">{t.content}</Label>
-                  <Textarea
-                    id="content"
-                    value={formData.content}
-                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                    required
-                    rows={12}
-                    data-testid="textarea-content"
+                  <Label htmlFor="preview">{t.preview}</Label>
+                  <RichTextEditor
+                    content={formData.preview}
+                    onChange={(content) => setFormData({ ...formData, preview: content })}
+                    placeholder={t.preview}
                   />
+                </div>
+                <div>
+                  <Label htmlFor="content">{t.content}</Label>
+                  <RichTextEditor
+                    content={formData.content}
+                    onChange={(content) => setFormData({ ...formData, content: content })}
+                    placeholder={t.content}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isFree"
+                    checked={formData.isFree}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
+                    data-testid="checkbox-is-free"
+                  />
+                  <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
                 </div>
               </div>
 
