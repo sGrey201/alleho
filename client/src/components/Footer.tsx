@@ -40,6 +40,13 @@ export function Footer() {
               >
                 {t.termsAndRefund}
               </Link>
+              <Link 
+                href="/oferta"
+                className="block text-sm text-muted-foreground hover:text-primary transition-colors"
+                data-testid="link-footer-oferta"
+              >
+                {t.oferta}
+              </Link>
             </div>
           </div>
         </div>

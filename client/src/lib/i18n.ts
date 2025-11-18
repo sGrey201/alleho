@@ -151,6 +151,7 @@ export const t = {
   contacts: 'Контакты',
   terms: 'Условия оказания услуги',
   termsAndRefund: 'Условия и возврат',
+  oferta: 'Публичная оферта',
   allRightsReserved: 'Все права защищены',
   
   // Terms Page
