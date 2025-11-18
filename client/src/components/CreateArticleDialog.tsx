@@ -5,12 +5,12 @@ import { t } from '@/lib/i18n';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Save, X } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   Dialog,
   DialogContent,
@@ -196,24 +196,18 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
           <div className="space-y-4">
             <div>
               <Label htmlFor="preview">{t.preview}</Label>
-              <Textarea
-                id="preview"
-                value={formData.preview}
-                onChange={(e) => setFormData({ ...formData, preview: e.target.value })}
-                required
-                rows={3}
-                data-testid="textarea-preview"
+              <RichTextEditor
+                content={formData.preview}
+                onChange={(content) => setFormData({ ...formData, preview: content })}
+                placeholder={t.preview}
               />
             </div>
             <div>
               <Label htmlFor="content">{t.content}</Label>
-              <Textarea
-                id="content"
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                required
-                rows={12}
-                data-testid="textarea-content"
+              <RichTextEditor
+                content={formData.content}
+                onChange={(content) => setFormData({ ...formData, content: content })}
+                placeholder={t.content}
               />
             </div>
             <div className="flex items-center space-x-2">
