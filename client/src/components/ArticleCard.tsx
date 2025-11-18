@@ -162,7 +162,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
             {title}
           </h3>
           
-          <p className="text-lg text-muted-foreground leading-relaxed line-clamp-4 font-serif">
+          <p className="text-sm text-muted-foreground leading-tight line-clamp-4 font-serif">
             {article.preview}
           </p>
         </div>
