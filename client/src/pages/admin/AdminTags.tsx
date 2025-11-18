@@ -142,20 +142,44 @@ export default function AdminTags() {
     setIsDialogOpen(true);
   };
 
+  const generateSlug = (name: string): string => {
+    const translitMap: Record<string, string> = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+      'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+      'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+      'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    };
+    
+    return name
+      .toLowerCase()
+      .split('')
+      .map(char => translitMap[char] || char)
+      .join('')
+      .replace(/[^a-z0-9\s-]/gi, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  };
+
   const handleSubmit = () => {
-    if (!formData.name.trim() || !formData.slug.trim()) {
+    if (!formData.name.trim()) {
       toast({
         title: t.error,
-        description: 'Name and slug are required',
+        description: 'Name is required',
         variant: 'destructive',
       });
       return;
     }
 
+    const dataToSubmit = {
+      ...formData,
+      slug: generateSlug(formData.name),
+    };
+
     if (editingTag) {
-      updateMutation.mutate({ id: editingTag.id, data: formData });
+      updateMutation.mutate({ id: editingTag.id, data: dataToSubmit });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(dataToSubmit);
     }
   };
 
@@ -163,7 +187,6 @@ export default function AdminTags() {
     setFormData(prev => ({
       ...prev,
       name: value,
-      slug: value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'),
     }));
   };
 
@@ -304,16 +327,6 @@ export default function AdminTags() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="slug">{t.tagSlug}</Label>
-                  <Input
-                    id="slug"
-                    value={formData.slug}
-                    onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                    placeholder="e.g., arnica-montana"
-                    data-testid="input-tag-slug"
-                  />
-                </div>
               </div>
 
               <div className="flex justify-end gap-2">
