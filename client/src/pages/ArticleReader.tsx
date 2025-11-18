@@ -89,17 +89,17 @@ export default function ArticleReader() {
           </h1>
         </div>
 
+        <div className="mb-8">
+          <div
+            className="font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
+            style={{ whiteSpace: 'pre-wrap' }}
+          >
+            {article.preview}
+          </div>
+        </div>
+
         {isContentLocked ? (
           <>
-            <div className="mb-8">
-              <div
-                className="font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
-                style={{ whiteSpace: 'pre-wrap' }}
-              >
-                {article.preview}
-              </div>
-            </div>
-
             <div className="mb-8">
               <div
                 className="font-serif text-xl leading-[1.8] text-foreground"
