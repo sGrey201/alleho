@@ -178,9 +178,6 @@ export default function AdminArticles() {
         setSelectedTagIds([...selectedTagIds, newTag.id]);
       }
       
-      // Очищаем поиск, но не закрываем поповер
-      setTagSearchQuery('');
-      
       toast({
         title: t.tagSaved,
         variant: 'default',

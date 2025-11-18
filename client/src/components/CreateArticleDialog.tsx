@@ -93,9 +93,6 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       if (!selectedTagIds.includes(newTag.id)) {
         setSelectedTagIds([...selectedTagIds, newTag.id]);
       }
-      
-      // Очищаем поиск, но не закрываем поповер
-      setTagSearchQuery('');
     },
   });
 
