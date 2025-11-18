@@ -23,20 +23,6 @@ export default function ArticleReader() {
     enabled: !!params?.slug,
   });
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: t.unauthorized,
-        description: t.unauthorizedDescription,
-        variant: 'destructive',
-      });
-      setTimeout(() => {
-        window.location.href = '/api/login';
-      }, 500);
-    }
-  }, [isAuthenticated, authLoading, toast]);
-
-
   if (isLoading || authLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -58,7 +44,7 @@ export default function ArticleReader() {
     );
   }
 
-  const isContentLocked = !article.isFree && !hasActiveSubscription;
+  const isContentLocked = !article.isFree && (!isAuthenticated || !hasActiveSubscription);
 
   const formattedTags = article.tags.map(tag => {
     if (tag.category === 'remedy') {
@@ -140,14 +126,34 @@ export default function ArticleReader() {
                     </ul>
                   </div>
 
-                  <div className="text-center">
-                    <Button 
-                      size="lg"
-                      onClick={() => window.location.href = '/subscribe'}
-                      data-testid="button-get-subscription"
-                    >
-                      {t.getSubscription}
-                    </Button>
+                  <div className="flex flex-wrap gap-4 justify-center">
+                    {!isAuthenticated ? (
+                      <>
+                        <Button 
+                          size="lg"
+                          onClick={() => window.location.href = '/api/login'}
+                          data-testid="button-login"
+                        >
+                          {t.login}
+                        </Button>
+                        <Button 
+                          size="lg"
+                          variant="secondary"
+                          onClick={() => window.location.href = '/subscribe'}
+                          data-testid="button-get-subscription"
+                        >
+                          {t.getSubscription}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button 
+                        size="lg"
+                        onClick={() => window.location.href = '/subscribe'}
+                        data-testid="button-get-subscription"
+                      >
+                        {t.getSubscription}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
