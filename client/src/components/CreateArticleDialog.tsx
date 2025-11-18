@@ -87,23 +87,14 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       return result as unknown as Tag;
     },
     onSuccess: async (newTag: Tag) => {
-      console.log('New tag created in CreateArticleDialog:', newTag, 'ID:', newTag.id, 'Type:', typeof newTag.id);
-      
       // Обновляем список тегов и ждем завершения
       await queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       
       // Добавляем новый тег в выбранные только после того как список обновился
       if (newTag && newTag.id && typeof newTag.id === 'string') {
         if (!selectedTagIds.includes(newTag.id)) {
-          console.log('Adding tag ID to selectedTagIds:', newTag.id);
-          setSelectedTagIds(prev => {
-            const newIds = [...prev, newTag.id];
-            console.log('New selectedTagIds:', newIds);
-            return newIds;
-          });
+          setSelectedTagIds(prev => [...prev, newTag.id]);
         }
-      } else {
-        console.error('Invalid tag received:', newTag);
       }
       
       toast({
@@ -124,7 +115,6 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
     
     // Фильтруем null и undefined значения из tagIds перед отправкой
     const validTagIds = selectedTagIds.filter(id => id && typeof id === 'string');
-    console.log('Submitting article with tagIds:', validTagIds, 'Original:', selectedTagIds);
     
     createMutation.mutate({ ...formData, tagIds: validTagIds });
   };

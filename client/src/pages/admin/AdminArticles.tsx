@@ -171,14 +171,11 @@ export default function AdminArticles() {
       return await apiRequest('POST', '/api/admin/tags', data) as unknown as Tag;
     },
     onSuccess: async (newTag: Tag) => {
-      console.log('New tag created:', newTag, 'ID type:', typeof newTag.id, 'ID value:', newTag.id);
-      
       // Обновляем список тегов с сервера
       await refetchTags();
       
       // Добавляем новый тег в выбранные
       if (!selectedTagIds.includes(newTag.id)) {
-        console.log('Adding tag ID to selectedTagIds:', newTag.id);
         setSelectedTagIds([...selectedTagIds, newTag.id]);
       }
       
