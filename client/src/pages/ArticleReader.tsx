@@ -148,20 +148,6 @@ export default function ArticleReader() {
                     >
                       {t.getSubscription}
                     </Button>
-                    <div className="mt-6 space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        {t.contactAdmin}
-                      </p>
-                      <a 
-                        href="https://t.me/abaevz" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-block text-sm text-primary hover-elevate active-elevate-2 underline"
-                        data-testid="link-author"
-                      >
-                        {t.aboutAuthor}
-                      </a>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
