@@ -12,6 +12,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ArticleReader from "@/pages/ArticleReader";
 import Terms from "@/pages/Terms";
+import Subscribe from "@/pages/Subscribe";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/article/:slug" component={ArticleReader} />
       <Route path="/terms" component={Terms} />
+      <Route path="/subscribe" component={Subscribe} />
       {isAdmin && (
         <>
           <Route path="/admin" component={AdminHome} />

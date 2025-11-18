@@ -47,6 +47,23 @@ export const t = {
   subscriptionPricing: 'Условия подписки:',
   firstTimePurchase: '2000 ₽ за 6 месяцев при покупке впервые',
   renewalPurchase: 'Продление 1000 ₽ за 6 месяцев',
+  
+  // Subscribe Page
+  subscribePageTitle: 'Оформление подписки',
+  subscribePageDescription: 'Получите полный доступ ко всем статьям по гомеопатии',
+  firstTimeSubscription: 'Первая подписка',
+  renewalSubscriptionTitle: 'Продление подписки',
+  subscriptionDuration: 'на 6 месяцев',
+  renewalBenefit: 'Специальная цена для постоянных читателей',
+  continuedAccess: 'Непрерывный доступ ко всем материалам',
+  howToSubscribe: 'Как оформить подписку',
+  paymentInstructions: 'Для оформления подписки свяжитесь с нами любым удобным способом. Мы поможем выбрать удобный способ оплаты и активируем подписку сразу после получения платежа.',
+  contactDetails: 'Контактная информация',
+  availablePaymentMethods: 'Принимаем оплату банковскими картами, через СБП и другими способами',
+  contactViaTelegram: 'Написать в Telegram',
+  backToArticles: 'Вернуться к статьям',
+  loggedInAs: 'Вы вошли как',
+  
   readMore: 'Читать далее',
   readFull: 'Читать полностью',
   previewOnly: 'Предварительный просмотр',

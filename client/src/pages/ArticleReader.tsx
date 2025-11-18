@@ -143,7 +143,7 @@ export default function ArticleReader() {
                   <div className="text-center">
                     <Button 
                       size="lg"
-                      onClick={() => window.location.href = '/admin/subscriptions'}
+                      onClick={() => window.location.href = '/subscribe'}
                       data-testid="button-get-subscription"
                     >
                       {t.getSubscription}
