@@ -419,7 +419,7 @@ export default function AdminArticles() {
                                 data-testid="button-create-new-tag"
                               >
                                 <Plus className="mr-2 h-4 w-4" />
-                                {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
+                                {t.createNewTag}: "{tagSearchQuery.trim()}"
                               </Button>
                             </div>
                           ) : filteredTags.length === 0 ? (
