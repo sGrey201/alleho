@@ -34,7 +34,9 @@ export function generatePaymentUrl(params: {
     ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
     : 'http://localhost:5000';
 
-  return robokassa.generatePaymentUrl({
+  const isTestMode = process.env.NODE_ENV !== 'production';
+
+  const paymentParams: any = {
     outSum: params.amount,
     description: params.description,
     invId: params.invoiceId,
@@ -42,7 +44,12 @@ export function generatePaymentUrl(params: {
       shp_user_id: params.userId,
       shp_subscription_type: params.subscriptionType,
     },
-    receipt: {
+    culture: 'ru',
+  };
+
+  // Add receipt only in production mode (required by law in Russia)
+  if (!isTestMode) {
+    paymentParams.receipt = {
       items: [
         {
           sum: params.amount,
@@ -53,9 +60,10 @@ export function generatePaymentUrl(params: {
           tax: 'none',
         },
       ],
-    },
-    culture: 'ru',
-  });
+    };
+  }
+
+  return robokassa.generatePaymentUrl(paymentParams);
 }
 
 export function checkPayment(params: any): boolean {
