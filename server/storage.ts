@@ -3,6 +3,7 @@ import {
   articles,
   tags,
   articleTags,
+  payments,
   type User,
   type UpsertUser,
   type Article,
@@ -11,6 +12,8 @@ import {
   type Tag,
   type InsertTag,
   type UpdateTag,
+  type Payment,
+  type InsertPayment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray } from "drizzle-orm";
@@ -45,6 +48,12 @@ export interface IStorage {
   searchArticles(query: string): Promise<ArticleWithTags[]>;
   getArticleTags(articleId: string): Promise<Tag[]>;
   setArticleTags(articleId: string, tagIds: string[]): Promise<void>;
+
+  // Payment operations
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentByInvoiceId(invoiceId: string): Promise<Payment | undefined>;
+  updatePaymentStatus(invoiceId: string, status: string, robokassaData?: any): Promise<Payment>;
+  getUserPayments(userId: string): Promise<Payment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -294,6 +303,48 @@ export class DatabaseStorage implements IStorage {
       ...r.article,
       tags: tagsByArticleId.get(r.article.id) || []
     }));
+  }
+
+  // Payment operations
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [newPayment] = await db
+      .insert(payments)
+      .values(payment)
+      .returning();
+    return newPayment;
+  }
+
+  async getPaymentByInvoiceId(invoiceId: string): Promise<Payment | undefined> {
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId));
+    return payment;
+  }
+
+  async updatePaymentStatus(
+    invoiceId: string,
+    status: string,
+    robokassaData?: any
+  ): Promise<Payment> {
+    const [payment] = await db
+      .update(payments)
+      .set({
+        status,
+        robokassaData,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.invoiceId, invoiceId))
+      .returning();
+    return payment;
+  }
+
+  async getUserPayments(userId: string): Promise<Payment[]> {
+    return await db
+      .select()
+      .from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(sql`${payments.createdAt} DESC`);
   }
 }
 

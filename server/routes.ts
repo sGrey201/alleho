@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
+import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -353,6 +354,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error updating subscription:", error);
       res.status(500).json({ message: "Failed to update subscription" });
     }
+  });
+
+  // Payment routes
+  app.post('/api/payment/create', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!robokassa) {
+        return res.status(503).json({ message: "Payment system not configured" });
+      }
+
+      const userId = req.user.claims.sub;
+      const { subscriptionType } = req.body; // 'initial' or 'renewal'
+
+      if (!subscriptionType || !['initial', 'renewal'].includes(subscriptionType)) {
+        return res.status(400).json({ message: "Invalid subscription type" });
+      }
+
+      const amount = subscriptionType === 'initial' ? 2000 : 1000;
+      const description = subscriptionType === 'initial' 
+        ? 'Подписка MateriaMedica на 6 месяцев'
+        : 'Продление подписки MateriaMedica на 6 месяцев';
+
+      // Generate unique invoice ID (timestamp + random)
+      const invoiceId = Date.now() + Math.floor(Math.random() * 1000);
+
+      // Create payment record
+      const payment = await storage.createPayment({
+        userId,
+        amount: amount.toString(),
+        invoiceId: invoiceId.toString(),
+        description,
+        status: 'pending',
+        robokassaData: null,
+      });
+
+      // Generate payment URL
+      const paymentUrl = generatePaymentUrl({
+        amount,
+        description,
+        invoiceId,
+        userId,
+        subscriptionType,
+      });
+
+      res.json({ paymentUrl, invoiceId: payment.invoiceId });
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  // Robokassa Result URL callback (no auth required - called by Robokassa)
+  app.post('/payment/result', async (req, res) => {
+    try {
+      if (!robokassa) {
+        console.error('Robokassa not configured but received callback');
+        return res.status(503).send('Payment system not configured');
+      }
+
+      // Validate signature
+      const isValid = checkPayment(req.body);
+      
+      if (!isValid) {
+        console.error('Invalid Robokassa signature:', req.body);
+        return res.status(400).send('Invalid signature');
+      }
+
+      const { InvId, OutSum, shp_user_id, shp_subscription_type } = req.body;
+
+      // Update payment status
+      await storage.updatePaymentStatus(
+        InvId.toString(),
+        'completed',
+        req.body
+      );
+
+      // Extend user subscription
+      const user = await storage.getUser(shp_user_id);
+      if (user) {
+        const currentExpiry = user.subscriptionExpiresAt 
+          ? new Date(user.subscriptionExpiresAt)
+          : new Date();
+        
+        // If subscription already expired, start from now
+        const baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+        
+        // Add 6 months
+        const newExpiry = new Date(baseDate);
+        newExpiry.setMonth(newExpiry.getMonth() + 6);
+
+        await storage.updateUserSubscription(shp_user_id, newExpiry);
+        
+        console.log(`Payment successful: User ${shp_user_id}, Amount ${OutSum}, Invoice ${InvId}`);
+      }
+
+      // Must respond with OK + invoice ID
+      res.send(`OK${InvId}`);
+    } catch (error) {
+      console.error('Payment processing error:', error);
+      res.status(500).send('Error processing payment');
+    }
+  });
+
+  // Payment success page (user redirect)
+  app.get('/payment/success', (_req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Оплата успешна - MateriaMedica</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              max-width: 600px;
+              margin: 100px auto;
+              padding: 20px;
+              text-align: center;
+            }
+            .success {
+              color: #22c55e;
+              font-size: 48px;
+              margin-bottom: 20px;
+            }
+            h1 { color: #1f2937; }
+            p { color: #6b7280; line-height: 1.6; }
+            .button {
+              display: inline-block;
+              margin-top: 20px;
+              padding: 12px 24px;
+              background: #2563eb;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="success">✓</div>
+          <h1>Оплата прошла успешно!</h1>
+          <p>Ваша подписка активирована. Теперь у вас есть полный доступ ко всем материалам платформы.</p>
+          <a href="/" class="button">Вернуться на главную</a>
+        </body>
+      </html>
+    `);
+  });
+
+  // Payment failure page (user redirect)
+  app.get('/payment/fail', (_req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Ошибка оплаты - MateriaMedica</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              max-width: 600px;
+              margin: 100px auto;
+              padding: 20px;
+              text-align: center;
+            }
+            .error {
+              color: #ef4444;
+              font-size: 48px;
+              margin-bottom: 20px;
+            }
+            h1 { color: #1f2937; }
+            p { color: #6b7280; line-height: 1.6; }
+            .button {
+              display: inline-block;
+              margin-top: 20px;
+              padding: 12px 24px;
+              background: #2563eb;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="error">✗</div>
+          <h1>Ошибка оплаты</h1>
+          <p>К сожалению, оплата не прошла. Попробуйте еще раз или свяжитесь с нами, если проблема повторяется.</p>
+          <a href="/subscribe" class="button">Попробовать снова</a>
+          <a href="/" class="button">Вернуться на главную</a>
+        </body>
+      </html>
+    `);
   });
 
   const httpServer = createServer(app);
