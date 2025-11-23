@@ -112,3 +112,28 @@ export const updateArticleSchema = createInsertSchema(articles).omit({
 export type InsertArticle = z.infer<typeof insertArticleSchema>;
 export type UpdateArticle = z.infer<typeof updateArticleSchema>;
 export type Article = typeof articles.$inferSelect;
+
+// Payments table for tracking Robokassa payments
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amount: varchar("amount").notNull(), // Store as string to match Robokassa API
+  invoiceId: varchar("invoice_id").unique().notNull(),
+  description: text("description").notNull(),
+  status: varchar("status", { length: 50 }).notNull().default('pending'), // pending, completed, failed
+  robokassaData: jsonb("robokassa_data"), // Store callback data from Robokassa
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("payments_user_idx").on(table.userId),
+  index("payments_status_idx").on(table.status),
+]);
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
