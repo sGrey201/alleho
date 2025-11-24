@@ -10,8 +10,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, Plus } from 'lucide-react';
+import { User, Settings, LogOut, Plus, Check, AlertTriangle, X } from 'lucide-react';
 import { CreateArticleDialog } from '@/components/CreateArticleDialog';
+import { format } from 'date-fns';
+
+type SubscriptionStatus = 'active' | 'expiring' | 'expired';
 
 export function Header() {
   const { user, isAuthenticated, isAdmin, hasActiveSubscription } = useAuth();
@@ -21,6 +24,46 @@ export function Header() {
     if (!firstName && !lastName) return 'U';
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
+
+  const getSubscriptionStatus = (expiresAt?: string | null): { status: SubscriptionStatus; daysLeft: number } => {
+    if (!expiresAt) return { status: 'expired', daysLeft: 0 };
+    
+    const now = new Date();
+    const expirationDate = new Date(expiresAt);
+    const daysLeft = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysLeft <= 0) return { status: 'expired', daysLeft: 0 };
+    if (daysLeft <= 30) return { status: 'expiring', daysLeft };
+    return { status: 'active', daysLeft };
+  };
+
+  const subscriptionInfo = user ? getSubscriptionStatus(user.subscriptionExpiresAt) : { status: 'expired' as SubscriptionStatus, daysLeft: 0 };
+
+  const getStatusColor = (status: SubscriptionStatus) => {
+    switch (status) {
+      case 'active': return 'text-green-600';
+      case 'expiring': return 'text-yellow-600';
+      case 'expired': return 'text-red-600';
+    }
+  };
+
+  const getStatusBgColor = (status: SubscriptionStatus) => {
+    switch (status) {
+      case 'active': return 'bg-green-600';
+      case 'expiring': return 'bg-yellow-600';
+      case 'expired': return 'bg-red-600';
+    }
+  };
+
+  const getStatusIcon = (status: SubscriptionStatus) => {
+    switch (status) {
+      case 'active': return Check;
+      case 'expiring': return AlertTriangle;
+      case 'expired': return X;
+    }
+  };
+
+  const StatusIcon = getStatusIcon(subscriptionInfo.status);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -68,6 +111,12 @@ export function Header() {
                       {getInitials(user.firstName, user.lastName)}
                     </AvatarFallback>
                   </Avatar>
+                  <span 
+                    className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ${getStatusBgColor(subscriptionInfo.status)} ring-2 ring-background`}
+                    data-testid={`subscription-indicator-${subscriptionInfo.status}`}
+                  >
+                    <StatusIcon className="h-2.5 w-2.5 text-white" />
+                  </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -93,6 +142,13 @@ export function Header() {
                       </p>
                     )}
                   </div>
+                </div>
+                <div className="px-2 py-1.5">
+                  <p className={`text-xs font-medium ${getStatusColor(subscriptionInfo.status)}`} data-testid="subscription-status-text">
+                    {user.subscriptionExpiresAt && subscriptionInfo.status !== 'expired'
+                      ? `${t.subscriptionUntil} ${format(new Date(user.subscriptionExpiresAt), 'dd.MM.yyyy')}`
+                      : t.noSubscription}
+                  </p>
                 </div>
                 <DropdownMenuSeparator />
                 {isAdmin && (
