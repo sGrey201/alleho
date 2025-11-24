@@ -14,6 +14,8 @@ import ArticleReader from "@/pages/ArticleReader";
 import Terms from "@/pages/Terms";
 import Oferta from "@/pages/Oferta";
 import Subscribe from "@/pages/Subscribe";
+import PaymentSuccess from "@/pages/PaymentSuccess";
+import PaymentFail from "@/pages/PaymentFail";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
@@ -40,6 +42,8 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/oferta" component={Oferta} />
       <Route path="/subscribe" component={Subscribe} />
+      <Route path="/payment/success" component={PaymentSuccess} />
+      <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (
         <>
           <Route path="/admin" component={AdminHome} />
