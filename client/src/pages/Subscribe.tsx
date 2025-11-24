@@ -65,8 +65,8 @@ export default function Subscribe() {
             <p className="text-muted-foreground mb-4">
               Войдите, чтобы оформить подписку
             </p>
-            <Button onClick={() => setLocation('/')} data-testid="button-login">
-              Войти
+            <Button asChild data-testid="button-login">
+              <a href="/api/login">Войти</a>
             </Button>
           </div>
         ) : (
