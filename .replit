@@ -39,10 +39,6 @@ localPort = 43555
 externalPort = 5000
 
 [[ports]]
-localPort = 46601
-externalPort = 6000
-
-[[ports]]
 localPort = 46647
 externalPort = 3001
 
@@ -76,4 +72,3 @@ integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.
 [userenv]
 
 [userenv.production]
-ROBOKASSA_TEST_MODE = "true"
