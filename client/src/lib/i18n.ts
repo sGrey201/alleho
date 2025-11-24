@@ -38,6 +38,7 @@ export const t = {
   subscriptionUntil: 'Подписка до',
   noSubscription: 'Нет подписки',
   upgradePromptTitle: 'Требуется подписка',
+  authRequiredTitle: 'Требуется авторизация',
   upgradePromptDescription: 'Чтобы читать эту и все остальные статьи без ограничения',
   contactAdmin: 'Свяжитесь с администратором для оформления подписки',
   getSubscription: 'Посмотреть цену',

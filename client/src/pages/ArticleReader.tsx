@@ -106,31 +106,23 @@ export default function ArticleReader() {
                     </div>
                   </div>
                   <h3 className="mb-3 text-3xl font-bold text-foreground text-center">
-                    {t.upgradePromptTitle}
+                    {!isAuthenticated ? t.authRequiredTitle : t.upgradePromptTitle}
                   </h3>
-                  <p className="mb-8 text-lg text-muted-foreground text-center">
-                    {t.upgradePromptDescription}
-                  </p>
+                  {isAuthenticated && (
+                    <p className="mb-8 text-lg text-muted-foreground text-center">
+                      {t.upgradePromptDescription}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-4 justify-center">
                     {!isAuthenticated ? (
-                      <>
-                        <Button 
-                          size="lg"
-                          onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
-                          data-testid="button-login"
-                        >
-                          {t.login}
-                        </Button>
-                        <Button 
-                          size="lg"
-                          variant="secondary"
-                          onClick={() => window.location.href = '/subscribe'}
-                          data-testid="button-get-subscription"
-                        >
-                          {t.getSubscription}
-                        </Button>
-                      </>
+                      <Button 
+                        size="lg"
+                        onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+                        data-testid="button-login"
+                      >
+                        {t.login}
+                      </Button>
                     ) : (
                       <Button 
                         size="lg"
