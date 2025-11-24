@@ -108,23 +108,9 @@ export default function ArticleReader() {
                   <h3 className="mb-3 text-3xl font-bold text-foreground text-center">
                     {t.upgradePromptTitle}
                   </h3>
-                  <p className="mb-6 text-lg text-muted-foreground text-center">
+                  <p className="mb-8 text-lg text-muted-foreground text-center">
                     {t.upgradePromptDescription}
                   </p>
-                  
-                  <div className="mb-8 space-y-3">
-                    <p className="font-semibold text-foreground text-center">{t.subscriptionPricing}</p>
-                    <ul className="space-y-2 max-w-md mx-auto">
-                      <li className="flex items-start gap-3">
-                        <span className="text-primary mt-1">•</span>
-                        <span className="text-foreground">{t.firstTimePurchase}</span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="text-primary mt-1">•</span>
-                        <span className="text-foreground">{t.renewalPurchase}</span>
-                      </li>
-                    </ul>
-                  </div>
 
                   <div className="flex flex-wrap gap-4 justify-center">
                     {!isAuthenticated ? (
