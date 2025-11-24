@@ -37,7 +37,7 @@ export const t = {
   subscriptionExpired: 'Подписка истекла',
   subscriptionUntil: 'Подписка до',
   noSubscription: 'Нет подписки',
-  upgradePromptTitle: 'Требуется подписка',
+  upgradePromptTitle: 'Нужна подписка',
   authRequiredTitle: 'Требуется авторизация',
   upgradePromptDescription: 'Чтобы читать эту и все остальные статьи без ограничения',
   contactAdmin: 'Свяжитесь с администратором для оформления подписки',
