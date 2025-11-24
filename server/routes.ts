@@ -439,11 +439,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shp_subscription_type,
       });
 
+      // Filter out null values from Robokassa data to avoid Drizzle ORM errors
+      const robokassaData = Object.fromEntries(
+        Object.entries(req.body).filter(([_, value]) => value !== null)
+      );
+
       // Update payment status
       await storage.updatePaymentStatus(
         InvId.toString(),
         'completed',
-        req.body
+        robokassaData
       );
       console.log('✅ Payment status updated');
 
