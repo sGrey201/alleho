@@ -40,7 +40,7 @@ export const t = {
   upgradePromptTitle: 'Требуется подписка',
   upgradePromptDescription: 'Чтобы читать эту и все остальные статьи без ограничения',
   contactAdmin: 'Свяжитесь с администратором для оформления подписки',
-  getSubscription: 'Оформить подписку',
+  getSubscription: 'Посмотреть цену',
   aboutAuthor: 'Об авторе',
   subscriptionBenefits: 'С подпиской вы получите:',
   benefitFullAccess: 'Полный доступ ко всем статьям',
