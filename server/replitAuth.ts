@@ -139,14 +139,26 @@ export async function setupAuth(app: Express) {
     if (req.query.returnTo && typeof req.query.returnTo === 'string') {
       req.session.returnTo = req.query.returnTo;
       console.log('🔐 Login: Saving returnTo in session:', req.query.returnTo);
+      
+      // Explicitly save session before redirect to ensure it persists
+      req.session.save((err) => {
+        if (err) {
+          console.error('🔐 Login: Error saving session:', err);
+          return next(err);
+        }
+        console.log('🔐 Login: Session saved successfully');
+        passport.authenticate(`replitauth:${req.hostname}`, {
+          prompt: "login consent",
+          scope: ["openid", "email", "profile", "offline_access"],
+        })(req, res, next);
+      });
     } else {
       console.log('🔐 Login: No returnTo parameter provided');
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        prompt: "login consent",
+        scope: ["openid", "email", "profile", "offline_access"],
+      })(req, res, next);
     }
-    
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
