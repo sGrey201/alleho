@@ -77,7 +77,7 @@ export default function Subscribe() {
                   <CardTitle className="text-2xl">{t.firstTimeSubscription}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-4xl font-bold text-primary">2000 ₽</div>
+                  <div className="text-4xl font-bold text-primary">20 ₽</div>
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2">
@@ -122,7 +122,7 @@ export default function Subscribe() {
                   <CardTitle className="text-2xl">{t.renewalSubscriptionTitle}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-4xl font-bold text-primary">1000 ₽</div>
+                  <div className="text-4xl font-bold text-primary">20 ₽</div>
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2">

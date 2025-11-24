@@ -45,8 +45,8 @@ export const t = {
   benefitNewContent: 'Новые материалы каждую неделю',
   benefitExpertKnowledge: 'Экспертные знания по гомеопатии',
   subscriptionPricing: 'Условия подписки:',
-  firstTimePurchase: '2000 ₽ за 6 месяцев при покупке впервые',
-  renewalPurchase: 'Продление 1000 ₽ за 6 месяцев',
+  firstTimePurchase: '20 ₽ за 6 месяцев при покупке впервые',
+  renewalPurchase: 'Продление 20 ₽ за 6 месяцев',
   
   // Subscribe Page
   subscribePageTitle: 'Оформление подписки',
@@ -159,8 +159,8 @@ export const t = {
   serviceDescription: 'Описание услуги',
   serviceDescriptionText: 'MateriaMedica — это платформа подписки на образовательный контент по гомеопатии. Подписчики получают полный доступ к статьям о гомеопатических препаратах и клинических случаях.',
   pricingTitle: 'Стоимость подписки',
-  initialSubscription: 'Первая подписка: 2000 ₽ на 6 месяцев',
-  renewalSubscription: 'Продление подписки: 1000 ₽ на 6 месяцев',
+  initialSubscription: 'Первая подписка: 20 ₽ на 6 месяцев',
+  renewalSubscription: 'Продление подписки: 20 ₽ на 6 месяцев',
   paymentMethods: 'Способы оплаты',
   paymentMethodsText: 'Оплата любым удобным способом из доступных на сайте',
   requisitesTitle: 'Реквизиты',

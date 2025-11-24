@@ -370,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid subscription type" });
       }
 
-      const amount = subscriptionType === 'initial' ? 2000 : 1000;
+      const amount = subscriptionType === 'initial' ? 20 : 20;
       const description = subscriptionType === 'initial' 
         ? 'Подписка MateriaMedica на 6 месяцев'
         : 'Продление подписки MateriaMedica на 6 месяцев';
