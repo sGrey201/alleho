@@ -171,11 +171,14 @@ export async function setupAuth(app: Express) {
         }
         
         // Get returnTo from cookie, default to home
-        const returnTo = req.cookies.returnTo || "/";
+        // Safe access in case cookies are not parsed
+        const returnTo = (req.cookies && req.cookies.returnTo) || "/";
         console.log('🔐 Callback: returnTo from cookie:', returnTo);
         
-        // Clear returnTo cookie
-        res.clearCookie('returnTo');
+        // Clear returnTo cookie (safe check)
+        if (req.cookies && req.cookies.returnTo) {
+          res.clearCookie('returnTo');
+        }
         
         // Redirect to original page
         console.log('🔐 Callback: Redirecting to:', returnTo);
