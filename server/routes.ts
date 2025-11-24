@@ -406,6 +406,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Robokassa Result URL callback (no auth required - called by Robokassa)
   app.post('/payment/result', async (req, res) => {
+    console.log('🔔 Robokassa Result URL called:', {
+      method: req.method,
+      body: req.body,
+      query: req.query,
+    });
+
     try {
       if (!robokassa) {
         console.error('Robokassa not configured but received callback');
@@ -416,11 +422,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isValid = checkPayment(req.body);
       
       if (!isValid) {
-        console.error('Invalid Robokassa signature:', req.body);
+        console.error('❌ Invalid Robokassa signature:', req.body);
         return res.status(400).send('Invalid signature');
       }
+      
+      console.log('✅ Valid Robokassa signature');
 
       const { InvId, OutSum, shp_user_id, shp_subscription_type } = req.body;
+
+      console.log('📦 Processing payment:', {
+        InvId,
+        OutSum,
+        shp_user_id,
+        shp_subscription_type,
+      });
 
       // Update payment status
       await storage.updatePaymentStatus(
@@ -428,6 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'completed',
         req.body
       );
+      console.log('✅ Payment status updated');
 
       // Extend user subscription
       const user = await storage.getUser(shp_user_id);
@@ -445,10 +461,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         await storage.updateUserSubscription(shp_user_id, newExpiry);
         
-        console.log(`Payment successful: User ${shp_user_id}, Amount ${OutSum}, Invoice ${InvId}`);
+        console.log(`✅ Payment successful: User ${shp_user_id}, Amount ${OutSum}, Invoice ${InvId}, New expiry: ${newExpiry}`);
+      } else {
+        console.error(`❌ User not found: ${shp_user_id}`);
       }
 
       // Must respond with OK + invoice ID
+      console.log(`Responding: OK${InvId}`);
       res.send(`OK${InvId}`);
     } catch (error) {
       console.error('Payment processing error:', error);
