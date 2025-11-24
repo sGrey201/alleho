@@ -143,13 +143,16 @@ export function Header() {
                     )}
                   </div>
                 </div>
-                <div className="px-2 py-1.5">
-                  <p className={`text-xs font-medium ${getStatusColor(subscriptionInfo.status)}`} data-testid="subscription-status-text">
-                    {user.subscriptionExpiresAt && subscriptionInfo.status !== 'expired'
-                      ? `${t.subscriptionUntil} ${format(new Date(user.subscriptionExpiresAt), 'dd.MM.yyyy')}`
-                      : t.noSubscription}
-                  </p>
-                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/subscribe" className="flex w-full items-center" data-testid="link-subscription">
+                    <p className={`text-xs font-medium ${getStatusColor(subscriptionInfo.status)}`}>
+                      {user.subscriptionExpiresAt && subscriptionInfo.status !== 'expired'
+                        ? `${t.subscriptionUntil} ${format(new Date(user.subscriptionExpiresAt), 'dd.MM.yyyy')}`
+                        : t.noSubscription}
+                    </p>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {isAdmin && (
                   <>
