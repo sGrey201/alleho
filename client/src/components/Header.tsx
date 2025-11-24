@@ -77,7 +77,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
               M
             </div>
-            <span className="hidden text-lg font-bold text-foreground sm:inline-block">
+            <span className="text-lg font-bold text-foreground">
               MateriaMedica
             </span>
           </Link>
