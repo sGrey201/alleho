@@ -25,7 +25,7 @@ export function Header() {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
-  const getSubscriptionStatus = (expiresAt?: string | null): { status: SubscriptionStatus; daysLeft: number } => {
+  const getSubscriptionStatus = (expiresAt?: string | Date | null): { status: SubscriptionStatus; daysLeft: number } => {
     if (!expiresAt) return { status: 'expired', daysLeft: 0 };
     
     const now = new Date();
