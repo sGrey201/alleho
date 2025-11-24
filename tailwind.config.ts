@@ -88,7 +88,7 @@ export default {
       },
       fontFamily: {
         sans: ["Source Sans Pro", "sans-serif"],
-        serif: ["Lora", "serif"],
+        serif: ["Arial", "Helvetica", "Arial Unicode MS", "sans-serif"],
         mono: ["monospace"],
       },
       keyframes: {
