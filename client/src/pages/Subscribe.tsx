@@ -122,8 +122,22 @@ export default function Subscribe() {
                   <CardTitle className="text-2xl">{t.renewalSubscriptionTitle}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-4xl font-bold text-primary">20 ₽</div>
+                  <div className="flex items-baseline gap-3">
+                    <div className="text-4xl font-bold text-primary">
+                      {hasActiveSubscription ? '10' : '20'} ₽
+                    </div>
+                    {hasActiveSubscription && (
+                      <div className="text-lg text-muted-foreground line-through">20 ₽</div>
+                    )}
+                  </div>
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
+                  {hasActiveSubscription && (
+                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                        🎉 Скидка 50% за продление до окончания подписки!
+                      </p>
+                    </div>
+                  )}
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2">
                       <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />

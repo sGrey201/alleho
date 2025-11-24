@@ -371,10 +371,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid subscription type" });
       }
 
-      const amount = subscriptionType === 'initial' ? 20 : 20;
-      const description = subscriptionType === 'initial' 
-        ? 'Подписка MateriaMedica на 6 месяцев'
-        : 'Продление подписки MateriaMedica на 6 месяцев';
+      // Get user to check subscription status
+      const user = await storage.getUser(userId);
+      const hasActiveSubscription = user?.subscriptionExpiresAt 
+        ? new Date(user.subscriptionExpiresAt) > new Date()
+        : false;
+
+      // Pricing: Initial = 20₽, Renewal with active subscription = 10₽ (50% discount), Renewal after expiry = 20₽
+      let amount: number;
+      let description: string;
+      
+      if (subscriptionType === 'initial') {
+        amount = 20;
+        description = 'Подписка MateriaMedica на 6 месяцев';
+      } else {
+        // Renewal: 50% discount if subscription is still active
+        amount = hasActiveSubscription ? 10 : 20;
+        description = hasActiveSubscription 
+          ? 'Продление подписки MateriaMedica на 6 месяцев (скидка 50%)'
+          : 'Продление подписки MateriaMedica на 6 месяцев';
+      }
 
       // Generate unique invoice ID (timestamp + random) as string
       const invoiceId = (Date.now() + Math.floor(Math.random() * 1000)).toString();
