@@ -406,8 +406,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Robokassa Result URL callback handler (supports both GET and POST)
-  const handleRobokassaResult = async (req: any, res: any) => {
+  // Robokassa Result URL callback (no auth required - called by Robokassa)
+  app.post('/payment/result', async (req, res) => {
     console.log('🔔 Robokassa Result URL called:', {
       method: req.method,
       body: req.body,
@@ -420,20 +420,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).send('Payment system not configured');
       }
 
-      // Get parameters from body (POST) or query (GET)
-      const params = req.method === 'POST' ? req.body : req.query;
-
       // Validate signature
-      const isValid = checkPayment(params);
+      const isValid = checkPayment(req.body);
       
       if (!isValid) {
-        console.error('❌ Invalid Robokassa signature:', params);
+        console.error('❌ Invalid Robokassa signature:', req.body);
         return res.status(400).send('Invalid signature');
       }
       
       console.log('✅ Valid Robokassa signature');
 
-      const { InvId, OutSum, shp_user_id, shp_subscription_type } = params;
+      const { InvId, OutSum, shp_user_id, shp_subscription_type } = req.body;
 
       console.log('📦 Processing payment:', {
         InvId,
@@ -446,7 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updatePaymentStatus(
         InvId.toString(),
         'completed',
-        params
+        req.body
       );
       console.log('✅ Payment status updated');
 
