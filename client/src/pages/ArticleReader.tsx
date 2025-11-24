@@ -82,7 +82,7 @@ export default function ArticleReader() {
 
         <div className="mb-8">
           <div
-            className="prose prose-lg font-serif text-lg leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
+            className="prose prose-lg font-serif text-base md:text-lg leading-[1.44] md:leading-[1.8] text-muted-foreground italic border-l-4 border-primary pl-6 py-2"
             dangerouslySetInnerHTML={{ __html: article.preview }}
           />
         </div>
@@ -91,7 +91,7 @@ export default function ArticleReader() {
           <>
             <div className="mb-8">
               <div
-                className="prose prose-lg font-serif text-xl leading-[1.8] text-foreground text-justify"
+                className="prose prose-lg font-serif text-lg md:text-xl leading-[1.44] md:leading-[1.8] text-foreground text-justify"
                 data-testid="text-article-preview"
                 dangerouslySetInnerHTML={{ __html: partialContent }}
               />
@@ -140,7 +140,7 @@ export default function ArticleReader() {
         ) : (
           <div>
             <div
-              className="prose prose-lg font-serif text-xl leading-[1.8] text-foreground text-justify"
+              className="prose prose-lg font-serif text-lg md:text-xl leading-[1.44] md:leading-[1.8] text-foreground text-justify"
               data-testid="text-article-content"
               dangerouslySetInnerHTML={{ __html: article.content }}
             />
