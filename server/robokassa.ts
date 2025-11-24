@@ -3,7 +3,11 @@ import { Robokassa } from '@dev-aces/robokassa';
 const robokassaLogin = process.env.ROBOKASSA_LOGIN;
 const robokassaPassword1 = process.env.ROBOKASSA_PASSWORD1;
 const robokassaPassword2 = process.env.ROBOKASSA_PASSWORD2;
-const isTestMode = process.env.NODE_ENV !== 'production';
+// Use ROBOKASSA_TEST_MODE env var to explicitly control test mode
+// If not set, default to test mode in development and production mode in production
+const isTestMode = process.env.ROBOKASSA_TEST_MODE 
+  ? process.env.ROBOKASSA_TEST_MODE === 'true'
+  : process.env.NODE_ENV !== 'production';
 
 if (!robokassaLogin || !robokassaPassword1 || !robokassaPassword2) {
   console.warn('Robokassa credentials not configured. Payment functionality will be unavailable.');
