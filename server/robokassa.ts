@@ -39,10 +39,13 @@ export function generatePaymentUrl(params: {
     ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
     : 'http://localhost:5000';
 
+  // Convert invoiceId string to number for Robokassa library
+  const invIdNumber = parseInt(params.invoiceId, 10);
+
   const paymentUrl = robokassa.generatePaymentUrl({
     outSum: params.amount,
     description: params.description,
-    invId: params.invoiceId,
+    invId: invIdNumber,
     email: params.userEmail,
     userParameters: {
       shp_user_id: params.userId,
@@ -54,9 +57,18 @@ export function generatePaymentUrl(params: {
   console.log('🔗 Generated Robokassa payment URL:', paymentUrl);
   console.log('📋 Payment params:', {
     invoiceId: params.invoiceId,
+    invIdNumber: invIdNumber,
     amount: params.amount,
     description: params.description,
   });
+  
+  // Check if InvId is in the URL
+  if (paymentUrl && paymentUrl.includes('InvId=')) {
+    const invIdMatch = paymentUrl.match(/InvId=(\d+)/);
+    console.log('✅ InvId found in URL:', invIdMatch ? invIdMatch[1] : 'NOT FOUND');
+  } else {
+    console.warn('⚠️ InvId parameter NOT found in generated URL!');
+  }
 
   return paymentUrl;
 }
