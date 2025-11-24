@@ -135,30 +135,24 @@ export async function setupAuth(app: Express) {
   app.get("/api/login", (req, res, next) => {
     ensureStrategy(req.hostname);
     
-    // Save returnTo in session for redirect after authentication
+    // Save returnTo in cookie (not session) because OAuth flow creates new session
     if (req.query.returnTo && typeof req.query.returnTo === 'string') {
-      req.session.returnTo = req.query.returnTo;
-      console.log('🔐 Login: Saving returnTo in session:', req.query.returnTo);
-      
-      // Explicitly save session before redirect to ensure it persists
-      req.session.save((err) => {
-        if (err) {
-          console.error('🔐 Login: Error saving session:', err);
-          return next(err);
-        }
-        console.log('🔐 Login: Session saved successfully');
-        passport.authenticate(`replitauth:${req.hostname}`, {
-          prompt: "login consent",
-          scope: ["openid", "email", "profile", "offline_access"],
-        })(req, res, next);
+      // Set cookie with returnTo path (7 days expiry, httpOnly, secure in production)
+      res.cookie('returnTo', req.query.returnTo, {
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
       });
+      console.log('🔐 Login: Saving returnTo in cookie:', req.query.returnTo);
     } else {
       console.log('🔐 Login: No returnTo parameter provided');
-      passport.authenticate(`replitauth:${req.hostname}`, {
-        prompt: "login consent",
-        scope: ["openid", "email", "profile", "offline_access"],
-      })(req, res, next);
     }
+    
+    passport.authenticate(`replitauth:${req.hostname}`, {
+      prompt: "login consent",
+      scope: ["openid", "email", "profile", "offline_access"],
+    })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
@@ -176,12 +170,12 @@ export async function setupAuth(app: Express) {
           return next(loginErr);
         }
         
-        // Get returnTo from session, default to home
-        const returnTo = req.session.returnTo || "/";
-        console.log('🔐 Callback: returnTo from session:', returnTo);
+        // Get returnTo from cookie, default to home
+        const returnTo = req.cookies.returnTo || "/";
+        console.log('🔐 Callback: returnTo from cookie:', returnTo);
         
-        // Clear returnTo from session
-        delete req.session.returnTo;
+        // Clear returnTo cookie
+        res.clearCookie('returnTo');
         
         // Redirect to original page
         console.log('🔐 Callback: Redirecting to:', returnTo);
