@@ -77,7 +77,7 @@ export default function Subscribe() {
                   <CardTitle className="text-2xl">{t.firstTimeSubscription}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-4xl font-bold text-primary">20 ₽</div>
+                  <div className="text-4xl font-bold text-primary">2000 ₽</div>
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
                   <ul className="space-y-3">
                     <li className="flex items-start gap-2">
@@ -124,10 +124,10 @@ export default function Subscribe() {
                 <CardContent className="space-y-4">
                   <div className="flex items-baseline gap-3">
                     <div className="text-4xl font-bold text-primary">
-                      {hasActiveSubscription ? '10' : '20'} ₽
+                      {hasActiveSubscription ? '1000' : '2000'} ₽
                     </div>
                     {hasActiveSubscription && (
-                      <div className="text-lg text-muted-foreground line-through">20 ₽</div>
+                      <div className="text-lg text-muted-foreground line-through">2000 ₽</div>
                     )}
                   </div>
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
