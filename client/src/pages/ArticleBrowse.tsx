@@ -262,23 +262,6 @@ export default function ArticleBrowse() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      {(!isAuthenticated || !hasActiveSubscription) && (
-        <Alert className="mb-6 border-secondary bg-secondary/10">
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-4">
-            <span className="text-foreground">
-              Для полного доступа к статьям нужна подписка
-            </span>
-            <Button 
-              size="sm"
-              variant="secondary"
-              onClick={() => window.location.href = '/subscribe'}
-              data-testid="button-banner-subscribe"
-            >
-              {t.getSubscription}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
       <div className="mb-8">
         <div className="flex flex-wrap gap-2 mb-2">
           {selectedRemedyTags.map((tag) => (
