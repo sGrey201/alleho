@@ -60,105 +60,105 @@ export default function Subscribe() {
           </p>
         </div>
 
-        <div className="flex justify-center mb-12">
-          {!hasActiveSubscription ? (
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle className="text-2xl">{t.firstTimeSubscription}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-4xl font-bold text-primary">2000 ₽</div>
-                <div className="text-muted-foreground">{t.subscriptionDuration}</div>
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>{t.benefitFullAccess}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>{t.benefitNewContent}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>{t.benefitExpertKnowledge}</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={() => handlePayment('initial')}
-                  disabled={!user || loadingInitial || loadingRenewal}
-                  data-testid="button-payment-initial"
-                >
-                  {loadingInitial ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Переход к оплате...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Оформить подписку
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          ) : (
-            <Card className="max-w-md w-full">
-              <CardHeader>
-                <CardTitle className="text-2xl">{t.renewalSubscriptionTitle}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-4xl font-bold text-primary">1000 ₽</div>
-                <div className="text-muted-foreground">{t.subscriptionDuration}</div>
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>{t.renewalBenefit}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                    <span>{t.continuedAccess}</span>
-                  </li>
-                </ul>
-              </CardContent>
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  size="lg"
-                  variant="secondary"
-                  onClick={() => handlePayment('renewal')}
-                  disabled={!user || loadingInitial || loadingRenewal}
-                  data-testid="button-payment-renewal"
-                >
-                  {loadingRenewal ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Переход к оплате...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Продлить подписку
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-        </div>
-
-        {!user && (
-          <div className="text-center p-6 border rounded-lg bg-muted/50">
+        {!user ? (
+          <div className="text-center p-6 border rounded-lg bg-muted/50 max-w-md mx-auto">
             <p className="text-muted-foreground mb-4">
-              Войдите в систему, чтобы оформить подписку
+              Войдите, чтобы оформить подписку
             </p>
             <Button onClick={() => setLocation('/')} data-testid="button-login">
               Войти
             </Button>
+          </div>
+        ) : (
+          <div className="flex justify-center mb-12">
+            {!hasActiveSubscription ? (
+              <Card className="max-w-md w-full">
+                <CardHeader>
+                  <CardTitle className="text-2xl">{t.firstTimeSubscription}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-4xl font-bold text-primary">2000 ₽</div>
+                  <div className="text-muted-foreground">{t.subscriptionDuration}</div>
+                  <ul className="space-y-3">
+                    <li className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span>{t.benefitFullAccess}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span>{t.benefitNewContent}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span>{t.benefitExpertKnowledge}</span>
+                    </li>
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={() => handlePayment('initial')}
+                    disabled={loadingInitial || loadingRenewal}
+                    data-testid="button-payment-initial"
+                  >
+                    {loadingInitial ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Переход к оплате...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Оформить подписку
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ) : (
+              <Card className="max-w-md w-full">
+                <CardHeader>
+                  <CardTitle className="text-2xl">{t.renewalSubscriptionTitle}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-4xl font-bold text-primary">1000 ₽</div>
+                  <div className="text-muted-foreground">{t.subscriptionDuration}</div>
+                  <ul className="space-y-3">
+                    <li className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span>{t.renewalBenefit}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span>{t.continuedAccess}</span>
+                    </li>
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    variant="secondary"
+                    onClick={() => handlePayment('renewal')}
+                    disabled={loadingInitial || loadingRenewal}
+                    data-testid="button-payment-renewal"
+                  >
+                    {loadingRenewal ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Переход к оплате...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Продлить подписку
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
           </div>
         )}
 
