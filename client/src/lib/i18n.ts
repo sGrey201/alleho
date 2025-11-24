@@ -86,7 +86,7 @@ export const t = {
   selectTags: 'Выбрать теги',
   searchTags: 'Поиск тегов',
   noTagsFound: 'Теги не найдены',
-  createArticle: 'Создать статью',
+  createArticle: 'Добавить',
   editArticle: 'Редактировать статью',
   deleteArticle: 'Удалить статью',
   articleDeleted: 'Статья удалена',
