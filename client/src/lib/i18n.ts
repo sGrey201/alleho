@@ -54,7 +54,7 @@ export const t = {
   // Subscribe Page
   subscribePageTitle: 'Оформление подписки',
   subscribePageDescription: 'Получите полный доступ ко всем статьям по гомеопатии',
-  firstTimeSubscription: 'Первая подписка',
+  firstTimeSubscription: 'Полный доступ',
   renewalSubscriptionTitle: 'Продление подписки',
   subscriptionDuration: 'на 6 месяцев',
   renewalBenefit: 'Специальная цена для постоянных читателей',
