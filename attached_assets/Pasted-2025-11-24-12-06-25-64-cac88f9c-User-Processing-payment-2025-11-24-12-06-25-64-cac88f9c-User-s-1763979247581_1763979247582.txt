@@ -1,0 +1,96 @@
+2025-11-24 12:06:25.64
+cac88f9c
+User
+📦 Processing payment: {
+2025-11-24 12:06:25.64
+cac88f9c
+User
+shp_subscription_type: 'initial',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+🔔 Robokassa Result URL called: {
+2025-11-24 12:06:25.64
+cac88f9c
+User
+method: 'POST',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+query: {}
+2025-11-24 12:06:25.64
+cac88f9c
+User
+OutSum: '20.000000',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+InvId: '1763978476668',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+PaymentMethod: 'PayButton',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+IncCurrLabel: 'SBPPSR',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+Fee: '0.700000',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+out_summ: '20.000000',
+2025-11-24 12:06:25.64
+cac88f9c
+User
+}
+2025-11-24 12:06:25.64
+cac88f9c
+User
+shp_subscription_type: 'initial'
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at file:///home/runner/workspace/dist/index.js:937:21
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at Array.map ()
+2025-11-24 12:06:25.64
+cac88f9c
+User
+Payment processing error: TypeError: Cannot read properties of null (reading 'constructor')
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at mapUpdateSet (file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:82:82)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at file:///home/runner/workspace/node_modules/drizzle-orm/utils.js:83:9
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at DatabaseStorage.updatePaymentStatus (file:///home/runner/workspace/dist/index.js:374:49)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at is (file:///home/runner/workspace/node_modules/drizzle-orm/entity.js:15:41)
+2025-11-24 12:06:25.64
+cac88f9c
+User
+at PgUpdateBuilder.set (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/update.js
