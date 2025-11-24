@@ -35,6 +35,8 @@ export const t = {
   trialActive: 'Пробный период активен',
   daysRemaining: 'дней',
   subscriptionExpired: 'Подписка истекла',
+  subscriptionUntil: 'Подписка до',
+  noSubscription: 'Нет подписки',
   upgradePromptTitle: 'Требуется подписка',
   upgradePromptDescription: 'Чтобы читать эту и все остальные статьи без ограничения',
   contactAdmin: 'Свяжитесь с администратором для оформления подписки',
