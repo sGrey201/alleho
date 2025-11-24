@@ -364,6 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const userId = req.user.claims.sub;
+      const userEmail = req.user.claims.email;
       const { subscriptionType } = req.body; // 'initial' or 'renewal'
 
       if (!subscriptionType || !['initial', 'renewal'].includes(subscriptionType)) {
@@ -388,12 +389,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         robokassaData: null,
       });
 
-      // Generate payment URL
+      // Generate payment URL with user email
       const paymentUrl = generatePaymentUrl({
         amount,
         description,
         invoiceId,
         userId,
+        userEmail,
         subscriptionType,
       });
 

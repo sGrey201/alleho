@@ -28,6 +28,7 @@ export function generatePaymentUrl(params: {
   description: string;
   invoiceId: number;
   userId: string;
+  userEmail: string;
   subscriptionType: 'initial' | 'renewal';
 }): string | null {
   if (!robokassa) {
@@ -42,6 +43,7 @@ export function generatePaymentUrl(params: {
     outSum: params.amount,
     description: params.description,
     invId: params.invoiceId,
+    email: params.userEmail,
     userParameters: {
       shp_user_id: params.userId,
       shp_subscription_type: params.subscriptionType,
