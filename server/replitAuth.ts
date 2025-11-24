@@ -138,6 +138,9 @@ export async function setupAuth(app: Express) {
     // Save returnTo in session for redirect after authentication
     if (req.query.returnTo && typeof req.query.returnTo === 'string') {
       req.session.returnTo = req.query.returnTo;
+      console.log('🔐 Login: Saving returnTo in session:', req.query.returnTo);
+    } else {
+      console.log('🔐 Login: No returnTo parameter provided');
     }
     
     passport.authenticate(`replitauth:${req.hostname}`, {
@@ -163,11 +166,13 @@ export async function setupAuth(app: Express) {
         
         // Get returnTo from session, default to home
         const returnTo = req.session.returnTo || "/";
+        console.log('🔐 Callback: returnTo from session:', returnTo);
         
         // Clear returnTo from session
         delete req.session.returnTo;
         
         // Redirect to original page
+        console.log('🔐 Callback: Redirecting to:', returnTo);
         return res.redirect(returnTo);
       });
     })(req, res, next);
