@@ -26,7 +26,7 @@ export const robokassa = robokassaLogin && robokassaPassword1 && robokassaPasswo
 export function generatePaymentUrl(params: {
   amount: number;
   description: string;
-  invoiceId: number;
+  invoiceId: string;
   userId: string;
   userEmail: string;
   subscriptionType: 'initial' | 'renewal';
@@ -39,7 +39,7 @@ export function generatePaymentUrl(params: {
     ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
     : 'http://localhost:5000';
 
-  return robokassa.generatePaymentUrl({
+  const paymentUrl = robokassa.generatePaymentUrl({
     outSum: params.amount,
     description: params.description,
     invId: params.invoiceId,
@@ -50,6 +50,15 @@ export function generatePaymentUrl(params: {
     },
     culture: 'ru',
   });
+
+  console.log('🔗 Generated Robokassa payment URL:', paymentUrl);
+  console.log('📋 Payment params:', {
+    invoiceId: params.invoiceId,
+    amount: params.amount,
+    description: params.description,
+  });
+
+  return paymentUrl;
 }
 
 export function checkPayment(params: any): boolean {

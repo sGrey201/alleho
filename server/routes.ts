@@ -376,14 +376,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? 'Подписка MateriaMedica на 6 месяцев'
         : 'Продление подписки MateriaMedica на 6 месяцев';
 
-      // Generate unique invoice ID (timestamp + random)
-      const invoiceId = Date.now() + Math.floor(Math.random() * 1000);
+      // Generate unique invoice ID (timestamp + random) as string
+      const invoiceId = (Date.now() + Math.floor(Math.random() * 1000)).toString();
 
       // Create payment record
       const payment = await storage.createPayment({
         userId,
         amount: amount.toString(),
-        invoiceId: invoiceId.toString(),
+        invoiceId: invoiceId,
         description,
         status: 'pending',
         robokassaData: null,
