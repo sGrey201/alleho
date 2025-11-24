@@ -66,7 +66,7 @@ export default function Subscribe() {
               Войдите, чтобы оформить подписку
             </p>
             <Button asChild data-testid="button-login">
-              <a href="/api/login">Войти</a>
+              <a href="/api/login?returnTo=/subscribe">Войти</a>
             </Button>
           </div>
         ) : (

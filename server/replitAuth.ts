@@ -8,6 +8,13 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
+// Extend session type to include returnTo
+declare module 'express-session' {
+  interface SessionData {
+    returnTo?: string;
+  }
+}
+
 const getOidcConfig = memoize(
   async () => {
     return await client.discovery(
@@ -127,6 +134,12 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/login", (req, res, next) => {
     ensureStrategy(req.hostname);
+    
+    // Save returnTo in session for redirect after authentication
+    if (req.query.returnTo && typeof req.query.returnTo === 'string') {
+      req.session.returnTo = req.query.returnTo;
+    }
+    
     passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],

@@ -131,7 +131,7 @@ export default function ArticleReader() {
                       <>
                         <Button 
                           size="lg"
-                          onClick={() => window.location.href = '/api/login'}
+                          onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
                           data-testid="button-login"
                         >
                           {t.login}

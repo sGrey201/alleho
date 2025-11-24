@@ -16,8 +16,13 @@ export default function Landing() {
             {t.welcomeSubtitle}
           </p>
           <div className="flex justify-center gap-4">
-            <Button asChild size="lg" className="text-base px-8" data-testid="button-login">
-              <a href="/api/login">{t.loginToStart}</a>
+            <Button 
+              size="lg" 
+              className="text-base px-8" 
+              onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+              data-testid="button-login"
+            >
+              {t.loginToStart}
             </Button>
           </div>
         </div>

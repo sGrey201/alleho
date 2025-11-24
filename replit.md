@@ -53,6 +53,7 @@ Preferred communication style: Simple, everyday language.
 - Passport.js strategy for OIDC integration
 - Role-based access control (admin vs regular users)
 - Subscription-based content access control
+- Return-to-origin navigation: users return to the page they came from after login (via returnTo query parameter)
 
 **Content Access Model**
 - Free users: Preview-only access (first 1000 characters of articles)
@@ -93,7 +94,8 @@ Preferred communication style: Simple, everyday language.
 
 **Authentication Routes**
 - `/api/auth/user` - Get current user profile
-- `/api/login` - Initiate OIDC authentication flow
+- `/api/login?returnTo=/path` - Initiate OIDC authentication flow with optional return URL
+- `/api/callback` - OIDC callback handler (redirects to returnTo or homepage)
 - `/api/logout` - End user session
 
 **Public Article Routes** (require authentication)

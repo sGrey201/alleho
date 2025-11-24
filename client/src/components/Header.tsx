@@ -119,8 +119,11 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild data-testid="button-login">
-              <a href="/api/login">{t.login}</a>
+            <Button 
+              onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+              data-testid="button-login"
+            >
+              {t.login}
             </Button>
           )}
         </div>
