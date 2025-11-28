@@ -290,3 +290,12 @@
     inset: -1px;
   }
 }
+
+/* Article paragraph spacing - 1.3x line height for paragraph margins */
+.prose p {
+  margin-bottom: 0.55em;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
