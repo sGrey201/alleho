@@ -133,9 +133,7 @@ export default function Subscribe() {
                   <div className="text-muted-foreground">{t.subscriptionDuration}</div>
                   {hasActiveSubscription && (
                     <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                        🎉 Скидка 50% за продление до окончания подписки!
-                      </p>
+                      <p className="text-sm font-medium text-green-700 dark:text-green-400">🎉 Скидка 50% если продлить до окончания!</p>
                     </div>
                   )}
                   <ul className="space-y-3">
