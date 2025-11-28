@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRoute } from 'wouter';
+import { useRoute, Link } from 'wouter';
 import { Article, Tag } from '@shared/schema';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
@@ -133,16 +133,20 @@ export default function ArticleReader() {
           </div>
         )}
 
-        <div className="mt-8 flex flex-wrap gap-2">
+        <div className="mt-8 flex flex-wrap gap-2 not-prose">
           {article.tags.map((tag) => (
-            <Badge
+            <Link
               key={tag.id}
-              variant={tag.category === 'remedy' ? 'default' : 'secondary'}
-              className="text-sm font-medium"
-              data-testid={`badge-article-tag-${tag.slug}`}
+              href={tag.category === 'remedy' ? `/?remedies=${tag.slug}` : `/?situations=${tag.slug}`}
             >
-              {tag.name}
-            </Badge>
+              <Badge
+                variant={tag.category === 'remedy' ? 'default' : 'secondary'}
+                className="text-sm font-medium cursor-pointer"
+                data-testid={`badge-article-tag-${tag.slug}`}
+              >
+                {tag.name}
+              </Badge>
+            </Link>
           ))}
         </div>
       </article>
