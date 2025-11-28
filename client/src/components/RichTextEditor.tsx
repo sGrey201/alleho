@@ -45,7 +45,9 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = html;
           
-          const processNode = (node: Node): string => {
+          const paragraphs: string[] = [];
+          
+          const extractText = (node: Node): string => {
             if (node.nodeType === Node.TEXT_NODE) {
               return node.textContent || '';
             }
@@ -53,18 +55,10 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             if (node.nodeType === Node.ELEMENT_NODE) {
               const element = node as Element;
               const tagName = element.tagName.toLowerCase();
-              let childContent = Array.from(node.childNodes).map(processNode).join('');
+              const childContent = Array.from(node.childNodes).map(extractText).join('');
               
               if (tagName === 'strong' || tagName === 'b') {
                 return `<strong>${childContent}</strong>`;
-              }
-              
-              if (tagName === 'br') {
-                return '<br>';
-              }
-              
-              if (tagName === 'p' || tagName === 'div') {
-                return `<p>${childContent}</p>`;
               }
               
               return childContent;
@@ -73,19 +67,36 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             return '';
           };
           
-          const cleanedHtml = Array.from(tempDiv.childNodes).map(processNode).join('');
+          const collectParagraphs = (node: Node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as Element;
+              const tagName = element.tagName.toLowerCase();
+              
+              if (tagName === 'p' || tagName === 'div' || tagName === 'li') {
+                const content = extractText(node).trim();
+                if (content) {
+                  paragraphs.push(`<p>${content}</p>`);
+                }
+              } else {
+                Array.from(node.childNodes).forEach(collectParagraphs);
+              }
+            } else if (node.nodeType === Node.TEXT_NODE) {
+              const content = (node.textContent || '').trim();
+              if (content) {
+                paragraphs.push(`<p>${content}</p>`);
+              }
+            }
+          };
           
-          view.dispatch(
-            view.state.tr.replaceSelectionWith(
-              view.state.schema.nodeFromJSON({
-                type: 'doc',
-                content: [{ type: 'paragraph', content: [] }]
-              }),
-              false
-            )
-          );
+          Array.from(tempDiv.childNodes).forEach(collectParagraphs);
           
-          editor?.commands.insertContent(cleanedHtml || text);
+          const cleanedHtml = paragraphs.join('');
+          
+          if (cleanedHtml) {
+            editor?.commands.insertContent(cleanedHtml);
+          } else if (text) {
+            editor?.commands.insertContent(text);
+          }
           return true;
         }
         
