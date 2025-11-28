@@ -129,7 +129,6 @@ export const t = {
   situations: 'Ситуации',
   searchByRemedy: 'Поиск по препаратам',
   searchBySituation: 'Поиск по ситуациям',
-  searchTags: 'Поиск...',
   manageTags: 'Управление тегами',
   createTag: 'Создать тег',
   editTag: 'Редактировать тег',
