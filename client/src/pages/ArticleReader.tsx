@@ -49,9 +49,7 @@ export default function ArticleReader() {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlContent;
     const textContent = tempDiv.textContent || tempDiv.innerText || '';
-    const words = textContent.split(/\s+/);
-    const twentyPercentWords = Math.ceil(words.length * 0.2);
-    const partialText = words.slice(0, twentyPercentWords).join(' ');
+    const partialText = textContent.slice(0, 500);
     return `<p>${partialText}...</p>`;
   };
 
