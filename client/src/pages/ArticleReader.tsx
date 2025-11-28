@@ -1,22 +1,19 @@
-import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
 import { Article, Tag } from '@shared/schema';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
+import { formatArticleTitle } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Clock, Calendar, Lock } from 'lucide-react';
-import { format } from 'date-fns';
+import { Lock } from 'lucide-react';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
 export default function ArticleReader() {
   const [, params] = useRoute('/article/:slug');
   const { hasActiveSubscription, isLoading: authLoading, isAuthenticated } = useAuth();
-  const { toast } = useToast();
 
   const { data: article, isLoading } = useQuery<ArticleWithTags>({
     queryKey: ['/api/articles/slug', params?.slug],
@@ -46,18 +43,7 @@ export default function ArticleReader() {
 
   const isContentLocked = !article.isFree && (!isAuthenticated || !hasActiveSubscription);
 
-  const formattedTags = article.tags.map(tag => {
-    if (tag.category === 'remedy') {
-      return tag.name.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ');
-    } else {
-      return tag.name.toLowerCase();
-    }
-  });
-  
-  const joined = formattedTags.join(', ');
-  const title = joined.charAt(0).toUpperCase() + joined.slice(1);
+  const title = formatArticleTitle(article.tags);
 
   const getPartialContent = (htmlContent: string): string => {
     const tempDiv = document.createElement('div');

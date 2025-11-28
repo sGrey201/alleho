@@ -12,6 +12,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Edit, Plus, X, Save } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { formatArticleTitle } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import {
@@ -54,16 +55,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     isFree: article.isFree,
   });
   
-  const sortedTags = [...article.tags].sort((a, b) => {
-    // Сначала препараты, потом ситуации
-    if (a.category !== b.category) {
-      return a.category === 'remedy' ? -1 : 1;
-    }
-    // Внутри категории — по алфавиту
-    return a.name.localeCompare(b.name);
-  });
-  
-  const title = sortedTags.map(tag => tag.name).join(', ');
+  const title = formatArticleTitle(article.tags);
 
   const getTextFromHTML = (html: string): string => {
     const tempDiv = document.createElement('div');
