@@ -112,14 +112,13 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             }
             removeEmptyFirstParagraph();
           } else if (text) {
-            const lines = text.split(/\r?\n/);
-            const paragraphs = lines.map(line => `<p>${line || '<br>'}</p>`).join('');
+            const textWithBreaks = text.replace(/\r?\n/g, '<br>');
             const docText = editor?.state.doc.textContent || '';
             if (docText.trim() === '') {
               editor?.commands.clearContent();
-              editor?.commands.setContent(paragraphs);
+              editor?.commands.setContent(`<p>${textWithBreaks}</p>`);
             } else {
-              editor?.commands.insertContent(paragraphs);
+              editor?.commands.insertContent(textWithBreaks);
             }
             removeEmptyFirstParagraph();
           }
@@ -127,9 +126,8 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         }
         
         if (text) {
-          const lines = text.split(/\r?\n/);
-          const paragraphs = lines.map(line => `<p>${line || '<br>'}</p>`).join('');
-          editor?.commands.insertContent(paragraphs);
+          const textWithBreaks = text.replace(/\r?\n/g, '<br>');
+          editor?.commands.insertContent(textWithBreaks);
           return true;
         }
         
