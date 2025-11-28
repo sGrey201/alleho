@@ -112,13 +112,20 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             }
             removeEmptyFirstParagraph();
           } else if (text) {
-            const textWithBreaks = text.replace(/\r?\n/g, '<br>');
+            const lines = text.split(/\r?\n/);
+            const content: any[] = [];
+            lines.forEach((line, index) => {
+              if (line) content.push({ type: 'text', text: line });
+              if (index < lines.length - 1) {
+                content.push({ type: 'hardBreak' });
+              }
+            });
             const docText = editor?.state.doc.textContent || '';
             if (docText.trim() === '') {
               editor?.commands.clearContent();
-              editor?.commands.setContent(`<p>${textWithBreaks}</p>`);
+              editor?.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content }] });
             } else {
-              editor?.commands.insertContent(textWithBreaks);
+              editor?.commands.insertContent(content);
             }
             removeEmptyFirstParagraph();
           }
@@ -126,8 +133,15 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         }
         
         if (text) {
-          const textWithBreaks = text.replace(/\r?\n/g, '<br>');
-          editor?.commands.insertContent(textWithBreaks);
+          const lines = text.split(/\r?\n/);
+          const content: any[] = [];
+          lines.forEach((line, index) => {
+            if (line) content.push({ type: 'text', text: line });
+            if (index < lines.length - 1) {
+              content.push({ type: 'hardBreak' });
+            }
+          });
+          editor?.commands.insertContent(content);
           return true;
         }
         
