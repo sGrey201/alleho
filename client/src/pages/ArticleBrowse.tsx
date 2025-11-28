@@ -333,12 +333,12 @@ export default function ArticleBrowse() {
                               }}
                               disabled={selectedIds.includes(tag.id)}
                               data-testid={`tag-option-${tag.slug}`}
-                              className="gap-2"
+                              className="gap-2 group"
                             >
                               {tag.category === 'remedy' ? (
-                                <Pill className="h-4 w-4 text-primary shrink-0" />
+                                <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
                               ) : (
-                                <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
                               )}
                               {tag.name}
                             </CommandItem>
@@ -401,12 +401,12 @@ export default function ArticleBrowse() {
                           }}
                           disabled={selectedIds.includes(tag.id)}
                           data-testid={`tag-option-${tag.slug}`}
-                          className="gap-2"
+                          className="gap-2 group"
                         >
                           {tag.category === 'remedy' ? (
-                            <Pill className="h-4 w-4 text-primary shrink-0" />
+                            <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
                           ) : (
-                            <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
                           )}
                           {tag.name}
                         </CommandItem>
