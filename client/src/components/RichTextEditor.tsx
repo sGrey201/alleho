@@ -1,8 +1,6 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import TextAlign from '@tiptap/extension-text-align';
-import { Bold, Italic, List, ListOrdered, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
+import { Bold } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface RichTextEditorProps {
@@ -15,13 +13,16 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2, 3],
-        },
-      }),
-      Underline,
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
+        heading: false,
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+        blockquote: false,
+        codeBlock: false,
+        code: false,
+        horizontalRule: false,
+        strike: false,
+        italic: false,
       }),
     ],
     content,
@@ -31,6 +32,69 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[200px] p-4 focus:outline-none',
+      },
+      handlePaste: (view, event) => {
+        event.preventDefault();
+        const clipboardData = event.clipboardData;
+        if (!clipboardData) return false;
+        
+        const html = clipboardData.getData('text/html');
+        const text = clipboardData.getData('text/plain');
+        
+        if (html) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = html;
+          
+          const processNode = (node: Node): string => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              return node.textContent || '';
+            }
+            
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as Element;
+              const tagName = element.tagName.toLowerCase();
+              let childContent = Array.from(node.childNodes).map(processNode).join('');
+              
+              if (tagName === 'strong' || tagName === 'b') {
+                return `<strong>${childContent}</strong>`;
+              }
+              
+              if (tagName === 'br') {
+                return '<br>';
+              }
+              
+              if (tagName === 'p' || tagName === 'div') {
+                return `<p>${childContent}</p>`;
+              }
+              
+              return childContent;
+            }
+            
+            return '';
+          };
+          
+          const cleanedHtml = Array.from(tempDiv.childNodes).map(processNode).join('');
+          
+          view.dispatch(
+            view.state.tr.replaceSelectionWith(
+              view.state.schema.nodeFromJSON({
+                type: 'doc',
+                content: [{ type: 'paragraph', content: [] }]
+              }),
+              false
+            )
+          );
+          
+          editor?.commands.insertContent(cleanedHtml || text);
+          return true;
+        }
+        
+        if (text) {
+          editor?.commands.insertContent(text);
+          return true;
+        }
+        
+        return false;
       },
     },
   });
@@ -51,92 +115,6 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           data-testid="button-bold"
         >
           <Bold className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={editor.isActive('italic') ? 'bg-accent' : ''}
-          data-testid="button-italic"
-        >
-          <Italic className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={editor.isActive('underline') ? 'bg-accent' : ''}
-          data-testid="button-underline"
-        >
-          <UnderlineIcon className="h-4 w-4" />
-        </Button>
-        
-        <div className="w-px h-8 bg-border mx-1" />
-        
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={editor.isActive('bulletList') ? 'bg-accent' : ''}
-          data-testid="button-bullet-list"
-        >
-          <List className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={editor.isActive('orderedList') ? 'bg-accent' : ''}
-          data-testid="button-ordered-list"
-        >
-          <ListOrdered className="h-4 w-4" />
-        </Button>
-
-        <div className="w-px h-8 bg-border mx-1" />
-
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().setTextAlign('left').run()}
-          className={editor.isActive({ textAlign: 'left' }) ? 'bg-accent' : ''}
-          data-testid="button-align-left"
-        >
-          <AlignLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().setTextAlign('center').run()}
-          className={editor.isActive({ textAlign: 'center' }) ? 'bg-accent' : ''}
-          data-testid="button-align-center"
-        >
-          <AlignCenter className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().setTextAlign('right').run()}
-          className={editor.isActive({ textAlign: 'right' }) ? 'bg-accent' : ''}
-          data-testid="button-align-right"
-        >
-          <AlignRight className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-          className={editor.isActive({ textAlign: 'justify' }) ? 'bg-accent' : ''}
-          data-testid="button-align-justify"
-        >
-          <AlignJustify className="h-4 w-4" />
         </Button>
       </div>
       
