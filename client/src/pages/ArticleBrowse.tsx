@@ -3,12 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { ArticleCard } from '@/components/ArticleCard';
-import { Plus, X, AlertCircle } from 'lucide-react';
+import { Plus, X, AlertCircle, Pill, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -31,7 +30,6 @@ function transliterateRuToLatin(text: string): string {
 export default function ArticleBrowse() {
   const [location, setLocation] = useLocation();
   const [tagSearchQuery, setTagSearchQuery] = useState('');
-  const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const { isAuthenticated, hasActiveSubscription } = useAuth();
 
@@ -132,15 +130,13 @@ export default function ArticleBrowse() {
   const filteredTags = useMemo(() => {
     if (!allTags) return [];
     
-    let tags = allTags.filter(tag => tag.category === tagCategoryFilter);
-    
-    if (!tagSearchQuery.trim()) return tags;
+    if (!tagSearchQuery.trim()) return allTags;
     const query = tagSearchQuery.toLowerCase().trim();
     
-    // Для препаратов также ищем по транслитерации русского текста
-    const transliteratedQuery = tagCategoryFilter === 'remedy' ? transliterateRuToLatin(query) : query;
+    // Транслитерация для поиска препаратов
+    const transliteratedQuery = transliterateRuToLatin(query);
     
-    return tags.filter(tag => {
+    return allTags.filter(tag => {
       const tagNameLower = tag.name.toLowerCase();
       const tagSlugLower = tag.slug.toLowerCase();
       
@@ -150,7 +146,7 @@ export default function ArticleBrowse() {
       }
       
       // Для препаратов: поиск по транслитерированному запросу
-      if (tagCategoryFilter === 'remedy' && transliteratedQuery !== query) {
+      if (tag.category === 'remedy' && transliteratedQuery !== query) {
         if (tagNameLower.includes(transliteratedQuery) || tagSlugLower.includes(transliteratedQuery)) {
           return true;
         }
@@ -165,14 +161,14 @@ export default function ArticleBrowse() {
       }
       
       // Для препаратов: поиск по началу слов в транслитерации
-      if (tagCategoryFilter === 'remedy' && transliteratedQuery !== query) {
+      if (tag.category === 'remedy' && transliteratedQuery !== query) {
         return nameWords.some(word => word.startsWith(transliteratedQuery)) || 
                slugWords.some(word => word.startsWith(transliteratedQuery));
       }
       
       return false;
     });
-  }, [allTags, tagSearchQuery, tagCategoryFilter]);
+  }, [allTags, tagSearchQuery]);
 
   const selectedRemedyTags = useMemo(() => {
     if (!allTags) return [];
@@ -234,7 +230,7 @@ export default function ArticleBrowse() {
       e.preventDefault();
       if (filteredTags.length > 0) {
         const firstTag = filteredTags[0];
-        const selectedIds = tagCategoryFilter === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+        const selectedIds = firstTag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
         if (!selectedIds.includes(firstTag.id)) {
           addTag(firstTag.id);
         }
@@ -270,6 +266,7 @@ export default function ArticleBrowse() {
               variant="default" 
               className="gap-1"
             >
+              <Pill className="h-3 w-3" />
               {tag.name}
               <button
                 type="button"
@@ -287,6 +284,7 @@ export default function ArticleBrowse() {
               variant="secondary" 
               className="gap-1"
             >
+              <Activity className="h-3 w-3" />
               {tag.name}
               <button
                 type="button"
@@ -311,51 +309,45 @@ export default function ArticleBrowse() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[400px] p-0" align="start">
-                <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
-                  <div className="border-b px-2 pt-2">
-                    <TabsList className="w-full grid grid-cols-2">
-                      <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
-                        {t.remedies}
-                      </TabsTrigger>
-                      <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
-                        {t.situations}
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
-                  <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
-                    <CommandInput 
-                      placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
-                      value={tagSearchQuery}
-                      onValueChange={setTagSearchQuery}
-                    />
-                    <CommandList className="max-h-96 overflow-auto">
-                      {filteredTags.length === 0 ? (
-                        <CommandEmpty>{t.noTagsFound}</CommandEmpty>
-                      ) : (
-                        <CommandGroup>
-                          {filteredTags.map((tag) => {
-                            const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
-                            return (
-                              <CommandItem
-                                key={tag.id}
-                                value={tag.name}
-                                onSelect={() => {
-                                  if (!selectedIds.includes(tag.id)) {
-                                    addTag(tag.id);
-                                  }
-                                }}
-                                disabled={selectedIds.includes(tag.id)}
-                                data-testid={`tag-option-${tag.slug}`}
-                              >
-                                {tag.name}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </Tabs>
+                <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+                  <CommandInput 
+                    placeholder={t.searchTags}
+                    value={tagSearchQuery}
+                    onValueChange={setTagSearchQuery}
+                  />
+                  <CommandList className="max-h-96 overflow-auto">
+                    {filteredTags.length === 0 ? (
+                      <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {filteredTags.map((tag) => {
+                          const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+                          return (
+                            <CommandItem
+                              key={tag.id}
+                              value={tag.name}
+                              onSelect={() => {
+                                if (!selectedIds.includes(tag.id)) {
+                                  addTag(tag.id);
+                                }
+                              }}
+                              disabled={selectedIds.includes(tag.id)}
+                              data-testid={`tag-option-${tag.slug}`}
+                              className="gap-2"
+                            >
+                              {tag.category === 'remedy' ? (
+                                <Pill className="h-4 w-4 text-primary shrink-0" />
+                              ) : (
+                                <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                              )}
+                              {tag.name}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
               </PopoverContent>
             </Popover>
           )}
@@ -385,51 +377,45 @@ export default function ArticleBrowse() {
               </Button>
             </PopoverTrigger>
           <PopoverContent className="w-[400px] p-0" align="start">
-            <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
-              <div className="border-b px-2 pt-2">
-                <TabsList className="w-full grid grid-cols-2">
-                  <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
-                    {t.remedies}
-                  </TabsTrigger>
-                  <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
-                    {t.situations}
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-              <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
-                <CommandInput 
-                  placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
-                  value={tagSearchQuery}
-                  onValueChange={setTagSearchQuery}
-                />
-                <CommandList className="max-h-96 overflow-auto">
-                  {filteredTags.length === 0 ? (
-                    <CommandEmpty>{t.noTagsFound}</CommandEmpty>
-                  ) : (
-                    <CommandGroup>
-                      {filteredTags.map((tag) => {
-                        const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
-                        return (
-                          <CommandItem
-                            key={tag.id}
-                            value={tag.name}
-                            onSelect={() => {
-                              if (!selectedIds.includes(tag.id)) {
-                                addTag(tag.id);
-                              }
-                            }}
-                            disabled={selectedIds.includes(tag.id)}
-                            data-testid={`tag-option-${tag.slug}`}
-                          >
-                            {tag.name}
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  )}
-                </CommandList>
-              </Command>
-            </Tabs>
+            <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+              <CommandInput 
+                placeholder={t.searchTags}
+                value={tagSearchQuery}
+                onValueChange={setTagSearchQuery}
+              />
+              <CommandList className="max-h-96 overflow-auto">
+                {filteredTags.length === 0 ? (
+                  <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                ) : (
+                  <CommandGroup>
+                    {filteredTags.map((tag) => {
+                      const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+                      return (
+                        <CommandItem
+                          key={tag.id}
+                          value={tag.name}
+                          onSelect={() => {
+                            if (!selectedIds.includes(tag.id)) {
+                              addTag(tag.id);
+                            }
+                          }}
+                          disabled={selectedIds.includes(tag.id)}
+                          data-testid={`tag-option-${tag.slug}`}
+                          className="gap-2"
+                        >
+                          {tag.category === 'remedy' ? (
+                            <Pill className="h-4 w-4 text-primary shrink-0" />
+                          ) : (
+                            <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                          )}
+                          {tag.name}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                )}
+              </CommandList>
+            </Command>
           </PopoverContent>
           </Popover>
         )}
