@@ -291,9 +291,9 @@
   }
 }
 
-/* Article paragraph spacing - 1.3x line height for paragraph margins */
+/* Article paragraph spacing */
 .prose p {
-  margin-bottom: 0.55em;
+  margin-bottom: 0.35em;
 }
 
 .prose p:last-child {
