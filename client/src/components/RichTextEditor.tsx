@@ -93,7 +93,12 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           const cleanedHtml = paragraphs.join('');
           
           if (cleanedHtml) {
-            editor?.commands.insertContent(cleanedHtml);
+            const isEditorEmpty = editor?.isEmpty || editor?.state.doc.textContent.trim() === '';
+            if (isEditorEmpty) {
+              editor?.commands.setContent(cleanedHtml);
+            } else {
+              editor?.commands.insertContent(cleanedHtml);
+            }
           } else if (text) {
             editor?.commands.insertContent(text);
           }
