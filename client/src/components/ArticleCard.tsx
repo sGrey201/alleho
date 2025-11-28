@@ -54,7 +54,14 @@ export function ArticleCard({ article }: ArticleCardProps) {
     isFree: article.isFree,
   });
   
-  const sortedTags = [...article.tags].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedTags = [...article.tags].sort((a, b) => {
+    // Сначала препараты, потом ситуации
+    if (a.category !== b.category) {
+      return a.category === 'remedy' ? -1 : 1;
+    }
+    // Внутри категории — по алфавиту
+    return a.name.localeCompare(b.name);
+  });
   
   const formattedTags = sortedTags.map(tag => {
     if (tag.category === 'remedy') {
