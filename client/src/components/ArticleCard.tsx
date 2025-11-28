@@ -54,7 +54,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
     isFree: article.isFree,
   });
   
-  const formattedTags = article.tags.map(tag => {
+  const sortedTags = [...article.tags].sort((a, b) => a.name.localeCompare(b.name));
+  
+  const formattedTags = sortedTags.map(tag => {
     if (tag.category === 'remedy') {
       return tag.name.split(' ').map(word => 
         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
