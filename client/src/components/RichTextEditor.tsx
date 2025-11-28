@@ -112,20 +112,13 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             }
             removeEmptyFirstParagraph();
           } else if (text) {
-            const lines = text.split(/\r?\n/);
-            const content: any[] = [];
-            lines.forEach((line, index) => {
-              if (line) content.push({ type: 'text', text: line });
-              if (index < lines.length - 1) {
-                content.push({ type: 'hardBreak' });
-              }
-            });
+            const htmlContent = `<p>${text.replace(/\r?\n/g, '<br>')}</p>`;
             const docText = editor?.state.doc.textContent || '';
             if (docText.trim() === '') {
               editor?.commands.clearContent();
-              editor?.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content }] });
+              editor?.commands.setContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
             } else {
-              editor?.commands.insertContent(content);
+              editor?.commands.insertContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
             }
             removeEmptyFirstParagraph();
           }
@@ -133,15 +126,8 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         }
         
         if (text) {
-          const lines = text.split(/\r?\n/);
-          const content: any[] = [];
-          lines.forEach((line, index) => {
-            if (line) content.push({ type: 'text', text: line });
-            if (index < lines.length - 1) {
-              content.push({ type: 'hardBreak' });
-            }
-          });
-          editor?.commands.insertContent(content);
+          const htmlContent = `<p>${text.replace(/\r?\n/g, '<br>')}</p>`;
+          editor?.commands.insertContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
           return true;
         }
         
