@@ -213,7 +213,6 @@ export default function ArticleBrowse() {
     } else if (tag.category === 'situation' && !selectedSituationTagIds.includes(tagId)) {
       setSelectedSituationTagIds([...selectedSituationTagIds, tagId]);
     }
-    setTagPopoverOpen(false);
     setTagSearchQuery('');
   };
 
