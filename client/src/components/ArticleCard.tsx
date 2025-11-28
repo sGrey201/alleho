@@ -63,18 +63,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
     return a.name.localeCompare(b.name);
   });
   
-  const formattedTags = sortedTags.map(tag => {
-    if (tag.category === 'remedy') {
-      return tag.name.split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-      ).join(' ');
-    } else {
-      return tag.name.toLowerCase();
-    }
-  });
-  
-  const joined = formattedTags.join(', ');
-  const title = joined.charAt(0).toUpperCase() + joined.slice(1);
+  const title = sortedTags.map(tag => tag.name).join(', ');
 
   const getTextFromHTML = (html: string): string => {
     const tempDiv = document.createElement('div');
