@@ -93,14 +93,21 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           const cleanedHtml = paragraphs.join('');
           
           if (cleanedHtml) {
-            const isEditorEmpty = editor?.isEmpty || editor?.state.doc.textContent.trim() === '';
-            if (isEditorEmpty) {
+            const docText = editor?.state.doc.textContent || '';
+            if (docText.trim() === '') {
+              editor?.commands.clearContent();
               editor?.commands.setContent(cleanedHtml);
             } else {
               editor?.commands.insertContent(cleanedHtml);
             }
           } else if (text) {
-            editor?.commands.insertContent(text);
+            const docText = editor?.state.doc.textContent || '';
+            if (docText.trim() === '') {
+              editor?.commands.clearContent();
+              editor?.commands.setContent(`<p>${text}</p>`);
+            } else {
+              editor?.commands.insertContent(text);
+            }
           }
           return true;
         }
