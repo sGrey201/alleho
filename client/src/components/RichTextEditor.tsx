@@ -92,6 +92,16 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
           
           const cleanedHtml = paragraphs.join('');
           
+          const removeEmptyFirstParagraph = () => {
+            setTimeout(() => {
+              if (!editor) return;
+              const firstNode = editor.state.doc.firstChild;
+              if (firstNode && firstNode.type.name === 'paragraph' && firstNode.textContent.trim() === '') {
+                editor.chain().focus().setTextSelection(0).deleteNode('paragraph').run();
+              }
+            }, 0);
+          };
+          
           if (cleanedHtml) {
             const docText = editor?.state.doc.textContent || '';
             if (docText.trim() === '') {
@@ -100,6 +110,7 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             } else {
               editor?.commands.insertContent(cleanedHtml);
             }
+            removeEmptyFirstParagraph();
           } else if (text) {
             const docText = editor?.state.doc.textContent || '';
             if (docText.trim() === '') {
@@ -108,6 +119,7 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
             } else {
               editor?.commands.insertContent(text);
             }
+            removeEmptyFirstParagraph();
           }
           return true;
         }
