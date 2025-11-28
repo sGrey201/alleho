@@ -11,46 +11,6 @@ interface RichTextEditorProps {
   placeholder?: string;
 }
 
-function cleanPastedHTML(html: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  
-  function processNode(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent || '';
-    }
-    
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return '';
-    }
-    
-    const el = node as Element;
-    const tagName = el.tagName.toLowerCase();
-    let childContent = '';
-    
-    for (const child of Array.from(node.childNodes)) {
-      childContent += processNode(child);
-    }
-    
-    if (tagName === 'strong' || tagName === 'b') {
-      return `<strong>${childContent}</strong>`;
-    }
-    
-    if (tagName === 'p' || tagName === 'div' || tagName === 'br') {
-      return `<p>${childContent}</p>`;
-    }
-    
-    return childContent;
-  }
-  
-  let result = '';
-  for (const child of Array.from(doc.body.childNodes)) {
-    result += processNode(child);
-  }
-  
-  return result || `<p>${html}</p>`;
-}
-
 export function RichTextEditor({ content, onChange, placeholder }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -71,29 +31,6 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[200px] p-4 focus:outline-none',
-      },
-      handlePaste: (view, event) => {
-        const clipboardData = event.clipboardData;
-        if (!clipboardData) return false;
-        
-        const html = clipboardData.getData('text/html');
-        const text = clipboardData.getData('text/plain');
-        
-        if (html) {
-          event.preventDefault();
-          const cleanedHTML = cleanPastedHTML(html);
-          editor?.commands.insertContent(cleanedHTML);
-          return true;
-        }
-        
-        if (text) {
-          event.preventDefault();
-          const paragraphs = text.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
-          editor?.commands.insertContent(paragraphs);
-          return true;
-        }
-        
-        return false;
       },
     },
   });
