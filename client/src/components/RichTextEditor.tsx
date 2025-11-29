@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold } from 'lucide-react';
+import { Bold, Code, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface RichTextEditorProps {
   content: string;
@@ -10,6 +12,9 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ content, onChange, placeholder }: RichTextEditorProps) {
+  const [mode, setMode] = useState<'visual' | 'html'>('visual');
+  const [htmlContent, setHtmlContent] = useState(content);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -27,114 +32,49 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
     ],
     content,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      setHtmlContent(html);
+      onChange(html);
     },
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none min-h-[200px] p-4 focus:outline-none',
       },
-      handlePaste: (view, event) => {
-        event.preventDefault();
-        const clipboardData = event.clipboardData;
-        if (!clipboardData) return false;
-        
-        const html = clipboardData.getData('text/html');
-        const text = clipboardData.getData('text/plain');
-        
-        if (html) {
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = html;
-          
-          const paragraphs: string[] = [];
-          
-          const extractText = (node: Node): string => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              return node.textContent || '';
-            }
-            
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const element = node as Element;
-              const tagName = element.tagName.toLowerCase();
-              const childContent = Array.from(node.childNodes).map(extractText).join('');
-              
-              if (tagName === 'strong' || tagName === 'b') {
-                return `<strong>${childContent}</strong>`;
-              }
-              
-              return childContent;
-            }
-            
-            return '';
-          };
-          
-          const collectParagraphs = (node: Node) => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const element = node as Element;
-              const tagName = element.tagName.toLowerCase();
-              
-              if (tagName === 'p' || tagName === 'div' || tagName === 'li') {
-                const content = extractText(node).trim();
-                if (content) {
-                  paragraphs.push(`<p>${content}</p>`);
-                }
-              } else {
-                Array.from(node.childNodes).forEach(collectParagraphs);
-              }
-            } else if (node.nodeType === Node.TEXT_NODE) {
-              const content = (node.textContent || '').trim();
-              if (content) {
-                paragraphs.push(`<p>${content}</p>`);
-              }
-            }
-          };
-          
-          Array.from(tempDiv.childNodes).forEach(collectParagraphs);
-          
-          const cleanedHtml = paragraphs.join('');
-          
-          const removeEmptyFirstParagraph = () => {
-            setTimeout(() => {
-              if (!editor) return;
-              const firstNode = editor.state.doc.firstChild;
-              if (firstNode && firstNode.type.name === 'paragraph' && firstNode.textContent.trim() === '') {
-                editor.chain().focus().setTextSelection(0).deleteNode('paragraph').run();
-              }
-            }, 0);
-          };
-          
-          if (cleanedHtml) {
-            const docText = editor?.state.doc.textContent || '';
-            if (docText.trim() === '') {
-              editor?.commands.clearContent();
-              editor?.commands.setContent(cleanedHtml);
-            } else {
-              editor?.commands.insertContent(cleanedHtml);
-            }
-            removeEmptyFirstParagraph();
-          } else if (text) {
-            const htmlContent = `<p>${text.replace(/\r?\n/g, '<br>')}</p>`;
-            const docText = editor?.state.doc.textContent || '';
-            if (docText.trim() === '') {
-              editor?.commands.clearContent();
-              editor?.commands.setContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
-            } else {
-              editor?.commands.insertContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
-            }
-            removeEmptyFirstParagraph();
-          }
-          return true;
-        }
-        
-        if (text) {
-          const htmlContent = `<p>${text.replace(/\r?\n/g, '<br>')}</p>`;
-          editor?.commands.insertContent(htmlContent, { parseOptions: { preserveWhitespace: 'full' } });
-          return true;
-        }
-        
-        return false;
-      },
     },
   });
+
+  useEffect(() => {
+    if (editor && mode === 'visual' && editor.getHTML() !== htmlContent) {
+      editor.commands.setContent(htmlContent);
+    }
+  }, [mode, editor, htmlContent]);
+
+  useEffect(() => {
+    if (content !== htmlContent) {
+      setHtmlContent(content);
+      if (editor && mode === 'visual') {
+        editor.commands.setContent(content);
+      }
+    }
+  }, [content]);
+
+  const handleModeSwitch = () => {
+    if (mode === 'visual') {
+      setHtmlContent(editor?.getHTML() || '');
+      setMode('html');
+    } else {
+      if (editor) {
+        editor.commands.setContent(htmlContent);
+      }
+      onChange(htmlContent);
+      setMode('visual');
+    }
+  };
+
+  const handleHtmlChange = (value: string) => {
+    setHtmlContent(value);
+    onChange(value);
+  };
 
   if (!editor) {
     return null;
@@ -142,20 +82,55 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
 
   return (
     <div className="border rounded-md">
-      <div className="border-b bg-muted/30 p-2 flex flex-wrap gap-1">
+      <div className="border-b bg-muted/30 p-2 flex flex-wrap gap-1 items-center justify-between">
+        <div className="flex gap-1">
+          {mode === 'visual' && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={editor.isActive('bold') ? 'bg-accent' : ''}
+              data-testid="button-bold"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        
         <Button
           type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={editor.isActive('bold') ? 'bg-accent' : ''}
-          data-testid="button-bold"
+          size="sm"
+          variant={mode === 'html' ? 'secondary' : 'ghost'}
+          onClick={handleModeSwitch}
+          className="gap-1.5"
+          data-testid="button-toggle-mode"
         >
-          <Bold className="h-4 w-4" />
+          {mode === 'visual' ? (
+            <>
+              <Code className="h-4 w-4" />
+              HTML
+            </>
+          ) : (
+            <>
+              <Eye className="h-4 w-4" />
+              Visual
+            </>
+          )}
         </Button>
       </div>
       
-      <EditorContent editor={editor} />
+      {mode === 'visual' ? (
+        <EditorContent editor={editor} />
+      ) : (
+        <Textarea
+          value={htmlContent}
+          onChange={(e) => handleHtmlChange(e.target.value)}
+          placeholder={placeholder || "Enter HTML content..."}
+          className="min-h-[200px] font-mono text-sm border-0 rounded-none focus-visible:ring-0 resize-y"
+          data-testid="textarea-html-content"
+        />
+      )}
     </div>
   );
 }
