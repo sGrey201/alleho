@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Settings, LogOut, Plus, Check, AlertTriangle, X } from 'lucide-react';
-import { CreateArticleDialog } from '@/components/CreateArticleDialog';
+import { ArticleDialog } from '@/components/ArticleDialog';
 import { format } from 'date-fns';
 
 type SubscriptionStatus = 'active' | 'expiring' | 'expired';
@@ -85,7 +85,7 @@ export function Header() {
 
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <CreateArticleDialog
+            <ArticleDialog
               trigger={
                 <Button variant="default" size="sm" data-testid="button-create-article">
                   <Plus className="h-4 w-4 mr-2" />
