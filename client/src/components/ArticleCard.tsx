@@ -145,6 +145,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
           <div className="flex items-start gap-2 mb-4">
             <h3 className="text-xl md:text-2xl font-bold text-foreground font-serif leading-tight line-clamp-2 flex-1" data-testid={`text-article-title-${article.id}`}>
               {title}
+              {article.isFree && (
+                <span className="ml-2 text-sm font-medium text-green-600 dark:text-green-500">free</span>
+              )}
             </h3>
             {user?.isAdmin && (
               <Button
