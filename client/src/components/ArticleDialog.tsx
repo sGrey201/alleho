@@ -124,24 +124,35 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
 
   const dialogContent = (
     <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col" hideCloseButton>
-      <div className="sticky top-0 z-10 flex justify-end gap-2 p-4 border-b bg-background pt-[10px] pb-[10px]">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setDialogOpen(false)}
-          data-testid="button-cancel"
-        >
-          {t.cancel}
-        </Button>
-        <Button
-          type="button"
-          disabled={isPending}
-          onClick={handleSubmit}
-          data-testid="button-save-article"
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {t.save}
-        </Button>
+      <div className="sticky top-0 z-10 flex justify-between items-center gap-2 p-4 border-b bg-background pt-[10px] pb-[10px]">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isFree"
+            checked={formData.isFree}
+            onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
+            data-testid="checkbox-is-free"
+          />
+          <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setDialogOpen(false)}
+            data-testid="button-cancel"
+          >
+            {t.cancel}
+          </Button>
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={handleSubmit}
+            data-testid="button-save-article"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {t.save}
+          </Button>
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-6 space-y-6 pt-[14px] pb-[14px]">
@@ -167,15 +178,6 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
               onChange={(content) => setFormData({ ...formData, content: content })}
               placeholder={t.content}
             />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isFree"
-              checked={formData.isFree}
-              onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
-              data-testid="checkbox-is-free"
-            />
-            <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
           </div>
         </div>
       </div>
