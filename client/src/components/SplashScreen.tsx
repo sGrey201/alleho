@@ -36,10 +36,6 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
           }`}
         >
           <div className="max-w-3xl px-6 py-12 text-center">
-            <h1 className="mb-8 font-serif text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-foreground">
-              Materia Medica
-            </h1>
-            
             <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
               <video
                 autoPlay
