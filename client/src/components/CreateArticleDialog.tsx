@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Save, X } from 'lucide-react';
+import { Plus, Save, X, Pill, Activity } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   Dialog,
@@ -145,7 +145,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       .trim();
   };
 
-  const handleCreateNewTag = () => {
+  const handleCreateNewTag = (category: 'remedy' | 'situation') => {
     const trimmedQuery = tagSearchQuery.trim();
     if (!trimmedQuery) return;
     
@@ -154,16 +154,13 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
     createTagMutation.mutate({
       name: trimmedQuery,
       slug,
-      category: 'situation',
+      category,
     });
   };
 
   const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (filteredTags.length === 0 && tagSearchQuery.trim()) {
-        handleCreateNewTag();
-      }
     }
   };
 
@@ -275,16 +272,29 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                         <p className="text-sm text-muted-foreground mb-3">
                           {t.noTagsFound}
                         </p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleCreateNewTag}
-                          disabled={createTagMutation.isPending}
-                          data-testid="button-create-new-tag"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          {t.createNewSituation}: "{tagSearchQuery.trim()}"
-                        </Button>
+                        <div className="flex gap-2 justify-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleCreateNewTag('remedy')}
+                            disabled={createTagMutation.isPending}
+                            data-testid="button-create-new-remedy"
+                          >
+                            <Pill className="mr-2 h-4 w-4" />
+                            {t.createNewRemedy}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleCreateNewTag('situation')}
+                            disabled={createTagMutation.isPending}
+                            data-testid="button-create-new-situation"
+                          >
+                            <Activity className="mr-2 h-4 w-4" />
+                            {t.createNewSituation}
+                          </Button>
+                        </div>
                       </div>
                     ) : filteredTags.length === 0 ? (
                       <CommandEmpty>{t.noTagsFound}</CommandEmpty>
@@ -301,13 +311,13 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                             }}
                             disabled={selectedTagIds.includes(tag.id)}
                             data-testid={`tag-option-${tag.slug}`}
+                            className="gap-2 group"
                           >
-                            <Badge 
-                              variant={tag.category === 'remedy' ? 'default' : 'secondary'}
-                              className="mr-2"
-                            >
-                              {tag.category === 'remedy' ? t.remedy : t.situation}
-                            </Badge>
+                            {tag.category === 'remedy' ? (
+                              <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
+                            ) : (
+                              <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
+                            )}
                             {tag.name}
                           </CommandItem>
                         ))}
