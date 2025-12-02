@@ -132,7 +132,7 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
             onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
             data-testid="checkbox-is-free"
           />
-          <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
+          <Label htmlFor="isFree" className="cursor-pointer">FREE</Label>
         </div>
         <div className="flex gap-2">
           <Button
