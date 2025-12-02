@@ -267,7 +267,6 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
         </div>
 
         <div>
-          <Label>{t.tags}</Label>
           <div className="flex flex-wrap gap-2 mt-2 mb-2">
             {selectedTags.filter(tag => tag && tag.id && tag.name).map((tag) => (
               <Badge 
