@@ -49,7 +49,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
             </div>
             
             <div className="mb-10 space-y-6 text-base md:text-lg leading-relaxed text-muted-foreground">
-              <p>
+              <p className="text-justify">
                 Добро пожаловать в уникальное пространство, где Materia Medica оживает в человеческих судьбах. Наш проект — это галерея живых портретов, инструмент развития интуитивного восприятия типажа с целью увидеть живой, узнаваемый образ за сухими рубриками реперториума. Каждая зарисовка — ключ к пониманию великой книги под названием Materia Medica.
               </p>
               <p className="text-justify">
