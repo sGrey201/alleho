@@ -124,7 +124,7 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
 
   const dialogContent = (
     <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col" hideCloseButton>
-      <div className="sticky top-0 z-10 flex justify-end gap-2 p-4 border-b bg-background">
+      <div className="sticky top-0 z-10 flex justify-end gap-2 p-4 border-b bg-background pt-[10px] pb-[10px]">
         <Button
           type="button"
           variant="outline"
