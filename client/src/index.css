@@ -293,9 +293,10 @@
 
 /* Article paragraph spacing */
 .prose p {
-  margin-bottom: 0.2em;
+  margin-bottom: 0.2em !important;
+  margin-top: 0 !important;
 }
 
 .prose p:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
 }
