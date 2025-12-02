@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
+import { truncateHtml } from "./utils/htmlTruncate";
+
+const PREVIEW_LENGTH = 500;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -42,7 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
-          content: article.isFree ? article.content : article.content.substring(0, 1000),
+          content: article.isFree ? article.content : truncateHtml(article.content, PREVIEW_LENGTH),
         }));
         return res.json(previewArticles);
       }
@@ -74,7 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
-          content: article.content.substring(0, 1000),
+          content: truncateHtml(article.content, PREVIEW_LENGTH),
         };
         return res.json(previewArticle);
       }
@@ -106,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
-          content: article.content.substring(0, 1000),
+          content: truncateHtml(article.content, PREVIEW_LENGTH),
         };
         return res.json(previewArticle);
       }
@@ -136,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!hasActiveSubscription) {
         const previewResults = results.map(article => ({
           ...article,
-          content: article.isFree ? article.content : article.content.substring(0, 1000),
+          content: article.isFree ? article.content : truncateHtml(article.content, PREVIEW_LENGTH),
         }));
         return res.json(previewResults);
       }
