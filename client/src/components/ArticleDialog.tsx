@@ -1,0 +1,412 @@
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Article, InsertArticle, Tag } from '@shared/schema';
+import { t } from '@/lib/i18n';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Save, X, Pill, Activity } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+
+type ArticleWithTags = Article & { tags: Tag[] };
+
+interface ArticleDialogProps {
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  article?: ArticleWithTags;
+}
+
+export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleDialogProps) {
+  const { toast } = useToast();
+  const isEditMode = !!article;
+  
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  
+  const [formData, setFormData] = useState<InsertArticle>({
+    preview: '',
+    content: '',
+    isFree: false,
+  });
+
+  useEffect(() => {
+    if (article) {
+      setFormData({
+        preview: article.preview,
+        content: article.content,
+        isFree: article.isFree,
+      });
+      setSelectedTagIds(article.tags.map(t => t.id));
+    }
+  }, [article]);
+
+  const { data: allTags = [] } = useQuery<Tag[]>({
+    queryKey: ['/api/tags'],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: InsertArticle & { tagIds: string[] }) => {
+      return await apiRequest('POST', '/api/admin/articles', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: t.articleSaved,
+        variant: 'default',
+      });
+      resetForm();
+      closeDialog();
+    },
+    onError: () => {
+      toast({
+        title: t.error,
+        description: t.somethingWrong,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertArticle & { tagIds: string[] }) => {
+      return await apiRequest('PUT', `/api/admin/articles/${article!.id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
+      toast({
+        title: t.articleSaved,
+      });
+      closeDialog();
+    },
+    onError: () => {
+      toast({
+        title: t.error,
+        description: t.somethingWrong,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const createTagMutation = useMutation<Tag, Error, { name: string; slug: string; category: 'remedy' | 'situation' }>({
+    mutationFn: async (data: { name: string; slug: string; category: 'remedy' | 'situation' }) => {
+      const result = await apiRequest('POST', '/api/admin/tags', data);
+      return result as unknown as Tag;
+    },
+    onSuccess: async (newTag: Tag) => {
+      await queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
+      
+      if (newTag && newTag.id && typeof newTag.id === 'string') {
+        if (!selectedTagIds.includes(newTag.id)) {
+          setSelectedTagIds(prev => [...prev, newTag.id]);
+        }
+      }
+      
+      toast({
+        title: t.tagSaved,
+        variant: 'default',
+      });
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({ preview: '', content: '', isFree: false });
+    setSelectedTagIds([]);
+    setTagSearchQuery('');
+  };
+
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    onOpenChange?.(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const validTagIds = selectedTagIds.filter(id => id && typeof id === 'string');
+    
+    if (isEditMode) {
+      updateMutation.mutate({ ...formData, tagIds: validTagIds });
+    } else {
+      createMutation.mutate({ ...formData, tagIds: validTagIds });
+    }
+  };
+
+  const addTag = (tagId: string) => {
+    if (!selectedTagIds.includes(tagId)) {
+      setSelectedTagIds([...selectedTagIds, tagId]);
+    }
+    setTagPopoverOpen(false);
+    setTagSearchQuery('');
+  };
+
+  const removeTag = (tagId: string) => {
+    setSelectedTagIds(selectedTagIds.filter(id => id !== tagId));
+  };
+
+  const transliterate = (text: string): string => {
+    const translitMap: Record<string, string> = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+      'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+      'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+      'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+    };
+    
+    return text
+      .toLowerCase()
+      .split('')
+      .map(char => translitMap[char] || char)
+      .join('')
+      .replace(/[^a-z0-9\s-]/gi, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  };
+
+  const handleCreateNewTag = (category: 'remedy' | 'situation') => {
+    const trimmedQuery = tagSearchQuery.trim();
+    if (!trimmedQuery) return;
+    
+    const slug = transliterate(trimmedQuery);
+    
+    createTagMutation.mutate({
+      name: trimmedQuery,
+      slug,
+      category,
+    });
+  };
+
+  const handleTagSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  };
+
+  const selectedTags = useMemo(() => {
+    return selectedTagIds
+      .map(id => allTags.find(tag => tag.id === id))
+      .filter((tag): tag is Tag => tag !== undefined);
+  }, [selectedTagIds, allTags]);
+
+  const filteredTags = useMemo(() => {
+    const query = tagSearchQuery.toLowerCase().trim();
+    return allTags.filter(tag => {
+      const matchesSearch = !query || tag.name.toLowerCase().includes(query);
+      return matchesSearch;
+    });
+  }, [allTags, tagSearchQuery]);
+
+  const dialogOpen = open !== undefined ? open : isDialogOpen;
+  const setDialogOpen = (value: boolean) => {
+    setIsDialogOpen(value);
+    onOpenChange?.(value);
+    if (!value && !isEditMode) resetForm();
+  };
+
+  const isPending = isEditMode ? updateMutation.isPending : createMutation.isPending;
+
+  const dialogContent = (
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>{isEditMode ? t.editArticle : t.createArticle}</DialogTitle>
+      </DialogHeader>
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="preview">{t.preview}</Label>
+            <RichTextEditor
+              content={formData.preview}
+              onChange={(content) => setFormData({ ...formData, preview: content })}
+              placeholder={t.preview}
+            />
+          </div>
+          <div>
+            <Label htmlFor="content">{t.content}</Label>
+            <RichTextEditor
+              content={formData.content}
+              onChange={(content) => setFormData({ ...formData, content: content })}
+              placeholder={t.content}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="isFree"
+              checked={formData.isFree}
+              onCheckedChange={(checked) => setFormData({ ...formData, isFree: checked === true })}
+              data-testid="checkbox-is-free"
+            />
+            <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
+          </div>
+        </div>
+
+        <div>
+          <Label>{t.tags}</Label>
+          <div className="flex flex-wrap gap-2 mt-2 mb-2">
+            {selectedTags.filter(tag => tag && tag.id && tag.name).map((tag) => (
+              <Badge 
+                key={tag.id} 
+                variant={tag.category === 'remedy' ? 'default' : 'secondary'} 
+                className="gap-1"
+              >
+                {tag.name}
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag.id)}
+                  className="ml-1 hover:text-destructive"
+                  data-testid={`button-remove-tag-${tag.id}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={tagPopoverOpen}
+                className="w-full justify-between"
+                data-testid="button-select-tags"
+              >
+                {t.selectTags}
+                <Plus className="ml-2 h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0" align="start">
+              <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+                <CommandInput 
+                  placeholder={t.searchTags}
+                  value={tagSearchQuery}
+                  onValueChange={setTagSearchQuery}
+                />
+                <CommandList className="max-h-96 overflow-auto">
+                  {filteredTags.length === 0 && tagSearchQuery.trim() ? (
+                    <div className="p-4 text-center">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {t.noTagsFound}
+                      </p>
+                      <div className="flex gap-2 justify-center">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleCreateNewTag('remedy')}
+                          disabled={createTagMutation.isPending}
+                          data-testid="button-create-new-remedy"
+                        >
+                          <Pill className="mr-2 h-4 w-4" />
+                          {t.createNewRemedy}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleCreateNewTag('situation')}
+                          disabled={createTagMutation.isPending}
+                          data-testid="button-create-new-situation"
+                        >
+                          <Activity className="mr-2 h-4 w-4" />
+                          {t.createNewSituation}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : filteredTags.length === 0 ? (
+                    <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                  ) : (
+                    <CommandGroup>
+                      {filteredTags.map((tag) => (
+                        <CommandItem
+                          key={tag.id}
+                          value={tag.name}
+                          onSelect={() => {
+                            if (!selectedTagIds.includes(tag.id)) {
+                              addTag(tag.id);
+                            }
+                          }}
+                          disabled={selectedTagIds.includes(tag.id)}
+                          data-testid={`tag-option-${tag.slug}`}
+                          className="gap-2 group"
+                        >
+                          {tag.category === 'remedy' ? (
+                            <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
+                          ) : (
+                            <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
+                          )}
+                          {tag.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setDialogOpen(false)}
+            data-testid="button-cancel"
+          >
+            {t.cancel}
+          </Button>
+          <Button
+            type="submit"
+            disabled={isPending}
+            data-testid="button-save-article"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {t.save}
+          </Button>
+        </div>
+      </form>
+    </DialogContent>
+  );
+
+  if (trigger) {
+    return (
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+        {dialogContent}
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {dialogContent}
+    </Dialog>
+  );
+}
