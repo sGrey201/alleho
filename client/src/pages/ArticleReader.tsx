@@ -59,7 +59,7 @@ export default function ArticleReader() {
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
-          <h1 className="mb-6 text-3xl md:text-4xl font-bold text-foreground leading-tight font-serif" data-testid="text-article-title">
+          <h1 className="mb-6 text-3xl md:text-4xl font-bold text-foreground leading-tight font-serif line-clamp-2" data-testid="text-article-title">
             {title}
           </h1>
         </div>
