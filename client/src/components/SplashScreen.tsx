@@ -77,7 +77,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
               onClick={handleEnter}
               className="px-10 py-6 text-lg font-semibold"
               data-testid="button-enter-site"
-            >Вперед!</Button>
+            >Далее</Button>
           </div>
         </div>
       )}
