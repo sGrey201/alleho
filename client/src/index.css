@@ -293,7 +293,7 @@
 
 /* Article paragraph spacing */
 .prose p {
-  margin-bottom: 0.35em;
+  margin-bottom: 0.2em;
 }
 
 .prose p:last-child {
