@@ -7,7 +7,6 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Save, X } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -44,7 +43,6 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [tagSearchQuery, setTagSearchQuery] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [tagCategoryFilter, setTagCategoryFilter] = useState<'remedy' | 'situation'>('remedy');
   
   const [formData, setFormData] = useState<InsertArticle>({
     preview: '',
@@ -87,10 +85,8 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
       return result as unknown as Tag;
     },
     onSuccess: async (newTag: Tag) => {
-      // Обновляем список тегов и ждем завершения
       await queryClient.invalidateQueries({ queryKey: ['/api/tags'] });
       
-      // Добавляем новый тег в выбранные только после того как список обновился
       if (newTag && newTag.id && typeof newTag.id === 'string') {
         if (!selectedTagIds.includes(newTag.id)) {
           setSelectedTagIds(prev => [...prev, newTag.id]);
@@ -113,7 +109,6 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Фильтруем null и undefined значения из tagIds перед отправкой
     const validTagIds = selectedTagIds.filter(id => id && typeof id === 'string');
     
     createMutation.mutate({ ...formData, tagIds: validTagIds });
@@ -159,7 +154,7 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
     createTagMutation.mutate({
       name: trimmedQuery,
       slug,
-      category: tagCategoryFilter,
+      category: 'situation',
     });
   };
 
@@ -181,11 +176,10 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
   const filteredTags = useMemo(() => {
     const query = tagSearchQuery.toLowerCase().trim();
     return allTags.filter(tag => {
-      const matchesCategory = tag.category === tagCategoryFilter;
       const matchesSearch = !query || tag.name.toLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
+      return matchesSearch;
     });
-  }, [allTags, tagSearchQuery, tagCategoryFilter]);
+  }, [allTags, tagSearchQuery]);
 
   const dialogOpen = open !== undefined ? open : isDialogOpen;
   const setDialogOpen = (value: boolean) => {
@@ -269,64 +263,58 @@ export function CreateArticleDialog({ trigger, open, onOpenChange }: CreateArtic
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[400px] p-0" align="start">
-                <Tabs value={tagCategoryFilter} onValueChange={(v) => setTagCategoryFilter(v as 'remedy' | 'situation')}>
-                  <div className="border-b px-2 pt-2">
-                    <TabsList className="w-full grid grid-cols-2">
-                      <TabsTrigger value="remedy" className="text-xs" data-testid="tab-filter-remedies">
-                        {t.remedies}
-                      </TabsTrigger>
-                      <TabsTrigger value="situation" className="text-xs" data-testid="tab-filter-situations">
-                        {t.situations}
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
-                  <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
-                    <CommandInput 
-                      placeholder={tagCategoryFilter === 'remedy' ? t.searchByRemedy : t.searchBySituation} 
-                      value={tagSearchQuery}
-                      onValueChange={setTagSearchQuery}
-                    />
-                    <CommandList className="max-h-96 overflow-auto">
-                      {filteredTags.length === 0 && tagSearchQuery.trim() ? (
-                        <div className="p-4 text-center">
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {t.noTagsFound}
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleCreateNewTag}
-                            disabled={createTagMutation.isPending}
-                            data-testid="button-create-new-tag"
+                <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+                  <CommandInput 
+                    placeholder={t.searchTags}
+                    value={tagSearchQuery}
+                    onValueChange={setTagSearchQuery}
+                  />
+                  <CommandList className="max-h-96 overflow-auto">
+                    {filteredTags.length === 0 && tagSearchQuery.trim() ? (
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {t.noTagsFound}
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleCreateNewTag}
+                          disabled={createTagMutation.isPending}
+                          data-testid="button-create-new-tag"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          {t.createNewSituation}: "{tagSearchQuery.trim()}"
+                        </Button>
+                      </div>
+                    ) : filteredTags.length === 0 ? (
+                      <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {filteredTags.map((tag) => (
+                          <CommandItem
+                            key={tag.id}
+                            value={tag.name}
+                            onSelect={() => {
+                              if (!selectedTagIds.includes(tag.id)) {
+                                addTag(tag.id);
+                              }
+                            }}
+                            disabled={selectedTagIds.includes(tag.id)}
+                            data-testid={`tag-option-${tag.slug}`}
                           >
-                            <Plus className="mr-2 h-4 w-4" />
-                            {tagCategoryFilter === 'remedy' ? t.createNewRemedy : t.createNewSituation}: "{tagSearchQuery.trim()}"
-                          </Button>
-                        </div>
-                      ) : filteredTags.length === 0 ? (
-                        <CommandEmpty>{t.noTagsFound}</CommandEmpty>
-                      ) : (
-                        <CommandGroup>
-                          {filteredTags.map((tag) => (
-                            <CommandItem
-                              key={tag.id}
-                              value={tag.name}
-                              onSelect={() => {
-                                if (!selectedTagIds.includes(tag.id)) {
-                                  addTag(tag.id);
-                                }
-                              }}
-                              disabled={selectedTagIds.includes(tag.id)}
-                              data-testid={`tag-option-${tag.slug}`}
+                            <Badge 
+                              variant={tag.category === 'remedy' ? 'default' : 'secondary'}
+                              className="mr-2"
                             >
-                              {tag.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                    </CommandList>
-                  </Command>
-                </Tabs>
+                              {tag.category === 'remedy' ? t.remedy : t.situation}
+                            </Badge>
+                            {tag.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
               </PopoverContent>
             </Popover>
           </div>
