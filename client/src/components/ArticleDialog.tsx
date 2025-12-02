@@ -13,8 +13,6 @@ import { TagSelector } from '@/components/TagSelector';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 
@@ -105,9 +103,7 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
     onOpenChange?.(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = () => {
     const validTagIds = selectedTagIds.filter(id => id && typeof id === 'string');
     
     if (isEditMode) {
@@ -127,8 +123,34 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
   const isPending = isEditMode ? updateMutation.isPending : createMutation.isPending;
 
   const dialogContent = (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col" hideCloseButton>
+      <div className="sticky top-0 z-10 flex justify-end gap-2 p-4 border-b bg-background">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setDialogOpen(false)}
+          data-testid="button-cancel"
+        >
+          {t.cancel}
+        </Button>
+        <Button
+          type="button"
+          disabled={isPending}
+          onClick={handleSubmit}
+          data-testid="button-save-article"
+        >
+          <Save className="mr-2 h-4 w-4" />
+          {t.save}
+        </Button>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <TagSelector
+          selectedTagIds={selectedTagIds}
+          onTagsChange={setSelectedTagIds}
+          allowCreate={true}
+        />
+
         <div className="space-y-4">
           <div>
             <Label htmlFor="preview">{t.preview}</Label>
@@ -156,32 +178,7 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
             <Label htmlFor="isFree" className="cursor-pointer">{t.isFree}</Label>
           </div>
         </div>
-
-        <TagSelector
-          selectedTagIds={selectedTagIds}
-          onTagsChange={setSelectedTagIds}
-          allowCreate={true}
-        />
-
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setDialogOpen(false)}
-            data-testid="button-cancel"
-          >
-            {t.cancel}
-          </Button>
-          <Button
-            type="submit"
-            disabled={isPending}
-            data-testid="button-save-article"
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {t.save}
-          </Button>
-        </div>
-      </form>
+      </div>
     </DialogContent>
   );
 
