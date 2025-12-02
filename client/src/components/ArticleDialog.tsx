@@ -128,10 +128,6 @@ export function ArticleDialog({ trigger, open, onOpenChange, article }: ArticleD
 
   const dialogContent = (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>{isEditMode ? t.editArticle : t.createArticle}</DialogTitle>
-      </DialogHeader>
-      
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
           <div>
