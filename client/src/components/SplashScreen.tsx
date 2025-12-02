@@ -1,8 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { Button } from '@/components/ui/button';
 import bannerVideo from '@assets/баннер_1764664948472.mp4';
 
 const SPLASH_SEEN_KEY = 'materiamedica_splash_seen';
+
+type SplashContextType = {
+  showAboutProject: () => void;
+};
+
+const SplashContext = createContext<SplashContextType | null>(null);
+
+export function useSplash() {
+  const context = useContext(SplashContext);
+  if (!context) {
+    throw new Error('useSplash must be used within SplashScreen');
+  }
+  return context;
+}
 
 export function SplashScreen({ children }: { children: React.ReactNode }) {
   const [showSplash, setShowSplash] = useState(false);
@@ -23,12 +37,13 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
     }, 500);
   };
 
-  if (!showSplash) {
-    return <>{children}</>;
-  }
+  const showAboutProject = () => {
+    setIsVisible(true);
+    setShowSplash(true);
+  };
 
   return (
-    <>
+    <SplashContext.Provider value={{ showAboutProject }}>
       {showSplash && (
         <div 
           className={`fixed inset-0 z-50 flex items-center justify-center bg-background overflow-y-auto transition-opacity duration-500 ${
@@ -67,6 +82,6 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
         </div>
       )}
       {children}
-    </>
+    </SplashContext.Provider>
   );
 }
