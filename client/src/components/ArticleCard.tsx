@@ -142,23 +142,23 @@ export function ArticleCard({ article }: ArticleCardProps) {
           className="md:p-6 cursor-pointer rounded-lg relative md:border"
           data-testid={`card-article-${article.id}`}
         >
-          {user?.isAdmin && (
-            <div className="absolute top-4 right-4">
+          <div className="flex items-start gap-2 mb-4">
+            <h3 className="text-xl md:text-2xl font-bold text-foreground font-serif leading-tight line-clamp-2 flex-1" data-testid={`text-article-title-${article.id}`}>
+              {title}
+            </h3>
+            {user?.isAdmin && (
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
                 onClick={handleEdit}
+                className="shrink-0"
                 data-testid={`button-edit-article-${article.id}`}
               >
                 <Edit className="h-4 w-4" />
               </Button>
-            </div>
-          )}
-          
-          <h3 className="text-xl md:text-2xl font-bold mb-4 text-foreground pr-20 font-serif leading-tight line-clamp-2" data-testid={`text-article-title-${article.id}`}>
-            {title}
-          </h3>
+            )}
+          </div>
           
           <p className="text-base text-muted-foreground leading-snug line-clamp-4 font-serif">
             {previewText}
