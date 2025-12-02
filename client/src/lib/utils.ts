@@ -13,12 +13,7 @@ export function formatArticleTitle(tags: { name: string; category: string }[]): 
     return a.name.localeCompare(b.name);
   });
   
-  const title = sortedTags.map(tag => {
-    if (tag.category === 'remedy') {
-      return tag.name.split(' ')[0];
-    }
-    return tag.name;
-  }).join(', ');
+  const title = sortedTags.map(tag => tag.name).join(', ');
   
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
