@@ -31,29 +31,28 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
     <>
       {showSplash && (
         <div 
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-background transition-opacity duration-500 ${
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-background overflow-y-auto transition-opacity duration-500 ${
             isVisible ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <div className="absolute inset-0 overflow-hidden">
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="h-full w-full object-cover"
-            >
-              <source src={bannerVideo} type="video/mp4" />
-            </video>
-            <div className="absolute inset-0 bg-black/60" />
-          </div>
-          
-          <div className="relative z-10 max-w-3xl px-6 text-center text-white">
-            <h1 className="mb-8 font-serif text-3xl md:text-4xl lg:text-5xl font-bold leading-tight">
+          <div className="max-w-3xl px-6 py-12 text-center">
+            <h1 className="mb-8 font-serif text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-foreground">
               Materia Medica
             </h1>
             
-            <div className="mb-10 space-y-6 text-base md:text-lg leading-relaxed opacity-95">
+            <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full"
+              >
+                <source src={bannerVideo} type="video/mp4" />
+              </video>
+            </div>
+            
+            <div className="mb-10 space-y-6 text-base md:text-lg leading-relaxed text-muted-foreground">
               <p>
                 Добро пожаловать в уникальное пространство, где Materia Medica оживает в человеческих судьбах. Наш проект — это галерея живых портретов, инструмент развития интуитивного восприятия типажа с целью увидеть живой, узнаваемый образ за сухими рубриками реперториума. Каждая зарисовка — ключ к пониманию великой книги под названием Materia Medica.
               </p>
