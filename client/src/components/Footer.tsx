@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { t } from '@/lib/i18n';
 import { Link } from 'wouter';
+import { AboutDialog } from './AboutDialog';
 
 export function Footer() {
+  const [aboutOpen, setAboutOpen] = useState(false);
   const currentYear = new Date().getFullYear();
 
   return (
@@ -33,6 +36,13 @@ export function Footer() {
           <div>
             <h3 className="mb-4 text-sm font-semibold text-foreground">Информация</h3>
             <div className="space-y-2">
+              <button 
+                onClick={() => setAboutOpen(true)}
+                className="block text-sm text-muted-foreground hover:text-primary transition-colors text-left"
+                data-testid="link-footer-about"
+              >
+                О проекте
+              </button>
               <Link 
                 href="/terms"
                 className="block text-sm text-muted-foreground hover:text-primary transition-colors"
@@ -57,6 +67,8 @@ export function Footer() {
           </p>
         </div>
       </div>
+      
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </footer>
   );
 }
