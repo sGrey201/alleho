@@ -45,16 +45,6 @@ export default function ArticleReader() {
 
   const title = formatArticleTitle(article.tags);
 
-  const getPartialContent = (htmlContent: string): string => {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
-    const textContent = tempDiv.textContent || tempDiv.innerText || '';
-    const partialText = textContent.slice(0, 500);
-    return `<p>${partialText}...</p>`;
-  };
-
-  const partialContent = isContentLocked ? getPartialContent(article.content) : article.content;
-
   return (
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
@@ -77,7 +67,7 @@ export default function ArticleReader() {
               <div
                 className="prose prose-lg font-serif text-lg md:text-xl leading-[1.44] md:leading-[1.8] text-foreground text-justify"
                 data-testid="text-article-preview"
-                dangerouslySetInnerHTML={{ __html: partialContent }}
+                dangerouslySetInnerHTML={{ __html: article.content }}
               />
             </div>
 
