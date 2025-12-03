@@ -44,10 +44,10 @@ export function ArticleCard({ article }: ArticleCardProps) {
           <div className="flex items-start gap-2 mb-4">
             <h3 className="text-xl md:text-2xl font-bold text-foreground font-serif leading-tight line-clamp-2 flex-1" data-testid={`text-article-title-${article.id}`}>
               {title}
-              {article.isFree && (
-                <Badge variant="secondary" className="ml-2 text-sm font-medium">free</Badge>
-              )}
             </h3>
+            {article.isFree && (
+              <Badge variant="secondary" className="text-sm font-medium shrink-0">free</Badge>
+            )}
             {user?.isAdmin && (
               <Button
                 type="button"
