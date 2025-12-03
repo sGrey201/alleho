@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Article, Tag } from '@shared/schema';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Link } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { Edit } from 'lucide-react';
@@ -44,7 +45,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
             <h3 className="text-xl md:text-2xl font-bold text-foreground font-serif leading-tight line-clamp-2 flex-1" data-testid={`text-article-title-${article.id}`}>
               {title}
               {article.isFree && (
-                <span className="ml-2 font-medium text-green-600 dark:text-green-500 text-[16px]">free</span>
+                <Badge variant="secondary" className="ml-2 text-sm font-medium">free</Badge>
               )}
             </h3>
             {user?.isAdmin && (
