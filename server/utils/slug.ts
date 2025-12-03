@@ -21,10 +21,8 @@ export function transliterate(text: string): string {
 }
 
 export function generateSlugFromTags(tags: Tag[]): string {
-  // Генерируем уникальный суффикс
-  const timestamp = Date.now();
-  const randomPart = Math.random().toString(36).substring(2, 8);
-  const uniqueSuffix = `${timestamp}-${randomPart}`;
+  // Генерируем короткий уникальный суффикс (8 символов)
+  const uniqueSuffix = Math.random().toString(36).substring(2, 10);
   
   // Если теги отсутствуют, возвращаем только уникальный slug
   if (!tags || tags.length === 0) {
@@ -43,7 +41,18 @@ export function generateSlugFromTags(tags: Tag[]): string {
   
   const joined = formattedTags.join(', ');
   const title = joined.charAt(0).toUpperCase() + joined.slice(1);
-  const baseSlug = transliterate(title);
+  let baseSlug = transliterate(title);
+  
+  // Обрезаем baseSlug до 90 символов (оставляем место для суффикса "-" + 8 символов)
+  const maxBaseLength = 90;
+  if (baseSlug.length > maxBaseLength) {
+    baseSlug = baseSlug.substring(0, maxBaseLength);
+    // Убираем неполные слова в конце (обрезаем до последнего дефиса)
+    const lastDash = baseSlug.lastIndexOf('-');
+    if (lastDash > maxBaseLength / 2) {
+      baseSlug = baseSlug.substring(0, lastDash);
+    }
+  }
   
   // Добавляем уникальный суффикс к slug'у для гарантии уникальности
   return `${baseSlug}-${uniqueSuffix}`;
