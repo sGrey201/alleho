@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRoute, Link } from 'wouter';
 import { Article, Tag } from '@shared/schema';
@@ -14,6 +15,10 @@ type ArticleWithTags = Article & { tags: Tag[] };
 export default function ArticleReader() {
   const [, params] = useRoute('/article/:slug');
   const { hasActiveSubscription, isLoading: authLoading, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [params?.slug]);
 
   const { data: article, isLoading } = useQuery<ArticleWithTags>({
     queryKey: ['/api/articles/slug', params?.slug],
