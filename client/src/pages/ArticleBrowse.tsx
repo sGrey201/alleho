@@ -33,6 +33,11 @@ export default function ArticleBrowse() {
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const { isAuthenticated, hasActiveSubscription } = useAuth();
 
+  // Scroll to top when navigating to this page
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles'],
   });
