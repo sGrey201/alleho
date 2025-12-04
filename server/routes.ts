@@ -29,6 +29,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Public article routes (accessible to everyone, preview for non-subscribers)
   app.get('/api/articles', async (req: any, res) => {
+    // Prevent caching to ensure subscription-based content gating works correctly
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const articlesList = await storage.getAllArticles();
       
@@ -58,6 +60,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/articles/slug/:slug', async (req: any, res) => {
+    // Prevent caching to ensure subscription-based content gating works correctly
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const article = await storage.getArticleBySlug(req.params.slug);
       if (!article) {
@@ -90,6 +94,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/articles/:id', async (req: any, res) => {
+    // Prevent caching to ensure subscription-based content gating works correctly
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const article = await storage.getArticleById(req.params.id);
       if (!article) {
@@ -123,6 +129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Search articles
   app.get('/api/articles/search/:query', isAuthenticated, async (req: any, res) => {
+    // Prevent caching to ensure subscription-based content gating works correctly
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
