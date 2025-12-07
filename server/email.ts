@@ -44,7 +44,11 @@ export async function getUncachableResendClient() {
 export async function sendPasswordResetEmail(to: string, resetToken: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+  // В production используем APP_URL или REPLIT_DOMAINS (без DEV домена)
+  // В development используем REPLIT_DEV_DOMAIN
+  const baseUrl = process.env.APP_URL 
+    ? process.env.APP_URL
+    : process.env.REPLIT_DEV_DOMAIN 
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
     : process.env.REPLIT_DOMAINS 
     ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
