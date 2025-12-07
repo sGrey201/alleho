@@ -178,32 +178,11 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button data-testid="button-login">
-                  {t.login}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/auth" className="flex w-full items-center" data-testid="link-email-login">
-                    <User className="mr-2 h-4 w-4" />
-                    Войти по email
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <a
-                    href={`/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
-                    className="flex w-full items-center"
-                    data-testid="link-replit-login"
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    Войти через Replit
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button asChild data-testid="button-login">
+              <Link href="/auth">
+                {t.login}
+              </Link>
+            </Button>
           )}
         </div>
       </div>
