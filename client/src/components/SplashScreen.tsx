@@ -51,7 +51,10 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
           }`}
         >
           <div className="max-w-3xl px-6 py-12 pt-20 text-center">
-            <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
+            <div 
+              className="mb-8 rounded-lg overflow-hidden shadow-lg cursor-pointer"
+              onClick={handleEnter}
+            >
               <video
                 autoPlay
                 loop
