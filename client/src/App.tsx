@@ -17,6 +17,8 @@ import Oferta from "@/pages/Oferta";
 import Subscribe from "@/pages/Subscribe";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentFail from "@/pages/PaymentFail";
+import AuthPage from "@/pages/AuthPage";
+import ResetPassword from "@/pages/ResetPassword";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
@@ -40,6 +42,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/article/:slug" component={ArticleReader} />
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/terms" component={Terms} />
       <Route path="/oferta" component={Oferta} />
       <Route path="/subscribe" component={Subscribe} />
