@@ -276,9 +276,6 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </Form>
-              <p className="text-xs text-center text-muted-foreground">
-                При регистрации вы получаете 7-дневный бесплатный пробный период
-              </p>
             </TabsContent>
 
             <TabsContent value="forgot" className="space-y-4 mt-4">
