@@ -1,0 +1,136 @@
+2025-12-07 21:04:37.51
+593c589c
+User
+^
+2025-12-07 21:04:37.51
+593c589c
+User
+routine: 'ProcessInterrupts',
+2025-12-07 21:04:37.51
+593c589c
+User
+schema: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+arrayParser: { create: [Function: create] },
+2025-12-07 21:04:37.51
+593c589c
+User
+client_encoding: '',
+2025-12-07 21:04:37.51
+593c589c
+User
+_receiver: Receiver {
+2025-12-07 21:04:37.51
+593c589c
+User
+hint: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+isDomainSocket: false,
+2025-12-07 21:04:37.51
+593c589c
+User
+user: 'neondb_owner',
+2025-12-07 21:04:37.51
+593c589c
+User
+table: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+_maxListeners: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+database: 'neondb',
+2025-12-07 21:04:37.51
+593c589c
+User
+line: '3289',
+2025-12-07 21:04:37.51
+593c589c
+User
+dataType: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+client: NeonClient {
+2025-12-07 21:04:37.51
+593c589c
+User
+file: 'postgres.c',
+2025-12-07 21:04:37.51
+593c589c
+User
+[Symbol(triggerId)]: 80621
+2025-12-07 21:04:37.51
+593c589c
+User
+connect_timeout: 0
+2025-12-07 21:04:37.51
+593c589c
+User
+severity: 'FATAL',
+2025-12-07 21:04:37.51
+593c589c
+User
+internalPosition: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+connectionParameters: ConnectionParameters {
+2025-12-07 21:04:37.51
+593c589c
+User
+0&&(o=t[0]),o instanceof Error)throw o;var u=new Error("Unhandled error."+(o?" ("+
+2025-12-07 21:04:37.51
+593c589c
+User
+port: 5432,
+2025-12-07 21:04:37.51
+593c589c
+User
+user: 'neondb_owner',
+2025-12-07 21:04:37.51
+593c589c
+User
+constraint: undefined,
+2025-12-07 21:04:37.51
+593c589c
+User
+binary: false,
+2025-12-07 21:04:37.51
+593c589c
+User
+_eventsCount: 1,
+2025-12-07 21:04:37.51
+593c589c
+User
+detail: undefined,
+2025-12-07 21:04:41.01
+593c589c
+User
+npm notice
+2025-12-07 21:04:41.01
+593c589c
+User
+npm notice To update run: npm install -g npm@11.6.4
+2025-12-07 21:04:41.01
+593c589c
+User
+npm notice
+2025-12-07 21:04:41.01
+593c589c
+User
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.4
+2025-12-07 21:04:41.01
+593c589c
+User
+npm notice New major version of npm available! 10.8.2 -> 11.6.4
+2025-12-07 21:04:42.21
+593c589c
+System
+command finished with error [npm run start]: exit status 1
