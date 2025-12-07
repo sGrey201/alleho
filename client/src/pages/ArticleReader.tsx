@@ -100,7 +100,7 @@ export default function ArticleReader() {
                         asChild
                         data-testid="button-login"
                       >
-                        <Link href="/auth">{t.login}</Link>
+                        <Link className="my-2.5" href="/auth">{t.login}</Link>
                       </Button>
                     ) : (
                       <Button 
