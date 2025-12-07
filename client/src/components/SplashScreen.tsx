@@ -50,7 +50,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
             isVisible ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <div className="max-w-3xl px-6 py-12 text-center">
+          <div className="max-w-3xl px-6 py-12 pt-20 text-center">
             <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
               <video
                 autoPlay
