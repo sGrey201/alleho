@@ -46,7 +46,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
     <SplashContext.Provider value={{ showAboutProject }}>
       {showSplash && (
         <div 
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-background overflow-y-auto transition-opacity duration-500 ${
+          className={`fixed inset-0 z-[9999] flex items-center justify-center bg-background overflow-y-auto transition-opacity duration-500 ${
             isVisible ? 'opacity-100' : 'opacity-0'
           }`}
         >
