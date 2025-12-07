@@ -84,7 +84,7 @@ export default function ArticleReader() {
                       <Lock className="h-8 w-8 text-primary" />
                     </div>
                   </div>
-                  <h3 className="mb-3 text-3xl font-bold text-foreground text-center">
+                  <h3 className="text-3xl font-bold text-foreground text-center mt-[10px] mb-[10px]">
                     {!isAuthenticated ? t.authRequiredTitle : t.upgradePromptTitle}
                   </h3>
                   {isAuthenticated && (
