@@ -111,15 +111,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserWithPassword(email: string, passwordHash: string): Promise<User> {
-    const trialExpiry = new Date();
-    trialExpiry.setDate(trialExpiry.getDate() + 7);
-    
     const [user] = await db
       .insert(users)
       .values({
         email,
         passwordHash,
-        subscriptionExpiresAt: trialExpiry,
       })
       .returning();
     return user;
