@@ -24,10 +24,16 @@ export type ArticleWithTags = Article & { tags: Tag[] };
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserProfile(id: string, profileData: Partial<User>): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserSubscription(id: string, expiresAt: Date | null): Promise<User>;
+  createUserWithPassword(email: string, passwordHash: string): Promise<User>;
+  updateUserPassword(id: string, passwordHash: string): Promise<User>;
+  setResetToken(id: string, token: string, expiresAt: Date): Promise<User>;
+  getUserByResetToken(token: string): Promise<User | undefined>;
+  clearResetToken(id: string): Promise<User>;
 
   // Tag operations
   getAllTags(): Promise<Tag[]>;
@@ -99,6 +105,71 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUserWithPassword(email: string, passwordHash: string): Promise<User> {
+    const trialExpiry = new Date();
+    trialExpiry.setDate(trialExpiry.getDate() + 7);
+    
+    const [user] = await db
+      .insert(users)
+      .values({
+        email,
+        passwordHash,
+        subscriptionExpiresAt: trialExpiry,
+      })
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        passwordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async setResetToken(id: string, token: string, expiresAt: Date): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        resetToken: token,
+        resetTokenExpiresAt: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.resetToken, token));
+    return user;
+  }
+
+  async clearResetToken(id: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        resetToken: null,
+        resetTokenExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
 
   // Tag operations
   async getAllTags(): Promise<Tag[]> {

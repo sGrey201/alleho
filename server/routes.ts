@@ -2,25 +2,93 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 
 const PREVIEW_LENGTH = 500;
 
+async function checkSubscription(req: any): Promise<boolean> {
+  const session = req.session as any;
+  
+  // Check email auth
+  if (session?.userId && session?.authType === 'email') {
+    const user = await storage.getUser(session.userId);
+    return user?.subscriptionExpiresAt 
+      ? new Date(user.subscriptionExpiresAt) > new Date() 
+      : false;
+  }
+  
+  // Check Replit Auth
+  if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+    const user = await storage.getUser(req.user.claims.sub);
+    return user?.subscriptionExpiresAt 
+      ? new Date(user.subscriptionExpiresAt) > new Date() 
+      : false;
+  }
+  
+  return false;
+}
+
+async function getCurrentUserId(req: any): Promise<string | null> {
+  const session = req.session as any;
+  
+  if (session?.userId && session?.authType === 'email') {
+    return session.userId;
+  }
+  
+  if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+    return req.user.claims.sub;
+  }
+  
+  return null;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Email auth routes
+  app.post('/api/auth/register', register);
+  app.post('/api/auth/login', login);
+  app.post('/api/auth/forgot-password', requestPasswordReset);
+  app.post('/api/auth/reset-password', resetPassword);
+  app.get('/api/auth/email-user', getEmailUser);
+  app.post('/api/auth/logout', logoutEmail);
+
+  // Auth routes (supports both Replit Auth and email auth)
+  app.get('/api/auth/user', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      const session = req.session as any;
+      
+      // Check email auth first
+      if (session?.userId && session?.authType === 'email') {
+        const user = await storage.getUser(session.userId);
+        if (user) {
+          return res.json({
+            id: user.id,
+            email: user.email,
+            subscriptionExpiresAt: user.subscriptionExpiresAt,
+            isAdmin: user.isAdmin,
+            authType: 'email',
+          });
+        }
       }
-      res.json(user);
+      
+      // Check Replit Auth
+      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
+        const userId = req.user.claims.sub;
+        const user = await storage.getUser(userId);
+        if (user) {
+          return res.json({
+            ...user,
+            authType: 'replit',
+          });
+        }
+      }
+      
+      return res.status(401).json({ message: "Unauthorized" });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -29,21 +97,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Public article routes (accessible to everyone, preview for non-subscribers)
   app.get('/api/articles', async (req: any, res) => {
-    // Prevent caching to ensure subscription-based content gating works correctly
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const articlesList = await storage.getAllArticles();
-      
-      // Check if user is authenticated and has active subscription
-      let hasActiveSubscription = false;
-      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-        const user = await storage.getUser(req.user.claims.sub);
-        hasActiveSubscription = user?.subscriptionExpiresAt 
-          ? new Date(user.subscriptionExpiresAt) > new Date() 
-          : false;
-      }
+      const hasActiveSubscription = await checkSubscription(req);
 
-      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription) {
         const previewArticles = articlesList.map(article => ({
           ...article,
@@ -60,7 +118,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/articles/slug/:slug', async (req: any, res) => {
-    // Prevent caching to ensure subscription-based content gating works correctly
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const article = await storage.getArticleBySlug(req.params.slug);
@@ -68,16 +125,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Article not found" });
       }
 
-      // Check if user is authenticated and has active subscription
-      let hasActiveSubscription = false;
-      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-        const user = await storage.getUser(req.user.claims.sub);
-        hasActiveSubscription = user?.subscriptionExpiresAt 
-          ? new Date(user.subscriptionExpiresAt) > new Date() 
-          : false;
-      }
+      const hasActiveSubscription = await checkSubscription(req);
 
-      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
@@ -94,7 +143,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get('/api/articles/:id', async (req: any, res) => {
-    // Prevent caching to ensure subscription-based content gating works correctly
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
       const article = await storage.getArticleById(req.params.id);
@@ -102,16 +150,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Article not found" });
       }
 
-      // Check if user is authenticated and has active subscription
-      let hasActiveSubscription = false;
-      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-        const user = await storage.getUser(req.user.claims.sub);
-        hasActiveSubscription = user?.subscriptionExpiresAt 
-          ? new Date(user.subscriptionExpiresAt) > new Date() 
-          : false;
-      }
+      const hasActiveSubscription = await checkSubscription(req);
 
-      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription && !article.isFree) {
         const previewArticle = {
           ...article,
@@ -128,22 +168,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Search articles
-  app.get('/api/articles/search/:query', isAuthenticated, async (req: any, res) => {
-    // Prevent caching to ensure subscription-based content gating works correctly
+  app.get('/api/articles/search/:query', async (req: any, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
       const { query } = req.params;
       const results = await storage.searchArticles(query);
-      
-      // Check subscription status
-      const hasActiveSubscription = user?.subscriptionExpiresAt 
-        ? new Date(user.subscriptionExpiresAt) > new Date() 
-        : false;
+      const hasActiveSubscription = await checkSubscription(req);
 
-      // If no active subscription, truncate content to preview (except for free articles)
       if (!hasActiveSubscription) {
         const previewResults = results.map(article => ({
           ...article,
