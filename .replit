@@ -23,6 +23,10 @@ localPort = 35323
 externalPort = 3003
 
 [[ports]]
+localPort = 35809
+externalPort = 8081
+
+[[ports]]
 localPort = 37459
 externalPort = 3000
 
@@ -92,3 +96,4 @@ integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.
 [userenv]
 
 [userenv.production]
+APP_URL = "https://materiamedica.pro"
