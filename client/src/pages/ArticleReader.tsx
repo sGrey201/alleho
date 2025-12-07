@@ -97,10 +97,10 @@ export default function ArticleReader() {
                     {!isAuthenticated ? (
                       <Button 
                         size="lg"
-                        onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
+                        asChild
                         data-testid="button-login"
                       >
-                        {t.login}
+                        <Link href="/auth">{t.login}</Link>
                       </Button>
                     ) : (
                       <Button 
