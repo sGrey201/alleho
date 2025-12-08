@@ -1,9 +1,7 @@
 import { t } from '@/lib/i18n';
 import { Link } from 'wouter';
-import { useSplash } from '@/components/SplashScreen';
 
 export function Footer() {
-  const { showAboutProject } = useSplash();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -35,13 +33,13 @@ export function Footer() {
           <div>
             <h3 className="mb-4 text-sm font-semibold text-foreground">Информация</h3>
             <div className="space-y-2">
-              <button
-                onClick={showAboutProject}
-                className="block text-sm text-muted-foreground hover:text-primary transition-colors text-left"
+              <Link 
+                href="/about"
+                className="block text-sm text-muted-foreground hover:text-primary transition-colors"
                 data-testid="link-footer-about"
               >
                 О проекте
-              </button>
+              </Link>
               <Link 
                 href="/terms"
                 className="block text-sm text-muted-foreground hover:text-primary transition-colors"

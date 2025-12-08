@@ -8,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AppSidebar } from "@/components/AppSidebar";
-import { SplashScreen } from "@/components/SplashScreen";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import ArticleReader from "@/pages/ArticleReader";
@@ -23,6 +22,7 @@ import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
 import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
 import AdminTags from "@/pages/admin/AdminTags";
+import About from "@/pages/About";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -46,6 +46,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/terms" component={Terms} />
       <Route path="/oferta" component={Oferta} />
+      <Route path="/about" component={About} />
       <Route path="/subscribe" component={Subscribe} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
@@ -115,9 +116,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <SplashScreen>
-          <AppContent />
-        </SplashScreen>
+        <AppContent />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
