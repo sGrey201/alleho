@@ -405,16 +405,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ message: "Payment system not configured" });
       }
 
-      const userId = req.user.claims.sub;
-      const userEmail = req.user.claims.email;
+      const user = req.dbUser;
+      const userId = user.id;
+      const userEmail = user.email;
       const { subscriptionType } = req.body; // 'initial' or 'renewal'
 
       if (!subscriptionType || !['initial', 'renewal'].includes(subscriptionType)) {
         return res.status(400).json({ message: "Invalid subscription type" });
       }
 
-      // Get user to check subscription status
-      const user = await storage.getUser(userId);
+      // Check subscription status
       const hasActiveSubscription = user?.subscriptionExpiresAt 
         ? new Date(user.subscriptionExpiresAt) > new Date()
         : false;
