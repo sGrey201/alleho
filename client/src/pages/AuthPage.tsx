@@ -82,7 +82,7 @@ export default function AuthPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({ title: "Регистрация успешна", description: "Вам предоставлен 7-дневный пробный период" });
+      toast({ title: "Регистрация успешна" });
       setLocation("/");
     },
     onError: (error: Error) => {
