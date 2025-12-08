@@ -200,44 +200,37 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user.expires_at) {
+  const session = req.session as any;
+  
+  if (!session?.userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
+  const user = await storage.getUser(session.userId);
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  (req as any).dbUser = user;
+  return next();
 };
 
 export const isAdmin: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
+  const session = req.session as any;
+  
+  if (!session?.userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  const dbUser = await storage.getUser(user.claims.sub);
-  if (!dbUser?.isAdmin) {
+  const user = await storage.getUser(session.userId);
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (!user.isAdmin) {
     return res.status(403).json({ message: "Forbidden - Admin access required" });
   }
 
+  (req as any).dbUser = user;
   next();
 };
