@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Edit } from 'lucide-react';
 import { formatArticleTitle } from '@/lib/utils';
 import { ArticleDialog } from '@/components/ArticleDialog';
+import { LikeButton } from '@/components/LikeButton';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -65,6 +66,10 @@ export function ArticleCard({ article }: ArticleCardProps) {
           <p className="text-base text-muted-foreground leading-snug line-clamp-4 font-serif">
             {previewText}
           </p>
+          
+          <div className="mt-4 flex items-center">
+            <LikeButton articleId={article.id} variant="compact" />
+          </div>
         </div>
       </Link>
       

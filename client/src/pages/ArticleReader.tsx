@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Lock } from 'lucide-react';
+import { LikeButton } from '@/components/LikeButton';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -123,6 +124,10 @@ export default function ArticleReader() {
               data-testid="text-article-content"
               dangerouslySetInnerHTML={{ __html: article.content }}
             />
+            
+            <div className="mt-12 pt-8 border-t not-prose">
+              <LikeButton articleId={article.id} variant="full" />
+            </div>
           </div>
         )}
 
