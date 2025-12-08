@@ -2,6 +2,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
+import { queryClient } from '@/lib/queryClient';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -165,15 +166,17 @@ export function Header() {
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuItem asChild>
-                  <a
-                    href="/api/logout"
-                    className="flex w-full items-center text-destructive"
-                    data-testid="link-logout"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    {t.logout}
-                  </a>
+                <DropdownMenuItem
+                  className="flex w-full items-center text-destructive cursor-pointer"
+                  data-testid="link-logout"
+                  onClick={async () => {
+                    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+                    queryClient.clear();
+                    window.location.href = '/';
+                  }}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t.logout}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
