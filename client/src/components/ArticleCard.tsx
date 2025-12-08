@@ -68,7 +68,7 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </p>
           
           <div className="mt-4 flex items-center">
-            <LikeButton articleId={article.id} variant="compact" />
+            <LikeButton articleId={article.id} variant="compact" isFree={article.isFree} />
           </div>
         </div>
       </Link>

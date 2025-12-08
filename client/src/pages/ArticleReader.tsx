@@ -126,7 +126,7 @@ export default function ArticleReader() {
             />
             
             <div className="mt-12 pt-8 border-t not-prose">
-              <LikeButton articleId={article.id} variant="full" />
+              <LikeButton articleId={article.id} variant="full" isFree={article.isFree} />
             </div>
           </div>
         )}

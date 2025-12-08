@@ -14,10 +14,11 @@ interface LikesInfo {
 interface LikeButtonProps {
   articleId: string;
   variant?: 'compact' | 'full';
+  isFree?: boolean;
 }
 
-export function LikeButton({ articleId, variant = 'compact' }: LikeButtonProps) {
-  const { isAuthenticated } = useAuth();
+export function LikeButton({ articleId, variant = 'compact', isFree = false }: LikeButtonProps) {
+  const { isAuthenticated, hasActiveSubscription } = useAuth();
   const { toast } = useToast();
 
   const { data: likesInfo, isLoading } = useQuery<LikesInfo>({
@@ -44,6 +45,8 @@ export function LikeButton({ articleId, variant = 'compact' }: LikeButtonProps) 
     },
   });
 
+  const canLike = isFree || hasActiveSubscription;
+
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -52,6 +55,14 @@ export function LikeButton({ articleId, variant = 'compact' }: LikeButtonProps) 
       toast({
         title: 'Войдите в систему',
         description: 'Чтобы поставить лайк, необходимо войти в систему',
+      });
+      return;
+    }
+
+    if (!canLike) {
+      toast({
+        title: 'Требуется подписка',
+        description: 'Чтобы поставить лайк на эту статью, необходима подписка',
       });
       return;
     }

@@ -214,6 +214,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Необходимо войти в систему" });
       }
       
+      const article = await storage.getArticleById(id);
+      if (!article) {
+        return res.status(404).json({ message: "Статья не найдена" });
+      }
+      
+      if (!article.isFree) {
+        const hasActiveSubscription = await checkSubscription(req);
+        if (!hasActiveSubscription) {
+          return res.status(403).json({ message: "Требуется подписка для лайка этой статьи" });
+        }
+      }
+      
       const result = await storage.toggleLike(id, session.userId);
       res.json(result);
     } catch (error) {
