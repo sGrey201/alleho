@@ -3,11 +3,15 @@ import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
+import { queryClient } from '@/lib/queryClient';
 
 export default function PaymentSuccess() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    // Invalidate user cache to refresh subscription info in header
+    queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+    
     const timer = setTimeout(() => {
       setLocation('/');
     }, 5000);
