@@ -8,6 +8,7 @@ import { Edit } from 'lucide-react';
 import { formatArticleTitle } from '@/lib/utils';
 import { ArticleDialog } from '@/components/ArticleDialog';
 import { LikeButton } from '@/components/LikeButton';
+import { ShareButton } from '@/components/ShareButton';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -67,8 +68,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
             {previewText}
           </p>
           
-          <div className="mt-4 flex items-center">
+          <div className="mt-4 flex items-center gap-4">
             <LikeButton articleId={article.id} variant="compact" isFree={article.isFree} />
+            <ShareButton articleSlug={article.slug} variant="compact" />
           </div>
         </div>
       </Link>

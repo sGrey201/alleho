@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Lock } from 'lucide-react';
 import { LikeButton } from '@/components/LikeButton';
+import { ShareButton } from '@/components/ShareButton';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -125,8 +126,9 @@ export default function ArticleReader() {
               dangerouslySetInnerHTML={{ __html: article.content }}
             />
             
-            <div className="mt-12 pt-8 border-t not-prose">
+            <div className="mt-12 pt-8 border-t not-prose flex items-center gap-4">
               <LikeButton articleId={article.id} variant="full" isFree={article.isFree} />
+              <ShareButton articleSlug={article.slug} variant="full" />
             </div>
           </div>
         )}
