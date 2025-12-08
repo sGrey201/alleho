@@ -69,16 +69,13 @@ export function LikeButton({ articleId, variant = 'compact' }: LikeButtonProps) 
         size="default"
         onClick={handleClick}
         disabled={likeMutation.isPending}
-        className={cn(
-          'gap-2',
-          userLiked && 'text-red-500 border-red-200 dark:border-red-900'
-        )}
+        className="gap-2"
         data-testid={`button-like-${articleId}`}
       >
         <Heart 
           className={cn(
             'h-5 w-5 transition-all',
-            userLiked && 'fill-red-500 text-red-500',
+            userLiked && 'fill-current',
             likeMutation.isPending && 'animate-pulse'
           )} 
         />
@@ -97,15 +94,15 @@ export function LikeButton({ articleId, variant = 'compact' }: LikeButtonProps) 
       disabled={likeMutation.isPending}
       className={cn(
         'flex items-center gap-1.5 text-muted-foreground transition-colors',
-        userLiked && 'text-red-500',
-        !isLoading && !likeMutation.isPending && 'hover:text-red-500'
+        userLiked && 'text-foreground',
+        !isLoading && !likeMutation.isPending && 'hover:text-foreground'
       )}
       data-testid={`button-like-${articleId}`}
     >
       <Heart 
         className={cn(
           'h-4 w-4 transition-all',
-          userLiked && 'fill-red-500',
+          userLiked && 'fill-current',
           likeMutation.isPending && 'animate-pulse'
         )} 
       />
