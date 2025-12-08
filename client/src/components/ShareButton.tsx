@@ -1,4 +1,4 @@
-import { Share2 } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,7 +56,7 @@ export function ShareButton({ articleSlug, variant = 'compact' }: ShareButtonPro
         className="gap-2"
         data-testid={`button-share-${articleSlug}`}
       >
-        <Share2 className="h-5 w-5" />
+        <Send className="h-5 w-5" />
         <span>Поделиться</span>
       </Button>
     );
@@ -69,7 +69,7 @@ export function ShareButton({ articleSlug, variant = 'compact' }: ShareButtonPro
       className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
       data-testid={`button-share-${articleSlug}`}
     >
-      <Share2 className="h-4 w-4" />
+      <Send className="h-4 w-4" />
     </button>
   );
 }
