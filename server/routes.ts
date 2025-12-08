@@ -190,6 +190,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Article like routes
+  app.get('/api/articles/:id/likes', async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const session = req.session as any;
+      const userId = session?.userId;
+      
+      const likesInfo = await storage.getArticleLikesInfo(id, userId);
+      res.json(likesInfo);
+    } catch (error) {
+      console.error("Error fetching likes:", error);
+      res.status(500).json({ message: "Failed to fetch likes" });
+    }
+  });
+
+  app.post('/api/articles/:id/like', async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const session = req.session as any;
+      
+      if (!session?.userId) {
+        return res.status(401).json({ message: "Необходимо войти в систему" });
+      }
+      
+      const result = await storage.toggleLike(id, session.userId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      res.status(500).json({ message: "Failed to toggle like" });
+    }
+  });
+
   // Tag routes (public - for browsing and searching)
   app.get('/api/tags', async (req, res) => {
     try {
