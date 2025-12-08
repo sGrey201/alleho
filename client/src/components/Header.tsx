@@ -75,7 +75,7 @@ export function Header() {
             className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md px-2 py-1" 
             data-testid="link-home"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-[18px]">
               M
             </div>
             <span className="text-lg font-bold text-foreground">
