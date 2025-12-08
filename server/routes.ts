@@ -420,15 +420,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : false;
 
       // Pricing: Initial = 2000₽, Renewal with active subscription = 1000₽ (50% discount), Renewal after expiry = 2000₽
+      // Admins get 100x discount for testing
+      const adminDiscount = user.isAdmin ? 100 : 1;
       let amount: number;
       let description: string;
       
       if (subscriptionType === 'initial') {
-        amount = 2000;
+        amount = 2000 / adminDiscount;
         description = 'Подписка MateriaMedica на 6 месяцев';
       } else {
         // Renewal: 50% discount if subscription is still active
-        amount = hasActiveSubscription ? 1000 : 2000;
+        amount = (hasActiveSubscription ? 1000 : 2000) / adminDiscount;
         description = hasActiveSubscription 
           ? 'Продление подписки MateriaMedica на 6 месяцев (скидка 50%)'
           : 'Продление подписки MateriaMedica на 6 месяцев';
