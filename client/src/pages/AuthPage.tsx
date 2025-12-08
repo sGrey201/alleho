@@ -63,7 +63,6 @@ export default function AuthPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({ title: "Вход выполнен успешно" });
       setLocation("/");
     },
     onError: (error: Error) => {
