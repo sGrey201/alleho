@@ -140,3 +140,17 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+// Article likes table (one like per user per article)
+export const articleLikes = pgTable("article_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  articleId: varchar("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("article_likes_article_idx").on(table.articleId),
+  index("article_likes_user_idx").on(table.userId),
+  sql`CONSTRAINT article_likes_unique UNIQUE (article_id, user_id)`,
+]);
+
+export type ArticleLike = typeof articleLikes.$inferSelect;

@@ -4,6 +4,7 @@ import {
   tags,
   articleTags,
   payments,
+  articleLikes,
   type User,
   type UpsertUser,
   type Article,
@@ -14,6 +15,7 @@ import {
   type UpdateTag,
   type Payment,
   type InsertPayment,
+  type ArticleLike,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray } from "drizzle-orm";
@@ -60,6 +62,12 @@ export interface IStorage {
   getPaymentByInvoiceId(invoiceId: string): Promise<Payment | undefined>;
   updatePaymentStatus(invoiceId: string, status: string, robokassaData?: any): Promise<Payment>;
   getUserPayments(userId: string): Promise<Payment[]>;
+
+  // Like operations
+  toggleLike(articleId: string, userId: string): Promise<{ liked: boolean; likesCount: number }>;
+  getLikesCount(articleId: string): Promise<number>;
+  hasUserLiked(articleId: string, userId: string): Promise<boolean>;
+  getArticleLikesInfo(articleId: string, userId?: string): Promise<{ likesCount: number; userLiked: boolean }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -412,6 +420,48 @@ export class DatabaseStorage implements IStorage {
       .from(payments)
       .where(eq(payments.userId, userId))
       .orderBy(sql`${payments.createdAt} DESC`);
+  }
+
+  // Like operations
+  async toggleLike(articleId: string, userId: string): Promise<{ liked: boolean; likesCount: number }> {
+    const existingLike = await db
+      .select()
+      .from(articleLikes)
+      .where(sql`${articleLikes.articleId} = ${articleId} AND ${articleLikes.userId} = ${userId}`);
+
+    if (existingLike.length > 0) {
+      await db
+        .delete(articleLikes)
+        .where(sql`${articleLikes.articleId} = ${articleId} AND ${articleLikes.userId} = ${userId}`);
+      const likesCount = await this.getLikesCount(articleId);
+      return { liked: false, likesCount };
+    } else {
+      await db.insert(articleLikes).values({ articleId, userId });
+      const likesCount = await this.getLikesCount(articleId);
+      return { liked: true, likesCount };
+    }
+  }
+
+  async getLikesCount(articleId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(articleLikes)
+      .where(eq(articleLikes.articleId, articleId));
+    return Number(result[0]?.count || 0);
+  }
+
+  async hasUserLiked(articleId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .select()
+      .from(articleLikes)
+      .where(sql`${articleLikes.articleId} = ${articleId} AND ${articleLikes.userId} = ${userId}`);
+    return result.length > 0;
+  }
+
+  async getArticleLikesInfo(articleId: string, userId?: string): Promise<{ likesCount: number; userLiked: boolean }> {
+    const likesCount = await this.getLikesCount(articleId);
+    const userLiked = userId ? await this.hasUserLiked(articleId, userId) : false;
+    return { likesCount, userLiked };
   }
 }
 
