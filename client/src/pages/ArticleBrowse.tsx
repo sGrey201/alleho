@@ -373,19 +373,18 @@ export default function ArticleBrowse() {
           )}
         </div>
         {!hasSelectedTags && (
-          <div className="flex gap-2">
-            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 justify-between"
-                  data-testid="button-select-tags"
-                >
-                  {t.search}
-                  <Plus className="ml-2 h-4 w-4" />
-                </Button>
-              </PopoverTrigger>
+          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-between"
+                data-testid="button-select-tags"
+              >
+                {t.search}
+                <Plus className="ml-2 h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
           <PopoverContent className="w-[400px] p-0" align="start">
             <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
               <CommandInput 
@@ -427,21 +426,18 @@ export default function ArticleBrowse() {
               </CommandList>
             </Command>
           </PopoverContent>
-            </Popover>
-            <Badge
-              variant={showFreeOnly ? "default" : "outline"}
-              className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
-                showFreeOnly 
-                  ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
-                  : "hover:bg-muted"
-              }`}
-              onClick={() => setShowFreeOnly(!showFreeOnly)}
-              data-testid="button-filter-free"
-            >
-              free
-            </Badge>
-          </div>
+          </Popover>
         )}
+        <Badge
+          variant={showFreeOnly ? "secondary" : "outline"}
+          className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
+            showFreeOnly ? "" : "hover:bg-muted"
+          }`}
+          onClick={() => setShowFreeOnly(!showFreeOnly)}
+          data-testid="button-filter-free"
+        >
+          free
+        </Badge>
       </div>
 
       {filteredArticles.length === 0 ? (
