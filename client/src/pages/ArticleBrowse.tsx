@@ -263,6 +263,7 @@ export default function ArticleBrowse() {
   const clearAllTags = () => {
     setSelectedRemedyTagIds([]);
     setSelectedSituationTagIds([]);
+    setShowFreeOnly(false);
   };
 
   return (
@@ -361,6 +362,18 @@ export default function ArticleBrowse() {
             </Popover>
           )}
           {hasSelectedTags && (
+            <Badge
+              variant={showFreeOnly ? "secondary" : "outline"}
+              className={`cursor-pointer px-3 py-1.5 text-sm font-medium transition-colors shrink-0 ${
+                showFreeOnly ? "" : "hover:bg-muted"
+              }`}
+              onClick={() => setShowFreeOnly(!showFreeOnly)}
+              data-testid="button-filter-free"
+            >
+              free
+            </Badge>
+          )}
+          {hasSelectedTags && (
             <Button
               type="button"
               variant="outline"
@@ -372,8 +385,8 @@ export default function ArticleBrowse() {
             </Button>
           )}
         </div>
-        <div className="flex gap-2">
-          {!hasSelectedTags && (
+        {!hasSelectedTags && (
+          <div className="flex gap-2">
             <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -428,18 +441,18 @@ export default function ArticleBrowse() {
               </Command>
             </PopoverContent>
             </Popover>
-          )}
-          <Badge
-            variant={showFreeOnly ? "secondary" : "outline"}
-            className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
-              showFreeOnly ? "" : "hover:bg-muted"
-            }`}
-            onClick={() => setShowFreeOnly(!showFreeOnly)}
-            data-testid="button-filter-free"
-          >
-            free
-          </Badge>
-        </div>
+            <Badge
+              variant={showFreeOnly ? "secondary" : "outline"}
+              className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
+                showFreeOnly ? "" : "hover:bg-muted"
+              }`}
+              onClick={() => setShowFreeOnly(!showFreeOnly)}
+              data-testid="button-filter-free"
+            >
+              free
+            </Badge>
+          </div>
+        )}
       </div>
 
       {filteredArticles.length === 0 ? (
