@@ -372,72 +372,74 @@ export default function ArticleBrowse() {
             </Button>
           )}
         </div>
-        {!hasSelectedTags && (
-          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-between"
-                data-testid="button-select-tags"
-              >
-                {t.search}
-                <Plus className="ml-2 h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-          <PopoverContent className="w-[400px] p-0" align="start">
-            <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
-              <CommandInput 
-                placeholder={t.searchTags}
-                value={tagSearchQuery}
-                onValueChange={setTagSearchQuery}
-              />
-              <CommandList className="max-h-96 overflow-auto">
-                {filteredTags.length === 0 ? (
-                  <CommandEmpty>{t.noTagsFound}</CommandEmpty>
-                ) : (
-                  <CommandGroup>
-                    {filteredTags.map((tag) => {
-                      const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
-                      return (
-                        <CommandItem
-                          key={tag.id}
-                          value={tag.name}
-                          onSelect={() => {
-                            if (!selectedIds.includes(tag.id)) {
-                              addTag(tag.id);
-                            }
-                          }}
-                          disabled={selectedIds.includes(tag.id)}
-                          data-testid={`tag-option-${tag.slug}`}
-                          className="gap-2 group"
-                        >
-                          {tag.category === 'remedy' ? (
-                            <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
-                          ) : (
-                            <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
-                          )}
-                          {tag.name}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-          </Popover>
-        )}
-        <Badge
-          variant={showFreeOnly ? "secondary" : "outline"}
-          className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
-            showFreeOnly ? "" : "hover:bg-muted"
-          }`}
-          onClick={() => setShowFreeOnly(!showFreeOnly)}
-          data-testid="button-filter-free"
-        >
-          free
-        </Badge>
+        <div className="flex gap-2">
+          {!hasSelectedTags && (
+            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 justify-between"
+                  data-testid="button-select-tags"
+                >
+                  {t.search}
+                  <Plus className="ml-2 h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0" align="start">
+              <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
+                <CommandInput 
+                  placeholder={t.searchTags}
+                  value={tagSearchQuery}
+                  onValueChange={setTagSearchQuery}
+                />
+                <CommandList className="max-h-96 overflow-auto">
+                  {filteredTags.length === 0 ? (
+                    <CommandEmpty>{t.noTagsFound}</CommandEmpty>
+                  ) : (
+                    <CommandGroup>
+                      {filteredTags.map((tag) => {
+                        const selectedIds = tag.category === 'remedy' ? selectedRemedyTagIds : selectedSituationTagIds;
+                        return (
+                          <CommandItem
+                            key={tag.id}
+                            value={tag.name}
+                            onSelect={() => {
+                              if (!selectedIds.includes(tag.id)) {
+                                addTag(tag.id);
+                              }
+                            }}
+                            disabled={selectedIds.includes(tag.id)}
+                            data-testid={`tag-option-${tag.slug}`}
+                            className="gap-2 group"
+                          >
+                            {tag.category === 'remedy' ? (
+                              <Pill className="h-4 w-4 text-primary group-data-[selected=true]:text-accent-foreground shrink-0" />
+                            ) : (
+                              <Activity className="h-4 w-4 text-muted-foreground group-data-[selected=true]:text-accent-foreground shrink-0" />
+                            )}
+                            {tag.name}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+            </Popover>
+          )}
+          <Badge
+            variant={showFreeOnly ? "secondary" : "outline"}
+            className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
+              showFreeOnly ? "" : "hover:bg-muted"
+            }`}
+            onClick={() => setShowFreeOnly(!showFreeOnly)}
+            data-testid="button-filter-free"
+          >
+            free
+          </Badge>
+        </div>
       </div>
 
       {filteredArticles.length === 0 ? (
