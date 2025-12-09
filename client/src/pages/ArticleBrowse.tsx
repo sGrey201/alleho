@@ -48,6 +48,7 @@ export default function ArticleBrowse() {
 
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
+  const [showFreeOnly, setShowFreeOnly] = useState(false);
   const hasInitialized = useRef(false);
   const isInitializing = useRef(false);
 
@@ -189,6 +190,9 @@ export default function ArticleBrowse() {
     if (!articles) return [];
     
     return articles.filter(article => {
+      // Фильтр по бесплатным статьям
+      if (showFreeOnly && !article.isFree) return false;
+      
       // Если ничего не выбрано - показываем все статьи
       if (selectedRemedyTagIds.length === 0 && selectedSituationTagIds.length === 0) return true;
       
@@ -207,7 +211,7 @@ export default function ArticleBrowse() {
       // Логика AND между категориями: (П1 OR П2) AND (С1 OR С2)
       return matchesRemedy && matchesSituation;
     });
-  }, [articles, selectedRemedyTagIds, selectedSituationTagIds]);
+  }, [articles, selectedRemedyTagIds, selectedSituationTagIds, showFreeOnly]);
 
   const addTag = (tagId: string) => {
     const tag = allTags?.find(t => t.id === tagId);
@@ -369,18 +373,19 @@ export default function ArticleBrowse() {
           )}
         </div>
         {!hasSelectedTags && (
-          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-between"
-                data-testid="button-select-tags"
-              >
-                {t.search}
-                <Plus className="ml-2 h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
+          <div className="flex gap-2">
+            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 justify-between"
+                  data-testid="button-select-tags"
+                >
+                  {t.search}
+                  <Plus className="ml-2 h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
           <PopoverContent className="w-[400px] p-0" align="start">
             <Command shouldFilter={false} onKeyDown={handleTagSearchKeyDown}>
               <CommandInput 
@@ -422,7 +427,20 @@ export default function ArticleBrowse() {
               </CommandList>
             </Command>
           </PopoverContent>
-          </Popover>
+            </Popover>
+            <Badge
+              variant={showFreeOnly ? "default" : "outline"}
+              className={`cursor-pointer px-3 py-2 text-sm font-medium transition-colors shrink-0 ${
+                showFreeOnly 
+                  ? "bg-green-600 hover:bg-green-700 text-white border-green-600" 
+                  : "hover:bg-muted"
+              }`}
+              onClick={() => setShowFreeOnly(!showFreeOnly)}
+              data-testid="button-filter-free"
+            >
+              free
+            </Badge>
+          </div>
         )}
       </div>
 
