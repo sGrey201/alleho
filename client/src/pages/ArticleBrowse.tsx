@@ -307,6 +307,18 @@ export default function ArticleBrowse() {
             </Badge>
           ))}
           {hasSelectedTags && (
+            <Badge
+              variant={showFreeOnly ? "secondary" : "outline"}
+              className={`cursor-pointer px-3 py-1.5 text-sm font-medium transition-colors shrink-0 ${
+                showFreeOnly ? "" : "hover:bg-muted"
+              }`}
+              onClick={() => setShowFreeOnly(!showFreeOnly)}
+              data-testid="button-filter-free"
+            >
+              free
+            </Badge>
+          )}
+          {hasSelectedTags && (
             <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -360,18 +372,6 @@ export default function ArticleBrowse() {
                 </Command>
               </PopoverContent>
             </Popover>
-          )}
-          {hasSelectedTags && (
-            <Badge
-              variant={showFreeOnly ? "secondary" : "outline"}
-              className={`cursor-pointer px-3 py-1.5 text-sm font-medium transition-colors shrink-0 ${
-                showFreeOnly ? "" : "hover:bg-muted"
-              }`}
-              onClick={() => setShowFreeOnly(!showFreeOnly)}
-              data-testid="button-filter-free"
-            >
-              free
-            </Badge>
           )}
           {hasSelectedTags && (
             <Button
