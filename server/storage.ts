@@ -256,7 +256,7 @@ export class DatabaseStorage implements IStorage {
 
   // Article operations
   async getAllArticles(): Promise<ArticleWithTags[]> {
-    const allArticles = await db.select().from(articles).orderBy(sql`${articles.isFree} DESC, ${articles.createdAt} DESC`);
+    const allArticles = await db.select().from(articles).orderBy(sql`${articles.createdAt} DESC`);
     
     if (allArticles.length === 0) return [];
     

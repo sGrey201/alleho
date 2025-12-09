@@ -9,6 +9,8 @@ import { formatArticleTitle } from '@/lib/utils';
 import { ArticleDialog } from '@/components/ArticleDialog';
 import { LikeButton } from '@/components/LikeButton';
 import { ShareButton } from '@/components/ShareButton';
+import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -71,6 +73,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
           <div className="mt-4 flex items-center gap-4">
             <LikeButton articleId={article.id} variant="compact" isFree={article.isFree} />
             <ShareButton articleSlug={article.slug} variant="compact" />
+            <span className="ml-auto text-sm text-muted-foreground">
+              {article.createdAt && format(new Date(article.createdAt), 'd MMM yyyy', { locale: ru })}
+            </span>
           </div>
         </div>
       </Link>
