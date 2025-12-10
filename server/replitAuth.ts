@@ -202,7 +202,7 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const session = req.session as any;
   
-  if (!session?.userId) {
+  if (!session?.userId || session?.authType !== 'email') {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -218,7 +218,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 export const isAdmin: RequestHandler = async (req, res, next) => {
   const session = req.session as any;
   
-  if (!session?.userId) {
+  if (!session?.userId || session?.authType !== 'email') {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
