@@ -338,12 +338,6 @@ export default function AdminArticles() {
           setIsDialogOpen(open);
           if (!open) resetForm();
         }}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-article">
-              <Plus className="mr-2 h-4 w-4" />
-              {t.createArticle}
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
