@@ -316,12 +316,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateArticle(id: string, articleData: UpdateArticle, tagIds?: string[]): Promise<ArticleWithTags> {
-    let updateData = { ...articleData, updatedAt: new Date() };
+    const updateData = { ...articleData, updatedAt: new Date() };
     
     if (tagIds !== undefined) {
-      const tagsList = await this.getTagsByIds(tagIds);
-      const slug = generateSlugFromTags(tagsList);
-      updateData = { ...updateData, slug };
       await this.setArticleTags(id, tagIds);
     }
     
