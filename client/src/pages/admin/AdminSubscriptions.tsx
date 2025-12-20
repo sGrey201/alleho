@@ -126,7 +126,6 @@ export default function AdminSubscriptions() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[200px]">{t.email}</TableHead>
-                  <TableHead>{t.role}</TableHead>
                   <TableHead>{t.status}</TableHead>
                   <TableHead>{t.expiresAt}</TableHead>
                   <TableHead className="text-right">{t.actions}</TableHead>
@@ -147,11 +146,6 @@ export default function AdminSubscriptions() {
                               </div>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.isAdmin ? 'default' : 'outline'}>
-                            {user.isAdmin ? t.adminRole : t.user}
-                          </Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(status)}</TableCell>
                         <TableCell>
@@ -238,7 +232,7 @@ export default function AdminSubscriptions() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                       {t.noResults}
                     </TableCell>
                   </TableRow>
