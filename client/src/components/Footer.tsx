@@ -25,6 +25,15 @@ export function Footer() {
               >
                 Telegram: @vorobevaEM
               </a>
+              <a 
+                href="https://t.me/homeopathy_for_professionals" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block text-sm text-muted-foreground hover:text-primary transition-colors"
+                data-testid="link-footer-telegram-channel"
+              >
+                Канал: @homeopathy_for_professionals
+              </a>
             </div>
           </div>
 

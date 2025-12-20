@@ -96,15 +96,26 @@ export default function Terms() {
             <p className="text-muted-foreground mb-3">
               По всем вопросам обращайтесь:
             </p>
-            <a 
-              href="https://t.me/vorobevaEM" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-primary hover-elevate active-elevate-2 font-medium"
-              data-testid="link-telegram-contact"
-            >
-              <span>Telegram: @vorobevaEM</span>
-            </a>
+            <div className="space-y-2">
+              <a 
+                href="https://t.me/vorobevaEM" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-primary hover-elevate active-elevate-2 font-medium"
+                data-testid="link-telegram-contact"
+              >
+                <span>Telegram: @vorobevaEM</span>
+              </a>
+              <a 
+                href="https://t.me/homeopathy_for_professionals" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block text-primary hover-elevate active-elevate-2 font-medium"
+                data-testid="link-telegram-channel"
+              >
+                Канал: @homeopathy_for_professionals
+              </a>
+            </div>
           </CardContent>
         </Card>
       </div>
