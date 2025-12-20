@@ -18,7 +18,7 @@ import {
   type ArticleLike,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, ilike, sql, inArray } from "drizzle-orm";
+import { eq, or, ilike, sql, inArray, and } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
@@ -483,7 +483,10 @@ export class DatabaseStorage implements IStorage {
       const userLikesResult = await db
         .select({ articleId: articleLikes.articleId })
         .from(articleLikes)
-        .where(sql`${articleLikes.articleId} = ANY(${articleIds}) AND ${articleLikes.userId} = ${userId}`);
+        .where(and(
+          inArray(articleLikes.articleId, articleIds),
+          eq(articleLikes.userId, userId)
+        ));
       userLikedSet = new Set(userLikesResult.map(r => r.articleId));
     }
 
