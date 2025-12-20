@@ -38,8 +38,16 @@ export default function ArticleBrowse() {
     window.scrollTo(0, 0);
   }, []);
 
-  const { data: articles, isLoading } = useQuery<ArticleWithTags[]>({
-    queryKey: ['/api/articles'],
+  const [needsFullLoad, setNeedsFullLoad] = useState(false);
+  
+  const { data: articles, isLoading, refetch } = useQuery<ArticleWithTags[]>({
+    queryKey: ['/api/articles', needsFullLoad ? 'all' : 'initial'],
+    queryFn: async () => {
+      const url = needsFullLoad ? '/api/articles' : '/api/articles?limit=12';
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch articles');
+      return res.json();
+    },
   });
 
   const { data: allTags } = useQuery<Tag[]>({
@@ -214,9 +222,12 @@ export default function ArticleBrowse() {
     });
   }, [articles, selectedRemedyTagIds, selectedSituationTagIds, showFreeOnly]);
 
-  // Reset visible count when filters change
+  // Reset visible count and trigger full load when filters change
   useEffect(() => {
     setVisibleCount(12);
+    if (selectedRemedyTagIds.length > 0 || selectedSituationTagIds.length > 0 || showFreeOnly) {
+      if (!needsFullLoad) setNeedsFullLoad(true);
+    }
   }, [selectedRemedyTagIds, selectedSituationTagIds, showFreeOnly]);
 
   const addTag = (tagId: string) => {
@@ -277,6 +288,9 @@ export default function ArticleBrowse() {
   const hasMoreArticles = filteredArticles.length > visibleCount;
 
   const loadMore = () => {
+    if (!needsFullLoad) {
+      setNeedsFullLoad(true);
+    }
     setVisibleCount(prev => prev + 12);
   };
 
