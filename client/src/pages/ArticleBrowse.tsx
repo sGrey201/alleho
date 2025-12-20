@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Article, Tag } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { ArticleCard } from '@/components/ArticleCard';
-import { Plus, X, AlertCircle, Pill, Activity } from 'lucide-react';
+import { Plus, X, AlertCircle, Pill, Activity, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +40,7 @@ export default function ArticleBrowse() {
 
   const [needsFullLoad, setNeedsFullLoad] = useState(false);
   
-  const { data: articles, isLoading, refetch } = useQuery<ArticleWithTags[]>({
+  const { data: articles, isLoading, isFetching } = useQuery<ArticleWithTags[]>({
     queryKey: ['/api/articles', needsFullLoad ? 'all' : 'initial'],
     queryFn: async () => {
       const url = needsFullLoad ? '/api/articles' : '/api/articles?limit=12';
@@ -48,6 +48,7 @@ export default function ArticleBrowse() {
       if (!res.ok) throw new Error('Failed to fetch articles');
       return res.json();
     },
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: allTags } = useQuery<Tag[]>({
@@ -264,7 +265,7 @@ export default function ArticleBrowse() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !articles) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
@@ -508,9 +509,17 @@ export default function ArticleBrowse() {
                 variant="default"
                 size="lg"
                 onClick={loadMore}
+                disabled={isFetching}
                 data-testid="button-load-more"
               >
-                {t.loadMore}
+                {isFetching ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t.loading}
+                  </>
+                ) : (
+                  t.loadMore
+                )}
               </Button>
             </div>
           )}
