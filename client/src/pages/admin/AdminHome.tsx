@@ -3,20 +3,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { FileText, Users, Plus } from 'lucide-react';
+import { FileText, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Article, User } from '@shared/schema';
+
+type AdminStats = { articlesCount: number; usersCount: number };
 
 export default function AdminHome() {
   const { isAdmin } = useAuth();
 
-  const { data: articles } = useQuery<Article[]>({
-    queryKey: ['/api/admin/articles'],
-    enabled: isAdmin,
-  });
-
-  const { data: users } = useQuery<User[]>({
-    queryKey: ['/api/admin/users'],
+  const { data: stats } = useQuery<AdminStats>({
+    queryKey: ['/api/admin/stats'],
     enabled: isAdmin,
   });
 
@@ -38,7 +34,7 @@ export default function AdminHome() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{articles?.length || 0}</div>
+            <div className="text-3xl font-bold">{stats?.articlesCount ?? 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {t.allArticles}
             </p>
@@ -58,7 +54,7 @@ export default function AdminHome() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{users?.length || 0}</div>
+            <div className="text-3xl font-bold">{stats?.usersCount ?? 0}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {t.manageSubscriptions}
             </p>

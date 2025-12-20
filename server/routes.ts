@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, payments } from "@shared/schema";
+import { users, payments, articles } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
@@ -379,6 +379,23 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+
+  // Admin stats - fast count query
+  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (_req, res) => {
+    try {
+      const [[articlesResult], [usersResult]] = await Promise.all([
+        db.select({ count: sql<number>`count(*)::int` }).from(articles),
+        db.select({ count: sql<number>`count(*)::int` }).from(users),
+      ]);
+      res.json({
+        articlesCount: articlesResult?.count || 0,
+        usersCount: usersResult?.count || 0,
+      });
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
 
   // Admin article routes
   app.get('/api/admin/articles', isAuthenticated, isAdmin, async (_req, res) => {
