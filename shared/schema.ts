@@ -87,7 +87,9 @@ export const articles = pgTable("articles", {
   isFree: boolean("is_free").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("articles_created_at_idx").on(table.createdAt),
+]);
 
 // Junction table for article-tag many-to-many relationship
 export const articleTags = pgTable("article_tags", {
