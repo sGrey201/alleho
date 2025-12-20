@@ -62,7 +62,6 @@ export interface IStorage {
   getPaymentByInvoiceId(invoiceId: string): Promise<Payment | undefined>;
   updatePaymentStatus(invoiceId: string, status: string, robokassaData?: any): Promise<Payment>;
   getUserPayments(userId: string): Promise<Payment[]>;
-  getLastSuccessfulPayments(): Promise<{ userId: string; createdAt: Date | null }[]>;
 
   // Like operations
   toggleLike(articleId: string, userId: string): Promise<{ liked: boolean; likesCount: number }>;

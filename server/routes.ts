@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
-import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, payments } from "@shared/schema";
+import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
@@ -489,29 +489,7 @@ ${allUrls.map(url => `  <url>
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (_req, res) => {
     try {
       const usersList = await storage.getAllUsers();
-      const lastPayments = await storage.getLastSuccessfulPayments();
-      
-      // Create a map of userId -> lastPaymentDate
-      const paymentMap = new Map<string, Date>();
-      for (const payment of lastPayments) {
-        paymentMap.set(payment.userId, payment.createdAt!);
-      }
-      
-      // Add lastPaymentAt to each user and sort by it (descending)
-      const usersWithPayments = usersList.map(user => ({
-        ...user,
-        lastPaymentAt: paymentMap.get(user.id) || null,
-      }));
-      
-      // Sort by lastPaymentAt descending (users with payments first, then by date)
-      usersWithPayments.sort((a, b) => {
-        if (!a.lastPaymentAt && !b.lastPaymentAt) return 0;
-        if (!a.lastPaymentAt) return 1;
-        if (!b.lastPaymentAt) return -1;
-        return new Date(b.lastPaymentAt).getTime() - new Date(a.lastPaymentAt).getTime();
-      });
-      
-      res.json(usersWithPayments);
+      res.json(usersList);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
