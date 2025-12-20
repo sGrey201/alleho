@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { User } from '@shared/schema';
+import { User, Payment } from '@shared/schema';
 
 type UserWithPayment = User & { lastPaymentDate?: string | Date | null };
 import { t } from '@/lib/i18n';
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Calendar as CalendarIcon, Check, AlertTriangle, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, AlertTriangle, X, CreditCard } from 'lucide-react';
 import { format, addDays, addMonths, addYears } from 'date-fns';
 
 export default function AdminSubscriptions() {
@@ -36,10 +37,16 @@ export default function AdminSubscriptions() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [expirationDate, setExpirationDate] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [paymentsDialogUser, setPaymentsDialogUser] = useState<UserWithPayment | null>(null);
 
   const { data: users, isLoading } = useQuery<UserWithPayment[]>({
     queryKey: ['/api/admin/users'],
     enabled: isAdmin,
+  });
+
+  const { data: userPayments, isLoading: paymentsLoading } = useQuery<Payment[]>({
+    queryKey: ['/api/admin/users', paymentsDialogUser?.id, 'payments'],
+    enabled: !!paymentsDialogUser,
   });
 
   const updateSubscriptionMutation = useMutation({
@@ -146,7 +153,12 @@ export default function AdminSubscriptions() {
                   users.map((user) => {
                     const status = getSubscriptionStatus(user);
                     return (
-                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                      <TableRow 
+                        key={user.id} 
+                        data-testid={`row-user-${user.id}`}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => setPaymentsDialogUser(user)}
+                      >
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <span 
@@ -267,6 +279,59 @@ export default function AdminSubscriptions() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!paymentsDialogUser} onOpenChange={(open) => !open && setPaymentsDialogUser(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              История оплат: {paymentsDialogUser?.email}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[400px]">
+            {paymentsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+              </div>
+            ) : userPayments && userPayments.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Дата</TableHead>
+                    <TableHead>Сумма</TableHead>
+                    <TableHead>Описание</TableHead>
+                    <TableHead>Статус</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {userPayments.map((payment) => (
+                    <TableRow key={payment.id} data-testid={`payment-row-${payment.id}`}>
+                      <TableCell>
+                        {payment.createdAt 
+                          ? format(new Date(payment.createdAt), 'dd.MM.yyyy HH:mm')
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="font-medium">{payment.amount} ₽</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{payment.description}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={payment.status === 'completed' ? 'default' : payment.status === 'pending' ? 'secondary' : 'destructive'}
+                        >
+                          {payment.status === 'completed' ? 'Оплачено' : payment.status === 'pending' ? 'Ожидание' : 'Ошибка'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Нет платежей
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

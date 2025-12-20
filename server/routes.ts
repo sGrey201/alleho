@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users } from "@shared/schema";
-import { sql } from "drizzle-orm";
+import { users, payments } from "@shared/schema";
+import { sql, eq, desc } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
@@ -522,6 +522,22 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Get user's payment history
+  app.get('/api/admin/users/:id/payments', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const userPayments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.userId, req.params.id))
+        .orderBy(desc(payments.createdAt));
+      
+      res.json(userPayments);
+    } catch (error) {
+      console.error("Error fetching user payments:", error);
+      res.status(500).json({ message: "Failed to fetch user payments" });
     }
   });
 
