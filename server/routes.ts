@@ -52,9 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sitemap.xml - dynamic generation
   app.get('/sitemap.xml', async (req, res) => {
     try {
-      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
-        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
-        : `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
+      const baseUrl = process.env.APP_URL || 'https://materiamedica.pro';
       
       const articles = await storage.getAllArticles();
       
