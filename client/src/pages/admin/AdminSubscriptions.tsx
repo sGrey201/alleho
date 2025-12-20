@@ -45,7 +45,7 @@ export default function AdminSubscriptions() {
   });
 
   const { data: userPayments, isLoading: paymentsLoading } = useQuery<Payment[]>({
-    queryKey: ['/api/admin/users', paymentsDialogUser?.id, 'payments'],
+    queryKey: [`/api/admin/users/${paymentsDialogUser?.id}/payments`],
     enabled: !!paymentsDialogUser,
   });
 
