@@ -22,9 +22,7 @@ export function Footer() {
                 rel="noopener noreferrer"
                 className="block text-sm text-muted-foreground hover:text-primary transition-colors"
                 data-testid="link-footer-telegram"
-              >
-                Telegram: @vorobevaEM
-              </a>
+              >Личка: @vorobevaEM</a>
               <a 
                 href="https://t.me/homeopathy_for_professionals" 
                 target="_blank" 
