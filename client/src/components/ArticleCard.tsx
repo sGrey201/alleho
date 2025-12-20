@@ -11,7 +11,11 @@ import { LikeButton } from '@/components/LikeButton';
 import { ShareButton } from '@/components/ShareButton';
 import { format } from 'date-fns';
 
-type ArticleWithTags = Article & { tags: Tag[] };
+type ArticleWithTags = Article & { 
+  tags: Tag[];
+  likesCount?: number;
+  userLiked?: boolean;
+};
 
 interface ArticleCardProps {
   article: ArticleWithTags;
@@ -70,7 +74,13 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </p>
           
           <div className="mt-4 flex items-center gap-4">
-            <LikeButton articleId={article.id} variant="compact" isFree={article.isFree} />
+            <LikeButton 
+                articleId={article.id} 
+                variant="compact" 
+                isFree={article.isFree}
+                initialLikesCount={article.likesCount}
+                initialUserLiked={article.userLiked}
+              />
             <ShareButton articleSlug={article.slug} variant="compact" />
             <span className="ml-auto text-sm text-muted-foreground">
               {article.createdAt && format(new Date(article.createdAt), 'dd.MM.yyyy')}

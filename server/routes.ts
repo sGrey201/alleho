@@ -101,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const articlesList = await storage.getAllArticles();
       const hasActiveSubscription = await checkSubscription(req);
-      const userId = getUserId(req);
+      const userId = await getCurrentUserId(req);
 
       // Get likes info for all articles in one query
       const articleIds = articlesList.map(a => a.id);

@@ -15,14 +15,28 @@ interface LikeButtonProps {
   articleId: string;
   variant?: 'compact' | 'full';
   isFree?: boolean;
+  initialLikesCount?: number;
+  initialUserLiked?: boolean;
 }
 
-export function LikeButton({ articleId, variant = 'compact', isFree = false }: LikeButtonProps) {
+export function LikeButton({ 
+  articleId, 
+  variant = 'compact', 
+  isFree = false,
+  initialLikesCount,
+  initialUserLiked 
+}: LikeButtonProps) {
   const { isAuthenticated, hasActiveSubscription } = useAuth();
   const { toast } = useToast();
 
+  // Use query only if initial data not provided (e.g., in ArticleReader)
   const { data: likesInfo, isLoading } = useQuery<LikesInfo>({
     queryKey: ['/api/articles', articleId, 'likes'],
+    enabled: initialLikesCount === undefined,
+    initialData: initialLikesCount !== undefined ? {
+      likesCount: initialLikesCount,
+      userLiked: initialUserLiked ?? false
+    } : undefined,
   });
 
   const likeMutation = useMutation({
@@ -31,10 +45,13 @@ export function LikeButton({ articleId, variant = 'compact', isFree = false }: L
       return response.json();
     },
     onSuccess: (data: { liked: boolean; likesCount: number }) => {
+      // Update individual like cache
       queryClient.setQueryData<LikesInfo>(['/api/articles', articleId, 'likes'], {
         likesCount: data.likesCount,
         userLiked: data.liked,
       });
+      // Invalidate articles list to refresh likes counts
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
     },
     onError: () => {
       toast({
