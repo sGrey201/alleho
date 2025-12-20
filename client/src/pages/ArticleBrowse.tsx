@@ -49,6 +49,7 @@ export default function ArticleBrowse() {
   const [selectedRemedyTagIds, setSelectedRemedyTagIds] = useState<string[]>([]);
   const [selectedSituationTagIds, setSelectedSituationTagIds] = useState<string[]>([]);
   const [showFreeOnly, setShowFreeOnly] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(12);
   const hasInitialized = useRef(false);
   const isInitializing = useRef(false);
 
@@ -213,6 +214,11 @@ export default function ArticleBrowse() {
     });
   }, [articles, selectedRemedyTagIds, selectedSituationTagIds, showFreeOnly]);
 
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [selectedRemedyTagIds, selectedSituationTagIds, showFreeOnly]);
+
   const addTag = (tagId: string) => {
     const tag = allTags?.find(t => t.id === tagId);
     if (!tag) return;
@@ -264,6 +270,14 @@ export default function ArticleBrowse() {
     setSelectedRemedyTagIds([]);
     setSelectedSituationTagIds([]);
     setShowFreeOnly(false);
+    setVisibleCount(12);
+  };
+
+  const visibleArticles = filteredArticles.slice(0, visibleCount);
+  const hasMoreArticles = filteredArticles.length > visibleCount;
+
+  const loadMore = () => {
+    setVisibleCount(prev => prev + 12);
   };
 
   return (
@@ -464,14 +478,28 @@ export default function ArticleBrowse() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filteredArticles.map((article) => (
-            <ArticleCard 
-              key={article.id} 
-              article={article}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {visibleArticles.map((article) => (
+              <ArticleCard 
+                key={article.id} 
+                article={article}
+              />
+            ))}
+          </div>
+          {hasMoreArticles && (
+            <div className="mt-8 flex justify-center">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={loadMore}
+                data-testid="button-load-more"
+              >
+                {t.loadMore}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
