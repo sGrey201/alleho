@@ -47,7 +47,7 @@ export interface IStorage {
   deleteTag(id: string): Promise<boolean>;
   
   // Article operations
-  getAllArticles(): Promise<ArticleWithTags[]>;
+  getAllArticles(options?: { limit?: number; offset?: number }): Promise<ArticleWithTags[]>;
   getArticleById(id: string): Promise<ArticleWithTags | undefined>;
   getArticleBySlug(slug: string): Promise<ArticleWithTags | undefined>;
   createArticle(article: InsertArticle, tagIds: string[]): Promise<ArticleWithTags>;
@@ -256,8 +256,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Article operations
-  async getAllArticles(): Promise<ArticleWithTags[]> {
-    const allArticles = await db.select().from(articles).orderBy(sql`${articles.createdAt} DESC`);
+  async getAllArticles(options?: { limit?: number; offset?: number }): Promise<ArticleWithTags[]> {
+    let query = db.select().from(articles).orderBy(sql`${articles.createdAt} DESC`);
+    
+    if (options?.limit) {
+      query = query.limit(options.limit) as typeof query;
+    }
+    if (options?.offset) {
+      query = query.offset(options.offset) as typeof query;
+    }
+    
+    const allArticles = await query;
     
     if (allArticles.length === 0) return [];
     

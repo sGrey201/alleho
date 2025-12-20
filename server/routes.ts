@@ -99,7 +99,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/articles', async (req: any, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
-      const articlesList = await storage.getAllArticles();
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+      const offset = req.query.offset ? parseInt(req.query.offset, 10) : undefined;
+      const articlesList = await storage.getAllArticles({ limit, offset });
       const hasActiveSubscription = await checkSubscription(req);
       const userId = await getCurrentUserId(req);
 
