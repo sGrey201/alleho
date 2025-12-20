@@ -244,7 +244,6 @@ export default function Oferta() {
           <h2 className="text-2xl font-semibold mb-4">Реквизиты Исполнителя</h2>
           <div className="bg-muted p-6 rounded-lg">
             <p className="mb-2"><strong>ИНН:</strong> 025301343170</p>
-            <p className="mb-2"><strong>Контактный телефон:</strong> +7 917 773-91-09</p>
             <p className="mb-2"><strong>Контактный e-mail:</strong> kpedo@inbox.ru</p>
           </div>
         </section>
