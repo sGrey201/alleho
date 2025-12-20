@@ -522,18 +522,18 @@ ${allUrls.map(url => `  <url>
           createdAt: users.createdAt,
           updatedAt: users.updatedAt,
           lastPaymentDate: sql<Date | null>`(
-            SELECT MAX(created_at) 
-            FROM payments 
-            WHERE payments.user_id = ${users.id} 
-            AND payments.status = 'completed'
+            SELECT MAX(p.created_at) 
+            FROM payments p 
+            WHERE p.user_id = users.id 
+            AND p.status = 'completed'
           )`.as('last_payment_date'),
         })
         .from(users)
         .orderBy(sql`(
-          SELECT MAX(created_at) 
-          FROM payments 
-          WHERE payments.user_id = ${users.id} 
-          AND payments.status = 'completed'
+          SELECT MAX(p.created_at) 
+          FROM payments p 
+          WHERE p.user_id = users.id 
+          AND p.status = 'completed'
         ) DESC NULLS LAST`);
       
       res.json(usersWithPayments);
