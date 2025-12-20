@@ -59,8 +59,8 @@ export default function ArticleReader() {
     title,
     description,
     slug: article.slug,
-    createdAt: article.createdAt,
-    updatedAt: article.updatedAt,
+    createdAt: article.createdAt || undefined,
+    updatedAt: article.updatedAt || undefined,
     tags: tagNames,
   });
 

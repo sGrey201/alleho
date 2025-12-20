@@ -132,6 +132,19 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**December 20, 2025 - SEO Optimization**
+- ✅ Added robots.txt with proper crawling directives
+- ✅ Implemented react-helmet-async for dynamic meta tags
+- ✅ Dynamic title, description, and Open Graph tags for article pages
+- ✅ Schema.org JSON-LD structured data for articles (Article schema)
+- ✅ Schema.org structured data for tag collection pages (CollectionPage schema)
+- ✅ Dynamic canonical URLs for each page
+- ✅ Created "All Remedies" page (/remedies) with full list of homeopathic remedies
+- ✅ Created "All Situations" page (/situations) with full list of clinical cases
+- ✅ Added catalog section to footer with links to /remedies and /situations
+- ✅ Updated sitemap.xml with new pages and improved priority settings
+- ✅ SEO component (client/src/components/SEO.tsx) for reusable meta tag management
+
 **November 11, 2025 - Dual Tag Category System Implementation**
 - ✅ Normalized tag system with two categories: "remedy" (homeopathic remedies) and "situation" (clinical scenarios)
 - ✅ Database migration: added category field to tags table with index for performance
