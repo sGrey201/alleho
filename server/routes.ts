@@ -6,7 +6,7 @@ import { register, login, requestPasswordReset, resetPassword, getEmailUser, log
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
-import { prerenderMiddleware, invalidateCache, invalidateTagCache } from "./prerender";
+import { invalidateCache, invalidateTagCache } from "./prerender";
 
 const PREVIEW_LENGTH = 500;
 
@@ -47,9 +47,6 @@ async function getCurrentUserId(req: any): Promise<string | null> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Prerender middleware for SEO (must be before auth)
-  app.use(prerenderMiddleware);
-  
   // Auth middleware
   await setupAuth(app);
 

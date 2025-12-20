@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { prerenderMiddleware } from "./prerender";
 
 const app = express();
 
@@ -59,6 +60,9 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
     throw err;
   });
+
+  // Prerender middleware for SEO bots (before Vite/static serving)
+  app.use(prerenderMiddleware);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route

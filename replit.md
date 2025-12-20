@@ -132,9 +132,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**December 20, 2025 - SEO Optimization**
+**December 20, 2025 - SEO Optimization with Prerendering**
 - ✅ Added robots.txt with proper crawling directives
-- ✅ Implemented react-helmet-async for dynamic meta tags
+- ✅ Implemented react-helmet-async for dynamic meta tags (client-side)
+- ✅ Server-side prerendering for search engine bots (server/prerender.ts)
+- ✅ Cached prerendering with 24-hour TTL and automatic cache invalidation
 - ✅ Dynamic title, description, and Open Graph tags for article pages
 - ✅ Schema.org JSON-LD structured data for articles (Article schema)
 - ✅ Schema.org structured data for tag collection pages (CollectionPage schema)
@@ -144,6 +146,7 @@ Preferred communication style: Simple, everyday language.
 - ✅ Added catalog section to footer with links to /remedies and /situations
 - ✅ Updated sitemap.xml with new pages and improved priority settings
 - ✅ SEO component (client/src/components/SEO.tsx) for reusable meta tag management
+- ✅ Cache invalidation on article/tag create/update/delete
 
 **November 11, 2025 - Dual Tag Category System Implementation**
 - ✅ Normalized tag system with two categories: "remedy" (homeopathic remedies) and "situation" (clinical scenarios)
