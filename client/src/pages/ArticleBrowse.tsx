@@ -490,7 +490,7 @@ export default function ArticleBrowse() {
           {hasMoreArticles && (
             <div className="mt-8 flex justify-center">
               <Button
-                variant="outline"
+                variant="default"
                 size="lg"
                 onClick={loadMore}
                 data-testid="button-load-more"

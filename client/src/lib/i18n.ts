@@ -79,7 +79,7 @@ export const t = {
   publishedOn: 'Опубликовано',
   noArticles: 'Статей пока нет',
   articleNotFound: 'Статья не найдена',
-  loadMore: 'Ещё',
+  loadMore: 'Показать ещё',
   
   // Admin
   adminPanel: 'Панель администратора',
