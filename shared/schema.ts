@@ -88,7 +88,7 @@ export const articles = pgTable("articles", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("articles_created_at_idx").on(table.createdAt.desc()),
+  index("articles_created_at_idx").on(table.createdAt),
 ]);
 
 // Junction table for article-tag many-to-many relationship
