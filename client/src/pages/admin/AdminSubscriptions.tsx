@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Calendar as CalendarIcon, Check, AlertTriangle, X, CreditCard } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, CheckCheck, AlertTriangle, X, CreditCard, Clock, XCircle } from 'lucide-react';
 import { format, addDays, addMonths, addYears } from 'date-fns';
 
 export default function AdminSubscriptions() {
@@ -38,6 +38,8 @@ export default function AdminSubscriptions() {
   const [expirationDate, setExpirationDate] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [paymentsDialogUser, setPaymentsDialogUser] = useState<UserWithPayment | null>(null);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState('');
 
   const { data: users, isLoading } = useQuery<UserWithPayment[]>({
     queryKey: ['/api/admin/users'],
@@ -47,6 +49,21 @@ export default function AdminSubscriptions() {
   const { data: userPayments, isLoading: paymentsLoading } = useQuery<Payment[]>({
     queryKey: [`/api/admin/users/${paymentsDialogUser?.id}/payments`],
     enabled: !!paymentsDialogUser,
+  });
+
+  const updateReceiptMutation = useMutation({
+    mutationFn: async ({ paymentId, receiptUrl }: { paymentId: string; receiptUrl: string }) => {
+      return await apiRequest('PUT', `/api/admin/payments/${paymentId}/receipt`, { receiptUrl });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${paymentsDialogUser?.id}/payments`] });
+      toast({ title: 'Ссылка на чек сохранена', variant: 'default' });
+      setEditingPayment(null);
+      setReceiptUrl('');
+    },
+    onError: () => {
+      toast({ title: t.error, description: t.somethingWrong, variant: 'destructive' });
+    },
   });
 
   const updateSubscriptionMutation = useMutation({
@@ -300,26 +317,41 @@ export default function AdminSubscriptions() {
                     <TableHead>Дата</TableHead>
                     <TableHead>Сумма</TableHead>
                     <TableHead>Описание</TableHead>
-                    <TableHead>Статус</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {userPayments.map((payment) => (
-                    <TableRow key={payment.id} data-testid={`payment-row-${payment.id}`}>
+                    <TableRow 
+                      key={payment.id} 
+                      data-testid={`payment-row-${payment.id}`}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => {
+                        setEditingPayment(payment);
+                        setReceiptUrl(payment.receiptUrl || '');
+                      }}
+                    >
                       <TableCell>
-                        {payment.createdAt 
-                          ? format(new Date(payment.createdAt), 'dd.MM.yyyy HH:mm')
-                          : '—'}
+                        <div className="flex items-center gap-2">
+                          {payment.status === 'completed' ? (
+                            payment.receiptUrl ? (
+                              <CheckCheck className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <Check className="h-4 w-4 text-green-600" />
+                            )
+                          ) : payment.status === 'pending' ? (
+                            <Clock className="h-4 w-4 text-yellow-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                          <span>
+                            {payment.createdAt 
+                              ? format(new Date(payment.createdAt), 'dd.MM.yyyy HH:mm')
+                              : '—'}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{payment.amount} ₽</TableCell>
                       <TableCell className="max-w-[200px] truncate">{payment.description}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={payment.status === 'completed' ? 'default' : payment.status === 'pending' ? 'secondary' : 'destructive'}
-                        >
-                          {payment.status === 'completed' ? 'Оплачено' : payment.status === 'pending' ? 'Ожидание' : 'Ошибка'}
-                        </Badge>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -330,6 +362,43 @@ export default function AdminSubscriptions() {
               </div>
             )}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingPayment} onOpenChange={(open) => !open && setEditingPayment(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Прикрепить чек</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="receiptUrl">Ссылка на чек</Label>
+              <Input
+                id="receiptUrl"
+                type="url"
+                placeholder="https://..."
+                value={receiptUrl}
+                onChange={(e) => setReceiptUrl(e.target.value)}
+                data-testid="input-receipt-url"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditingPayment(null)}
+                data-testid="button-cancel-receipt"
+              >
+                {t.cancel}
+              </Button>
+              <Button
+                onClick={() => editingPayment && updateReceiptMutation.mutate({ paymentId: editingPayment.id, receiptUrl })}
+                disabled={updateReceiptMutation.isPending}
+                data-testid="button-save-receipt"
+              >
+                {t.save}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

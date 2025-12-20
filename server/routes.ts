@@ -541,6 +541,26 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Update payment receipt URL
+  app.put('/api/admin/payments/:id/receipt', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { receiptUrl } = req.body;
+      const [updated] = await db
+        .update(payments)
+        .set({ receiptUrl, updatedAt: new Date() })
+        .where(eq(payments.id, req.params.id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating receipt URL:", error);
+      res.status(500).json({ message: "Failed to update receipt URL" });
+    }
+  });
+
   app.put('/api/admin/users/:id/subscription', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { subscriptionExpiresAt } = req.body;
