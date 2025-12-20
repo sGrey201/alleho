@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth
+Disallow: /reset-password
+
+Sitemap: https://materiamedica.pro/sitemap.xml
