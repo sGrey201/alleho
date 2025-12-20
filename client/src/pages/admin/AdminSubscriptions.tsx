@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, AlertTriangle, X } from 'lucide-react';
 import { format, addDays, addMonths, addYears } from 'date-fns';
 
 export default function AdminSubscriptions() {
@@ -78,25 +78,33 @@ export default function AdminSubscriptions() {
     updateSubscriptionMutation.mutate({ userId: editingUser.id, expiresAt: date });
   };
 
-  const getSubscriptionStatus = (user: User) => {
+  type SubscriptionStatus = 'active' | 'expiring' | 'expired';
+
+  const getSubscriptionStatus = (user: User): SubscriptionStatus => {
     if (!user.subscriptionExpiresAt) return 'expired';
     const expiresAt = new Date(user.subscriptionExpiresAt);
     const now = new Date();
     const daysUntilExpiration = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
     if (expiresAt < now) return 'expired';
-    if (daysUntilExpiration <= 7) return 'trial';
+    if (daysUntilExpiration <= 30) return 'expiring';
     return 'active';
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
-      active: { variant: 'default' as const, label: t.activeStatus },
-      trial: { variant: 'secondary' as const, label: t.trialStatus },
-      expired: { variant: 'outline' as const, label: t.expiredStatus },
-    };
-    const config = variants[status] || variants.expired;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+  const getStatusBgColor = (status: SubscriptionStatus) => {
+    switch (status) {
+      case 'active': return 'bg-green-600';
+      case 'expiring': return 'bg-yellow-600';
+      case 'expired': return 'bg-red-600';
+    }
+  };
+
+  const getStatusIcon = (status: SubscriptionStatus) => {
+    switch (status) {
+      case 'active': return Check;
+      case 'expiring': return AlertTriangle;
+      case 'expired': return X;
+    }
   };
 
   if (isLoading) {
@@ -126,7 +134,6 @@ export default function AdminSubscriptions() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[200px]">{t.email}</TableHead>
-                  <TableHead>{t.status}</TableHead>
                   <TableHead>{t.expiresAt}</TableHead>
                   <TableHead className="text-right">{t.actions}</TableHead>
                 </TableRow>
@@ -138,16 +145,26 @@ export default function AdminSubscriptions() {
                     return (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                         <TableCell className="font-medium">
-                          <div>
-                            <div className="font-medium">{user.email || 'No email'}</div>
-                            {user.firstName && user.lastName && (
-                              <div className="text-sm text-muted-foreground">
-                                {user.firstName} {user.lastName}
-                              </div>
-                            )}
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className={`flex h-5 w-5 items-center justify-center rounded-full ${getStatusBgColor(status)}`}
+                              data-testid={`subscription-indicator-${status}-${user.id}`}
+                            >
+                              {(() => {
+                                const StatusIcon = getStatusIcon(status);
+                                return <StatusIcon className="h-3 w-3 text-white" />;
+                              })()}
+                            </span>
+                            <div>
+                              <div className="font-medium">{user.email || 'No email'}</div>
+                              {user.firstName && user.lastName && (
+                                <div className="text-sm text-muted-foreground">
+                                  {user.firstName} {user.lastName}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(status)}</TableCell>
                         <TableCell>
                           {user.subscriptionExpiresAt
                             ? format(new Date(user.subscriptionExpiresAt), 'MMM d, yyyy')
@@ -232,7 +249,7 @@ export default function AdminSubscriptions() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
                       {t.noResults}
                     </TableCell>
                   </TableRow>
