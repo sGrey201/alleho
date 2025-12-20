@@ -6,6 +6,7 @@ import { users, payments } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
+import { sendReceiptEmail } from "./email";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
@@ -541,7 +542,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Update payment receipt URL
+  // Update payment receipt URL and send email to user
   app.put('/api/admin/payments/:id/receipt', isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { receiptUrl } = req.body;
@@ -554,6 +555,29 @@ ${allUrls.map(url => `  <url>
       if (!updated) {
         return res.status(404).json({ message: "Payment not found" });
       }
+
+      // Send receipt email to user
+      if (receiptUrl) {
+        const [user] = await db
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, updated.userId));
+        
+        if (user?.email) {
+          const paymentDate = updated.createdAt 
+            ? new Date(updated.createdAt).toLocaleDateString('ru-RU')
+            : 'неизвестно';
+          
+          try {
+            await sendReceiptEmail(user.email, receiptUrl, updated.amount, paymentDate);
+            console.log(`Receipt email sent to ${user.email}`);
+          } catch (emailError) {
+            console.error("Error sending receipt email:", emailError);
+            // Don't fail the request if email fails
+          }
+        }
+      }
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating receipt URL:", error);

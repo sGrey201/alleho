@@ -86,3 +86,37 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
     `
   });
 }
+
+export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAmount: string, paymentDate: string) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  
+  await client.emails.send({
+    from: fromEmail,
+    to: [to],
+    subject: 'Чек об оплате - Materia Medica Pro',
+    html: `
+      <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2C5282; margin-bottom: 20px;">Чек об оплате</h1>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Здравствуйте!
+        </p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Ваш платёж на сумму <strong>${paymentAmount} ₽</strong> от ${paymentDate} успешно обработан.
+        </p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Чек об оплате доступен по ссылке:
+        </p>
+        <a href="${receiptUrl}" style="display: inline-block; background-color: #38A169; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Открыть чек
+        </a>
+        <p style="font-size: 14px; color: #666; margin-top: 30px;">
+          Спасибо за вашу подписку!
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999;">
+          Materia Medica Pro — Живые портреты гомеопатических типажей
+        </p>
+      </div>
+    `
+  });
+}
