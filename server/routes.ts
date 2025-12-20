@@ -58,9 +58,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const staticPages: Array<{ loc: string; priority: string; changefreq: string; lastmod?: string }> = [
         { loc: '/', priority: '1.0', changefreq: 'daily' },
+        { loc: '/remedies', priority: '0.9', changefreq: 'weekly' },
+        { loc: '/situations', priority: '0.9', changefreq: 'weekly' },
         { loc: '/subscribe', priority: '0.8', changefreq: 'monthly' },
+        { loc: '/about', priority: '0.6', changefreq: 'monthly' },
         { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
-        { loc: '/auth', priority: '0.5', changefreq: 'monthly' },
+        { loc: '/oferta', priority: '0.3', changefreq: 'yearly' },
       ];
       
       const articleUrls = articles.map(article => ({

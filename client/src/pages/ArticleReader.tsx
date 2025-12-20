@@ -4,13 +4,14 @@ import { useRoute, Link } from 'wouter';
 import { Article, Tag } from '@shared/schema';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
-import { formatArticleTitle } from '@/lib/utils';
+import { formatArticleTitle, stripHtml } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Lock } from 'lucide-react';
 import { LikeButton } from '@/components/LikeButton';
 import { ShareButton } from '@/components/ShareButton';
+import { SEO, generateArticleSchema } from '@/components/SEO';
 
 type ArticleWithTags = Article & { tags: Tag[] };
 
@@ -51,8 +52,35 @@ export default function ArticleReader() {
   const isContentLocked = !article.isFree && (!isAuthenticated || !hasActiveSubscription);
 
   const title = formatArticleTitle(article.tags);
+  const description = stripHtml(article.preview).slice(0, 160);
+  const tagNames = article.tags.map(tag => tag.name);
+  
+  const articleSchema = generateArticleSchema({
+    title,
+    description,
+    slug: article.slug,
+    createdAt: article.createdAt,
+    updatedAt: article.updatedAt,
+    tags: tagNames,
+  });
 
   return (
+    <>
+      <SEO
+        title={title}
+        description={description}
+        keywords={tagNames.join(', ')}
+        url={`/article/${article.slug}`}
+        type="article"
+        article={{
+          publishedTime: article.createdAt ? new Date(article.createdAt).toISOString() : undefined,
+          modifiedTime: article.updatedAt ? new Date(article.updatedAt).toISOString() : undefined,
+          author: 'Materia Medica Pro',
+          tags: tagNames,
+        }}
+        schema={articleSchema}
+      />
+      
     <div className="mx-auto max-w-4xl px-6 py-12">
       <article className="prose prose-lg max-w-none">
         <div className="mb-8 not-prose">
@@ -151,5 +179,6 @@ export default function ArticleReader() {
         </div>
       </article>
     </div>
+    </>
   );
 }

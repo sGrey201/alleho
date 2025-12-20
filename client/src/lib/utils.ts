@@ -17,3 +17,7 @@ export function formatArticleTitle(tags: { name: string; category: string }[]): 
   
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
+
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
