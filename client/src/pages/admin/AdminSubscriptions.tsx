@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { User } from '@shared/schema';
+
+type UserWithPayment = User & { lastPaymentDate?: string | Date | null };
 import { t } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -35,7 +37,7 @@ export default function AdminSubscriptions() {
   const [expirationDate, setExpirationDate] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { data: users, isLoading } = useQuery<User[]>({
+  const { data: users, isLoading } = useQuery<UserWithPayment[]>({
     queryKey: ['/api/admin/users'],
     enabled: isAdmin,
   });
@@ -134,6 +136,7 @@ export default function AdminSubscriptions() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[200px]">{t.email}</TableHead>
+                  <TableHead>Посл. оплата</TableHead>
                   <TableHead>{t.expiresAt}</TableHead>
                   <TableHead className="text-right">{t.actions}</TableHead>
                 </TableRow>
@@ -164,6 +167,11 @@ export default function AdminSubscriptions() {
                               )}
                             </div>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.lastPaymentDate
+                            ? format(new Date(user.lastPaymentDate), 'MMM d, yyyy')
+                            : '—'}
                         </TableCell>
                         <TableCell>
                           {user.subscriptionExpiresAt
@@ -249,7 +257,7 @@ export default function AdminSubscriptions() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
                       {t.noResults}
                     </TableCell>
                   </TableRow>

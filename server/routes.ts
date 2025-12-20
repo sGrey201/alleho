@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { sql } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
@@ -488,8 +491,34 @@ ${allUrls.map(url => `  <url>
   // Admin user/subscription routes
   app.get('/api/admin/users', isAuthenticated, isAdmin, async (_req, res) => {
     try {
-      const usersList = await storage.getAllUsers();
-      res.json(usersList);
+      // Get all users with their last successful payment date
+      const usersWithPayments = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+          isAdmin: users.isAdmin,
+          subscriptionExpiresAt: users.subscriptionExpiresAt,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          lastPaymentDate: sql<Date | null>`(
+            SELECT MAX(created_at) 
+            FROM payments 
+            WHERE payments.user_id = ${users.id} 
+            AND payments.status = 'completed'
+          )`.as('last_payment_date'),
+        })
+        .from(users)
+        .orderBy(sql`(
+          SELECT MAX(created_at) 
+          FROM payments 
+          WHERE payments.user_id = ${users.id} 
+          AND payments.status = 'completed'
+        ) DESC NULLS LAST`);
+      
+      res.json(usersWithPayments);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
