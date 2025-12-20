@@ -101,16 +101,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const articlesList = await storage.getAllArticles();
       const hasActiveSubscription = await checkSubscription(req);
+      const userId = getUserId(req);
 
-      if (!hasActiveSubscription) {
-        const previewArticles = articlesList.map(article => ({
+      // Get likes info for all articles in one query
+      const articleIds = articlesList.map(a => a.id);
+      const likesInfo = await storage.getBulkArticleLikesInfo(articleIds, userId || undefined);
+
+      // Add likes info to articles
+      const articlesWithLikes = articlesList.map(article => {
+        const likes = likesInfo.get(article.id) || { likesCount: 0, userLiked: false };
+        return {
           ...article,
-          content: article.isFree ? article.content : truncateHtml(article.content, PREVIEW_LENGTH),
-        }));
-        return res.json(previewArticles);
-      }
+          content: (!hasActiveSubscription && !article.isFree) 
+            ? truncateHtml(article.content, PREVIEW_LENGTH) 
+            : article.content,
+          likesCount: likes.likesCount,
+          userLiked: likes.userLiked,
+        };
+      });
 
-      res.json(articlesList);
+      res.json(articlesWithLikes);
     } catch (error) {
       console.error("Error fetching articles:", error);
       res.status(500).json({ message: "Failed to fetch articles" });

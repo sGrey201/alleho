@@ -68,6 +68,7 @@ export interface IStorage {
   getLikesCount(articleId: string): Promise<number>;
   hasUserLiked(articleId: string, userId: string): Promise<boolean>;
   getArticleLikesInfo(articleId: string, userId?: string): Promise<{ likesCount: number; userLiked: boolean }>;
+  getBulkArticleLikesInfo(articleIds: string[], userId?: string): Promise<Map<string, { likesCount: number; userLiked: boolean }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -459,6 +460,45 @@ export class DatabaseStorage implements IStorage {
     const likesCount = await this.getLikesCount(articleId);
     const userLiked = userId ? await this.hasUserLiked(articleId, userId) : false;
     return { likesCount, userLiked };
+  }
+
+  async getBulkArticleLikesInfo(articleIds: string[], userId?: string): Promise<Map<string, { likesCount: number; userLiked: boolean }>> {
+    if (articleIds.length === 0) {
+      return new Map();
+    }
+
+    // Get likes count for all articles in one query
+    const likesCountResult = await db
+      .select({ 
+        articleId: articleLikes.articleId, 
+        count: sql<number>`count(*)` 
+      })
+      .from(articleLikes)
+      .where(inArray(articleLikes.articleId, articleIds))
+      .groupBy(articleLikes.articleId);
+
+    // Get user likes in one query if userId provided
+    let userLikedSet = new Set<string>();
+    if (userId) {
+      const userLikesResult = await db
+        .select({ articleId: articleLikes.articleId })
+        .from(articleLikes)
+        .where(sql`${articleLikes.articleId} = ANY(${articleIds}) AND ${articleLikes.userId} = ${userId}`);
+      userLikedSet = new Set(userLikesResult.map(r => r.articleId));
+    }
+
+    // Build result map
+    const result = new Map<string, { likesCount: number; userLiked: boolean }>();
+    const likesCountMap = new Map(likesCountResult.map(r => [r.articleId, Number(r.count)]));
+    
+    for (const articleId of articleIds) {
+      result.set(articleId, {
+        likesCount: likesCountMap.get(articleId) || 0,
+        userLiked: userLikedSet.has(articleId)
+      });
+    }
+
+    return result;
   }
 }
 
