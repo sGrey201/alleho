@@ -164,15 +164,6 @@ export default function AdminSubscriptions() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleQuickExtend(user, 7)}
-                              disabled={updateSubscriptionMutation.isPending}
-                              data-testid={`button-extend-7-${user.id}`}
-                            >
-                              {t.extend7Days}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
                               onClick={() => handleQuickExtend(user, 30)}
                               disabled={updateSubscriptionMutation.isPending}
                               data-testid={`button-extend-30-${user.id}`}
