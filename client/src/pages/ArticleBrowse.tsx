@@ -113,6 +113,21 @@ export default function ArticleBrowse() {
     }
   }, [selectedRemedyTagIds, selectedSituationTagIds]);
 
+  // Reset filters when logo is clicked
+  useEffect(() => {
+    const handleResetFilters = () => {
+      setSelectedRemedyTagIds([]);
+      setSelectedSituationTagIds([]);
+      setShowFreeOnly(false);
+      setVisibleCount(12);
+      setNeedsFullLoad(false);
+      window.scrollTo(0, 0);
+    };
+    
+    window.addEventListener('resetFilters', handleResetFilters);
+    return () => window.removeEventListener('resetFilters', handleResetFilters);
+  }, []);
+
   // Обновляем URL при изменении выбранных тегов (только после инициализации)
   useEffect(() => {
     if (!allTags || !hasInitialized.current || isInitializing.current) return;

@@ -74,6 +74,7 @@ export function Header() {
             href="/" 
             className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md px-2 py-1" 
             data-testid="link-home"
+            onClick={() => window.dispatchEvent(new CustomEvent('resetFilters'))}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-[18px]">
               M
