@@ -285,7 +285,8 @@ export default function ArticleBrowse() {
   };
 
   const visibleArticles = filteredArticles.slice(0, visibleCount);
-  const hasMoreArticles = filteredArticles.length > visibleCount;
+  // Show "load more" if: we haven't loaded all articles yet (initial 12) OR there are more filtered articles to show
+  const hasMoreArticles = (!needsFullLoad && filteredArticles.length >= 12) || filteredArticles.length > visibleCount;
 
   const loadMore = () => {
     if (!needsFullLoad) {
