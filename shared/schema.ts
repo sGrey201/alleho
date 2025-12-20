@@ -127,6 +127,7 @@ export const payments = pgTable("payments", {
   description: text("description").notNull(),
   status: varchar("status", { length: 50 }).notNull().default('pending'), // pending, completed, failed
   robokassaData: jsonb("robokassa_data"), // Store callback data from Robokassa
+  receiptUrl: text("receipt_url"), // URL to payment receipt
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
