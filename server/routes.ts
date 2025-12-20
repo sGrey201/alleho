@@ -49,6 +49,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Sitemap.xml - dynamic generation
+  app.get('/sitemap.xml', async (req, res) => {
+    try {
+      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
+        ? `https://${process.env.REPLIT_DEPLOYMENT_URL}`
+        : `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
+      
+      const articles = await storage.getAllArticles();
+      
+      const staticPages: Array<{ loc: string; priority: string; changefreq: string; lastmod?: string }> = [
+        { loc: '/', priority: '1.0', changefreq: 'daily' },
+        { loc: '/subscribe', priority: '0.8', changefreq: 'monthly' },
+        { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
+        { loc: '/auth', priority: '0.5', changefreq: 'monthly' },
+      ];
+      
+      const articleUrls = articles.map(article => ({
+        loc: `/article/${article.slug}`,
+        priority: '0.7',
+        changefreq: 'weekly',
+        lastmod: article.updatedAt ? new Date(article.updatedAt).toISOString().split('T')[0] : undefined,
+      }));
+      
+      const allUrls = [...staticPages, ...articleUrls];
+      
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${allUrls.map(url => `  <url>
+    <loc>${baseUrl}${url.loc}</loc>
+    <priority>${url.priority}</priority>
+    <changefreq>${url.changefreq}</changefreq>${url.lastmod ? `
+    <lastmod>${url.lastmod}</lastmod>` : ''}
+  </url>`).join('\n')}
+</urlset>`;
+      
+      res.set('Content-Type', 'application/xml');
+      res.send(xml);
+    } catch (error) {
+      console.error('Error generating sitemap:', error);
+      res.status(500).send('Error generating sitemap');
+    }
+  });
+
   // Email auth routes
   app.post('/api/auth/register', register);
   app.post('/api/auth/login', login);
