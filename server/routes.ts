@@ -6,6 +6,7 @@ import { register, login, requestPasswordReset, resetPassword, getEmailUser, log
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
+import { prerenderMiddleware, invalidateCache, invalidateTagCache } from "./prerender";
 
 const PREVIEW_LENGTH = 500;
 
@@ -46,6 +47,9 @@ async function getCurrentUserId(req: any): Promise<string | null> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Prerender middleware for SEO (must be before auth)
+  app.use(prerenderMiddleware);
+  
   // Auth middleware
   await setupAuth(app);
 
@@ -329,6 +333,7 @@ ${allUrls.map(url => `  <url>
     try {
       const validatedData = insertTagSchema.parse(req.body);
       const tag = await storage.createTag(validatedData);
+      invalidateTagCache(tag.category as 'remedy' | 'situation');
       res.json(tag);
     } catch (error) {
       console.error("Error creating tag:", error);
@@ -347,6 +352,7 @@ ${allUrls.map(url => `  <url>
       if (!tag) {
         return res.status(404).json({ message: "Tag not found" });
       }
+      invalidateTagCache();
       res.json(tag);
     } catch (error) {
       console.error("Error updating tag:", error);
@@ -364,6 +370,7 @@ ${allUrls.map(url => `  <url>
       if (!deleted) {
         return res.status(404).json({ message: "Tag not found" });
       }
+      invalidateTagCache();
       res.json({ message: "Tag deleted successfully" });
     } catch (error) {
       console.error("Error deleting tag:", error);
@@ -414,6 +421,7 @@ ${allUrls.map(url => `  <url>
       }
       
       const article = await storage.createArticle(validatedData, validatedTagIds);
+      invalidateCache(article.slug);
       res.json(article);
     } catch (error) {
       console.error("Error creating article:", error);
@@ -455,6 +463,7 @@ ${allUrls.map(url => `  <url>
       }
       
       const article = await storage.updateArticle(req.params.id, validatedData, validatedTagIds);
+      invalidateCache(article.slug);
       res.json(article);
     } catch (error) {
       console.error("Error updating article:", error);
@@ -467,7 +476,11 @@ ${allUrls.map(url => `  <url>
 
   app.delete('/api/admin/articles/:id', isAuthenticated, isAdmin, async (req, res) => {
     try {
+      const article = await storage.getArticleById(req.params.id);
       await storage.deleteArticle(req.params.id);
+      if (article) {
+        invalidateCache(article.slug);
+      }
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting article:", error);
