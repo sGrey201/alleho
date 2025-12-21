@@ -207,7 +207,7 @@ export default function AdminSubscriptions() {
                             ? format(new Date(user.subscriptionExpiresAt), 'MMM d, yyyy')
                             : t.never}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-2">
                             <Button
                               variant="outline"
