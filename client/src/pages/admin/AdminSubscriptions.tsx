@@ -212,7 +212,10 @@ export default function AdminSubscriptions() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleQuickExtend(user, 30)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickExtend(user, 30);
+                              }}
                               disabled={updateSubscriptionMutation.isPending}
                               data-testid={`button-extend-30-${user.id}`}
                             >
@@ -238,6 +241,7 @@ export default function AdminSubscriptions() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  onClick={(e) => e.stopPropagation()}
                                   data-testid={`button-set-expiration-${user.id}`}
                                 >
                                   <CalendarIcon className="h-4 w-4" />
