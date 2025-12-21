@@ -164,7 +164,7 @@ export default function AuthPage() {
                             <Input 
                               {...field} 
                               type="password" 
-                              placeholder="••••••" 
+                              placeholder="" 
                               className="pl-10"
                               data-testid="input-login-password"
                             />
