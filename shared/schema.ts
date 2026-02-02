@@ -157,3 +157,94 @@ export const articleLikes = pgTable("article_likes", {
 ]);
 
 export type ArticleLike = typeof articleLikes.$inferSelect;
+
+// User questionnaire table
+export const userQuestionnaires = pgTable("user_questionnaires", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  data: jsonb("data").notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("user_questionnaires_user_idx").on(table.userId),
+]);
+
+export const questionnaireDataSchema = z.object({
+  head: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  face: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  neck: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  chest: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  heartBreathing: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  stomach: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  back: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  arms: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  legs: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  joints: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  muscles: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  skin: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  reproductive: z.object({
+    problem: z.string().optional(),
+    better: z.string().optional(),
+    worse: z.string().optional(),
+  }).optional(),
+  psyche: z.string().optional(),
+  sleep: z.string().optional(),
+  energy: z.string().optional(),
+  cognitive: z.string().optional(),
+  behavior: z.string().optional(),
+  character: z.string().optional(),
+  social: z.string().optional(),
+  general: z.string().optional(),
+  medicalHistory: z.string().optional(),
+});
+
+export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
+export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;

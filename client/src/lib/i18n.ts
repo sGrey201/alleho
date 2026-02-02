@@ -145,6 +145,54 @@ export const t = {
   createNewRemedy: 'Создать препарат',
   createNewSituation: 'Создать ситуацию',
   
+  // Questionnaire
+  questionnaire: 'Моя анкета',
+  questionnaireTitle: 'Анкета пациента',
+  questionnaireDescription: 'Заполните информацию о своём здоровье',
+  questionnaireSaved: 'Анкета сохранена',
+  questionnaireSaveError: 'Ошибка сохранения анкеты',
+  describeProblem: 'Опишите проблему',
+  whatMakesBetter: 'От чего лучше',
+  whatMakesWorse: 'От чего хуже',
+  hintsTitle: 'Подсказки',
+  
+  // Questionnaire sections - Physical
+  sectionHead: 'Голова',
+  sectionFace: 'Лицо, глаза, уши, нос, горло',
+  sectionNeck: 'Шея',
+  sectionChest: 'Грудная клетка',
+  sectionHeartBreathing: 'Сердце и дыхание',
+  sectionStomach: 'Живот, пищеварение',
+  sectionBack: 'Спина',
+  sectionArms: 'Руки',
+  sectionLegs: 'Ноги',
+  sectionJoints: 'Суставы',
+  sectionMuscles: 'Мышцы',
+  sectionSkin: 'Кожа',
+  sectionReproductive: 'Половая система',
+  
+  // Questionnaire sections - Psychological
+  sectionPsyche: 'Психика и эмоции',
+  sectionSleep: 'Сон и бодрствование',
+  sectionEnergy: 'Энергия и силы',
+  sectionCognitive: 'Когнитивные функции (мышление)',
+  sectionBehavior: 'Поведение и привычки',
+  sectionCharacter: 'Характер и личностные особенности',
+  sectionSocial: 'Социальное функционирование',
+  sectionGeneral: 'Общее самочувствие',
+  sectionMedicalHistory: 'История болезней и травм',
+  
+  // Questionnaire hints
+  hintsPsyche: 'Настроение, Тревога, Страхи, Раздражительность, Подавленность, Эмоциональная нестабильность, Апатия',
+  hintsSleep: 'Трудности с засыпанием, Частые пробуждения, Раннее пробуждение, Сонливость днём, Качество сна',
+  hintsEnergy: 'Усталость, Слабость, Истощаемость, Потеря выносливости',
+  hintsCognitive: 'Память, Внимание, Концентрация, Скорость мышления, «Туман в голове»',
+  hintsBehavior: 'Изменения поведения, Импульсивность, Избегание, Зависимости, Режим дня',
+  hintsCharacter: 'Вспыльчивость, Замкнутость, Повышенная чувствительность, Перфекционизм, Неуверенность, Контроль / тревожность',
+  hintsSocial: 'Общение с людьми, Отношения, Работа / учёба, Конфликты, Изоляция',
+  hintsGeneral: '«Чувствую себя плохо», «Что-то не так», Снижение качества жизни',
+  hintsMedicalHistory: 'Перечислите в хронологическом порядке болезни и травмы',
+
   // Errors
   unauthorized: 'Не авторизован',
   unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',

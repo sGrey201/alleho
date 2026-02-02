@@ -5,6 +5,7 @@ import {
   articleTags,
   payments,
   articleLikes,
+  userQuestionnaires,
   type User,
   type UpsertUser,
   type Article,
@@ -16,6 +17,8 @@ import {
   type Payment,
   type InsertPayment,
   type ArticleLike,
+  type UserQuestionnaire,
+  type QuestionnaireData,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray, and } from "drizzle-orm";
@@ -69,6 +72,10 @@ export interface IStorage {
   hasUserLiked(articleId: string, userId: string): Promise<boolean>;
   getArticleLikesInfo(articleId: string, userId?: string): Promise<{ likesCount: number; userLiked: boolean }>;
   getBulkArticleLikesInfo(articleIds: string[], userId?: string): Promise<Map<string, { likesCount: number; userLiked: boolean }>>;
+
+  // Questionnaire operations
+  getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined>;
+  saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -511,6 +518,40 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result;
+  }
+
+  // Questionnaire operations
+  async getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined> {
+    const [questionnaire] = await db
+      .select()
+      .from(userQuestionnaires)
+      .where(eq(userQuestionnaires.userId, userId));
+    return questionnaire;
+  }
+
+  async saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire> {
+    const existing = await this.getQuestionnaire(userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(userQuestionnaires)
+        .set({
+          data,
+          updatedAt: new Date(),
+        })
+        .where(eq(userQuestionnaires.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(userQuestionnaires)
+        .values({
+          userId,
+          data,
+        })
+        .returning();
+      return created;
+    }
   }
 }
 

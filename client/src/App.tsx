@@ -27,6 +27,7 @@ import AdminTags from "@/pages/admin/AdminTags";
 import About from "@/pages/About";
 import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
+import Questionnaire from "@/pages/Questionnaire";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -55,6 +56,7 @@ function Router() {
       <Route path="/subscribe" component={Subscribe} />
       <Route path="/remedies" component={AllRemedies} />
       <Route path="/situations" component={AllSituations} />
+      <Route path="/questionnaire" component={Questionnaire} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (

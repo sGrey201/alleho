@@ -758,6 +758,37 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Questionnaire routes
+  app.get('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const questionnaire = await storage.getQuestionnaire(userId);
+      res.json(questionnaire?.data || {});
+    } catch (error) {
+      console.error("Error fetching questionnaire:", error);
+      res.status(500).json({ message: "Failed to fetch questionnaire" });
+    }
+  });
+
+  app.post('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const questionnaire = await storage.saveQuestionnaire(userId, req.body);
+      res.json(questionnaire);
+    } catch (error) {
+      console.error("Error saving questionnaire:", error);
+      res.status(500).json({ message: "Failed to save questionnaire" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
