@@ -155,13 +155,17 @@ export function Header() {
                     </p>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/questionnaire" className="flex w-full items-center" data-testid="link-questionnaire">
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                    {t.questionnaire}
-                  </Link>
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/questionnaire" className="flex w-full items-center" data-testid="link-questionnaire">
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        {t.questionnaire}
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {isAdmin && (
                   <>
                     <DropdownMenuSeparator />

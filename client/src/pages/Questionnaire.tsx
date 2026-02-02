@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { HelpCircle, Save, Loader2 } from "lucide-react";
+import { HelpCircle, Loader2, Check } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
 
 type PhysicalSectionKey = 'head' | 'face' | 'neck' | 'chest' | 'heartBreathing' | 'stomach' | 'back' | 'arms' | 'legs' | 'joints' | 'muscles' | 'skin' | 'reproductive';
@@ -57,27 +57,32 @@ const psychSections: PsychSection[] = [
 ];
 
 export default function Questionnaire() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [formData, setFormData] = useState<QuestionnaireData>({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const formDataRef = useRef<QuestionnaireData>({});
 
   const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
     queryKey: ['/api/questionnaire'],
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && isAdmin,
   });
 
   useEffect(() => {
     if (savedData) {
       setFormData(savedData);
+      formDataRef.current = savedData;
     }
   }, [savedData]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       setLocation('/auth');
+    } else if (!authLoading && isAuthenticated && !isAdmin) {
+      setLocation('/');
     }
-  }, [authLoading, isAuthenticated, setLocation]);
+  }, [authLoading, isAuthenticated, isAdmin, setLocation]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: QuestionnaireData) => {
@@ -86,12 +91,22 @@ export default function Questionnaire() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/questionnaire'] });
-      toast({ title: t.questionnaireSaved });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     },
     onError: () => {
       toast({ title: t.questionnaireSaveError, variant: "destructive" });
+      setSaveStatus('idle');
     },
   });
+
+  const triggerAutoSave = useCallback(() => {
+    if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
+      formDataRef.current = formData;
+      setSaveStatus('saving');
+      saveMutation.mutate(formData);
+    }
+  }, [formData, saveMutation]);
 
   const updatePhysicalField = (section: PhysicalSectionKey, field: 'problem' | 'better' | 'worse', value: string) => {
     setFormData(prev => ({
@@ -110,10 +125,6 @@ export default function Questionnaire() {
     }));
   };
 
-  const handleSave = () => {
-    saveMutation.mutate(formData);
-  };
-
   if (authLoading || isLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -122,7 +133,7 @@ export default function Questionnaire() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !isAdmin) {
     return null;
   }
 
@@ -130,7 +141,25 @@ export default function Questionnaire() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <Card>
         <CardHeader>
-          <CardTitle data-testid="text-questionnaire-title">{t.questionnaireTitle}</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle data-testid="text-questionnaire-title">{t.questionnaireTitle}</CardTitle>
+            {saveStatus !== 'idle' && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {saveStatus === 'saving' && (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t.saving}</span>
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <>
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>{t.saved}</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <CardDescription>{t.questionnaireDescription}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -149,6 +178,7 @@ export default function Questionnaire() {
                         data-testid={`input-${section.key}-problem`}
                         value={(formData[section.key] as { problem?: string; better?: string; worse?: string } | undefined)?.problem || ''}
                         onChange={(e) => updatePhysicalField(section.key, 'problem', e.target.value)}
+                        onBlur={triggerAutoSave}
                         className="min-h-[80px]"
                       />
                     </div>
@@ -159,6 +189,7 @@ export default function Questionnaire() {
                         data-testid={`input-${section.key}-better`}
                         value={(formData[section.key] as { problem?: string; better?: string; worse?: string } | undefined)?.better || ''}
                         onChange={(e) => updatePhysicalField(section.key, 'better', e.target.value)}
+                        onBlur={triggerAutoSave}
                         className="min-h-[80px]"
                       />
                     </div>
@@ -169,6 +200,7 @@ export default function Questionnaire() {
                         data-testid={`input-${section.key}-worse`}
                         value={(formData[section.key] as { problem?: string; better?: string; worse?: string } | undefined)?.worse || ''}
                         onChange={(e) => updatePhysicalField(section.key, 'worse', e.target.value)}
+                        onBlur={triggerAutoSave}
                         className="min-h-[80px]"
                       />
                     </div>
@@ -209,6 +241,7 @@ export default function Questionnaire() {
                       data-testid={`input-${section.key}`}
                       value={(formData[section.key] as string | undefined) || ''}
                       onChange={(e) => updatePsychField(section.key, e.target.value)}
+                      onBlur={triggerAutoSave}
                       className="min-h-[120px]"
                     />
                   </div>
@@ -217,20 +250,6 @@ export default function Questionnaire() {
             ))}
           </Accordion>
 
-          <div className="mt-8 flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-              data-testid="button-save-questionnaire"
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              {t.save}
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

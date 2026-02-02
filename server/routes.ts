@@ -758,8 +758,8 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Questionnaire routes
-  app.get('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+  // Questionnaire routes (admin only)
+  app.get('/api/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) {
@@ -774,7 +774,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  app.post('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+  app.post('/api/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) {
