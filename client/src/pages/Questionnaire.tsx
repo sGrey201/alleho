@@ -67,6 +67,8 @@ export default function Questionnaire() {
   const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
     queryKey: ['/api/questionnaire'],
     enabled: isAuthenticated && isAdmin,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {
