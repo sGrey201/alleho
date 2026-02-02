@@ -116,9 +116,9 @@ Preferred communication style: Simple, everyday language.
 - `PUT /api/admin/tags/:id` - Update tag
 - `DELETE /api/admin/tags/:id` - Delete tag
 
-**Questionnaire Routes** (require authentication)
+**Questionnaire Routes** (require admin role)
 - `GET /api/questionnaire` - Get user's questionnaire data
-- `POST /api/questionnaire` - Save user's questionnaire data
+- `POST /api/questionnaire` - Save user's questionnaire data (auto-saves on field blur)
 
 ### Internationalization
 
@@ -142,8 +142,10 @@ Preferred communication style: Simple, everyday language.
 - ✅ Physical sections (14): Head, Face/Eyes/Ears/Nose/Throat, Neck, Chest, Heart/Breathing, Stomach/Digestion, Back, Arms, Legs, Joints, Muscles, Skin, Reproductive system - each with problem/better/worse fields
 - ✅ Psychological sections (9): Psyche/Emotions, Sleep, Energy, Cognitive, Behavior, Character, Social, General wellbeing, Medical history - text fields with hint popups
 - ✅ API routes for fetching and saving questionnaire data
-- ✅ Added "My Questionnaire" link to user dropdown menu in header
+- ✅ Added "My Questionnaire" link to user dropdown menu in header (admin only)
 - ✅ Russian translations for all questionnaire sections and labels
+- ✅ Admin-only access restriction for questionnaire (API and frontend)
+- ✅ Auto-save functionality - data saves automatically when moving between fields
 
 **December 20, 2025 - SEO Optimization with Prerendering**
 - ✅ Added robots.txt with proper crawling directives
