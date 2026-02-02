@@ -9,7 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { HelpCircle, Loader2, Check } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
@@ -89,8 +89,8 @@ export default function Questionnaire() {
       const res = await apiRequest("POST", "/api/questionnaire", data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/questionnaire'] });
+    onSuccess: (_data, variables) => {
+      formDataRef.current = variables;
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
