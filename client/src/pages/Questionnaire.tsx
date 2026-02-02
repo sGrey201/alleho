@@ -165,7 +165,7 @@ export default function Questionnaire() {
           <CardDescription>{t.questionnaireDescription}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Accordion type="multiple" className="w-full">
+          <Accordion type="single" collapsible className="w-full">
             {physicalSections.map((section) => (
               <AccordionItem key={section.key} value={section.key}>
                 <AccordionTrigger data-testid={`accordion-${section.key}`}>
@@ -227,7 +227,7 @@ export default function Questionnaire() {
                           <HelpCircle className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-80" side="right">
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
                         <div className="space-y-2">
                           <h4 className="font-medium">{t.hintsTitle}</h4>
                           <p className="text-sm text-muted-foreground">{section.hints}</p>
