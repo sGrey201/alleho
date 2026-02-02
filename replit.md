@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a subscription-based homeopathy content platform that delivers professional articles about homeopathic remedies and patient cases in three languages: Russian, German, and English. The application features a clean, Medium-inspired reading experience for content consumption and a systematic admin interface for managing articles and user subscriptions. Built with React, Express, and PostgreSQL, it uses Replit Auth for authentication and implements content access control based on subscription status.
+This is a subscription-based homeopathy content platform that delivers professional articles about homeopathic remedies and patient cases. The application features a clean, Medium-inspired reading experience for content consumption and a systematic admin interface for managing articles and user subscriptions. Built with React, Express, and PostgreSQL, it uses email/password authentication with session-based security and implements content access control based on subscription status.
 
 ## User Preferences
 
@@ -116,6 +116,10 @@ Preferred communication style: Simple, everyday language.
 - `PUT /api/admin/tags/:id` - Update tag
 - `DELETE /api/admin/tags/:id` - Delete tag
 
+**Questionnaire Routes** (require authentication)
+- `GET /api/questionnaire` - Get user's questionnaire data
+- `POST /api/questionnaire` - Save user's questionnaire data
+
 ### Internationalization
 
 **Supported Languages**
@@ -131,6 +135,15 @@ Preferred communication style: Simple, everyday language.
 - UI translations for navigation, forms, and system messages
 
 ## Recent Changes
+
+**February 2, 2026 - Patient Questionnaire Feature**
+- ✅ Added user questionnaire table (user_questionnaires) with JSONB data storage
+- ✅ Created questionnaire page (/questionnaire) with accordion-based form
+- ✅ Physical sections (14): Head, Face/Eyes/Ears/Nose/Throat, Neck, Chest, Heart/Breathing, Stomach/Digestion, Back, Arms, Legs, Joints, Muscles, Skin, Reproductive system - each with problem/better/worse fields
+- ✅ Psychological sections (9): Psyche/Emotions, Sleep, Energy, Cognitive, Behavior, Character, Social, General wellbeing, Medical history - text fields with hint popups
+- ✅ API routes for fetching and saving questionnaire data
+- ✅ Added "My Questionnaire" link to user dropdown menu in header
+- ✅ Russian translations for all questionnaire sections and labels
 
 **December 20, 2025 - SEO Optimization with Prerendering**
 - ✅ Added robots.txt with proper crawling directives
