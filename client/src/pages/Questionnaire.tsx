@@ -264,15 +264,15 @@ export default function Questionnaire() {
 
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
-      {isPatientView && (
+      {isPatientView && patientId && (
         <Button
           variant="ghost"
-          onClick={() => setLocation('/my-patients')}
+          onClick={() => setLocation(`/health-wall/${patientId}`)}
           className="mb-4"
-          data-testid="button-back-to-patients"
+          data-testid="button-back-to-health-wall"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          {t.backToPatients}
+          {t.backToHealthWall}
         </Button>
       )}
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">

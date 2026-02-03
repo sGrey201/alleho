@@ -243,6 +243,7 @@ export const t = {
   lastUpdated: 'Обновлено',
   patientQuestionnaire: 'Анкета пациента',
   backToPatients: 'Назад к пациентам',
+  backToHealthWall: 'Назад',
   accessDenied: 'Доступ запрещён',
   questionnaireNotFound: 'Анкета не найдена',
   noDataAvailable: 'Нет данных',
