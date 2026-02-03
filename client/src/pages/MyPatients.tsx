@@ -61,7 +61,6 @@ export default function MyPatients() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold" data-testid="text-my-patients-title">{t.myPatients}</h1>
-        <p className="text-muted-foreground">{t.myPatientsDescription}</p>
       </div>
 
       {patients && patients.length > 0 ? (
