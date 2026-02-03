@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -140,11 +139,11 @@ export default function Questionnaire() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle data-testid="text-questionnaire-title">{t.questionnaireTitle}</CardTitle>
+    <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
+        <div className="pb-2 sm:p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-xl font-semibold" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
             {saveStatus !== 'idle' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {saveStatus === 'saving' && (
@@ -162,9 +161,9 @@ export default function Questionnaire() {
               </div>
             )}
           </div>
-          <CardDescription>{t.questionnaireDescription}</CardDescription>
-        </CardHeader>
-        <CardContent>
+          <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
+        </div>
+        <div className="sm:px-6 sm:pb-6">
           <Accordion type="single" collapsible className="w-full">
             {physicalSections.map((section) => (
               <AccordionItem key={section.key} value={section.key}>
@@ -252,8 +251,8 @@ export default function Questionnaire() {
             ))}
           </Accordion>
 
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
