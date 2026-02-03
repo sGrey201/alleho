@@ -165,22 +165,28 @@ export default function HealthWall() {
     ? t.healthWall 
     : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
 
+  const handleBackClick = () => {
+    if (isOwnWall) {
+      setLocation('/');
+    } else {
+      setLocation('/my-patients');
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 lg:px-8 flex flex-col h-[calc(100vh-120px)]">
-      <div className="mb-4 flex items-center gap-4">
-        {!isOwnWall && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation('/my-patients')}
-            data-testid="button-back-to-patients"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        )}
+    <div className="flex flex-col h-full">
+      <div className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBackClick}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold" data-testid="text-health-wall-title">
-            {displayName}
+          <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
+            {isOwnWall ? t.healthWall : displayName}
           </h1>
           {!isOwnWall && patientInfo && (
             <p className="text-sm text-muted-foreground">
@@ -198,7 +204,7 @@ export default function HealthWall() {
         </Link>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages && messages.length > 0 ? (
           <>
             {messages.map((msg) => {
@@ -258,7 +264,7 @@ export default function HealthWall() {
         )}
       </div>
 
-      <div className="border-t pt-4">
+      <div className="border-t px-4 py-3 shrink-0">
         {isAdmin && !isOwnWall && (
           <div className="flex items-center gap-2 mb-2">
             <Button

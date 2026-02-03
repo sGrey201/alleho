@@ -126,6 +126,17 @@ function AppContent() {
     );
   }
 
+  const isHealthWall = location.startsWith('/health-wall');
+
+  if (isHealthWall) {
+    return (
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
+        <ScrollToTop />
+        <Router />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <ScrollToTop />
