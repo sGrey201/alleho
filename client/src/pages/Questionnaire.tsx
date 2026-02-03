@@ -97,11 +97,11 @@ export default function Questionnaire() {
 
   const [, patientParams] = useRoute("/patient/:userId");
   const patientId = patientParams?.userId;
-  const isReadOnly = !!patientId;
+  const isPatientView = !!patientId;
 
   const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
     queryKey: ['/api/questionnaire'],
-    enabled: isAuthenticated && isAdmin && !isReadOnly,
+    enabled: isAuthenticated && isAdmin && !isPatientView,
     staleTime: 0,
     refetchOnMount: 'always',
   });
@@ -115,21 +115,22 @@ export default function Questionnaire() {
       }
       return res.json();
     },
-    enabled: isAuthenticated && isAdmin && isReadOnly,
+    enabled: isAuthenticated && isAdmin && isPatientView,
   });
 
   useEffect(() => {
-    if (savedData && !isReadOnly) {
+    if (savedData && !isPatientView) {
       setFormData(savedData);
       formDataRef.current = savedData;
     }
-  }, [savedData, isReadOnly]);
+  }, [savedData, isPatientView]);
 
   useEffect(() => {
-    if (patientData && isReadOnly) {
+    if (patientData && isPatientView) {
       setFormData(patientData.data);
+      formDataRef.current = patientData.data;
     }
-  }, [patientData, isReadOnly]);
+  }, [patientData, isPatientView]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -141,7 +142,8 @@ export default function Questionnaire() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: QuestionnaireData) => {
-      const res = await apiRequest("POST", "/api/questionnaire", data);
+      const url = isPatientView ? `/api/patient/${patientId}/questionnaire` : "/api/questionnaire";
+      const res = await apiRequest("POST", url, data);
       return res.json();
     },
     onSuccess: (_data, variables) => {
@@ -230,6 +232,13 @@ export default function Questionnaire() {
     }));
   };
 
+  const updateHomeopathNotes = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      homeopathNotes: value,
+    }));
+  };
+
   if (authLoading || isLoading || isLoadingPatient) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -251,13 +260,13 @@ export default function Questionnaire() {
     }
   };
 
-  const patientName = isReadOnly 
+  const patientName = isPatientView 
     ? (formData.patientName || patientData?.patient.firstName || patientData?.patient.email)
     : null;
 
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
-      {isReadOnly && (
+      {isPatientView && (
         <Button
           variant="ghost"
           onClick={() => setLocation('/my-patients')}
@@ -272,9 +281,9 @@ export default function Questionnaire() {
         <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
           <div>
             <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">
-              {isReadOnly ? `${t.patientQuestionnaire}: ${patientName}` : t.questionnaireTitle}
+              {isPatientView ? `${t.patientQuestionnaire}: ${patientName}` : t.questionnaireTitle}
             </h2>
-            {isReadOnly ? (
+            {isPatientView ? (
               <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
                 {formData.birthMonth && formData.birthYear && (
                   <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
@@ -300,7 +309,7 @@ export default function Questionnaire() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {!isReadOnly && saveStatus !== 'idle' && (
+            {saveStatus !== 'idle' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {saveStatus === 'saving' && (
                   <>
@@ -316,7 +325,7 @@ export default function Questionnaire() {
                 )}
               </div>
             )}
-            {!isReadOnly && (
+            {!isPatientView && (
               <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <SheetTrigger asChild>
                   <Button
@@ -464,7 +473,6 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'problem', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
-                        disabled={isReadOnly}
                       />
                     </div>
                     <div className="space-y-2">
@@ -476,7 +484,6 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'better', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
-                        disabled={isReadOnly}
                       />
                     </div>
                     <div className="space-y-2">
@@ -488,7 +495,6 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'worse', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
-                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -530,12 +536,32 @@ export default function Questionnaire() {
                       onChange={(e) => updatePsychField(section.key, e.target.value)}
                       onBlur={triggerAutoSave}
                       className="min-h-[120px]"
-                      disabled={isReadOnly}
                     />
                   </div>
                 </AccordionContent>
               </AccordionItem>
             ))}
+
+            {isPatientView && (
+              <AccordionItem value="homeopathNotes">
+                <AccordionTrigger data-testid="accordion-homeopath-notes">
+                  {t.sectionHomeopathNotes}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2 pt-2">
+                    <p className="text-sm text-muted-foreground">{t.homeopathNotesDescription}</p>
+                    <Textarea
+                      id="homeopath-notes"
+                      data-testid="input-homeopath-notes"
+                      value={formData.homeopathNotes || ''}
+                      onChange={(e) => updateHomeopathNotes(e.target.value)}
+                      onBlur={triggerAutoSave}
+                      className="min-h-[200px]"
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
           </Accordion>
 
         </div>

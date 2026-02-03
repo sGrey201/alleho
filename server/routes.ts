@@ -848,6 +848,39 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Save a patient's questionnaire (only if shared with current user)
+  app.post('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+      
+      const patientId = req.params.userId;
+      const existingQuestionnaire = await storage.getQuestionnaire(patientId);
+      
+      if (!existingQuestionnaire) {
+        return res.status(404).json({ message: "Questionnaire not found" });
+      }
+      
+      const existingData = existingQuestionnaire.data as QuestionnaireData;
+      if (!existingData.sharedWithEmails?.includes(currentUser.email)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const questionnaire = await storage.saveQuestionnaire(patientId, req.body);
+      res.json(questionnaire);
+    } catch (error) {
+      console.error("Error saving patient questionnaire:", error);
+      res.status(500).json({ message: "Failed to save questionnaire" });
+    }
+  });
+
   // Get questionnaires shared with current user (My Patients)
   app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
