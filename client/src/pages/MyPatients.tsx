@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { Loader2, Users } from "lucide-react";
-import { format } from "date-fns";
 
 interface Patient {
   id: string;
@@ -85,13 +84,6 @@ export default function MyPatients() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{patient.email}</span>
-                  <span>•</span>
-                  <span>{t.lastUpdated}: {format(new Date(patient.updatedAt), 'dd.MM.yyyy')}</span>
-                </div>
-              </CardContent>
             </Card>
           ))}
         </div>
