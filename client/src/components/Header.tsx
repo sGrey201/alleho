@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, Plus, Check, AlertTriangle, X, ClipboardList, Users } from 'lucide-react';
+import { User, Settings, LogOut, Plus, Check, AlertTriangle, X, ClipboardList, Users, Heart } from 'lucide-react';
 import { ArticleDialog } from '@/components/ArticleDialog';
 import { format } from 'date-fns';
 
@@ -155,15 +155,15 @@ export function Header() {
                     </p>
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/health-wall" className="flex w-full items-center" data-testid="link-health-wall">
+                    <Heart className="mr-2 h-4 w-4" />
+                    {t.healthWall}
+                  </Link>
+                </DropdownMenuItem>
                 {isAdmin && (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/questionnaire" className="flex w-full items-center" data-testid="link-questionnaire">
-                        <ClipboardList className="mr-2 h-4 w-4" />
-                        {t.questionnaire}
-                      </Link>
-                    </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/my-patients" className="flex w-full items-center" data-testid="link-my-patients">
                         <Users className="mr-2 h-4 w-4" />

@@ -275,4 +275,21 @@ export const t = {
   refundPolicy: 'Политика возврата',
   noRefund: 'Возврат средств не предусмотрен',
   contactUs: 'Связаться с нами',
+
+  // Health Wall
+  healthWall: 'Стена здоровья',
+  healthWallDescription: 'История лечения и общение с врачом',
+  sendMessage: 'Отправить',
+  writeMessage: 'Напишите сообщение...',
+  prescription: 'Назначение',
+  prescriptionPlaceholder: 'Введите назначение...',
+  sendPrescription: 'Добавить назначение',
+  noMessages: 'Нет сообщений',
+  noMessagesDescription: 'Начните общение с вашим врачом',
+  uploadPhoto: 'Загрузить фото',
+  viewQuestionnaireFull: 'Просмотреть анкету',
+  doctor: 'Врач',
+  patient: 'Пациент',
+  today: 'Сегодня',
+  yesterday: 'Вчера',
 };

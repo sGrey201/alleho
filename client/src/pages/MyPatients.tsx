@@ -65,7 +65,12 @@ export default function MyPatients() {
       {patients && patients.length > 0 ? (
         <div className="space-y-4">
           {patients.map((patient) => (
-            <Card key={patient.id} className="hover-elevate" data-testid={`card-patient-${patient.id}`}>
+            <Card 
+              key={patient.id} 
+              className="hover-elevate cursor-pointer" 
+              data-testid={`card-patient-${patient.id}`}
+              onClick={() => setLocation(`/health-wall/${patient.userId}`)}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div>

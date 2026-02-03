@@ -29,6 +29,7 @@ import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
 import Questionnaire from "@/pages/Questionnaire";
 import MyPatients from "@/pages/MyPatients";
+import HealthWall from "@/pages/HealthWall";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -60,6 +61,8 @@ function Router() {
       <Route path="/questionnaire" component={Questionnaire} />
       <Route path="/my-patients" component={MyPatients} />
       <Route path="/patient/:userId" component={Questionnaire} />
+      <Route path="/health-wall" component={HealthWall} />
+      <Route path="/health-wall/:patientUserId" component={HealthWall} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (
