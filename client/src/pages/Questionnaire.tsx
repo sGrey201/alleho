@@ -405,7 +405,6 @@ export default function Questionnaire() {
 
                     <div className="space-y-2">
                       <Label>{t.doctorAccess}</Label>
-                      <p className="text-sm text-muted-foreground">{t.doctorAccessDescription}</p>
                       <div className="flex gap-2">
                         <Input
                           type="email"
