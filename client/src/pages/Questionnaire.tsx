@@ -286,7 +286,7 @@ export default function Questionnaire() {
                   {patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
+                <h1 className="text-lg font-bold" data-testid="text-patient-info">
                   {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
                     <>
                       {formData.patientName && <span>{formData.patientName}</span>}
@@ -296,9 +296,9 @@ export default function Questionnaire() {
                       )}
                     </>
                   ) : (
-                    t.questionnaireDescription
+                    t.questionnaire
                   )}
-                </p>
+                </h1>
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
