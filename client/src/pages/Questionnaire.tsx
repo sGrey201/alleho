@@ -286,7 +286,6 @@ export default function Questionnaire() {
                   )}
                   {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
                   {isPatientView && patientData?.patient.email && <span>• {patientData.patient.email}</span>}
-                  {isPatientView && patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
                 </div>
               </div>
             </div>
