@@ -276,9 +276,6 @@ export default function Questionnaire() {
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
         <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
           <div>
-            <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">
-              {isPatientView ? `${t.patientQuestionnaire}: ${patientName}` : t.questionnaireTitle}
-            </h2>
             {isPatientView ? (
               <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
                 {formData.birthMonth && formData.birthYear && (
