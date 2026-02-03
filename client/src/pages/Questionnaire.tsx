@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { HelpCircle, Loader2, Check, Settings, X, Plus } from "lucide-react";
+import { HelpCircle, Loader2, Check, Settings, X, Plus, ArrowLeft } from "lucide-react";
+import { format } from "date-fns";
 import type { QuestionnaireData } from "@shared/schema";
+
+interface PatientQuestionnaireResponse {
+  data: QuestionnaireData;
+  patient: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  updatedAt: string;
+}
 
 const months = [
   { value: 1, label: t.january },
@@ -83,19 +95,41 @@ export default function Questionnaire() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
 
+  const [, patientParams] = useRoute("/patient/:userId");
+  const patientId = patientParams?.userId;
+  const isReadOnly = !!patientId;
+
   const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
     queryKey: ['/api/questionnaire'],
-    enabled: isAuthenticated && isAdmin,
+    enabled: isAuthenticated && isAdmin && !isReadOnly,
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
+  const { data: patientData, isLoading: isLoadingPatient } = useQuery<PatientQuestionnaireResponse>({
+    queryKey: ['/api/patient', patientId, 'questionnaire'],
+    queryFn: async () => {
+      const res = await fetch(`/api/patient/${patientId}/questionnaire`);
+      if (!res.ok) {
+        throw new Error(res.status === 403 ? 'access_denied' : 'not_found');
+      }
+      return res.json();
+    },
+    enabled: isAuthenticated && isAdmin && isReadOnly,
+  });
+
   useEffect(() => {
-    if (savedData) {
+    if (savedData && !isReadOnly) {
       setFormData(savedData);
       formDataRef.current = savedData;
     }
-  }, [savedData]);
+  }, [savedData, isReadOnly]);
+
+  useEffect(() => {
+    if (patientData && isReadOnly) {
+      setFormData(patientData.data);
+    }
+  }, [patientData, isReadOnly]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -196,7 +230,7 @@ export default function Questionnaire() {
     }));
   };
 
-  if (authLoading || isLoading) {
+  if (authLoading || isLoading || isLoadingPatient) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -208,28 +242,65 @@ export default function Questionnaire() {
     return null;
   }
 
+  const getGenderLabel = (gender?: string) => {
+    switch (gender) {
+      case 'male': return t.genderMale;
+      case 'female': return t.genderFemale;
+      case 'other': return t.genderOther;
+      default: return '';
+    }
+  };
+
+  const patientName = isReadOnly 
+    ? (formData.patientName || patientData?.patient.firstName || patientData?.patient.email)
+    : null;
+
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
+      {isReadOnly && (
+        <Button
+          variant="ghost"
+          onClick={() => setLocation('/my-patients')}
+          className="mb-4"
+          data-testid="button-back-to-patients"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          {t.backToPatients}
+        </Button>
+      )}
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
         <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
           <div>
-            <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
-            <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
-              {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
-                <>
-                  {formData.patientName && <span>{formData.patientName}</span>}
-                  {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
-                  {formData.birthMonth && formData.birthYear && (
-                    <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
-                  )}
-                </>
-              ) : (
-                t.questionnaireDescription
-              )}
-            </p>
+            <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">
+              {isReadOnly ? `${t.patientQuestionnaire}: ${patientName}` : t.questionnaireTitle}
+            </h2>
+            {isReadOnly ? (
+              <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
+                {formData.birthMonth && formData.birthYear && (
+                  <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
+                )}
+                {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
+                {patientData?.patient.email && <span>• {patientData.patient.email}</span>}
+                {patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
+                {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
+                  <>
+                    {formData.patientName && <span>{formData.patientName}</span>}
+                    {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
+                    {formData.birthMonth && formData.birthYear && (
+                      <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
+                    )}
+                  </>
+                ) : (
+                  t.questionnaireDescription
+                )}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {saveStatus !== 'idle' && (
+            {!isReadOnly && saveStatus !== 'idle' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {saveStatus === 'saving' && (
                   <>
@@ -245,7 +316,8 @@ export default function Questionnaire() {
                 )}
               </div>
             )}
-            <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+            {!isReadOnly && (
+              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
@@ -370,7 +442,8 @@ export default function Questionnaire() {
                     </div>
                   </div>
                 </SheetContent>
-            </Sheet>
+              </Sheet>
+            )}
           </div>
         </div>
         <div className="sm:px-6 sm:pb-6">
@@ -391,6 +464,7 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'problem', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
+                        disabled={isReadOnly}
                       />
                     </div>
                     <div className="space-y-2">
@@ -402,6 +476,7 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'better', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
+                        disabled={isReadOnly}
                       />
                     </div>
                     <div className="space-y-2">
@@ -413,6 +488,7 @@ export default function Questionnaire() {
                         onChange={(e) => updatePhysicalField(section.key, 'worse', e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[80px]"
+                        disabled={isReadOnly}
                       />
                     </div>
                   </div>
@@ -454,6 +530,7 @@ export default function Questionnaire() {
                       onChange={(e) => updatePsychField(section.key, e.target.value)}
                       onBlur={triggerAutoSave}
                       className="min-h-[120px]"
+                      disabled={isReadOnly}
                     />
                   </div>
                 </AccordionContent>
