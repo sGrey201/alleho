@@ -126,9 +126,11 @@ function AppContent() {
     );
   }
 
-  const isHealthWall = location.startsWith('/health-wall');
+  const isFullscreenPage = location.startsWith('/health-wall') || 
+                           location.startsWith('/questionnaire') || 
+                           location.startsWith('/patient/');
 
-  if (isHealthWall) {
+  if (isFullscreenPage) {
     return (
       <div className="h-screen bg-background flex flex-col overflow-hidden">
         <ScrollToTop />

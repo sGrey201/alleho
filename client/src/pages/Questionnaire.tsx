@@ -263,63 +263,64 @@ export default function Questionnaire() {
     : null;
 
   return (
-    <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
-      <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
-        <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLocation(isPatientView ? `/health-wall/${patientId}` : '/health-wall')}
-              data-testid="button-back-to-health-wall"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            {isPatientView ? (
-              <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
-                {formData.birthMonth && formData.birthYear && (
-                  <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
-                )}
-                {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
-                {patientData?.patient.email && <span>• {patientData.patient.email}</span>}
-                {patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
-                {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
-                  <>
-                    {formData.patientName && <span>{formData.patientName}</span>}
-                    {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
-                    {formData.birthMonth && formData.birthYear && (
-                      <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
-                    )}
-                  </>
-                ) : (
-                  t.questionnaireDescription
-                )}
-              </p>
-            )}
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
+        <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
+          <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLocation(isPatientView ? `/health-wall/${patientId}` : '/health-wall')}
+                data-testid="button-back-to-health-wall"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              {isPatientView ? (
+                <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
+                  {formData.birthMonth && formData.birthYear && (
+                    <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
+                  )}
+                  {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
+                  {patientData?.patient.email && <span>• {patientData.patient.email}</span>}
+                  {patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
+                  {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
+                    <>
+                      {formData.patientName && <span>{formData.patientName}</span>}
+                      {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
+                      {formData.birthMonth && formData.birthYear && (
+                        <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
+                      )}
+                    </>
+                  ) : (
+                    t.questionnaireDescription
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {saveStatus !== 'idle' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {saveStatus === 'saving' && (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{t.saving}</span>
+                    </>
+                  )}
+                  {saveStatus === 'saved' && (
+                    <>
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>{t.saved}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {saveStatus !== 'idle' && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {saveStatus === 'saving' && (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{t.saving}</span>
-                  </>
-                )}
-                {saveStatus === 'saved' && (
-                  <>
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>{t.saved}</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="sm:px-6 sm:pb-6">
+          <div className="sm:px-6 sm:pb-6">
           <Accordion type="single" collapsible className="w-full">
             {!isPatientView && (
               <AccordionItem value="basicInfo">
@@ -546,6 +547,7 @@ export default function Questionnaire() {
             )}
           </Accordion>
 
+          </div>
         </div>
       </div>
     </div>
