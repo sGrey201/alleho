@@ -7,13 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { HelpCircle, Loader2, Check, Settings, X, Plus, ArrowLeft } from "lucide-react";
+import { HelpCircle, Loader2, Check, X, Plus, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import type { QuestionnaireData } from "@shared/schema";
 
@@ -92,7 +91,6 @@ export default function Questionnaire() {
   const [formData, setFormData] = useState<QuestionnaireData>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const formDataRef = useRef<QuestionnaireData>({});
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
 
   const [, patientParams] = useRoute("/patient/:userId");
@@ -325,23 +323,17 @@ export default function Questionnaire() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+        <div className="sm:px-6 sm:pb-6">
+          <Accordion type="single" collapsible className="w-full">
             {!isPatientView && (
-              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    data-testid="button-questionnaire-settings"
-                  >
-                    <Settings className="h-5 w-5 text-muted-foreground" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent className="overflow-y-auto">
-                  <SheetHeader>
-                    <SheetTitle>{t.questionnaireSettings}</SheetTitle>
-                    <SheetDescription>{t.questionnaireDescription}</SheetDescription>
-                  </SheetHeader>
-                  <div className="space-y-6 py-6">
+              <AccordionItem value="basicInfo">
+                <AccordionTrigger data-testid="accordion-basic-info">
+                  {t.sectionBasicInfo}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-6 pt-2">
                     <div className="space-y-2">
                       <Label htmlFor="patientName">{t.patientName}</Label>
                       <Input
@@ -450,13 +442,10 @@ export default function Questionnaire() {
                       )}
                     </div>
                   </div>
-                </SheetContent>
-              </Sheet>
+                </AccordionContent>
+              </AccordionItem>
             )}
-          </div>
-        </div>
-        <div className="sm:px-6 sm:pb-6">
-          <Accordion type="single" collapsible className="w-full">
+
             {physicalSections.map((section) => (
               <AccordionItem key={section.key} value={section.key}>
                 <AccordionTrigger data-testid={`accordion-${section.key}`}>

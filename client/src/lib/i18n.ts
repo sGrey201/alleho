@@ -198,6 +198,7 @@ export const t = {
   // Homeopath notes section
   sectionHomeopathNotes: 'Заметки гомеопата',
   homeopathNotesDescription: 'Не видны пациенту',
+  sectionBasicInfo: 'Основное',
 
   // Questionnaire settings
   questionnaireSettings: 'Настройки анкеты',
