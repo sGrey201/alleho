@@ -27,7 +27,7 @@ interface HealthWallMessage {
   id: string;
   patientUserId: string;
   authorUserId: string;
-  messageType: 'message' | 'prescription';
+  messageType: 'message' | 'prescription' | 'followup';
   content?: string;
   imageUrl?: string;
   createdAt: string;
@@ -48,7 +48,7 @@ export default function HealthWall() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [message, setMessage] = useState('');
-  const [prescriptionMode, setPrescriptionMode] = useState(false);
+  const [messageMode, setMessageMode] = useState<'message' | 'prescription' | 'followup'>('message');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -91,7 +91,7 @@ export default function HealthWall() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/health-wall', patientUserId] });
       setMessage('');
-      setPrescriptionMode(false);
+      setMessageMode('message');
     },
     onError: () => {
       toast({
@@ -128,7 +128,7 @@ export default function HealthWall() {
     if (!message.trim()) return;
     sendMessageMutation.mutate({
       content: message.trim(),
-      messageType: prescriptionMode ? 'prescription' : 'message',
+      messageType: messageMode,
     });
   };
 
@@ -217,6 +217,7 @@ export default function HealthWall() {
             {messages.map((msg) => {
               const isOwnMessage = msg.authorUserId === user?.id;
               const isPrescription = msg.messageType === 'prescription';
+              const isFollowup = msg.messageType === 'followup';
 
               return (
                 <div
@@ -228,9 +229,11 @@ export default function HealthWall() {
                     className={`max-w-[85%] ${
                       isPrescription 
                         ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' 
-                        : isOwnMessage 
-                          ? 'bg-primary/10' 
-                          : ''
+                        : isFollowup
+                          ? 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800'
+                          : isOwnMessage 
+                            ? 'bg-primary/10' 
+                            : ''
                     }`}
                   >
                     <CardContent className="p-3">
@@ -239,6 +242,14 @@ export default function HealthWall() {
                           <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
                             <Pill className="h-3 w-3 mr-1" />
                             {t.prescription}
+                          </Badge>
+                        </div>
+                      )}
+                      {isFollowup && (
+                        <div className="mb-1">
+                          <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
+                            <FileText className="h-3 w-3 mr-1" />
+                            {t.followup}
                           </Badge>
                         </div>
                       )}
@@ -276,23 +287,42 @@ export default function HealthWall() {
         {isAdmin && !isOwnWall && (
           <div className="flex items-center gap-2 mb-2">
             <Button
-              variant={prescriptionMode ? "default" : "outline"}
+              variant={messageMode === 'prescription' ? "default" : "outline"}
               size="sm"
-              onClick={() => setPrescriptionMode(!prescriptionMode)}
+              onClick={() => setMessageMode(messageMode === 'prescription' ? 'message' : 'prescription')}
+              className={messageMode === 'prescription' ? 'bg-green-600 hover:bg-green-700' : ''}
               data-testid="button-toggle-prescription"
             >
               <Pill className="h-4 w-4 mr-1" />
               {t.prescription}
             </Button>
+            <Button
+              variant={messageMode === 'followup' ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMessageMode(messageMode === 'followup' ? 'message' : 'followup')}
+              className={messageMode === 'followup' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              data-testid="button-toggle-followup"
+            >
+              <FileText className="h-4 w-4 mr-1" />
+              {t.followup}
+            </Button>
           </div>
         )}
         <div className="flex gap-2">
           <Textarea
-            placeholder={prescriptionMode ? t.prescriptionPlaceholder : t.writeMessage}
+            placeholder={
+              messageMode === 'prescription' ? t.prescriptionPlaceholder : 
+              messageMode === 'followup' ? t.followupPlaceholder : 
+              t.writeMessage
+            }
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            className={`flex-1 min-h-[44px] max-h-32 resize-none ${prescriptionMode ? 'border-green-300 dark:border-green-700' : ''}`}
+            className={`flex-1 min-h-[44px] max-h-32 resize-none ${
+              messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
+              messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
+              ''
+            }`}
             data-testid="input-message"
           />
           <div className="flex flex-col gap-1">

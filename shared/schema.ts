@@ -257,7 +257,7 @@ export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
 export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;
 
 // Health wall message type enum
-export const healthWallMessageTypeEnum = z.enum(['message', 'prescription']);
+export const healthWallMessageTypeEnum = z.enum(['message', 'prescription', 'followup']);
 export type HealthWallMessageType = z.infer<typeof healthWallMessageTypeEnum>;
 
 // Health wall messages table (chat between doctor and patient)

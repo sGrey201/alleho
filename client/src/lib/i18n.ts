@@ -285,6 +285,8 @@ export const t = {
   prescription: 'Назначение',
   prescriptionPlaceholder: 'Введите назначение...',
   sendPrescription: 'Добавить назначение',
+  followup: 'Follow Up',
+  followupPlaceholder: 'Введите follow up...',
   noMessages: 'Нет сообщений',
   noMessagesDescription: 'Начните общение с вашим врачом',
   uploadPhoto: 'Загрузить фото',
