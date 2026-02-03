@@ -218,10 +218,10 @@ export default function Questionnaire() {
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="lg"
+                    size="icon"
                     data-testid="button-questionnaire-settings"
                   >
-                    <Settings className="h-6 w-6 text-muted-foreground" />
+                    <Settings className="h-5 w-5 text-muted-foreground" />
                   </Button>
                 </SheetTrigger>
                 <SheetContent className="overflow-y-auto">
