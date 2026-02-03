@@ -223,7 +223,7 @@ export default function HealthWall() {
                     <CardContent className="p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium">
-                          {msg.author.isAdmin ? t.doctor : t.patient}: {getAuthorName(msg.author)}
+                          {getAuthorName(msg.author)}
                         </span>
                         {isPrescription && (
                           <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
