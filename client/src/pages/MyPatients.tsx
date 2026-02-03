@@ -70,7 +70,7 @@ export default function MyPatients() {
               data-testid={`card-patient-${patient.id}`}
               onClick={() => setLocation(`/health-wall/${patient.userId}`)}
             >
-              <CardHeader>
+              <CardHeader className="pt-3 pb-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <CardTitle className="text-lg">{patient.patientName}</CardTitle>
