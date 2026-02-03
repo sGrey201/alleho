@@ -192,27 +192,29 @@ export default function Questionnaire() {
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
-        <div className="pb-2 sm:p-6">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-xl font-semibold" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
-            <div className="flex items-center gap-2">
-              {saveStatus !== 'idle' && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {saveStatus === 'saving' && (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>{t.saving}</span>
-                    </>
-                  )}
-                  {saveStatus === 'saved' && (
-                    <>
-                      <Check className="h-4 w-4 text-green-500" />
-                      <span>{t.saved}</span>
-                    </>
-                  )}
-                </div>
-              )}
-              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
+          <div>
+            <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
+            <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {saveStatus !== 'idle' && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {saveStatus === 'saving' && (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{t.saving}</span>
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <>
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>{t.saved}</span>
+                  </>
+                )}
+              </div>
+            )}
+            <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <SheetTrigger asChild>
                   <Button
                     variant="ghost"
@@ -337,10 +339,8 @@ export default function Questionnaire() {
                     </div>
                   </div>
                 </SheetContent>
-              </Sheet>
-            </div>
+            </Sheet>
           </div>
-          <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
         </div>
         <div className="sm:px-6 sm:pb-6">
           <Accordion type="single" collapsible className="w-full">
