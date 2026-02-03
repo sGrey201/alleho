@@ -233,6 +233,14 @@ export const t = {
   invalidEmail: 'Введите корректный email',
   emailAlreadyAdded: 'Этот email уже добавлен',
 
+  // My Patients
+  myPatients: 'Мои пациенты',
+  myPatientsDescription: 'Пациенты, предоставившие доступ к своим анкетам',
+  noPatientsYet: 'Пока нет пациентов',
+  noPatientsDescription: 'Пациенты появятся здесь, когда предоставят вам доступ к своим анкетам',
+  viewQuestionnaire: 'Просмотреть анкету',
+  lastUpdated: 'Обновлено',
+
   // Errors
   unauthorized: 'Не авторизован',
   unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',

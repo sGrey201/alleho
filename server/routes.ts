@@ -805,6 +805,39 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Get questionnaires shared with current user (My Patients)
+  app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user?.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+      
+      const sharedQuestionnaires = await storage.getQuestionnairesSharedWith(user.email);
+      
+      const result = sharedQuestionnaires.map(({ questionnaire, user }) => ({
+        id: questionnaire.id,
+        userId: user.id,
+        patientName: (questionnaire.data as any)?.patientName || user.firstName || user.email,
+        birthMonth: (questionnaire.data as any)?.birthMonth,
+        birthYear: (questionnaire.data as any)?.birthYear,
+        gender: (questionnaire.data as any)?.gender,
+        email: user.email,
+        updatedAt: questionnaire.updatedAt,
+      }));
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching my patients:", error);
+      res.status(500).json({ message: "Failed to fetch patients" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

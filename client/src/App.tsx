@@ -28,6 +28,7 @@ import About from "@/pages/About";
 import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
 import Questionnaire from "@/pages/Questionnaire";
+import MyPatients from "@/pages/MyPatients";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/remedies" component={AllRemedies} />
       <Route path="/situations" component={AllSituations} />
       <Route path="/questionnaire" component={Questionnaire} />
+      <Route path="/my-patients" component={MyPatients} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (

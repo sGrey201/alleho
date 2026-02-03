@@ -76,6 +76,7 @@ export interface IStorage {
   // Questionnaire operations
   getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined>;
   saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire>;
+  getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -552,6 +553,27 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]> {
+    const allQuestionnaires = await db
+      .select()
+      .from(userQuestionnaires)
+      .innerJoin(users, eq(userQuestionnaires.userId, users.id));
+    
+    const result: { questionnaire: UserQuestionnaire; user: User }[] = [];
+    
+    for (const row of allQuestionnaires) {
+      const data = row.user_questionnaires.data as QuestionnaireData;
+      if (data.sharedWithEmails?.includes(email)) {
+        result.push({
+          questionnaire: row.user_questionnaires,
+          user: row.users,
+        });
+      }
+    }
+    
+    return result;
   }
 }
 
