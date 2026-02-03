@@ -195,7 +195,19 @@ export default function Questionnaire() {
         <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
           <div>
             <h2 className="text-xl font-semibold mb-1" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
-            <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
+            <p className="text-sm text-muted-foreground" data-testid="text-patient-info">
+              {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
+                <>
+                  {formData.patientName && <span>{formData.patientName}</span>}
+                  {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
+                  {formData.birthMonth && formData.birthYear && (
+                    <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
+                  )}
+                </>
+              ) : (
+                t.questionnaireDescription
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {saveStatus !== 'idle' && (
