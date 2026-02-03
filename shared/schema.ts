@@ -255,3 +255,31 @@ export const questionnaireDataSchema = z.object({
 
 export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
 export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;
+
+// Health wall message type enum
+export const healthWallMessageTypeEnum = z.enum(['message', 'prescription']);
+export type HealthWallMessageType = z.infer<typeof healthWallMessageTypeEnum>;
+
+// Health wall messages table (chat between doctor and patient)
+export const healthWallMessages = pgTable("health_wall_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  patientUserId: varchar("patient_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  authorUserId: varchar("author_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  messageType: varchar("message_type", { length: 50 }).notNull().default('message'),
+  content: text("content"),
+  imageUrl: text("image_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("health_wall_patient_idx").on(table.patientUserId),
+  index("health_wall_created_idx").on(table.createdAt),
+]);
+
+export const insertHealthWallMessageSchema = createInsertSchema(healthWallMessages).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  messageType: healthWallMessageTypeEnum.default('message'),
+});
+
+export type InsertHealthWallMessage = z.infer<typeof insertHealthWallMessageSchema>;
+export type HealthWallMessage = typeof healthWallMessages.$inferSelect;
