@@ -2,10 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
-import { Loader2, Users, ExternalLink } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
 import { format } from "date-fns";
 
 interface Patient {
@@ -79,15 +78,6 @@ export default function MyPatients() {
                       {patient.gender && <span>{getGenderLabel(patient.gender)}</span>}
                     </CardDescription>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLocation(`/patient/${patient.userId}`)}
-                    data-testid={`button-view-patient-${patient.id}`}
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    {t.viewQuestionnaire}
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
