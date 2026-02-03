@@ -139,7 +139,7 @@ export default function Questionnaire() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8">
+    <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
         <div className="pb-2 sm:p-6">
           <div className="flex items-center justify-between mb-1">
