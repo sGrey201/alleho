@@ -245,6 +245,12 @@ export const questionnaireDataSchema = z.object({
   general: z.string().optional(),
   medicalHistory: z.string().optional(),
   homeopathNotes: z.string().optional(),
+  // Settings fields
+  patientName: z.string().optional(),
+  birthMonth: z.number().min(1).max(12).optional(),
+  birthYear: z.number().min(1900).max(2100).optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  sharedWithEmails: z.array(z.string().email()).optional(),
 });
 
 export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;

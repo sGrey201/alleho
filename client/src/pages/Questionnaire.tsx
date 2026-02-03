@@ -4,14 +4,32 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { HelpCircle, Loader2, Check, Settings } from "lucide-react";
+import { HelpCircle, Loader2, Check, Settings, X, Plus } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
+
+const months = [
+  { value: 1, label: t.january },
+  { value: 2, label: t.february },
+  { value: 3, label: t.march },
+  { value: 4, label: t.april },
+  { value: 5, label: t.may },
+  { value: 6, label: t.june },
+  { value: 7, label: t.july },
+  { value: 8, label: t.august },
+  { value: 9, label: t.september },
+  { value: 10, label: t.october },
+  { value: 11, label: t.november },
+  { value: 12, label: t.december },
+];
 
 type PhysicalSectionKey = 'head' | 'face' | 'neck' | 'chest' | 'heartBreathing' | 'stomach' | 'back' | 'arms' | 'legs' | 'joints' | 'muscles' | 'skin' | 'reproductive';
 type PsychSectionKey = 'psyche' | 'sleep' | 'energy' | 'cognitive' | 'behavior' | 'character' | 'social' | 'general' | 'medicalHistory';
@@ -62,6 +80,8 @@ export default function Questionnaire() {
   const [formData, setFormData] = useState<QuestionnaireData>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const formDataRef = useRef<QuestionnaireData>({});
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newDoctorEmail, setNewDoctorEmail] = useState('');
 
   const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
     queryKey: ['/api/questionnaire'],
@@ -126,6 +146,37 @@ export default function Questionnaire() {
     }));
   };
 
+  const updateSettings = (field: string, value: string | number | undefined) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      return updated;
+    });
+  };
+
+  const addDoctorEmail = () => {
+    if (!newDoctorEmail || !newDoctorEmail.includes('@')) {
+      toast({ title: 'Введите корректный email', variant: 'destructive' });
+      return;
+    }
+    const currentEmails = formData.sharedWithEmails || [];
+    if (currentEmails.includes(newDoctorEmail)) {
+      toast({ title: 'Этот email уже добавлен', variant: 'destructive' });
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      sharedWithEmails: [...(prev.sharedWithEmails || []), newDoctorEmail],
+    }));
+    setNewDoctorEmail('');
+  };
+
+  const removeDoctorEmail = (email: string) => {
+    setFormData(prev => ({
+      ...prev,
+      sharedWithEmails: (prev.sharedWithEmails || []).filter(e => e !== email),
+    }));
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -161,13 +212,132 @@ export default function Questionnaire() {
                   )}
                 </div>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                data-testid="button-questionnaire-settings"
-              >
-                <Settings className="h-5 w-5 text-muted-foreground" />
-              </Button>
+              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-testid="button-questionnaire-settings"
+                  >
+                    <Settings className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="overflow-y-auto">
+                  <SheetHeader>
+                    <SheetTitle>{t.questionnaireSettings}</SheetTitle>
+                    <SheetDescription>{t.questionnaireDescription}</SheetDescription>
+                  </SheetHeader>
+                  <div className="space-y-6 py-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="patientName">{t.patientName}</Label>
+                      <Input
+                        id="patientName"
+                        value={formData.patientName || ''}
+                        onChange={(e) => updateSettings('patientName', e.target.value)}
+                        onBlur={triggerAutoSave}
+                        data-testid="input-patient-name"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.birthMonth}</Label>
+                        <Select
+                          value={formData.birthMonth?.toString() || ''}
+                          onValueChange={(v) => {
+                            updateSettings('birthMonth', v ? parseInt(v) : undefined);
+                            setTimeout(triggerAutoSave, 100);
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-birth-month">
+                            <SelectValue placeholder={t.selectMonth} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {months.map((m) => (
+                              <SelectItem key={m.value} value={m.value.toString()}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="birthYear">{t.birthYear}</Label>
+                        <Input
+                          id="birthYear"
+                          type="number"
+                          min={1900}
+                          max={new Date().getFullYear()}
+                          value={formData.birthYear || ''}
+                          onChange={(e) => updateSettings('birthYear', e.target.value ? parseInt(e.target.value) : undefined)}
+                          onBlur={triggerAutoSave}
+                          data-testid="input-birth-year"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{t.gender}</Label>
+                      <Select
+                        value={formData.gender || ''}
+                        onValueChange={(v) => {
+                          updateSettings('gender', v as 'male' | 'female' | 'other');
+                          setTimeout(triggerAutoSave, 100);
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-gender">
+                          <SelectValue placeholder={t.selectGender} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">{t.genderMale}</SelectItem>
+                          <SelectItem value="female">{t.genderFemale}</SelectItem>
+                          <SelectItem value="other">{t.genderOther}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{t.doctorAccess}</Label>
+                      <p className="text-sm text-muted-foreground">{t.doctorAccessDescription}</p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          placeholder={t.enterEmail}
+                          value={newDoctorEmail}
+                          onChange={(e) => setNewDoctorEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && addDoctorEmail()}
+                          data-testid="input-doctor-email"
+                        />
+                        <Button onClick={addDoctorEmail} size="icon" data-testid="button-add-doctor">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {formData.sharedWithEmails && formData.sharedWithEmails.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {formData.sharedWithEmails.map((email) => (
+                            <div key={email} className="flex items-center justify-between rounded-md border p-2">
+                              <span className="text-sm">{email}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  removeDoctorEmail(email);
+                                  setTimeout(triggerAutoSave, 100);
+                                }}
+                                data-testid={`button-remove-doctor-${email}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
