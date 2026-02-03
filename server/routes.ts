@@ -789,6 +789,22 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Check if user exists by email (for doctor access sharing)
+  app.get('/api/users/check-email', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const email = req.query.email as string;
+      if (!email) {
+        return res.status(400).json({ exists: false, message: "Email is required" });
+      }
+      
+      const user = await storage.getUserByEmail(email);
+      res.json({ exists: !!user });
+    } catch (error) {
+      console.error("Error checking user email:", error);
+      res.status(500).json({ exists: false, message: "Failed to check email" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

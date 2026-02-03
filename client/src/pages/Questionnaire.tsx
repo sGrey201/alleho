@@ -153,21 +153,40 @@ export default function Questionnaire() {
     });
   };
 
-  const addDoctorEmail = () => {
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  const addDoctorEmail = async () => {
     if (!newDoctorEmail || !newDoctorEmail.includes('@')) {
-      toast({ title: 'Введите корректный email', variant: 'destructive' });
+      toast({ title: t.invalidEmail, variant: 'destructive' });
       return;
     }
     const currentEmails = formData.sharedWithEmails || [];
     if (currentEmails.includes(newDoctorEmail)) {
-      toast({ title: 'Этот email уже добавлен', variant: 'destructive' });
+      toast({ title: t.emailAlreadyAdded, variant: 'destructive' });
       return;
     }
-    setFormData(prev => ({
-      ...prev,
-      sharedWithEmails: [...(prev.sharedWithEmails || []), newDoctorEmail],
-    }));
-    setNewDoctorEmail('');
+
+    setIsCheckingEmail(true);
+    try {
+      const res = await fetch(`/api/users/check-email?email=${encodeURIComponent(newDoctorEmail)}`);
+      const data = await res.json();
+      
+      if (!data.exists) {
+        toast({ title: t.userNotFound, variant: 'destructive' });
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        sharedWithEmails: [...(prev.sharedWithEmails || []), newDoctorEmail],
+      }));
+      setNewDoctorEmail('');
+      setTimeout(triggerAutoSave, 100);
+    } catch (error) {
+      toast({ title: t.emailCheckError, variant: 'destructive' });
+    } finally {
+      setIsCheckingEmail(false);
+    }
   };
 
   const removeDoctorEmail = (email: string) => {
@@ -323,8 +342,8 @@ export default function Questionnaire() {
                           onKeyDown={(e) => e.key === 'Enter' && addDoctorEmail()}
                           data-testid="input-doctor-email"
                         />
-                        <Button onClick={addDoctorEmail} size="icon" data-testid="button-add-doctor">
-                          <Plus className="h-4 w-4" />
+                        <Button onClick={addDoctorEmail} size="icon" disabled={isCheckingEmail} data-testid="button-add-doctor">
+                          {isCheckingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         </Button>
                       </div>
                       {formData.sharedWithEmails && formData.sharedWithEmails.length > 0 && (

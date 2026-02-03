@@ -228,6 +228,10 @@ export const t = {
   november: 'Ноябрь',
   december: 'Декабрь',
   remove: 'Удалить',
+  userNotFound: 'Пользователь с таким email не найден',
+  emailCheckError: 'Ошибка проверки email',
+  invalidEmail: 'Введите корректный email',
+  emailAlreadyAdded: 'Этот email уже добавлен',
 
   // Errors
   unauthorized: 'Не авторизован',
