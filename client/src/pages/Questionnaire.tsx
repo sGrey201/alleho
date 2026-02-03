@@ -191,133 +191,6 @@ export default function Questionnaire() {
 
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="outline"
-            size="lg"
-            className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg"
-            data-testid="button-questionnaire-settings"
-          >
-            <Settings className="h-6 w-6" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>{t.questionnaireSettings}</SheetTitle>
-            <SheetDescription>{t.questionnaireDescription}</SheetDescription>
-          </SheetHeader>
-          <div className="space-y-6 py-6">
-            <div className="space-y-2">
-              <Label htmlFor="patientName">{t.patientName}</Label>
-              <Input
-                id="patientName"
-                value={formData.patientName || ''}
-                onChange={(e) => updateSettings('patientName', e.target.value)}
-                onBlur={triggerAutoSave}
-                data-testid="input-patient-name"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t.birthMonth}</Label>
-                <Select
-                  value={formData.birthMonth?.toString() || ''}
-                  onValueChange={(v) => {
-                    updateSettings('birthMonth', v ? parseInt(v) : undefined);
-                    setTimeout(triggerAutoSave, 100);
-                  }}
-                >
-                  <SelectTrigger data-testid="select-birth-month">
-                    <SelectValue placeholder={t.selectMonth} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((m) => (
-                      <SelectItem key={m.value} value={m.value.toString()}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="birthYear">{t.birthYear}</Label>
-                <Input
-                  id="birthYear"
-                  type="number"
-                  min={1900}
-                  max={new Date().getFullYear()}
-                  value={formData.birthYear || ''}
-                  onChange={(e) => updateSettings('birthYear', e.target.value ? parseInt(e.target.value) : undefined)}
-                  onBlur={triggerAutoSave}
-                  data-testid="input-birth-year"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>{t.gender}</Label>
-              <Select
-                value={formData.gender || ''}
-                onValueChange={(v) => {
-                  updateSettings('gender', v as 'male' | 'female' | 'other');
-                  setTimeout(triggerAutoSave, 100);
-                }}
-              >
-                <SelectTrigger data-testid="select-gender">
-                  <SelectValue placeholder={t.selectGender} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">{t.genderMale}</SelectItem>
-                  <SelectItem value="female">{t.genderFemale}</SelectItem>
-                  <SelectItem value="other">{t.genderOther}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>{t.doctorAccess}</Label>
-              <p className="text-sm text-muted-foreground">{t.doctorAccessDescription}</p>
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder={t.enterEmail}
-                  value={newDoctorEmail}
-                  onChange={(e) => setNewDoctorEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addDoctorEmail()}
-                  data-testid="input-doctor-email"
-                />
-                <Button onClick={addDoctorEmail} size="icon" data-testid="button-add-doctor">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {formData.sharedWithEmails && formData.sharedWithEmails.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {formData.sharedWithEmails.map((email) => (
-                    <div key={email} className="flex items-center justify-between rounded-md border p-2">
-                      <span className="text-sm">{email}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => {
-                          removeDoctorEmail(email);
-                          setTimeout(triggerAutoSave, 100);
-                        }}
-                        data-testid={`button-remove-doctor-${email}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
         <div className="pb-2 sm:p-6">
           <div className="flex items-center justify-between mb-1">
@@ -339,6 +212,132 @@ export default function Questionnaire() {
                   )}
                 </div>
               )}
+              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-testid="button-questionnaire-settings"
+                  >
+                    <Settings className="h-5 w-5 text-muted-foreground" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="overflow-y-auto">
+                  <SheetHeader>
+                    <SheetTitle>{t.questionnaireSettings}</SheetTitle>
+                    <SheetDescription>{t.questionnaireDescription}</SheetDescription>
+                  </SheetHeader>
+                  <div className="space-y-6 py-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="patientName">{t.patientName}</Label>
+                      <Input
+                        id="patientName"
+                        value={formData.patientName || ''}
+                        onChange={(e) => updateSettings('patientName', e.target.value)}
+                        onBlur={triggerAutoSave}
+                        data-testid="input-patient-name"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.birthMonth}</Label>
+                        <Select
+                          value={formData.birthMonth?.toString() || ''}
+                          onValueChange={(v) => {
+                            updateSettings('birthMonth', v ? parseInt(v) : undefined);
+                            setTimeout(triggerAutoSave, 100);
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-birth-month">
+                            <SelectValue placeholder={t.selectMonth} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {months.map((m) => (
+                              <SelectItem key={m.value} value={m.value.toString()}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="birthYear">{t.birthYear}</Label>
+                        <Input
+                          id="birthYear"
+                          type="number"
+                          min={1900}
+                          max={new Date().getFullYear()}
+                          value={formData.birthYear || ''}
+                          onChange={(e) => updateSettings('birthYear', e.target.value ? parseInt(e.target.value) : undefined)}
+                          onBlur={triggerAutoSave}
+                          data-testid="input-birth-year"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{t.gender}</Label>
+                      <Select
+                        value={formData.gender || ''}
+                        onValueChange={(v) => {
+                          updateSettings('gender', v as 'male' | 'female' | 'other');
+                          setTimeout(triggerAutoSave, 100);
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-gender">
+                          <SelectValue placeholder={t.selectGender} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">{t.genderMale}</SelectItem>
+                          <SelectItem value="female">{t.genderFemale}</SelectItem>
+                          <SelectItem value="other">{t.genderOther}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{t.doctorAccess}</Label>
+                      <p className="text-sm text-muted-foreground">{t.doctorAccessDescription}</p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          placeholder={t.enterEmail}
+                          value={newDoctorEmail}
+                          onChange={(e) => setNewDoctorEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && addDoctorEmail()}
+                          data-testid="input-doctor-email"
+                        />
+                        <Button onClick={addDoctorEmail} size="icon" data-testid="button-add-doctor">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {formData.sharedWithEmails && formData.sharedWithEmails.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {formData.sharedWithEmails.map((email) => (
+                            <div key={email} className="flex items-center justify-between rounded-md border p-2">
+                              <span className="text-sm">{email}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  removeDoctorEmail(email);
+                                  setTimeout(triggerAutoSave, 100);
+                                }}
+                                data-testid={`button-remove-doctor-${email}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
