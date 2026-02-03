@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Users, MessageCircle } from "lucide-react";
 
 interface Patient {
   id: string;
@@ -15,6 +16,8 @@ interface Patient {
   gender?: string;
   email: string;
   updatedAt: string;
+  unreadCount: number;
+  lastMessageAt: string | null;
 }
 
 export default function MyPatients() {
@@ -82,6 +85,12 @@ export default function MyPatients() {
                       {patient.gender && <span>{getGenderLabel(patient.gender)}</span>}
                     </CardDescription>
                   </div>
+                  {patient.unreadCount > 0 && (
+                    <Badge variant="default" className="shrink-0 bg-primary" data-testid={`badge-unread-${patient.id}`}>
+                      <MessageCircle className="h-3 w-3 mr-1" />
+                      {patient.unreadCount}
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
             </Card>
