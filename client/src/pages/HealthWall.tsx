@@ -221,17 +221,14 @@ export default function HealthWall() {
                     }`}
                   >
                     <CardContent className="p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">
-                          {getAuthorName(msg.author)}
-                        </span>
-                        {isPrescription && (
+                      {isPrescription && (
+                        <div className="mb-1">
                           <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
                             <Pill className="h-3 w-3 mr-1" />
                             {t.prescription}
                           </Badge>
-                        )}
-                      </div>
+                        </div>
+                      )}
                       {msg.imageUrl && (
                         <img 
                           src={msg.imageUrl} 
