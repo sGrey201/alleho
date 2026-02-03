@@ -148,7 +148,7 @@ export const t = {
   // Questionnaire
   questionnaire: 'Моя анкета',
   questionnaireTitle: 'Анкета пациента',
-  questionnaireDescription: 'Заполните информацию о своём здоровье',
+  questionnaireDescription: 'Заполните информацию о себе',
   questionnaireSaved: 'Анкета сохранена',
   questionnaireSaveError: 'Ошибка сохранения анкеты',
   saving: 'Сохранение...',
