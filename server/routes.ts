@@ -7,7 +7,7 @@ import { sql, eq, desc } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail } from "./email";
-import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
+import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
@@ -802,6 +802,49 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error checking user email:", error);
       res.status(500).json({ exists: false, message: "Failed to check email" });
+    }
+  });
+
+  // Get a patient's questionnaire (only if shared with current user)
+  app.get('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+      
+      const patientId = req.params.userId;
+      const questionnaire = await storage.getQuestionnaire(patientId);
+      
+      if (!questionnaire) {
+        return res.status(404).json({ message: "Questionnaire not found" });
+      }
+      
+      const data = questionnaire.data as QuestionnaireData;
+      if (!data.sharedWithEmails?.includes(currentUser.email)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const patient = await storage.getUser(patientId);
+      
+      res.json({
+        data: questionnaire.data,
+        patient: {
+          id: patient?.id,
+          email: patient?.email,
+          firstName: patient?.firstName,
+          lastName: patient?.lastName,
+        },
+        updatedAt: questionnaire.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching patient questionnaire:", error);
+      res.status(500).json({ message: "Failed to fetch questionnaire" });
     }
   });
 

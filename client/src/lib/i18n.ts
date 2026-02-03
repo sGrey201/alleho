@@ -240,6 +240,11 @@ export const t = {
   noPatientsDescription: 'Пациенты появятся здесь, когда предоставят вам доступ к своим анкетам',
   viewQuestionnaire: 'Просмотреть анкету',
   lastUpdated: 'Обновлено',
+  patientQuestionnaire: 'Анкета пациента',
+  backToPatients: 'Назад к пациентам',
+  accessDenied: 'Доступ запрещён',
+  questionnaireNotFound: 'Анкета не найдена',
+  noDataAvailable: 'Нет данных',
 
   // Errors
   unauthorized: 'Не авторизован',
