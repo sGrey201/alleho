@@ -24,7 +24,7 @@ import {
   type InsertHealthWallMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, ilike, sql, inArray, and } from "drizzle-orm";
+import { eq, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
@@ -84,6 +84,7 @@ export interface IStorage {
   // Health wall operations
   getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
   createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
+  getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -598,6 +599,35 @@ export class DatabaseStorage implements IStorage {
       .values(message)
       .returning();
     return created;
+  }
+
+  async getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }> {
+    const messages = await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.patientUserId, patientUserId))
+      .orderBy(desc(healthWallMessages.createdAt));
+
+    if (messages.length === 0) {
+      return { unreadCount: 0, lastMessageAt: null };
+    }
+
+    const lastMessageAt = messages[0].createdAt;
+    
+    const doctorLastMessageIndex = messages.findIndex(m => m.authorUserId === doctorUserId);
+    
+    let unreadCount = 0;
+    if (doctorLastMessageIndex === -1) {
+      unreadCount = messages.filter(m => m.authorUserId === patientUserId).length;
+    } else {
+      for (let i = 0; i < doctorLastMessageIndex; i++) {
+        if (messages[i].authorUserId === patientUserId) {
+          unreadCount++;
+        }
+      }
+    }
+
+    return { unreadCount, lastMessageAt };
   }
 }
 

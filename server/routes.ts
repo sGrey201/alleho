@@ -886,28 +886,40 @@ ${allUrls.map(url => `  <url>
   // Get questionnaires shared with current user (My Patients)
   app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) {
+      const doctorUserId = await getCurrentUserId(req);
+      if (!doctorUserId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const user = await storage.getUser(userId);
-      if (!user?.email) {
+      const doctor = await storage.getUser(doctorUserId);
+      if (!doctor?.email) {
         return res.status(400).json({ message: "User email not found" });
       }
       
-      const sharedQuestionnaires = await storage.getQuestionnairesSharedWith(user.email);
+      const sharedQuestionnaires = await storage.getQuestionnairesSharedWith(doctor.email);
       
-      const result = sharedQuestionnaires.map(({ questionnaire, user }) => ({
-        id: questionnaire.id,
-        userId: user.id,
-        patientName: (questionnaire.data as any)?.patientName || user.firstName || user.email,
-        birthMonth: (questionnaire.data as any)?.birthMonth,
-        birthYear: (questionnaire.data as any)?.birthYear,
-        gender: (questionnaire.data as any)?.gender,
-        email: user.email,
-        updatedAt: questionnaire.updatedAt,
+      const result = await Promise.all(sharedQuestionnaires.map(async ({ questionnaire, user }) => {
+        const stats = await storage.getPatientHealthWallStats(user.id, doctorUserId);
+        return {
+          id: questionnaire.id,
+          userId: user.id,
+          patientName: (questionnaire.data as any)?.patientName || user.firstName || user.email,
+          birthMonth: (questionnaire.data as any)?.birthMonth,
+          birthYear: (questionnaire.data as any)?.birthYear,
+          gender: (questionnaire.data as any)?.gender,
+          email: user.email,
+          updatedAt: questionnaire.updatedAt,
+          unreadCount: stats.unreadCount,
+          lastMessageAt: stats.lastMessageAt,
+        };
       }));
+      
+      result.sort((a, b) => {
+        if (!a.lastMessageAt && !b.lastMessageAt) return 0;
+        if (!a.lastMessageAt) return 1;
+        if (!b.lastMessageAt) return -1;
+        return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+      });
       
       res.json(result);
     } catch (error) {
