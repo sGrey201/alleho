@@ -285,7 +285,6 @@ export default function Questionnaire() {
                     <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
                   )}
                   {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
-                  {isPatientView && patientData?.patient.email && <span>• {patientData.patient.email}</span>}
                 </div>
               </div>
             </div>
