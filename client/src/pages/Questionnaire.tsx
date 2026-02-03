@@ -276,30 +276,19 @@ export default function Questionnaire() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              {isPatientView ? (
-                <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
+              <div className="flex flex-col" data-testid="text-patient-info">
+                <h1 className="text-lg font-bold">
+                  {formData.patientName || t.questionnaire}
+                </h1>
+                <div className="text-sm text-muted-foreground flex flex-wrap gap-2">
                   {formData.birthMonth && formData.birthYear && (
                     <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
                   )}
                   {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
-                  {patientData?.patient.email && <span>• {patientData.patient.email}</span>}
-                  {patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
+                  {isPatientView && patientData?.patient.email && <span>• {patientData.patient.email}</span>}
+                  {isPatientView && patientData?.updatedAt && <span>• {t.lastUpdated}: {format(new Date(patientData.updatedAt), 'dd.MM.yyyy')}</span>}
                 </div>
-              ) : (
-                <h1 className="text-lg font-bold" data-testid="text-patient-info">
-                  {formData.patientName || (formData.birthMonth && formData.birthYear) ? (
-                    <>
-                      {formData.patientName && <span>{formData.patientName}</span>}
-                      {formData.patientName && formData.birthMonth && formData.birthYear && <span>, </span>}
-                      {formData.birthMonth && formData.birthYear && (
-                        <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
-                      )}
-                    </>
-                  ) : (
-                    t.questionnaire
-                  )}
-                </h1>
-              )}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {saveStatus !== 'idle' && (
