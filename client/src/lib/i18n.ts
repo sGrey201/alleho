@@ -197,7 +197,7 @@ export const t = {
   
   // Homeopath notes section
   sectionHomeopathNotes: 'Заметки гомеопата',
-  homeopathNotesDescription: 'Эти заметки видны только гомеопату с активной подпиской',
+  homeopathNotesDescription: 'Видны только гомеопату с активной подпиской',
 
   // Questionnaire settings
   questionnaireSettings: 'Настройки анкеты',
