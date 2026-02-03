@@ -264,18 +264,9 @@ export default function Questionnaire() {
 
   return (
     <div className="mx-auto max-w-4xl px-2 py-4 sm:px-6 sm:py-8 lg:px-8 pl-[16px] pr-[16px]">
-      <Button
-        variant="ghost"
-        onClick={() => setLocation(isPatientView ? `/health-wall/${patientId}` : '/health-wall')}
-        className="mb-4"
-        data-testid="button-back-to-health-wall"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        {t.backToHealthWall}
-      </Button>
       <div className="sm:rounded-lg sm:border sm:bg-card sm:shadow-sm">
         <div className="flex items-start justify-between gap-4 pb-2 sm:p-6">
-          <div>
+          <div className="flex items-center gap-2">
             {isPatientView ? (
               <div className="text-sm text-muted-foreground flex flex-wrap gap-2" data-testid="text-patient-info">
                 {formData.birthMonth && formData.birthYear && (
@@ -300,6 +291,14 @@ export default function Questionnaire() {
                 )}
               </p>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLocation(isPatientView ? `/health-wall/${patientId}` : '/health-wall')}
+              data-testid="button-back-to-health-wall"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {saveStatus !== 'idle' && (
