@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { HelpCircle, Loader2, Check } from "lucide-react";
+import { HelpCircle, Loader2, Check, Settings } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
 
 type PhysicalSectionKey = 'head' | 'face' | 'neck' | 'chest' | 'heartBreathing' | 'stomach' | 'back' | 'arms' | 'legs' | 'joints' | 'muscles' | 'skin' | 'reproductive';
@@ -144,22 +144,31 @@ export default function Questionnaire() {
         <div className="pb-2 sm:p-6">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-xl font-semibold" data-testid="text-questionnaire-title">{t.questionnaireTitle}</h2>
-            {saveStatus !== 'idle' && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {saveStatus === 'saving' && (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{t.saving}</span>
-                  </>
-                )}
-                {saveStatus === 'saved' && (
-                  <>
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>{t.saved}</span>
-                  </>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {saveStatus !== 'idle' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {saveStatus === 'saving' && (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{t.saving}</span>
+                    </>
+                  )}
+                  {saveStatus === 'saved' && (
+                    <>
+                      <Check className="h-4 w-4 text-green-500" />
+                      <span>{t.saved}</span>
+                    </>
+                  )}
+                </div>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid="button-questionnaire-settings"
+              >
+                <Settings className="h-5 w-5 text-muted-foreground" />
+              </Button>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">{t.questionnaireDescription}</p>
         </div>
