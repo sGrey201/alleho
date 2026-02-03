@@ -193,7 +193,7 @@ export default function HealthWall() {
         <Link href={isOwnWall ? '/questionnaire' : `/patient/${patientUserId}`}>
           <Button variant="outline" size="sm" data-testid="button-view-questionnaire">
             <FileText className="h-4 w-4 mr-2" />
-            {t.viewQuestionnaireFull}
+            {t.questionnaire}
           </Button>
         </Link>
       </div>
