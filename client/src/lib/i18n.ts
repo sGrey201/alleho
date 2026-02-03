@@ -146,7 +146,7 @@ export const t = {
   createNewSituation: 'Создать ситуацию',
   
   // Questionnaire
-  questionnaire: 'Моя анкета',
+  questionnaire: 'Анкета',
   questionnaireTitle: 'Анкета пациента',
   questionnaireDescription: 'Заполните информацию о себе',
   questionnaireSaved: 'Анкета сохранена',
