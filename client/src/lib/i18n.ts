@@ -194,6 +194,10 @@ export const t = {
   hintsSocial: 'Общение с людьми, Отношения, Работа / учёба, Конфликты, Изоляция',
   hintsGeneral: '«Чувствую себя плохо», «Что-то не так», Снижение качества жизни',
   hintsMedicalHistory: 'Перечислите в хронологическом порядке болезни и травмы',
+  
+  // Homeopath notes section
+  sectionHomeopathNotes: 'Заметки гомеопата',
+  homeopathNotesDescription: 'Эти заметки видны только гомеопату с активной подпиской',
 
   // Errors
   unauthorized: 'Не авторизован',

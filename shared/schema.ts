@@ -244,6 +244,7 @@ export const questionnaireDataSchema = z.object({
   social: z.string().optional(),
   general: z.string().optional(),
   medicalHistory: z.string().optional(),
+  homeopathNotes: z.string().optional(),
 });
 
 export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
