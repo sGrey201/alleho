@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill } from "lucide-react";
+import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -48,6 +49,8 @@ export default function HealthWall() {
   const { toast } = useToast();
   const [message, setMessage] = useState('');
   const [prescriptionMode, setPrescriptionMode] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [, patientParams] = useRoute("/health-wall/:patientUserId");
@@ -136,11 +139,15 @@ export default function HealthWall() {
     }
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      uploadFile(file);
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const fileArray = Array.from(files);
+    for (const file of fileArray) {
+      await uploadFile(file);
     }
+    e.target.value = '';
   };
 
   const formatMessageDate = (dateStr: string) => {
@@ -239,8 +246,9 @@ export default function HealthWall() {
                         <img 
                           src={msg.imageUrl} 
                           alt="Uploaded" 
-                          className="rounded-md max-h-64 mb-2"
+                          className="rounded-md max-h-64 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
                           data-testid={`image-${msg.id}`}
+                          onClick={() => setSelectedImage(msg.imageUrl!)}
                         />
                       )}
                       {msg.content && (
@@ -317,12 +325,35 @@ export default function HealthWall() {
               id="photo-upload"
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={handlePhotoUpload}
             />
           </div>
         </div>
       </div>
+
+      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 border-none bg-transparent">
+          <div className="relative flex items-center justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white z-10"
+              onClick={() => setSelectedImage(null)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            {selectedImage && (
+              <img 
+                src={selectedImage} 
+                alt="Full size" 
+                className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
