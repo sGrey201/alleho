@@ -11,6 +11,8 @@ import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSch
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import { insertHealthWallMessageSchema, type QuestionnaireData as QData } from "@shared/schema";
 
 const PREVIEW_LENGTH = 500;
 
@@ -913,6 +915,142 @@ ${allUrls.map(url => `  <url>
       res.status(500).json({ message: "Failed to fetch patients" });
     }
   });
+
+  // Health Wall Routes
+
+  // Check if current user can access a patient's health wall
+  async function canAccessHealthWall(req: any, patientUserId: string): Promise<boolean> {
+    const currentUserId = await getCurrentUserId(req);
+    if (!currentUserId) return false;
+    
+    // User can access their own health wall
+    if (currentUserId === patientUserId) return true;
+    
+    // Doctors (admins) can access if the patient shared their questionnaire with them
+    const currentUser = await storage.getUser(currentUserId);
+    if (!currentUser?.email || !currentUser.isAdmin) return false;
+    
+    const questionnaire = await storage.getQuestionnaire(patientUserId);
+    if (!questionnaire) return false;
+    
+    const data = questionnaire.data as QData;
+    return data.sharedWithEmails?.includes(currentUser.email) ?? false;
+  }
+
+  // Get health wall messages for a patient
+  app.get('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId } = req.params;
+      
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const messages = await storage.getHealthWallMessages(patientUserId);
+      
+      // Get author info for each message
+      const authorIds = Array.from(new Set(messages.map(m => m.authorUserId)));
+      const authors = await Promise.all(authorIds.map(id => storage.getUser(id)));
+      const authorMap = new Map(authors.filter(Boolean).map(u => [u!.id, u!]));
+      
+      const messagesWithAuthors = messages.map(msg => ({
+        ...msg,
+        author: {
+          id: msg.authorUserId,
+          email: authorMap.get(msg.authorUserId)?.email,
+          firstName: authorMap.get(msg.authorUserId)?.firstName,
+          lastName: authorMap.get(msg.authorUserId)?.lastName,
+          isAdmin: authorMap.get(msg.authorUserId)?.isAdmin,
+        },
+      }));
+      
+      res.json(messagesWithAuthors);
+    } catch (error) {
+      console.error("Error fetching health wall messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Post a new message to health wall
+  app.post('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Only admins (doctors) can post prescriptions
+      const currentUser = await storage.getUser(currentUserId);
+      const messageType = req.body.messageType || 'message';
+      if (messageType === 'prescription' && !currentUser?.isAdmin) {
+        return res.status(403).json({ message: "Only doctors can post prescriptions" });
+      }
+      
+      const validatedData = insertHealthWallMessageSchema.parse({
+        patientUserId,
+        authorUserId: currentUserId,
+        messageType,
+        content: req.body.content,
+        imageUrl: req.body.imageUrl,
+      });
+      
+      const message = await storage.createHealthWallMessage(validatedData);
+      
+      // Return with author info
+      res.json({
+        ...message,
+        author: {
+          id: currentUserId,
+          email: currentUser?.email,
+          firstName: currentUser?.firstName,
+          lastName: currentUser?.lastName,
+          isAdmin: currentUser?.isAdmin,
+        },
+      });
+    } catch (error) {
+      console.error("Error posting health wall message:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid message data" });
+      }
+      res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
+  // Get patient info for health wall header
+  app.get('/api/health-wall/:patientUserId/info', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId } = req.params;
+      
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const patient = await storage.getUser(patientUserId);
+      const questionnaire = await storage.getQuestionnaire(patientUserId);
+      const data = questionnaire?.data as QData | undefined;
+      
+      res.json({
+        id: patient?.id,
+        email: patient?.email,
+        patientName: data?.patientName || patient?.firstName || patient?.email,
+        birthMonth: data?.birthMonth,
+        birthYear: data?.birthYear,
+        gender: data?.gender,
+      });
+    } catch (error) {
+      console.error("Error fetching patient info:", error);
+      res.status(500).json({ message: "Failed to fetch patient info" });
+    }
+  });
+
+  // Register object storage routes for file uploads
+  registerObjectStorageRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;

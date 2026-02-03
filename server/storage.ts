@@ -6,6 +6,7 @@ import {
   payments,
   articleLikes,
   userQuestionnaires,
+  healthWallMessages,
   type User,
   type UpsertUser,
   type Article,
@@ -19,6 +20,8 @@ import {
   type ArticleLike,
   type UserQuestionnaire,
   type QuestionnaireData,
+  type HealthWallMessage,
+  type InsertHealthWallMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray, and } from "drizzle-orm";
@@ -77,6 +80,10 @@ export interface IStorage {
   getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined>;
   saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire>;
   getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]>;
+
+  // Health wall operations
+  getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
+  createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -574,6 +581,23 @@ export class DatabaseStorage implements IStorage {
     }
     
     return result;
+  }
+
+  // Health wall operations
+  async getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]> {
+    return await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.patientUserId, patientUserId))
+      .orderBy(healthWallMessages.createdAt);
+  }
+
+  async createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage> {
+    const [created] = await db
+      .insert(healthWallMessages)
+      .values(message)
+      .returning();
+    return created;
   }
 }
 
