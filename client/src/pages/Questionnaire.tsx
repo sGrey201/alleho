@@ -210,12 +210,15 @@ export default function Questionnaire() {
         return;
       }
 
-      setFormData(prev => ({
-        ...prev,
-        sharedWithEmails: [...(prev.sharedWithEmails || []), newDoctorEmail],
-      }));
+      const updatedData = {
+        ...formData,
+        sharedWithEmails: [...(formData.sharedWithEmails || []), newDoctorEmail],
+      };
+      setFormData(updatedData);
+      formDataRef.current = updatedData;
       setNewDoctorEmail('');
-      setTimeout(triggerAutoSave, 100);
+      setSaveStatus('saving');
+      saveMutation.mutate(updatedData);
     } catch (error) {
       toast({ title: t.emailCheckError, variant: 'destructive' });
     } finally {
@@ -224,10 +227,14 @@ export default function Questionnaire() {
   };
 
   const removeDoctorEmail = (email: string) => {
-    setFormData(prev => ({
-      ...prev,
-      sharedWithEmails: (prev.sharedWithEmails || []).filter(e => e !== email),
-    }));
+    const updatedData = {
+      ...formData,
+      sharedWithEmails: (formData.sharedWithEmails || []).filter(e => e !== email),
+    };
+    setFormData(updatedData);
+    formDataRef.current = updatedData;
+    setSaveStatus('saving');
+    saveMutation.mutate(updatedData);
   };
 
   const updateHomeopathNotes = (value: string) => {
@@ -433,10 +440,7 @@ export default function Questionnaire() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6"
-                                  onClick={() => {
-                                    removeDoctorEmail(email);
-                                    setTimeout(triggerAutoSave, 100);
-                                  }}
+                                  onClick={() => removeDoctorEmail(email)}
                                   data-testid={`button-remove-doctor-${email}`}
                                 >
                                   <X className="h-4 w-4" />
