@@ -77,6 +77,7 @@ export default function HealthWall() {
   const { data: messages, isLoading: messagesLoading } = useQuery<HealthWallMessage[]>({
     queryKey: ['/api/health-wall', patientUserId],
     enabled: isAuthenticated && !!patientUserId,
+    refetchInterval: 3000,
   });
 
   const { data: patientInfo } = useQuery<PatientInfo>({
