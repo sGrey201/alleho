@@ -628,7 +628,7 @@ export default function HealthWall() {
       </Dialog>
 
       <Dialog open={showDoctorsDialog} onOpenChange={setShowDoctorsDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t.manageDoctors}</DialogTitle>
             <DialogDescription>{t.addDoctorByEmail}</DialogDescription>
