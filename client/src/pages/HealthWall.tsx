@@ -241,135 +241,6 @@ export default function HealthWall() {
     }
   };
 
-  const messagesArea = (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-      {messages && messages.length > 0 ? (
-          <>
-            {(() => {
-              const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
-              
-              messages.forEach((msg, index) => {
-                const isImageOnly = msg.imageUrl && !msg.content && msg.messageType === 'message';
-                const prevGroup = groupedMessages[groupedMessages.length - 1];
-                
-                if (isImageOnly && prevGroup?.isImageGroup) {
-                  const lastMsgInGroup = prevGroup.messages[prevGroup.messages.length - 1];
-                  if (lastMsgInGroup.authorUserId === msg.authorUserId) {
-                    prevGroup.messages.push(msg);
-                    return;
-                  }
-                }
-                
-                groupedMessages.push({
-                  messages: [msg],
-                  isImageGroup: !!isImageOnly,
-                });
-              });
-              
-              return groupedMessages.map((group, groupIndex) => {
-                const lastMsg = group.messages[group.messages.length - 1];
-                const isOwnMessage = lastMsg.authorUserId === user?.id;
-                
-                if (group.isImageGroup && group.messages.length > 1) {
-                  return (
-                    <div
-                      key={`group-${groupIndex}`}
-                      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
-                      data-testid={`message-group-${groupIndex}`}
-                    >
-                      <Card className={`max-w-[85%] ${isOwnMessage ? 'bg-primary/10' : ''}`}>
-                        <CardContent className="p-3">
-                          <div className="grid grid-cols-3 gap-1 mb-2">
-                            {group.messages.map((msg) => (
-                              <img 
-                                key={msg.id}
-                                src={msg.imageUrl!} 
-                                alt="Uploaded" 
-                                className="rounded-md w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                data-testid={`image-${msg.id}`}
-                                onClick={() => setSelectedImage(msg.imageUrl!)}
-                              />
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {formatMessageDate(lastMsg.createdAt)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  );
-                }
-                
-                const msg = group.messages[0];
-                const isPrescription = msg.messageType === 'prescription';
-                const isFollowup = msg.messageType === 'followup';
-                
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
-                    data-testid={`message-${msg.id}`}
-                  >
-                    <Card 
-                      className={`max-w-[85%] ${
-                        isPrescription 
-                          ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' 
-                          : isFollowup
-                            ? 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800'
-                            : isOwnMessage 
-                              ? 'bg-primary/10' 
-                              : ''
-                      }`}
-                    >
-                      <CardContent className="p-3">
-                        {isPrescription && (
-                          <div className="mb-1">
-                            <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
-                              <Pill className="h-3 w-3 mr-1" />
-                              {t.prescription}
-                            </Badge>
-                          </div>
-                        )}
-                        {isFollowup && (
-                          <div className="mb-1">
-                            <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
-                              <FileText className="h-3 w-3 mr-1" />
-                              {t.followup}
-                            </Badge>
-                          </div>
-                        )}
-                        {msg.imageUrl && (
-                          <img 
-                            src={msg.imageUrl} 
-                            alt="Uploaded" 
-                            className="rounded-md max-h-64 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                            data-testid={`image-${msg.id}`}
-                            onClick={() => setSelectedImage(msg.imageUrl!)}
-                          />
-                        )}
-                        {msg.content && (
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatMessageDate(msg.createdAt)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              });
-            })()}
-            <div ref={messagesEndRef} />
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-          <p className="text-muted-foreground mb-2">{t.noMessages}</p>
-          <p className="text-sm text-muted-foreground">{t.noMessagesDescription}</p>
-        </div>
-      )}
-    </div>
-  );
-
   const inputArea = (
     <div className="border-t px-4 py-3 shrink-0">
         {isAdmin && !isOwnWall && (
@@ -509,16 +380,142 @@ export default function HealthWall() {
         )}
 
         <div className={`flex flex-col ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`} style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : {}}>
-          <div className="flex-1 overflow-hidden relative">
-            {isMobile && showQuestionnaire && (
+          <div className="flex-1 relative min-h-0">
+            {isMobile && showQuestionnaire ? (
               <div className="absolute inset-0 z-10 bg-background overflow-y-auto">
                 <QuestionnairePanel 
                   patientUserId={patientUserId!} 
                   isOwnQuestionnaire={isOwnWall}
                 />
               </div>
+            ) : (
+              <div className="h-full overflow-y-auto px-4 py-4 space-y-3">
+                {messages && messages.length > 0 ? (
+                  <>
+                    {(() => {
+                      const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
+                      
+                      messages.forEach((msg, index) => {
+                        const isImageOnly = msg.imageUrl && !msg.content && msg.messageType === 'message';
+                        const prevGroup = groupedMessages[groupedMessages.length - 1];
+                        
+                        if (isImageOnly && prevGroup?.isImageGroup) {
+                          const lastMsgInGroup = prevGroup.messages[prevGroup.messages.length - 1];
+                          if (lastMsgInGroup.authorUserId === msg.authorUserId) {
+                            prevGroup.messages.push(msg);
+                            return;
+                          }
+                        }
+                        
+                        groupedMessages.push({
+                          messages: [msg],
+                          isImageGroup: !!isImageOnly,
+                        });
+                      });
+                      
+                      return groupedMessages.map((group, groupIndex) => {
+                        const lastMsg = group.messages[group.messages.length - 1];
+                        const isOwnMessage = lastMsg.authorUserId === user?.id;
+                        
+                        if (group.isImageGroup && group.messages.length > 1) {
+                          return (
+                            <div
+                              key={`group-${groupIndex}`}
+                              className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                              data-testid={`message-group-${groupIndex}`}
+                            >
+                              <Card className={`max-w-[85%] ${isOwnMessage ? 'bg-primary/10' : ''}`}>
+                                <CardContent className="p-3">
+                                  <div className="grid grid-cols-3 gap-1 mb-2">
+                                    {group.messages.map((msg) => (
+                                      <img 
+                                        key={msg.id}
+                                        src={msg.imageUrl!} 
+                                        alt="Uploaded" 
+                                        className="rounded-md w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                        data-testid={`image-${msg.id}`}
+                                        onClick={() => setSelectedImage(msg.imageUrl!)}
+                                      />
+                                    ))}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatMessageDate(lastMsg.createdAt)}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          );
+                        }
+                        
+                        const msg = group.messages[0];
+                        const isPrescription = msg.messageType === 'prescription';
+                        const isFollowup = msg.messageType === 'followup';
+                        
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                            data-testid={`message-${msg.id}`}
+                          >
+                            <Card 
+                              className={`max-w-[85%] ${
+                                isPrescription 
+                                  ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' 
+                                  : isFollowup
+                                    ? 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800'
+                                    : isOwnMessage 
+                                      ? 'bg-primary/10' 
+                                      : ''
+                              }`}
+                            >
+                              <CardContent className="p-3">
+                                {isPrescription && (
+                                  <div className="mb-1">
+                                    <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
+                                      <Pill className="h-3 w-3 mr-1" />
+                                      {t.prescription}
+                                    </Badge>
+                                  </div>
+                                )}
+                                {isFollowup && (
+                                  <div className="mb-1">
+                                    <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      {t.followup}
+                                    </Badge>
+                                  </div>
+                                )}
+                                {msg.imageUrl && (
+                                  <img 
+                                    src={msg.imageUrl} 
+                                    alt="Uploaded" 
+                                    className="rounded-md max-h-64 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                                    data-testid={`image-${msg.id}`}
+                                    onClick={() => setSelectedImage(msg.imageUrl!)}
+                                  />
+                                )}
+                                {msg.content && (
+                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {formatMessageDate(msg.createdAt)}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        );
+                      });
+                    })()}
+                    <div ref={messagesEndRef} />
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <p className="text-muted-foreground mb-2">{t.noMessages}</p>
+                    <p className="text-sm text-muted-foreground">{t.noMessagesDescription}</p>
+                  </div>
+                )}
+              </div>
             )}
-            {messagesArea}
           </div>
           {inputArea}
         </div>
