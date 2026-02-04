@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation, useRoute, Link } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,10 +10,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X } from "lucide-react";
+import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
+import QuestionnairePanel from "@/components/QuestionnairePanel";
 
 interface Author {
   id: string;
@@ -43,6 +44,12 @@ interface PatientInfo {
   gender?: string;
 }
 
+const STORAGE_KEY_DIVIDER = 'healthwall-divider-position';
+const STORAGE_KEY_PANEL = 'healthwall-panel-open';
+const MIN_PANEL_PERCENT = 33;
+const MAX_PANEL_PERCENT = 66;
+const DEFAULT_PANEL_PERCENT = 50;
+
 export default function HealthWall() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [, setLocation] = useLocation();
@@ -52,10 +59,23 @@ export default function HealthWall() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [showQuestionnaire, setShowQuestionnaire] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_PANEL);
+    return saved === 'true';
+  });
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_DIVIDER);
+    return saved ? parseInt(saved) : DEFAULT_PANEL_PERCENT;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [, patientParams] = useRoute("/health-wall/:patientUserId");
   const patientUserId = patientParams?.patientUserId || user?.id;
   const isOwnWall = patientUserId === user?.id;
+  
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   const { uploadFile, isUploading: uploadingPhoto } = useUpload({
     onSuccess: async (response) => {
@@ -112,6 +132,46 @@ export default function HealthWall() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_PANEL, showQuestionnaire.toString());
+  }, [showQuestionnaire]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_DIVIDER, panelWidth.toString());
+  }, [panelWidth]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const newPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    const clampedPercent = Math.min(MAX_PANEL_PERCENT, Math.max(MIN_PANEL_PERCENT, newPercent));
+    setPanelWidth(clampedPercent);
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  const toggleQuestionnaire = () => {
+    setShowQuestionnaire(prev => !prev);
+  };
 
   if (authLoading || messagesLoading) {
     return (
@@ -181,39 +241,9 @@ export default function HealthWall() {
     }
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleBackClick}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
-            {isOwnWall ? t.healthWall : displayName}
-          </h1>
-          {!isOwnWall && patientInfo && (
-            <p className="text-sm text-muted-foreground">
-              {patientInfo.birthMonth && patientInfo.birthYear && (
-                <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear}</span>
-              )}
-            </p>
-          )}
-        </div>
-        <Link href={isOwnWall ? '/questionnaire' : `/patient/${patientUserId}`}>
-          <Button variant="outline" size="sm" data-testid="button-view-questionnaire">
-            <FileText className="h-4 w-4 mr-2" />
-            {t.questionnaire}
-          </Button>
-        </Link>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {messages && messages.length > 0 ? (
+  const messagesArea = (
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {messages && messages.length > 0 ? (
           <>
             {(() => {
               const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
@@ -333,13 +363,15 @@ export default function HealthWall() {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <p className="text-muted-foreground mb-2">{t.noMessages}</p>
-            <p className="text-sm text-muted-foreground">{t.noMessagesDescription}</p>
-          </div>
-        )}
-      </div>
+          <p className="text-muted-foreground mb-2">{t.noMessages}</p>
+          <p className="text-sm text-muted-foreground">{t.noMessagesDescription}</p>
+        </div>
+      )}
+    </div>
+  );
 
-      <div className="border-t px-4 py-3 shrink-0">
+  const inputArea = (
+    <div className="border-t px-4 py-3 shrink-0">
         {isAdmin && !isOwnWall && (
           <div className="flex items-center gap-2 mb-2">
             <Button
@@ -416,6 +448,77 @@ export default function HealthWall() {
               onChange={handlePhotoUpload}
             />
           </div>
+        </div>
+      </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full" ref={containerRef}>
+      <div className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBackClick}
+          data-testid="button-back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex-1">
+          <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
+            {isOwnWall ? t.healthWall : displayName}
+          </h1>
+          {!isOwnWall && patientInfo && (
+            <p className="text-sm text-muted-foreground">
+              {patientInfo.birthMonth && patientInfo.birthYear && (
+                <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear}</span>
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          variant={showQuestionnaire ? "default" : "outline"}
+          size="sm"
+          onClick={toggleQuestionnaire}
+          data-testid="button-toggle-questionnaire"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          {t.questionnaire}
+        </Button>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden relative">
+        {showQuestionnaire && !isMobile && (
+          <>
+            <div 
+              className="h-full overflow-hidden border-r bg-background"
+              style={{ width: `${panelWidth}%` }}
+            >
+              <QuestionnairePanel 
+                patientUserId={patientUserId!} 
+                isOwnQuestionnaire={isOwnWall}
+              />
+            </div>
+            <div
+              className="w-2 h-full cursor-col-resize flex items-center justify-center bg-border hover:bg-primary/20 transition-colors shrink-0"
+              onMouseDown={handleMouseDown}
+              data-testid="resize-divider"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </>
+        )}
+
+        <div className={`flex flex-col ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`} style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : {}}>
+          {isMobile && showQuestionnaire && (
+            <div className="absolute inset-0 z-10 bg-background overflow-y-auto">
+              <QuestionnairePanel 
+                patientUserId={patientUserId!} 
+                isOwnQuestionnaire={isOwnWall}
+              />
+            </div>
+          )}
+          {messagesArea}
+          {inputArea}
         </div>
       </div>
 
