@@ -131,6 +131,7 @@ export default function HealthWall() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/health-wall/my/doctors'] });
       setNewDoctorEmail('');
+      setShowDoctorsDialog(false);
       toast({ title: t.doctorAdded });
     },
     onError: (error: any) => {
