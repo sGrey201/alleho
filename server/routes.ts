@@ -973,15 +973,9 @@ ${allUrls.map(url => `  <url>
     // User can access their own health wall
     if (currentUserId === patientUserId) return true;
     
-    // Doctors (admins) can access if the patient shared their questionnaire with them
-    const currentUser = await storage.getUser(currentUserId);
-    if (!currentUser?.email || !currentUser.isAdmin) return false;
-    
-    const questionnaire = await storage.getQuestionnaire(patientUserId);
-    if (!questionnaire) return false;
-    
-    const data = questionnaire.data as QData;
-    return data.sharedWithEmails?.includes(currentUser.email) ?? false;
+    // Doctors can access if the patient connected them to their health wall
+    const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
+    return isConnected;
   }
 
   // Get health wall messages for a patient
@@ -1093,6 +1087,132 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching patient info:", error);
       res.status(500).json({ message: "Failed to fetch patient info" });
+    }
+  });
+
+  // Health Wall Doctors API
+
+  // Get connected doctors for own health wall
+  app.get('/api/health-wall/my/doctors', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const doctors = await storage.getHealthWallDoctors(userId);
+      res.json(doctors.map(d => ({
+        id: d.doctor.id,
+        doctorUserId: d.user.id,
+        email: d.user.email,
+        firstName: d.user.firstName,
+        lastName: d.user.lastName,
+        createdAt: d.doctor.createdAt,
+      })));
+    } catch (error) {
+      console.error("Error fetching connected doctors:", error);
+      res.status(500).json({ message: "Failed to fetch connected doctors" });
+    }
+  });
+
+  // Add doctor to own health wall by email
+  app.post('/api/health-wall/my/doctors', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      // Find doctor by email
+      const doctor = await storage.getUserByEmail(email);
+      if (!doctor) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Can't add yourself
+      if (doctor.id === userId) {
+        return res.status(400).json({ message: "Cannot add yourself as a doctor" });
+      }
+
+      // Check if already connected
+      const isConnected = await storage.isHealthWallDoctorConnected(userId, doctor.id);
+      if (isConnected) {
+        return res.status(400).json({ message: "Doctor already connected" });
+      }
+
+      const connection = await storage.addHealthWallDoctor(userId, doctor.id);
+      res.json({
+        id: connection.id,
+        doctorUserId: doctor.id,
+        email: doctor.email,
+        firstName: doctor.firstName,
+        lastName: doctor.lastName,
+        createdAt: connection.createdAt,
+      });
+    } catch (error) {
+      console.error("Error adding doctor:", error);
+      res.status(500).json({ message: "Failed to add doctor" });
+    }
+  });
+
+  // Remove doctor from own health wall
+  app.delete('/api/health-wall/my/doctors/:doctorUserId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { doctorUserId } = req.params;
+      const removed = await storage.removeHealthWallDoctor(userId, doctorUserId);
+      
+      if (!removed) {
+        return res.status(404).json({ message: "Doctor connection not found" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing doctor:", error);
+      res.status(500).json({ message: "Failed to remove doctor" });
+    }
+  });
+
+  // Get patients who connected this doctor (for doctors to see their patients)
+  app.get('/api/health-wall/my/patients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const patients = await storage.getHealthWallPatients(userId);
+      
+      // Get additional info for each patient
+      const result = await Promise.all(patients.map(async (p) => {
+        const stats = await storage.getPatientHealthWallStats(p.patient.id, userId);
+        return {
+          id: p.connection.id,
+          patientUserId: p.patient.id,
+          email: p.patient.email,
+          firstName: p.patient.firstName,
+          lastName: p.patient.lastName,
+          birthMonth: p.patient.birthMonth,
+          birthYear: p.patient.birthYear,
+          createdAt: p.connection.createdAt,
+          unreadCount: stats.unreadCount,
+          lastMessageAt: stats.lastMessageAt,
+        };
+      }));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching patients:", error);
+      res.status(500).json({ message: "Failed to fetch patients" });
     }
   });
 

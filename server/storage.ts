@@ -7,6 +7,7 @@ import {
   articleLikes,
   userQuestionnaires,
   healthWallMessages,
+  healthWallDoctors,
   type User,
   type UpsertUser,
   type Article,
@@ -22,6 +23,8 @@ import {
   type QuestionnaireData,
   type HealthWallMessage,
   type InsertHealthWallMessage,
+  type HealthWallDoctor,
+  type InsertHealthWallDoctor,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
@@ -85,6 +88,13 @@ export interface IStorage {
   getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
   createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
   getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }>;
+
+  // Health wall doctors operations
+  getHealthWallDoctors(patientUserId: string): Promise<{ doctor: HealthWallDoctor; user: User }[]>;
+  getHealthWallPatients(doctorUserId: string): Promise<{ connection: HealthWallDoctor; patient: User }[]>;
+  addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor>;
+  removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean>;
+  isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -628,6 +638,75 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { unreadCount, lastMessageAt };
+  }
+
+  // Health wall doctors operations
+  async getHealthWallDoctors(patientUserId: string): Promise<{ doctor: HealthWallDoctor; user: User }[]> {
+    const connections = await db
+      .select()
+      .from(healthWallDoctors)
+      .where(eq(healthWallDoctors.patientUserId, patientUserId))
+      .orderBy(healthWallDoctors.createdAt);
+
+    const result: { doctor: HealthWallDoctor; user: User }[] = [];
+    for (const connection of connections) {
+      const user = await this.getUser(connection.doctorUserId);
+      if (user) {
+        result.push({ doctor: connection, user });
+      }
+    }
+    return result;
+  }
+
+  async getHealthWallPatients(doctorUserId: string): Promise<{ connection: HealthWallDoctor; patient: User }[]> {
+    const connections = await db
+      .select()
+      .from(healthWallDoctors)
+      .where(eq(healthWallDoctors.doctorUserId, doctorUserId))
+      .orderBy(healthWallDoctors.createdAt);
+
+    const result: { connection: HealthWallDoctor; patient: User }[] = [];
+    for (const connection of connections) {
+      const patient = await this.getUser(connection.patientUserId);
+      if (patient) {
+        result.push({ connection, patient });
+      }
+    }
+    return result;
+  }
+
+  async addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor> {
+    const [created] = await db
+      .insert(healthWallDoctors)
+      .values({ patientUserId, doctorUserId })
+      .returning();
+    return created;
+  }
+
+  async removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean> {
+    const result = await db
+      .delete(healthWallDoctors)
+      .where(
+        and(
+          eq(healthWallDoctors.patientUserId, patientUserId),
+          eq(healthWallDoctors.doctorUserId, doctorUserId)
+        )
+      )
+      .returning();
+    return result.length > 0;
+  }
+
+  async isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean> {
+    const [connection] = await db
+      .select()
+      .from(healthWallDoctors)
+      .where(
+        and(
+          eq(healthWallDoctors.patientUserId, patientUserId),
+          eq(healthWallDoctors.doctorUserId, doctorUserId)
+        )
+      );
+    return !!connection;
   }
 }
 

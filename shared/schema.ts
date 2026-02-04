@@ -287,3 +287,23 @@ export const insertHealthWallMessageSchema = createInsertSchema(healthWallMessag
 
 export type InsertHealthWallMessage = z.infer<typeof insertHealthWallMessageSchema>;
 export type HealthWallMessage = typeof healthWallMessages.$inferSelect;
+
+// Health wall doctors table (doctors connected to patient's health wall)
+export const healthWallDoctors = pgTable("health_wall_doctors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  patientUserId: varchar("patient_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  doctorUserId: varchar("doctor_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("health_wall_doctors_patient_idx").on(table.patientUserId),
+  index("health_wall_doctors_doctor_idx").on(table.doctorUserId),
+  sql`CONSTRAINT health_wall_doctors_unique UNIQUE (patient_user_id, doctor_user_id)`,
+]);
+
+export const insertHealthWallDoctorSchema = createInsertSchema(healthWallDoctors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertHealthWallDoctor = z.infer<typeof insertHealthWallDoctorSchema>;
+export type HealthWallDoctor = typeof healthWallDoctors.$inferSelect;
