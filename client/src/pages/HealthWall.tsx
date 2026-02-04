@@ -509,15 +509,17 @@ export default function HealthWall() {
         )}
 
         <div className={`flex flex-col ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`} style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : {}}>
-          {isMobile && showQuestionnaire && (
-            <div className="absolute inset-0 z-10 bg-background overflow-y-auto">
-              <QuestionnairePanel 
-                patientUserId={patientUserId!} 
-                isOwnQuestionnaire={isOwnWall}
-              />
-            </div>
-          )}
-          {messagesArea}
+          <div className="flex-1 overflow-hidden relative">
+            {isMobile && showQuestionnaire && (
+              <div className="absolute inset-0 z-10 bg-background overflow-y-auto">
+                <QuestionnairePanel 
+                  patientUserId={patientUserId!} 
+                  isOwnQuestionnaire={isOwnWall}
+                />
+              </div>
+            )}
+            {messagesArea}
+          </div>
           {inputArea}
         </div>
       </div>
