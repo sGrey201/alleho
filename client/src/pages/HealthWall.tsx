@@ -3,14 +3,15 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical } from "lucide-react";
+import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -42,6 +43,15 @@ interface PatientInfo {
   birthMonth?: number;
   birthYear?: number;
   gender?: string;
+}
+
+interface ConnectedDoctor {
+  id: string;
+  doctorUserId: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  createdAt: string;
 }
 
 const STORAGE_KEY_DIVIDER = 'healthwall-divider-position';
@@ -104,6 +114,48 @@ export default function HealthWall() {
     queryKey: ['/api/health-wall', patientUserId, 'info'],
     enabled: isAuthenticated && !!patientUserId && !isOwnWall,
   });
+
+  // Connected doctors for own health wall
+  const [showDoctorsDialog, setShowDoctorsDialog] = useState(false);
+  const [newDoctorEmail, setNewDoctorEmail] = useState('');
+
+  const { data: connectedDoctors } = useQuery<ConnectedDoctor[]>({
+    queryKey: ['/api/health-wall/my/doctors'],
+    enabled: isAuthenticated && isOwnWall,
+  });
+
+  const addDoctorMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return apiRequest('POST', '/api/health-wall/my/doctors', { email });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/health-wall/my/doctors'] });
+      setNewDoctorEmail('');
+      toast({ title: t.doctorAdded });
+    },
+    onError: (error: any) => {
+      const message = error?.message || t.doctorAddError;
+      toast({ title: message, variant: "destructive" });
+    },
+  });
+
+  const removeDoctorMutation = useMutation({
+    mutationFn: async (doctorUserId: string) => {
+      return apiRequest('DELETE', `/api/health-wall/my/doctors/${doctorUserId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/health-wall/my/doctors'] });
+      toast({ title: t.doctorRemoved });
+    },
+    onError: () => {
+      toast({ title: t.doctorRemoveError, variant: "destructive" });
+    },
+  });
+
+  const handleAddDoctor = () => {
+    if (!newDoctorEmail.trim()) return;
+    addDoctorMutation.mutate(newDoctorEmail.trim());
+  };
 
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content?: string; imageUrl?: string; messageType: string }) => {
@@ -335,15 +387,48 @@ export default function HealthWall() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
-            {isOwnWall ? t.healthWall : displayName}
-          </h1>
-          {!isOwnWall && patientInfo && (
-            <p className="text-sm text-muted-foreground">
-              {patientInfo.birthMonth && patientInfo.birthYear && (
-                <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear}</span>
+          {isOwnWall ? (
+            <>
+              {connectedDoctors && connectedDoctors.length > 0 ? (
+                <button
+                  onClick={() => setShowDoctorsDialog(true)}
+                  className="text-left hover:opacity-80 transition-opacity"
+                  data-testid="button-manage-doctors"
+                >
+                  <p className="text-lg font-bold" data-testid="text-health-wall-title">
+                    {connectedDoctors.map(d => 
+                      d.firstName && d.lastName 
+                        ? `${d.firstName} ${d.lastName}`
+                        : d.email
+                    ).join(', ')}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{t.connectedDoctors}</p>
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDoctorsDialog(true)}
+                  data-testid="button-connect-doctor"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  {t.connectDoctor}
+                </Button>
               )}
-            </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
+                {displayName}
+              </h1>
+              {patientInfo && (
+                <p className="text-sm text-muted-foreground">
+                  {patientInfo.birthMonth && patientInfo.birthYear && (
+                    <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear}</span>
+                  )}
+                </p>
+              )}
+            </>
           )}
         </div>
         <Button
@@ -537,6 +622,74 @@ export default function HealthWall() {
                 alt="Full size" 
                 className="max-w-full max-h-[90vh] object-contain rounded-lg"
               />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDoctorsDialog} onOpenChange={setShowDoctorsDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t.manageDoctors}</DialogTitle>
+            <DialogDescription>{t.addDoctorByEmail}</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder={t.doctorEmail}
+                value={newDoctorEmail}
+                onChange={(e) => setNewDoctorEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddDoctor()}
+                data-testid="input-doctor-email"
+              />
+              <Button
+                onClick={handleAddDoctor}
+                disabled={addDoctorMutation.isPending || !newDoctorEmail.trim()}
+                data-testid="button-add-doctor"
+              >
+                {addDoctorMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserPlus className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            {connectedDoctors && connectedDoctors.length > 0 ? (
+              <div className="space-y-2">
+                {connectedDoctors.map((doctor) => (
+                  <div
+                    key={doctor.id}
+                    className="flex items-center justify-between p-3 border rounded-md"
+                    data-testid={`doctor-item-${doctor.doctorUserId}`}
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {doctor.firstName && doctor.lastName
+                          ? `${doctor.firstName} ${doctor.lastName}`
+                          : doctor.email}
+                      </p>
+                      {doctor.firstName && doctor.lastName && (
+                        <p className="text-sm text-muted-foreground">{doctor.email}</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeDoctorMutation.mutate(doctor.doctorUserId)}
+                      disabled={removeDoctorMutation.isPending}
+                      data-testid={`button-remove-doctor-${doctor.doctorUserId}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                {t.noDoctorsConnected}
+              </p>
             )}
           </div>
         </DialogContent>
