@@ -120,6 +120,9 @@ ${allUrls.map(url => `  <url>
           return res.json({
             id: user.id,
             email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: user.profileImageUrl,
             subscriptionExpiresAt: user.subscriptionExpiresAt,
             isAdmin: user.isAdmin,
             authType: 'email',
