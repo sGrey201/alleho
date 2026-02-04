@@ -931,7 +931,7 @@ ${allUrls.map(url => `  <url>
       
       const result = await Promise.all(connectedPatients.map(async ({ connection, patient }) => {
         // Get questionnaire for patient info (name, birth date, etc.)
-        const questionnaire = await storage.getUserQuestionnaire(patient.id);
+        const questionnaire = await storage.getQuestionnaire(patient.id);
         const stats = await storage.getPatientHealthWallStats(patient.id, doctorUserId);
         
         const qData = questionnaire?.data as any;
