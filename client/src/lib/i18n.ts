@@ -248,6 +248,15 @@ export const t = {
   questionnaireNotFound: 'Анкета не найдена',
   noDataAvailable: 'Нет данных',
 
+  // Profile
+  profile: 'Профиль',
+  editProfile: 'Редактировать профиль',
+  firstName: 'Имя',
+  lastName: 'Фамилия',
+  changeAvatar: 'Изменить фото',
+  profileSaved: 'Профиль сохранён',
+  profileSaveError: 'Ошибка сохранения профиля',
+
   // Errors
   unauthorized: 'Не авторизован',
   unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',

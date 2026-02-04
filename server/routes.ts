@@ -760,8 +760,35 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Questionnaire routes (admin only)
-  app.get('/api/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
+  // User profile update route
+  app.put('/api/user/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { firstName, lastName, profileImageUrl } = req.body;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const updatedUser = await storage.updateUserProfile(userId, {
+        firstName: firstName || null,
+        lastName: lastName || null,
+        profileImageUrl: profileImageUrl || null,
+      });
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Questionnaire routes (available to all authenticated users for their own data)
+  app.get('/api/questionnaire', isAuthenticated, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) {
@@ -769,14 +796,14 @@ ${allUrls.map(url => `  <url>
       }
       
       const questionnaire = await storage.getQuestionnaire(userId);
-      res.json(questionnaire?.data || {});
+      res.json({ data: questionnaire?.data || {} });
     } catch (error) {
       console.error("Error fetching questionnaire:", error);
       res.status(500).json({ message: "Failed to fetch questionnaire" });
     }
   });
 
-  app.post('/api/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post('/api/questionnaire', isAuthenticated, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) {

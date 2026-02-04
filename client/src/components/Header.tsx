@@ -122,29 +122,31 @@ export function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <div className="flex items-center gap-2 p-2">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage
-                      src={user.profileImageUrl || undefined}
-                      alt={`${user.firstName || ''} ${user.lastName || ''}`}
-                    />
-                    <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
-                      {getInitials(user.firstName, user.lastName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {user.firstName && user.lastName
-                        ? `${user.firstName} ${user.lastName}`
-                        : user.email}
-                    </p>
-                    {user.email && (
-                      <p className="text-xs text-muted-foreground leading-none">
-                        {user.email}
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="flex items-center gap-2 p-2 cursor-pointer" data-testid="link-profile">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage
+                        src={user.profileImageUrl || undefined}
+                        alt={`${user.firstName || ''} ${user.lastName || ''}`}
+                      />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+                        {getInitials(user.firstName, user.lastName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {user.firstName && user.lastName
+                          ? `${user.firstName} ${user.lastName}`
+                          : user.email}
                       </p>
-                    )}
-                  </div>
-                </div>
+                      {user.email && (
+                        <p className="text-xs text-muted-foreground leading-none">
+                          {user.email}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/subscribe" className="flex w-full items-center" data-testid="link-subscription">
