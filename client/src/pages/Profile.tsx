@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Camera, Loader2, User } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useUpload } from "@/hooks/use-upload";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,20 +27,12 @@ const months = [
   { value: 12, label: t.december },
 ];
 
-function getInitials(firstName?: string | null, lastName?: string | null): string {
-  const first = firstName?.charAt(0) || '';
-  const last = lastName?.charAt(0) || '';
-  return (first + last).toUpperCase() || 'U';
-}
-
 export default function Profile() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
-  const { uploadFile, isUploading } = useUpload();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [gender, setGender] = useState<string>("");
   const [birthMonth, setBirthMonth] = useState<number | undefined>();
   const [birthYear, setBirthYear] = useState<string>("");
@@ -56,7 +46,6 @@ export default function Profile() {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
-      setProfileImageUrl(user.profileImageUrl || null);
     }
   }, [user]);
 
@@ -69,7 +58,7 @@ export default function Profile() {
   }, [questionnaire]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string; profileImageUrl: string | null }) => {
+    mutationFn: async (data: { firstName: string; lastName: string }) => {
       return apiRequest('PUT', '/api/user/profile', data);
     },
     onSuccess: () => {
@@ -91,7 +80,6 @@ export default function Profile() {
       await updateProfileMutation.mutateAsync({
         firstName,
         lastName,
-        profileImageUrl,
       });
 
       await updateQuestionnaireMutation.mutateAsync({
@@ -108,17 +96,6 @@ export default function Profile() {
         title: t.profileSaveError,
         variant: "destructive",
       });
-    }
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const result = await uploadFile(file);
-    if (result) {
-      const publicUrl = `https://objectstorage.replit.app/${result.objectPath}`;
-      setProfileImageUrl(publicUrl);
     }
   };
 
@@ -140,36 +117,6 @@ export default function Profile() {
     <div className="container max-w-2xl mx-auto py-8 px-4">
       <Card>
         <CardContent className="space-y-6 pt-6">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <Avatar className="h-24 w-24">
-                <AvatarImage src={profileImageUrl || undefined} alt={`${firstName} ${lastName}`} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-semibold">
-                  {getInitials(firstName, lastName)}
-                </AvatarFallback>
-              </Avatar>
-              <label
-                htmlFor="avatar-upload"
-                className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full cursor-pointer hover:bg-primary/90 transition-colors"
-              >
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
-              </label>
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarUpload}
-                disabled={isUploading}
-              />
-            </div>
-            <p className="text-sm text-muted-foreground">{t.changeAvatar}</p>
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="firstName">{t.firstName}</Label>
