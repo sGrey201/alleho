@@ -348,12 +348,11 @@ export default function HealthWall() {
         </div>
         <Button
           variant={showQuestionnaire ? "default" : "outline"}
-          size="sm"
+          size="icon"
           onClick={toggleQuestionnaire}
           data-testid="button-toggle-questionnaire"
         >
-          <FileText className="h-4 w-4 mr-2" />
-          {t.questionnaire}
+          <FileText className="h-4 w-4" />
         </Button>
       </div>
 
