@@ -918,7 +918,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Get questionnaires shared with current user (My Patients)
+  // Get patients who connected this doctor to their Health Wall
   app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const doctorUserId = await getCurrentUserId(req);
@@ -926,24 +926,24 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const doctor = await storage.getUser(doctorUserId);
-      if (!doctor?.email) {
-        return res.status(400).json({ message: "User email not found" });
-      }
+      // Get patients from health_wall_doctors table
+      const connectedPatients = await storage.getHealthWallPatients(doctorUserId);
       
-      const sharedQuestionnaires = await storage.getQuestionnairesSharedWith(doctor.email);
-      
-      const result = await Promise.all(sharedQuestionnaires.map(async ({ questionnaire, user }) => {
-        const stats = await storage.getPatientHealthWallStats(user.id, doctorUserId);
+      const result = await Promise.all(connectedPatients.map(async ({ connection, patient }) => {
+        // Get questionnaire for patient info (name, birth date, etc.)
+        const questionnaire = await storage.getUserQuestionnaire(patient.id);
+        const stats = await storage.getPatientHealthWallStats(patient.id, doctorUserId);
+        
+        const qData = questionnaire?.data as any;
         return {
-          id: questionnaire.id,
-          userId: user.id,
-          patientName: (questionnaire.data as any)?.patientName || user.firstName || user.email,
-          birthMonth: (questionnaire.data as any)?.birthMonth,
-          birthYear: (questionnaire.data as any)?.birthYear,
-          gender: (questionnaire.data as any)?.gender,
-          email: user.email,
-          updatedAt: questionnaire.updatedAt,
+          id: connection.id,
+          userId: patient.id,
+          patientName: qData?.patientName || patient.firstName || patient.email,
+          birthMonth: qData?.birthMonth,
+          birthYear: qData?.birthYear,
+          gender: qData?.gender,
+          email: patient.email,
+          updatedAt: questionnaire?.updatedAt || connection.createdAt,
           unreadCount: stats.unreadCount,
           lastMessageAt: stats.lastMessageAt,
         };
