@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { QuestionnaireData } from "@shared/schema";
 
 const months = [
   { value: 1, label: t.january },
@@ -37,41 +36,22 @@ export default function Profile() {
   const [birthMonth, setBirthMonth] = useState<number | undefined>();
   const [birthYear, setBirthYear] = useState<string>("");
 
-  const { data: questionnaire, isLoading: questionnaireLoading } = useQuery<{ data: QuestionnaireData }>({
-    queryKey: ['/api/questionnaire'],
-    enabled: !!user,
-  });
-
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
+      setGender(user.gender || "");
+      setBirthMonth(user.birthMonth || undefined);
+      setBirthYear(user.birthYear?.toString() || "");
     }
   }, [user]);
 
-  useEffect(() => {
-    if (questionnaire?.data) {
-      setGender(questionnaire.data.gender || "");
-      setBirthMonth(questionnaire.data.birthMonth);
-      setBirthYear(questionnaire.data.birthYear?.toString() || "");
-    }
-  }, [questionnaire]);
-
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string }) => {
+    mutationFn: async (data: { firstName: string; lastName: string; gender: string | null; birthMonth: number | null; birthYear: number | null }) => {
       return apiRequest('PUT', '/api/user/profile', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-    },
-  });
-
-  const updateQuestionnaireMutation = useMutation({
-    mutationFn: async (data: Partial<QuestionnaireData>) => {
-      return apiRequest('POST', '/api/questionnaire', data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/questionnaire'] });
     },
   });
 
@@ -80,12 +60,9 @@ export default function Profile() {
       await updateProfileMutation.mutateAsync({
         firstName,
         lastName,
-      });
-
-      await updateQuestionnaireMutation.mutateAsync({
-        gender: gender as 'male' | 'female' | 'other' | undefined,
-        birthMonth,
-        birthYear: birthYear ? parseInt(birthYear) : undefined,
+        gender: gender || null,
+        birthMonth: birthMonth || null,
+        birthYear: birthYear ? parseInt(birthYear) : null,
       });
 
       toast({
@@ -99,7 +76,7 @@ export default function Profile() {
     }
   };
 
-  if (authLoading || questionnaireLoading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -111,7 +88,7 @@ export default function Profile() {
     return null;
   }
 
-  const isSaving = updateProfileMutation.isPending || updateQuestionnaireMutation.isPending;
+  const isSaving = updateProfileMutation.isPending;
 
   return (
     <div className="container max-w-2xl mx-auto py-8 px-4">
