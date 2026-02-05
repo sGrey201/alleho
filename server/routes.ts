@@ -1092,8 +1092,6 @@ ${allUrls.map(url => `  <url>
       }
       
       const patient = await storage.getUser(patientUserId);
-      const questionnaire = await storage.getQuestionnaire(patientUserId);
-      const data = questionnaire?.data as QData | undefined;
       
       // Get patient's last visit time for doctors viewing this patient
       let patientLastVisitedAt = null;
@@ -1101,13 +1099,14 @@ ${allUrls.map(url => `  <url>
         patientLastVisitedAt = await storage.getPatientLastVisit(patientUserId);
       }
       
+      // Use patient profile data, not questionnaire data
       res.json({
         id: patient?.id,
         email: patient?.email,
-        patientName: data?.patientName || patient?.firstName || patient?.email,
-        birthMonth: data?.birthMonth,
-        birthYear: data?.birthYear,
-        gender: data?.gender,
+        patientName: patient?.firstName || patient?.email,
+        birthMonth: patient?.birthMonth,
+        birthYear: patient?.birthYear,
+        gender: patient?.gender,
         patientLastVisitedAt,
       });
     } catch (error) {
