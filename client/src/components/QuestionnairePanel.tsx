@@ -282,108 +282,32 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
         </div>
 
         <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="basicInfo">
-            <AccordionTrigger data-testid="panel-accordion-basic-info">
-              {t.sectionBasicInfo}
+          <AccordionItem value="profile">
+            <AccordionTrigger data-testid="panel-accordion-profile">
+              {t.sectionProfile}
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-6 pt-2">
-                {isPatientView ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label>{t.patientName}</Label>
-                      <div className="text-sm p-2 bg-muted rounded-md">{formData.patientName || '—'}</div>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>{t.patientName}</Label>
+                  <div className="text-sm p-2 bg-muted rounded-md">{formData.patientName || '—'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t.birthMonth}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md">
+                      {formData.birthMonth ? months.find(m => m.value === formData.birthMonth)?.label : '—'}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.birthMonth}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md">
-                          {formData.birthMonth ? months.find(m => m.value === formData.birthMonth)?.label : '—'}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.birthYear}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md">{formData.birthYear || '—'}</div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.gender}</Label>
-                      <div className="text-sm p-2 bg-muted rounded-md">{formData.gender ? getGenderLabel(formData.gender) : '—'}</div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="panel-patientName">{t.patientName}</Label>
-                      <Input
-                        id="panel-patientName"
-                        value={formData.patientName || ''}
-                        onChange={(e) => updateSettings('patientName', e.target.value)}
-                        onBlur={triggerAutoSave}
-                        data-testid="panel-input-patient-name"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.birthMonth}</Label>
-                        <Select
-                          value={formData.birthMonth?.toString() || ''}
-                          onValueChange={(v) => {
-                            updateSettings('birthMonth', v ? parseInt(v) : undefined);
-                            setTimeout(triggerAutoSave, 100);
-                          }}
-                        >
-                          <SelectTrigger data-testid="panel-select-birth-month">
-                            <SelectValue placeholder={t.selectMonth} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {months.map((m) => (
-                              <SelectItem key={m.value} value={m.value.toString()}>
-                                {m.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="panel-birthYear">{t.birthYear}</Label>
-                        <Input
-                          id="panel-birthYear"
-                          type="number"
-                          min={1900}
-                          max={new Date().getFullYear()}
-                          value={formData.birthYear || ''}
-                          onChange={(e) => updateSettings('birthYear', e.target.value ? parseInt(e.target.value) : undefined)}
-                          onBlur={triggerAutoSave}
-                          data-testid="panel-input-birth-year"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{t.gender}</Label>
-                      <Select
-                        value={formData.gender || ''}
-                        onValueChange={(v) => {
-                          updateSettings('gender', v as 'male' | 'female' | 'other');
-                          setTimeout(triggerAutoSave, 100);
-                        }}
-                      >
-                        <SelectTrigger data-testid="panel-select-gender">
-                          <SelectValue placeholder={t.selectGender} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="male">{t.genderMale}</SelectItem>
-                          <SelectItem value="female">{t.genderFemale}</SelectItem>
-                          <SelectItem value="other">{t.genderOther}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                  </>
-                )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.birthYear}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md">{formData.birthYear || '—'}</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.gender}</Label>
+                  <div className="text-sm p-2 bg-muted rounded-md">{formData.gender ? getGenderLabel(formData.gender) : '—'}</div>
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>
