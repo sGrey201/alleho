@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { HelpCircle, Loader2, Check, X, Plus } from "lucide-react";
@@ -20,6 +21,9 @@ interface PatientQuestionnaireResponse {
     email: string;
     firstName?: string;
     lastName?: string;
+    gender?: string;
+    birthMonth?: number;
+    birthYear?: number;
   };
   updatedAt: string;
 }
@@ -88,6 +92,7 @@ const psychSections: PsychSection[] = [
 
 export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }: QuestionnairePanelProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [formData, setFormData] = useState<QuestionnaireData>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const formDataRef = useRef<QuestionnaireData>({});
@@ -290,23 +295,39 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">
                   <Label>{t.patientName}</Label>
-                  <div className="text-sm p-2 bg-muted rounded-md">{formData.patientName || '—'}</div>
+                  <div className="text-sm p-2 bg-muted rounded-md">
+                    {isPatientView 
+                      ? (patientData?.patient?.firstName && patientData?.patient?.lastName 
+                          ? `${patientData.patient.firstName} ${patientData.patient.lastName}` 
+                          : patientData?.patient?.email || '—')
+                      : (user?.firstName && user?.lastName 
+                          ? `${user.firstName} ${user.lastName}` 
+                          : user?.email || '—')}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t.birthMonth}</Label>
                     <div className="text-sm p-2 bg-muted rounded-md">
-                      {formData.birthMonth ? months.find(m => m.value === formData.birthMonth)?.label : '—'}
+                      {isPatientView
+                        ? (patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient.birthMonth)?.label : '—')
+                        : (user?.birthMonth ? months.find(m => m.value === user.birthMonth)?.label : '—')}
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{t.birthYear}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md">{formData.birthYear || '—'}</div>
+                    <div className="text-sm p-2 bg-muted rounded-md">
+                      {isPatientView ? (patientData?.patient?.birthYear || '—') : (user?.birthYear || '—')}
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>{t.gender}</Label>
-                  <div className="text-sm p-2 bg-muted rounded-md">{formData.gender ? getGenderLabel(formData.gender) : '—'}</div>
+                  <div className="text-sm p-2 bg-muted rounded-md">
+                    {isPatientView 
+                      ? (patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—')
+                      : (user?.gender ? getGenderLabel(user.gender) : '—')}
+                  </div>
                 </div>
               </div>
             </AccordionContent>

@@ -23,6 +23,9 @@ interface PatientQuestionnaireResponse {
     email: string;
     firstName?: string;
     lastName?: string;
+    gender?: string;
+    birthMonth?: number;
+    birthYear?: number;
   };
   updatedAt: string;
 }
@@ -85,7 +88,7 @@ const psychSections: PsychSection[] = [
 ];
 
 export default function Questionnaire() {
-  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [formData, setFormData] = useState<QuestionnaireData>({});
@@ -324,23 +327,39 @@ export default function Questionnaire() {
                 <div className="space-y-4 pt-2">
                   <div className="space-y-2">
                     <Label>{t.patientName}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md">{formData.patientName || '—'}</div>
+                    <div className="text-sm p-2 bg-muted rounded-md">
+                      {isPatientView 
+                        ? (patientData?.patient?.firstName && patientData?.patient?.lastName 
+                            ? `${patientData.patient.firstName} ${patientData.patient.lastName}` 
+                            : patientData?.patient?.email || '—')
+                        : (user?.firstName && user?.lastName 
+                            ? `${user.firstName} ${user.lastName}` 
+                            : user?.email || '—')}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.birthMonth}</Label>
                       <div className="text-sm p-2 bg-muted rounded-md">
-                        {formData.birthMonth ? months.find(m => m.value === formData.birthMonth)?.label : '—'}
+                        {isPatientView
+                          ? (patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient.birthMonth)?.label : '—')
+                          : (user?.birthMonth ? months.find(m => m.value === user.birthMonth)?.label : '—')}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label>{t.birthYear}</Label>
-                      <div className="text-sm p-2 bg-muted rounded-md">{formData.birthYear || '—'}</div>
+                      <div className="text-sm p-2 bg-muted rounded-md">
+                        {isPatientView ? (patientData?.patient?.birthYear || '—') : (user?.birthYear || '—')}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{t.gender}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md">{formData.gender ? getGenderLabel(formData.gender) : '—'}</div>
+                    <div className="text-sm p-2 bg-muted rounded-md">
+                      {isPatientView 
+                        ? (patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—')
+                        : (user?.gender ? getGenderLabel(user.gender) : '—')}
+                    </div>
                   </div>
                 </div>
               </AccordionContent>

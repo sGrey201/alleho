@@ -876,6 +876,9 @@ ${allUrls.map(url => `  <url>
           email: patient?.email,
           firstName: patient?.firstName,
           lastName: patient?.lastName,
+          gender: patient?.gender,
+          birthMonth: patient?.birthMonth,
+          birthYear: patient?.birthYear,
         },
         updatedAt: questionnaire.updatedAt,
       });
