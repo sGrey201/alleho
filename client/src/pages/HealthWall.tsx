@@ -454,10 +454,7 @@ export default function HealthWall() {
               </h1>
               {patientInfo && (
                 <p className="text-sm text-muted-foreground">
-                  {patientInfo.birthMonth && patientInfo.birthYear && (
-                    <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear} | </span>
-                  )}
-                  <span>{formatDoctorLastVisit(patientInfo.patientLastVisitedAt)}</span>
+                  {formatDoctorLastVisit(patientInfo.patientLastVisitedAt)}
                 </p>
               )}
             </>
