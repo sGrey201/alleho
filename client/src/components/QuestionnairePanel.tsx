@@ -532,6 +532,47 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                     </div>
                   </AccordionContent>
                 </AccordionItem>
+
+                <AccordionItem value="willControl" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-will-control" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionWillControl}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsWillControl}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={willControlTags}
+                        selectedTags={formData.willControl?.tags || []}
+                        onTagsChange={updateWillControlTags}
+                        hint={t.hintsWillControl}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-will-control-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.willControl?.description || ''}
+                        onChange={(e) => updateWillControlDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
             </AccordionContent>
           </AccordionItem>
