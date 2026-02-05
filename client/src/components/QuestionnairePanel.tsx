@@ -324,33 +324,22 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   return (
     <div className="h-full overflow-y-auto">
       <div className="px-4 py-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-bold">{formData.patientName || t.questionnaire}</h2>
-            <div className="text-sm text-muted-foreground flex flex-wrap gap-2">
-              {formData.birthMonth && formData.birthYear && (
-                <span>{formData.birthMonth.toString().padStart(2, '0')}.{formData.birthYear}</span>
-              )}
-              {formData.gender && <span>• {getGenderLabel(formData.gender)}</span>}
-            </div>
+        {saveStatus !== 'idle' && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+            {saveStatus === 'saving' && (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{t.saving}</span>
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <>
+                <Check className="h-4 w-4 text-green-500" />
+                <span>{t.saved}</span>
+              </>
+            )}
           </div>
-          {saveStatus !== 'idle' && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {saveStatus === 'saving' && (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>{t.saving}</span>
-                </>
-              )}
-              {saveStatus === 'saved' && (
-                <>
-                  <Check className="h-4 w-4 text-green-500" />
-                  <span>{t.saved}</span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        )}
 
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
