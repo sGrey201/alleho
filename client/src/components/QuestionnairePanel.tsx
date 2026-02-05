@@ -108,6 +108,29 @@ const socialRelationsTags = [
   { key: 'addictions', label: t.socialTagAddictions },
 ];
 
+const willControlTags = [
+  { key: 'strongWill', label: t.willTagStrongWill },
+  { key: 'weakWill', label: t.willTagWeakWill },
+  { key: 'stubbornness', label: t.willTagStubbornness },
+  { key: 'compliance', label: t.willTagCompliance },
+  { key: 'impulsiveness', label: t.willTagImpulsiveness },
+  { key: 'caution', label: t.willTagCaution },
+  { key: 'hastiness', label: t.willTagHastiness },
+  { key: 'slowness', label: t.willTagSlowness },
+  { key: 'workaholism', label: t.willTagWorkaholism },
+  { key: 'laziness', label: t.willTagLaziness },
+  { key: 'pedantry', label: t.willTagPedantry },
+  { key: 'disorder', label: t.willTagDisorder },
+  { key: 'obsession', label: t.willTagObsession },
+  { key: 'superficiality', label: t.willTagSuperficiality },
+  { key: 'selfControl', label: t.willTagSelfControl },
+  { key: 'lackOfRestraint', label: t.willTagLackOfRestraint },
+  { key: 'perfectionism', label: t.willTagPerfectionism },
+  { key: 'negligence', label: t.willTagNegligence },
+  { key: 'controlDesire', label: t.willTagControlDesire },
+  { key: 'noInitiative', label: t.willTagNoInitiative },
+];
+
 interface TagSelectorProps {
   tags: { key: string; label: string }[];
   selectedTags: string[];
@@ -305,6 +328,26 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       ...prev,
       socialRelations: {
         ...prev.socialRelations,
+        description,
+      },
+    }));
+  };
+
+  const updateWillControlTags = (tags: string[]) => {
+    setFormData(prev => ({
+      ...prev,
+      willControl: {
+        ...prev.willControl,
+        tags,
+      },
+    }));
+  };
+
+  const updateWillControlDescription = (description: string) => {
+    setFormData(prev => ({
+      ...prev,
+      willControl: {
+        ...prev.willControl,
         description,
       },
     }));
