@@ -128,22 +128,6 @@ function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSele
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Popover>
-          <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-            >
-              <HelpCircle className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-            <p className="text-sm text-muted-foreground">{hint}</p>
-          </PopoverContent>
-        </Popover>
-      </div>
       <div 
         className="border rounded-md p-3 cursor-pointer hover-elevate"
         onClick={() => setIsOpen(!isOpen)}
