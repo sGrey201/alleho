@@ -128,15 +128,36 @@ function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSele
 
   return (
     <div className="space-y-2">
+      {selectedTags.length > 0 && (
+        <div className="space-y-1">
+          {selectedTags.map(key => {
+            const tag = tags.find(t => t.key === key);
+            if (!tag) return null;
+            return (
+              <div key={key} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`selected-${key}`}
+                  checked={true}
+                  onCheckedChange={() => toggleTag(key)}
+                />
+                <label
+                  htmlFor={`selected-${key}`}
+                  className="text-sm cursor-pointer"
+                >
+                  {tag.label}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div 
         className="border rounded-md p-3 cursor-pointer hover-elevate"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground line-clamp-2 flex-1">
-            {selectedTags.length > 0 
-              ? selectedTags.map(key => tags.find(tag => tag.key === key)?.label).filter(Boolean).join(', ')
-              : hint}
+          <span className="text-sm text-muted-foreground">
+            {hint}
           </span>
           <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
