@@ -430,7 +430,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         value={formData.moodAndEnergy?.description || ''}
                         onChange={(e) => updateMoodDescription(e.target.value)}
                         onBlur={triggerAutoSave}
-                        className="min-h-[100px]"
+                        className="min-h-[200px]"
                       />
                     </div>
                   </AccordionContent>
@@ -471,7 +471,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         value={formData.socialRelations?.description || ''}
                         onChange={(e) => updateSocialDescription(e.target.value)}
                         onBlur={triggerAutoSave}
-                        className="min-h-[100px]"
+                        className="min-h-[200px]"
                       />
                     </div>
                   </AccordionContent>
