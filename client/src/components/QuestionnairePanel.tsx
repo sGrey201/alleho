@@ -352,9 +352,9 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
           )}
         </div>
 
-        <Accordion type="multiple" className="w-full">
+        <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
-            <AccordionTrigger data-testid="panel-accordion-profile">
+            <AccordionTrigger data-testid="panel-accordion-profile" className="data-[state=open]:font-bold">
               {t.sectionProfile}
             </AccordionTrigger>
             <AccordionContent>
@@ -400,7 +400,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
           </AccordionItem>
 
           <AccordionItem value="psycheMental">
-            <AccordionTrigger data-testid="panel-accordion-psyche-mental">
+            <AccordionTrigger data-testid="panel-accordion-psyche-mental" className="data-[state=open]:font-bold">
               <div className="flex items-center gap-2">
                 {t.sectionPsycheMental}
                 <Popover>
@@ -420,9 +420,9 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              <Accordion type="multiple" className="w-full">
+              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="moodEnergy" className="border-0">
-                  <AccordionTrigger data-testid="panel-accordion-mood-energy" className="py-2">
+                  <AccordionTrigger data-testid="panel-accordion-mood-energy" className="py-2 data-[state=open]:font-bold">
                     <div className="flex items-center gap-2">
                       {t.subsectionMoodEnergy}
                       <Popover>
@@ -463,7 +463,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                 </AccordionItem>
 
                 <AccordionItem value="socialRelations" className="border-0">
-                  <AccordionTrigger data-testid="panel-accordion-social-relations" className="py-2">
+                  <AccordionTrigger data-testid="panel-accordion-social-relations" className="py-2 data-[state=open]:font-bold">
                     <div className="flex items-center gap-2">
                       {t.subsectionSocialRelations}
                       <Popover>
@@ -508,7 +508,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
           {isPatientView && (
             <AccordionItem value="homeopathNotes">
-              <AccordionTrigger data-testid="panel-accordion-homeopath-notes">
+              <AccordionTrigger data-testid="panel-accordion-homeopath-notes" className="data-[state=open]:font-bold">
                 {t.sectionHomeopathNotes}
               </AccordionTrigger>
               <AccordionContent>
