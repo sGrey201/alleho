@@ -134,9 +134,7 @@ function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSele
       >
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
-            {selectedTags.length > 0 
-              ? `${t.selectedCount}: ${selectedTags.length}` 
-              : hint}
+            {`${t.selectedCount}: ${selectedTags.length}`}
           </span>
           <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
