@@ -324,23 +324,6 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   return (
     <div className="h-full overflow-y-auto">
       <div className="px-4 py-4">
-        {saveStatus !== 'idle' && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-            {saveStatus === 'saving' && (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{t.saving}</span>
-              </>
-            )}
-            {saveStatus === 'saved' && (
-              <>
-                <Check className="h-4 w-4 text-green-500" />
-                <span>{t.saved}</span>
-              </>
-            )}
-          </div>
-        )}
-
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
             <AccordionTrigger data-testid="panel-accordion-profile" className="data-[state=open]:font-bold">
@@ -392,6 +375,8 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
             <AccordionTrigger data-testid="panel-accordion-psyche-mental" className="data-[state=open]:font-bold">
               <div className="flex items-center gap-2">
                 {t.sectionPsycheMental}
+                {saveStatus === 'saving' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {saveStatus === 'saved' && <Check className="h-4 w-4 text-green-500" />}
                 <Popover>
                   <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button
