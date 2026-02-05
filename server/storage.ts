@@ -733,6 +733,23 @@ export class DatabaseStorage implements IStorage {
       );
     return connection?.lastVisitedAt || null;
   }
+
+  async updatePatientLastVisit(patientUserId: string): Promise<void> {
+    await db
+      .update(healthWallDoctors)
+      .set({ patientLastVisitedAt: new Date() })
+      .where(eq(healthWallDoctors.patientUserId, patientUserId));
+  }
+
+  async getPatientLastVisit(patientUserId: string): Promise<Date | null> {
+    const [connection] = await db
+      .select({ patientLastVisitedAt: healthWallDoctors.patientLastVisitedAt })
+      .from(healthWallDoctors)
+      .where(eq(healthWallDoctors.patientUserId, patientUserId))
+      .orderBy(healthWallDoctors.patientLastVisitedAt)
+      .limit(1);
+    return connection?.patientLastVisitedAt || null;
+  }
 }
 
 export const storage = new DatabaseStorage();

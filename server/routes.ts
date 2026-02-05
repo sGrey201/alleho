@@ -988,11 +988,17 @@ ${allUrls.map(url => `  <url>
         return res.status(403).json({ message: "Access denied" });
       }
       
-      // Track doctor visit if a doctor is viewing a patient's wall
-      if (currentUserId && currentUserId !== patientUserId) {
-        const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
-        if (isConnected) {
-          await storage.updateDoctorLastVisit(patientUserId, currentUserId);
+      // Track visits
+      if (currentUserId) {
+        if (currentUserId === patientUserId) {
+          // Patient viewing their own wall - update patientLastVisitedAt
+          await storage.updatePatientLastVisit(patientUserId);
+        } else {
+          // Doctor viewing patient's wall - update lastVisitedAt
+          const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
+          if (isConnected) {
+            await storage.updateDoctorLastVisit(patientUserId, currentUserId);
+          }
         }
       }
       
@@ -1086,10 +1092,10 @@ ${allUrls.map(url => `  <url>
       const questionnaire = await storage.getQuestionnaire(patientUserId);
       const data = questionnaire?.data as QData | undefined;
       
-      // Get doctor's last visit time if current user is a doctor viewing this patient
-      let doctorLastVisitedAt = null;
+      // Get patient's last visit time for doctors viewing this patient
+      let patientLastVisitedAt = null;
       if (currentUserId && currentUserId !== patientUserId) {
-        doctorLastVisitedAt = await storage.getDoctorLastVisit(patientUserId, currentUserId);
+        patientLastVisitedAt = await storage.getPatientLastVisit(patientUserId);
       }
       
       res.json({
@@ -1099,7 +1105,7 @@ ${allUrls.map(url => `  <url>
         birthMonth: data?.birthMonth,
         birthYear: data?.birthYear,
         gender: data?.gender,
-        doctorLastVisitedAt,
+        patientLastVisitedAt,
       });
     } catch (error) {
       console.error("Error fetching patient info:", error);

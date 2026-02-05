@@ -43,7 +43,7 @@ interface PatientInfo {
   birthMonth?: number;
   birthYear?: number;
   gender?: string;
-  doctorLastVisitedAt?: string;
+  patientLastVisitedAt?: string;
 }
 
 interface ConnectedDoctor {
@@ -457,7 +457,7 @@ export default function HealthWall() {
                   {patientInfo.birthMonth && patientInfo.birthYear && (
                     <span>{patientInfo.birthMonth.toString().padStart(2, '0')}.{patientInfo.birthYear} | </span>
                   )}
-                  <span>{formatDoctorLastVisit(patientInfo.doctorLastVisitedAt)}</span>
+                  <span>{formatDoctorLastVisit(patientInfo.patientLastVisitedAt)}</span>
                 </p>
               )}
             </>
