@@ -1076,6 +1076,7 @@ ${allUrls.map(url => `  <url>
   app.get('/api/health-wall/:patientUserId/info', isAuthenticated, async (req: any, res) => {
     try {
       const { patientUserId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
       
       if (!await canAccessHealthWall(req, patientUserId)) {
         return res.status(403).json({ message: "Access denied" });
@@ -1085,6 +1086,12 @@ ${allUrls.map(url => `  <url>
       const questionnaire = await storage.getQuestionnaire(patientUserId);
       const data = questionnaire?.data as QData | undefined;
       
+      // Get doctor's last visit time if current user is a doctor viewing this patient
+      let doctorLastVisitedAt = null;
+      if (currentUserId && currentUserId !== patientUserId) {
+        doctorLastVisitedAt = await storage.getDoctorLastVisit(patientUserId, currentUserId);
+      }
+      
       res.json({
         id: patient?.id,
         email: patient?.email,
@@ -1092,6 +1099,7 @@ ${allUrls.map(url => `  <url>
         birthMonth: data?.birthMonth,
         birthYear: data?.birthYear,
         gender: data?.gender,
+        doctorLastVisitedAt,
       });
     } catch (error) {
       console.error("Error fetching patient info:", error);

@@ -720,6 +720,19 @@ export class DatabaseStorage implements IStorage {
         )
       );
   }
+
+  async getDoctorLastVisit(patientUserId: string, doctorUserId: string): Promise<Date | null> {
+    const [connection] = await db
+      .select({ lastVisitedAt: healthWallDoctors.lastVisitedAt })
+      .from(healthWallDoctors)
+      .where(
+        and(
+          eq(healthWallDoctors.patientUserId, patientUserId),
+          eq(healthWallDoctors.doctorUserId, doctorUserId)
+        )
+      );
+    return connection?.lastVisitedAt || null;
+  }
 }
 
 export const storage = new DatabaseStorage();
