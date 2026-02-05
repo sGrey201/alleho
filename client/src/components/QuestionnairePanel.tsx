@@ -199,7 +199,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
   const isPatientView = !isOwnQuestionnaire;
 
-  const { data: savedData, isLoading } = useQuery<QuestionnaireData>({
+  const { data: savedDataResponse, isLoading } = useQuery<{ data: QuestionnaireData }>({
     queryKey: ['/api/questionnaire'],
     enabled: isOwnQuestionnaire,
     staleTime: 0,
@@ -219,11 +219,11 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   });
 
   useEffect(() => {
-    if (savedData && isOwnQuestionnaire) {
-      setFormData(savedData);
-      formDataRef.current = savedData;
+    if (savedDataResponse?.data && isOwnQuestionnaire) {
+      setFormData(savedDataResponse.data);
+      formDataRef.current = savedDataResponse.data;
     }
-  }, [savedData, isOwnQuestionnaire]);
+  }, [savedDataResponse, isOwnQuestionnaire]);
 
   useEffect(() => {
     if (patientData && !isOwnQuestionnaire) {
