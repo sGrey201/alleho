@@ -382,40 +382,6 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>{t.doctorAccess}</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="email"
-                          placeholder={t.enterEmail}
-                          value={newDoctorEmail}
-                          onChange={(e) => setNewDoctorEmail(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addDoctorEmail()}
-                          data-testid="panel-input-doctor-email"
-                        />
-                        <Button onClick={addDoctorEmail} size="icon" disabled={isCheckingEmail} data-testid="panel-button-add-doctor">
-                          {isCheckingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      {formData.sharedWithEmails && formData.sharedWithEmails.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {formData.sharedWithEmails.map((email) => (
-                            <div key={email} className="flex items-center justify-between rounded-md border p-2">
-                              <span className="text-sm">{email}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => removeDoctorEmail(email)}
-                                data-testid={`panel-button-remove-doctor-${email}`}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
               </div>
