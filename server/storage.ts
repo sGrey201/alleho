@@ -708,6 +708,18 @@ export class DatabaseStorage implements IStorage {
       );
     return !!connection;
   }
+
+  async updateDoctorLastVisit(patientUserId: string, doctorUserId: string): Promise<void> {
+    await db
+      .update(healthWallDoctors)
+      .set({ lastVisitedAt: new Date() })
+      .where(
+        and(
+          eq(healthWallDoctors.patientUserId, patientUserId),
+          eq(healthWallDoctors.doctorUserId, doctorUserId)
+        )
+      );
+  }
 }
 
 export const storage = new DatabaseStorage();

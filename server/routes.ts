@@ -982,9 +982,18 @@ ${allUrls.map(url => `  <url>
   app.get('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
     try {
       const { patientUserId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
       
       if (!await canAccessHealthWall(req, patientUserId)) {
         return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // Track doctor visit if a doctor is viewing a patient's wall
+      if (currentUserId && currentUserId !== patientUserId) {
+        const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
+        if (isConnected) {
+          await storage.updateDoctorLastVisit(patientUserId, currentUserId);
+        }
       }
       
       const messages = await storage.getHealthWallMessages(patientUserId);
@@ -1108,6 +1117,7 @@ ${allUrls.map(url => `  <url>
         firstName: d.user.firstName,
         lastName: d.user.lastName,
         createdAt: d.doctor.createdAt,
+        lastVisitedAt: d.doctor.lastVisitedAt,
       })));
     } catch (error) {
       console.error("Error fetching connected doctors:", error);

@@ -52,11 +52,32 @@ interface ConnectedDoctor {
   firstName?: string;
   lastName?: string;
   createdAt: string;
+  lastVisitedAt?: string;
 }
 
 const STORAGE_KEY_DIVIDER = 'healthwall-divider-position';
 const STORAGE_KEY_PANEL = 'healthwall-panel-open';
 const MIN_PANEL_PERCENT = 33;
+
+function formatDoctorLastVisit(lastVisitedAt?: string): string {
+  if (!lastVisitedAt) {
+    return t.neverVisited;
+  }
+  
+  const date = new Date(lastVisitedAt);
+  const time = format(date, 'HH:mm');
+  
+  if (isToday(date)) {
+    return `${t.wasOnlineToday} ${time}`;
+  }
+  
+  if (isYesterday(date)) {
+    return `${t.wasOnlineYesterday} ${time}`;
+  }
+  
+  const dateStr = format(date, 'dd.MM.yyyy', { locale: ru });
+  return `${t.wasOnlineAt} ${dateStr} в ${time}`;
+}
 const MAX_PANEL_PERCENT = 66;
 const DEFAULT_PANEL_PERCENT = 50;
 
@@ -403,7 +424,15 @@ export default function HealthWall() {
                         : d.email
                     ).join(', ')}
                   </p>
-                  <p className="text-sm text-muted-foreground">{t.connectedDoctors}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {connectedDoctors.length === 1 
+                      ? formatDoctorLastVisit(connectedDoctors[0].lastVisitedAt)
+                      : connectedDoctors.map(d => {
+                          const name = d.firstName || d.email?.split('@')[0] || '';
+                          return `${name}: ${formatDoctorLastVisit(d.lastVisitedAt)}`;
+                        }).join(' | ')
+                    }
+                  </p>
                 </button>
               ) : (
                 <Button

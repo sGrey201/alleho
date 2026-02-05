@@ -294,6 +294,7 @@ export const healthWallDoctors = pgTable("health_wall_doctors", {
   patientUserId: varchar("patient_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   doctorUserId: varchar("doctor_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
+  lastVisitedAt: timestamp("last_visited_at"),
 }, (table) => [
   index("health_wall_doctors_patient_idx").on(table.patientUserId),
   index("health_wall_doctors_doctor_idx").on(table.doctorUserId),
@@ -303,6 +304,7 @@ export const healthWallDoctors = pgTable("health_wall_doctors", {
 export const insertHealthWallDoctorSchema = createInsertSchema(healthWallDoctors).omit({
   id: true,
   createdAt: true,
+  lastVisitedAt: true,
 });
 
 export type InsertHealthWallDoctor = z.infer<typeof insertHealthWallDoctorSchema>;
