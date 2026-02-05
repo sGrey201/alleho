@@ -429,16 +429,14 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         hint={t.hintsMoodEnergy}
                         onBlur={triggerAutoSave}
                       />
-                      <div className="space-y-2">
-                        <Label>{t.describeSelectedTraits}</Label>
-                        <Textarea
-                          data-testid="panel-input-mood-description"
-                          value={formData.moodAndEnergy?.description || ''}
-                          onChange={(e) => updateMoodDescription(e.target.value)}
-                          onBlur={triggerAutoSave}
-                          className="min-h-[100px]"
-                        />
-                      </div>
+                      <Textarea
+                        data-testid="panel-input-mood-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.moodAndEnergy?.description || ''}
+                        onChange={(e) => updateMoodDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[100px]"
+                      />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -472,16 +470,14 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         hint={t.hintsSocialRelations}
                         onBlur={triggerAutoSave}
                       />
-                      <div className="space-y-2">
-                        <Label>{t.describeSelectedTraits}</Label>
-                        <Textarea
-                          data-testid="panel-input-social-description"
-                          value={formData.socialRelations?.description || ''}
-                          onChange={(e) => updateSocialDescription(e.target.value)}
-                          onBlur={triggerAutoSave}
-                          className="min-h-[100px]"
-                        />
-                      </div>
+                      <Textarea
+                        data-testid="panel-input-social-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.socialRelations?.description || ''}
+                        onChange={(e) => updateSocialDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[100px]"
+                      />
                     </div>
                   </AccordionContent>
                 </AccordionItem>
