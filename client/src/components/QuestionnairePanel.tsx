@@ -257,6 +257,19 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     }
   }, [formData, saveMutation]);
 
+  // Auto-save every 30 seconds if there are changes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
+        formDataRef.current = formData;
+        setSaveStatus('saving');
+        saveMutation.mutate(formData);
+      }
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [formData, saveMutation]);
+
   const updateMoodTags = (tags: string[]) => {
     setFormData(prev => ({
       ...prev,
