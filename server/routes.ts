@@ -933,18 +933,18 @@ ${allUrls.map(url => `  <url>
       const connectedPatients = await storage.getHealthWallPatients(doctorUserId);
       
       const result = await Promise.all(connectedPatients.map(async ({ connection, patient }) => {
-        // Get questionnaire for patient info (name, birth date, etc.)
+        // Get questionnaire for updatedAt only
         const questionnaire = await storage.getQuestionnaire(patient.id);
         const stats = await storage.getPatientHealthWallStats(patient.id, doctorUserId);
         
-        const qData = questionnaire?.data as any;
+        // Use patient profile data, not questionnaire data
         return {
           id: connection.id,
           userId: patient.id,
-          patientName: qData?.patientName || patient.firstName || patient.email,
-          birthMonth: qData?.birthMonth,
-          birthYear: qData?.birthYear,
-          gender: qData?.gender,
+          patientName: patient.firstName || patient.email,
+          birthMonth: patient.birthMonth,
+          birthYear: patient.birthYear,
+          gender: patient.gender,
           email: patient.email,
           updatedAt: questionnaire?.updatedAt || connection.createdAt,
           unreadCount: stats.unreadCount,
