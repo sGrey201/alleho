@@ -506,9 +506,12 @@ export default function HealthWall() {
                 {messages && messages.length > 0 ? (
                   <>
                     {(() => {
+                      const filteredMessages = isOwnWall 
+                        ? messages.filter(msg => msg.messageType !== 'followup')
+                        : messages;
                       const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
                       
-                      messages.forEach((msg, index) => {
+                      filteredMessages.forEach((msg, index) => {
                         const isImageOnly = msg.imageUrl && !msg.content && msg.messageType === 'message';
                         const prevGroup = groupedMessages[groupedMessages.length - 1];
                         
