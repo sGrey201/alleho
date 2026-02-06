@@ -27,7 +27,6 @@ import AdminTags from "@/pages/admin/AdminTags";
 import About from "@/pages/About";
 import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
-import Questionnaire from "@/pages/Questionnaire";
 import MyPatients from "@/pages/MyPatients";
 import HealthWall from "@/pages/HealthWall";
 import Profile from "@/pages/Profile";
@@ -59,9 +58,7 @@ function Router() {
       <Route path="/subscribe" component={Subscribe} />
       <Route path="/remedies" component={AllRemedies} />
       <Route path="/situations" component={AllSituations} />
-      <Route path="/questionnaire" component={Questionnaire} />
       <Route path="/my-patients" component={MyPatients} />
-      <Route path="/patient/:userId" component={Questionnaire} />
       <Route path="/health-wall" component={HealthWall} />
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
       <Route path="/profile" component={Profile} />
@@ -128,9 +125,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = location.startsWith('/health-wall') || 
-                           location.startsWith('/questionnaire') || 
-                           location.startsWith('/patient/');
+  const isFullscreenPage = location.startsWith('/health-wall');
 
   if (isFullscreenPage) {
     return (
