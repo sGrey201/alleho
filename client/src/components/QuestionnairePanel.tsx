@@ -131,6 +131,124 @@ const willControlTags = [
   { key: 'noInitiative', label: t.willTagNoInitiative },
 ];
 
+const intellectImaginationTags = [
+  { key: 'clarityOfThinking', label: t.intellectTagClarityOfThinking },
+  { key: 'confusion', label: t.intellectTagConfusion },
+  { key: 'focusOnDetails', label: t.intellectTagFocusOnDetails },
+  { key: 'absentMindedness', label: t.intellectTagAbsentMindedness },
+  { key: 'quickMind', label: t.intellectTagQuickMind },
+  { key: 'slowThinking', label: t.intellectTagSlowThinking },
+  { key: 'creativeInspiration', label: t.intellectTagCreativeInspiration },
+  { key: 'mentalStupor', label: t.intellectTagMentalStupor },
+  { key: 'vividImagination', label: t.intellectTagVividImagination },
+  { key: 'pragmatism', label: t.intellectTagPragmatism },
+  { key: 'fixationOnPast', label: t.intellectTagFixationOnPast },
+  { key: 'fixationOnFuture', label: t.intellectTagFixationOnFuture },
+  { key: 'obsessiveThoughts', label: t.intellectTagObsessiveThoughts },
+  { key: 'brainOverload', label: t.intellectTagBrainOverload },
+  { key: 'wordFindingDifficulty', label: t.intellectTagWordFindingDifficulty },
+];
+
+const fearsTags = [
+  { key: 'fearOfDeath', label: t.fearTagFearOfDeath },
+  { key: 'disregardForDeath', label: t.fearTagDisregardForDeath },
+  { key: 'fearOfLoneliness', label: t.fearTagFearOfLoneliness },
+  { key: 'fearOfCrowds', label: t.fearTagFearOfCrowds },
+  { key: 'fearOfDarkness', label: t.fearTagFearOfDarkness },
+  { key: 'fearOfBrightLight', label: t.fearTagFearOfBrightLight },
+  { key: 'fearOfFuture', label: t.fearTagFearOfFuture },
+  { key: 'fearOfPastRepeat', label: t.fearTagFearOfPastRepeat },
+  { key: 'fearOfFailure', label: t.fearTagFearOfFailure },
+  { key: 'fearOfSuccess', label: t.fearTagFearOfSuccess },
+  { key: 'fearOfInsanity', label: t.fearTagFearOfInsanity },
+  { key: 'claustrophobia', label: t.fearTagClaustrophobia },
+  { key: 'fearOfHeights', label: t.fearTagFearOfHeights },
+  { key: 'fearOfAnimals', label: t.fearTagFearOfAnimals },
+  { key: 'hypochondria', label: t.fearTagHypochondria },
+  { key: 'panicAttacks', label: t.fearTagPanicAttacks },
+];
+
+const emotionalReactionsTags = [
+  { key: 'irritability', label: t.emotionTagIrritability },
+  { key: 'phlegmatic', label: t.emotionTagPhlegmatic },
+  { key: 'rage', label: t.emotionTagRage },
+  { key: 'annoyance', label: t.emotionTagAnnoyance },
+  { key: 'irritabilityFromTrifles', label: t.emotionTagIrritabilityFromTrifles },
+  { key: 'patience', label: t.emotionTagPatience },
+  { key: 'tearfulness', label: t.emotionTagTearfulness },
+  { key: 'inabilityToCry', label: t.emotionTagInabilityToCry },
+  { key: 'sentimentality', label: t.emotionTagSentimentality },
+  { key: 'coldness', label: t.emotionTagColdness },
+  { key: 'jealousy', label: t.emotionTagJealousy },
+  { key: 'indifference', label: t.emotionTagIndifference },
+  { key: 'envy', label: t.emotionTagEnvy },
+  { key: 'compassion', label: t.emotionTagCompassion },
+  { key: 'selfPity', label: t.emotionTagSelfPity },
+  { key: 'selfSeverity', label: t.emotionTagSelfSeverity },
+  { key: 'guilt', label: t.emotionTagGuilt },
+  { key: 'blamingOthers', label: t.emotionTagBlamingOthers },
+  { key: 'shyness', label: t.emotionTagShyness },
+  { key: 'shamelessness', label: t.emotionTagShamelessness },
+  { key: 'pride', label: t.emotionTagPride },
+  { key: 'worthlessness', label: t.emotionTagWorthlessness },
+  { key: 'impatience', label: t.emotionTagImpatience },
+  { key: 'longSuffering', label: t.emotionTagLongSuffering },
+  { key: 'hysteria', label: t.emotionTagHysteria },
+  { key: 'innerTrembling', label: t.emotionTagInnerTrembling },
+  { key: 'frenzy', label: t.emotionTagFrenzy },
+  { key: 'loveOfAnimals', label: t.emotionTagLoveOfAnimals },
+];
+
+const specialMentalStatesTags = [
+  { key: 'splitPersonality', label: t.specialTagSplitPersonality },
+  { key: 'unrealityFeeling', label: t.specialTagUnrealityFeeling },
+  { key: 'depersonalization', label: t.specialTagDepersonalization },
+  { key: 'suddenInsights', label: t.specialTagSuddenInsights },
+  { key: 'sensOfMission', label: t.specialTagSensOfMission },
+  { key: 'persecutionMania', label: t.specialTagPersecutionMania },
+  { key: 'delusionalIdeas', label: t.specialTagDelusionalIdeas },
+  { key: 'hallucinations', label: t.specialTagHallucinations },
+  { key: 'obsessiveRituals', label: t.specialTagObsessiveRituals },
+  { key: 'timeLoss', label: t.specialTagTimeLoss },
+  { key: 'obsessiveWashing', label: t.specialTagObsessiveWashing },
+];
+
+const desiresAversionsTags = [
+  { key: 'desireForComfort', label: t.desireTagDesireForComfort },
+  { key: 'desireToBeAlone', label: t.desireTagDesireToBeAlone },
+  { key: 'desireToTravel', label: t.desireTagDesireToTravel },
+  { key: 'desireForHome', label: t.desireTagDesireForHome },
+  { key: 'desireForAlcohol', label: t.desireTagDesireForAlcohol },
+  { key: 'aversionToAlcohol', label: t.desireTagAversionToAlcohol },
+  { key: 'desireForMusic', label: t.desireTagDesireForMusic },
+  { key: 'aversionToMusic', label: t.desireTagAversionToMusic },
+  { key: 'desireForBusiness', label: t.desireTagDesireForBusiness },
+  { key: 'desireForRoutine', label: t.desireTagDesireForRoutine },
+  { key: 'desireToDramatize', label: t.desireTagDesireToDramatize },
+  { key: 'desireToHideFeelings', label: t.desireTagDesireToHideFeelings },
+  { key: 'deathWish', label: t.desireTagDeathWish },
+  { key: 'thirstForLife', label: t.desireTagThirstForLife },
+  { key: 'aversionToStimuli', label: t.desireTagAversionToStimuli },
+  { key: 'talkativeness', label: t.desireTagTalkativeness },
+  { key: 'silence', label: t.desireTagSilence },
+];
+
+const reactionToSufferingTags = [
+  { key: 'stoicism', label: t.sufferingTagStoicism },
+  { key: 'painIntolerance', label: t.sufferingTagPainIntolerance },
+  { key: 'exaggeration', label: t.sufferingTagExaggeration },
+  { key: 'minimization', label: t.sufferingTagMinimization },
+  { key: 'fearOfDyingFromIllness', label: t.sufferingTagFearOfDyingFromIllness },
+  { key: 'beliefIncurable', label: t.sufferingTagBeliefIncurable },
+  { key: 'irritabilityFromPain', label: t.sufferingTagIrritabilityFromPain },
+  { key: 'apathyInPain', label: t.sufferingTagApathyInPain },
+  { key: 'demandAttention', label: t.sufferingTagDemandAttention },
+  { key: 'desireSolitudeInIllness', label: t.sufferingTagDesireSolitudeInIllness },
+  { key: 'worseFromSympathy', label: t.sufferingTagWorseFromSympathy },
+  { key: 'betterFromSympathy', label: t.sufferingTagBetterFromSympathy },
+  { key: 'fearOfDoctors', label: t.sufferingTagFearOfDoctors },
+];
+
 interface TagSelectorProps {
   tags: { key: string; label: string }[];
   selectedTags: string[];
@@ -353,6 +471,48 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     }));
   };
 
+  const updateIntellectImaginationTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, intellectImagination: { ...prev.intellectImagination, tags } }));
+  };
+  const updateIntellectImaginationDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, intellectImagination: { ...prev.intellectImagination, description } }));
+  };
+
+  const updateFearsTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, fears: { ...prev.fears, tags } }));
+  };
+  const updateFearsDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, fears: { ...prev.fears, description } }));
+  };
+
+  const updateEmotionalReactionsTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, emotionalReactions: { ...prev.emotionalReactions, tags } }));
+  };
+  const updateEmotionalReactionsDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, emotionalReactions: { ...prev.emotionalReactions, description } }));
+  };
+
+  const updateSpecialMentalStatesTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, specialMentalStates: { ...prev.specialMentalStates, tags } }));
+  };
+  const updateSpecialMentalStatesDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, specialMentalStates: { ...prev.specialMentalStates, description } }));
+  };
+
+  const updateDesiresAversionsTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, desiresAversions: { ...prev.desiresAversions, tags } }));
+  };
+  const updateDesiresAversionsDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, desiresAversions: { ...prev.desiresAversions, description } }));
+  };
+
+  const updateReactionToSufferingTags = (tags: string[]) => {
+    setFormData(prev => ({ ...prev, reactionToSuffering: { ...prev.reactionToSuffering, tags } }));
+  };
+  const updateReactionToSufferingDescription = (description: string) => {
+    setFormData(prev => ({ ...prev, reactionToSuffering: { ...prev.reactionToSuffering, description } }));
+  };
+
   const updateHomeopathNotes = (value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -567,6 +727,252 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         placeholder={t.describeSelectedTraits}
                         value={formData.willControl?.description || ''}
                         onChange={(e) => updateWillControlDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="intellectImagination" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-intellect-imagination" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionIntellectImagination}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsIntellectImagination}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={intellectImaginationTags}
+                        selectedTags={formData.intellectImagination?.tags || []}
+                        onTagsChange={updateIntellectImaginationTags}
+                        hint={t.hintsIntellectImagination}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-intellect-imagination-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.intellectImagination?.description || ''}
+                        onChange={(e) => updateIntellectImaginationDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="fears" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-fears" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionFears}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsFears}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={fearsTags}
+                        selectedTags={formData.fears?.tags || []}
+                        onTagsChange={updateFearsTags}
+                        hint={t.hintsFears}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-fears-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.fears?.description || ''}
+                        onChange={(e) => updateFearsDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="emotionalReactions" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-emotional-reactions" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionEmotionalReactions}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsEmotionalReactions}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={emotionalReactionsTags}
+                        selectedTags={formData.emotionalReactions?.tags || []}
+                        onTagsChange={updateEmotionalReactionsTags}
+                        hint={t.hintsEmotionalReactions}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-emotional-reactions-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.emotionalReactions?.description || ''}
+                        onChange={(e) => updateEmotionalReactionsDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="specialMentalStates" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-special-mental-states" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionSpecialMentalStates}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsSpecialMentalStates}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={specialMentalStatesTags}
+                        selectedTags={formData.specialMentalStates?.tags || []}
+                        onTagsChange={updateSpecialMentalStatesTags}
+                        hint={t.hintsSpecialMentalStates}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-special-mental-states-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.specialMentalStates?.description || ''}
+                        onChange={(e) => updateSpecialMentalStatesDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="desiresAversions" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-desires-aversions" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionDesiresAversions}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsDesiresAversions}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={desiresAversionsTags}
+                        selectedTags={formData.desiresAversions?.tags || []}
+                        onTagsChange={updateDesiresAversionsTags}
+                        hint={t.hintsDesiresAversions}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-desires-aversions-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.desiresAversions?.description || ''}
+                        onChange={(e) => updateDesiresAversionsDescription(e.target.value)}
+                        onBlur={triggerAutoSave}
+                        className="min-h-[200px]"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="reactionToSuffering" className="border-0">
+                  <AccordionTrigger data-testid="panel-accordion-reaction-to-suffering" className="py-2 data-[state=open]:font-bold">
+                    <div className="flex items-center gap-2">
+                      {t.subsectionReactionToSuffering}
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                          >
+                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                          <p className="text-sm text-muted-foreground">{t.hintsReactionToSuffering}</p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <TagSelector
+                        tags={reactionToSufferingTags}
+                        selectedTags={formData.reactionToSuffering?.tags || []}
+                        onTagsChange={updateReactionToSufferingTags}
+                        hint={t.hintsReactionToSuffering}
+                        onBlur={triggerAutoSave}
+                      />
+                      <Textarea
+                        data-testid="panel-input-reaction-to-suffering-description"
+                        placeholder={t.describeSelectedTraits}
+                        value={formData.reactionToSuffering?.description || ''}
+                        onChange={(e) => updateReactionToSufferingDescription(e.target.value)}
                         onBlur={triggerAutoSave}
                         className="min-h-[200px]"
                       />

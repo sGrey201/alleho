@@ -262,6 +262,12 @@ export const questionnaireDataSchema = z.object({
     tags: z.array(z.string()).optional(),
     description: z.string().optional(),
   }).optional(),
+  intellectImagination: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  fears: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  emotionalReactions: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  specialMentalStates: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  desiresAversions: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  reactionToSuffering: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // Settings fields
   patientName: z.string().optional(),
   birthMonth: z.number().min(1).max(12).optional(),
