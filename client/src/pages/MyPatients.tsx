@@ -81,8 +81,8 @@ export default function MyPatients() {
                       {patient.birthMonth && patient.birthYear && (
                         <span>{patient.birthMonth.toString().padStart(2, '0')}.{patient.birthYear}</span>
                       )}
-                      {patient.birthMonth && patient.birthYear && patient.gender && ' • '}
-                      {patient.gender && <span>{getGenderLabel(patient.gender)}</span>}
+                      {patient.birthMonth && patient.birthYear && patient.email && ' • '}
+                      {patient.email && <span>{patient.email}</span>}
                     </CardDescription>
                   </div>
                   {patient.unreadCount > 0 && (
