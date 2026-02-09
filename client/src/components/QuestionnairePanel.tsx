@@ -104,14 +104,25 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               )}
             </div>
             {isSelected && (
-              <div className="ml-6 mt-1 mb-2">
+              <div className="mt-1 mb-2">
                 <Textarea
                   data-testid={`panel-input-tag-${tag.key}`}
                   placeholder={t.describeSelectedTraits}
                   value={entry?.description || ''}
-                  onChange={(e) => onUpdateDescription(tag.key, e.target.value)}
+                  onChange={(e) => {
+                    onUpdateDescription(tag.key, e.target.value);
+                    const el = e.target;
+                    el.style.height = 'auto';
+                    el.style.height = el.scrollHeight + 'px';
+                  }}
                   onBlur={onBlur}
-                  className="min-h-[80px] text-sm"
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = el.scrollHeight + 'px';
+                    }
+                  }}
+                  className="min-h-[60px] text-sm resize-none overflow-hidden"
                 />
               </div>
             )}
