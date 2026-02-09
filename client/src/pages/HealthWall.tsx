@@ -190,7 +190,12 @@ export default function HealthWall() {
         setMessage('');
         setMessageMode('message');
         const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
-        if (textarea) textarea.style.height = 'auto';
+        if (textarea) {
+          textarea.style.height = 'auto';
+          textarea.focus();
+        }
+      } else {
+        focusMessageInput();
       }
     },
     onError: () => {
@@ -248,8 +253,18 @@ export default function HealthWall() {
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  const focusMessageInput = () => {
+    setTimeout(() => {
+      const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
+      if (textarea) textarea.focus();
+    }, 100);
+  };
+
   const toggleQuestionnaire = () => {
-    setShowQuestionnaire(prev => !prev);
+    setShowQuestionnaire(prev => {
+      if (prev) focusMessageInput();
+      return !prev;
+    });
   };
 
   if (authLoading || messagesLoading) {
