@@ -200,7 +200,7 @@ export const t = {
   homeopathNotesDescription: 'Не видны пациенту',
   sectionProfile: 'Профиль',
   
-  describeSelectedTraits: 'Опишите, как проявляется то, что вы выбрали из списка выше. Если есть еще какие-то особенности, относящиеся к этому разделу, также опишите их здесь.',
+  describeSelectedTraits: 'Опишите подробно. Ответьте на уточняющие вопросы',
 
   questionnaireSections: [
     {
