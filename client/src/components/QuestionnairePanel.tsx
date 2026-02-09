@@ -55,13 +55,14 @@ interface TagEntry {
 
 interface TagSelectorProps {
   tags: ReadonlyArray<{ readonly key: string; readonly label: string; readonly hint: string }>;
+  subsectionHint: string;
   selectedEntries: TagEntry[];
   onToggleTag: (tagKey: string) => void;
   onUpdateDescription: (tagKey: string, description: string) => void;
   onBlur?: () => void;
 }
 
-function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur }: TagSelectorProps) {
+function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur, subsectionHint }: TagSelectorProps) {
   const selectedKeys = selectedEntries.map(e => e.tagKey);
 
   return (
@@ -103,7 +104,7 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               <div className="ml-6 mt-1 mb-2">
                 <Textarea
                   data-testid={`panel-input-tag-${tag.key}`}
-                  placeholder={t.describeSelectedTraits}
+                  placeholder={[tag.hint, subsectionHint].filter(Boolean).join('\n') || t.describeSelectedTraits}
                   value={entry?.description || ''}
                   onChange={(e) => onUpdateDescription(tag.key, e.target.value)}
                   onBlur={onBlur}
@@ -346,6 +347,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         <div className="space-y-2 pt-2">
                           <TagSelector
                             tags={sub.tags}
+                            subsectionHint={sub.hint}
                             selectedEntries={(formData as any)[sub.key] || []}
                             onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
                             onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
