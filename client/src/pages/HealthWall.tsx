@@ -352,20 +352,22 @@ export default function HealthWall() {
           </div>
         )}
         <div className="flex items-end gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            disabled={uploadingPhoto}
-            onClick={() => document.getElementById('photo-upload')?.click()}
-            className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c] h-10 w-10"
-            data-testid="button-upload-photo"
-          >
-            {uploadingPhoto ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Image className="h-4 w-4" />
-            )}
-          </Button>
+          {!message.trim() && (
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={uploadingPhoto}
+              onClick={() => document.getElementById('photo-upload')?.click()}
+              className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c] h-10 w-10"
+              data-testid="button-upload-photo"
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Image className="h-4 w-4" />
+              )}
+            </Button>
+          )}
           <input
             id="photo-upload"
             type="file"
