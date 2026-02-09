@@ -188,6 +188,8 @@ export default function HealthWall() {
       queryClient.invalidateQueries({ queryKey: ['/api/health-wall', patientUserId] });
       setMessage('');
       setMessageMode('message');
+      const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
+      if (textarea) textarea.style.height = 'auto';
     },
     onError: () => {
       toast({
@@ -268,11 +270,16 @@ export default function HealthWall() {
     });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
+  const handleKeyDown = (_e: React.KeyboardEvent) => {
+  };
+
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    const el = e.target;
+    el.style.height = 'auto';
+    const lineHeight = 24;
+    const maxHeight = lineHeight * 6;
+    el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -317,7 +324,7 @@ export default function HealthWall() {
   };
 
   const inputArea = (
-    <div className="border-t px-4 py-3 shrink-0">
+    <div className="border-t px-4 py-4 shrink-0">
         {isAdmin && !isOwnWall && (
           <div className="flex items-center gap-2 mb-2">
             <Button
@@ -342,7 +349,29 @@ export default function HealthWall() {
             </Button>
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={uploadingPhoto}
+            onClick={() => document.getElementById('photo-upload')?.click()}
+            className="rounded-full shrink-0"
+            data-testid="button-upload-photo"
+          >
+            {uploadingPhoto ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Image className="h-4 w-4" />
+            )}
+          </Button>
+          <input
+            id="photo-upload"
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
           <Textarea
             placeholder={
               messageMode === 'prescription' ? t.prescriptionPlaceholder : 
@@ -350,50 +379,30 @@ export default function HealthWall() {
               t.writeMessage
             }
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
-            className={`flex-1 min-h-[44px] max-h-32 resize-none ${
+            rows={1}
+            className={`flex-1 min-h-[36px] resize-none overflow-y-auto rounded-2xl ${
               messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
               messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
               ''
             }`}
+            style={{ maxHeight: '144px' }}
             data-testid="input-message"
           />
-          <div className="flex flex-col gap-1">
-            <Button
-              onClick={handleSendMessage}
-              disabled={!message.trim() || sendMessageMutation.isPending}
-              size="icon"
-              data-testid="button-send-message"
-            >
-              {sendMessageMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={uploadingPhoto}
-              onClick={() => document.getElementById('photo-upload')?.click()}
-              data-testid="button-upload-photo"
-            >
-              {uploadingPhoto ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Image className="h-4 w-4" />
-              )}
-            </Button>
-            <input
-              id="photo-upload"
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handlePhotoUpload}
-            />
-          </div>
+          <Button
+            onClick={handleSendMessage}
+            disabled={!message.trim() || sendMessageMutation.isPending}
+            size="icon"
+            className="rounded-full shrink-0"
+            data-testid="button-send-message"
+          >
+            {sendMessageMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
   );
