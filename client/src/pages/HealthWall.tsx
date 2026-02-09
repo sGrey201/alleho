@@ -355,7 +355,7 @@ export default function HealthWall() {
             size="icon"
             disabled={uploadingPhoto}
             onClick={() => document.getElementById('photo-upload')?.click()}
-            className="rounded-full shrink-0"
+            className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c]"
             data-testid="button-upload-photo"
           >
             {uploadingPhoto ? (
