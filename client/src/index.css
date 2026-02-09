@@ -300,3 +300,16 @@
 .prose p:last-child {
   margin-bottom: 0 !important;
 }
+
+@keyframes hint-pulse {
+  0% { transform: scale(1); }
+  15% { transform: scale(1.35); }
+  30% { transform: scale(1); }
+  45% { transform: scale(1.35); }
+  60% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+.animate-hint-pulse {
+  animation: hint-pulse 0.8s ease-in-out 1;
+}

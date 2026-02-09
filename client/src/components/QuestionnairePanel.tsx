@@ -87,10 +87,10 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               >
                 {tag.label}
               </label>
-              {(tag.hint || subsectionHint) && (
+              {isSelected && (tag.hint || subsectionHint) && (
                 <Popover>
                   <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 animate-hint-pulse">
                       <HelpCircle className="h-3 w-3 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
