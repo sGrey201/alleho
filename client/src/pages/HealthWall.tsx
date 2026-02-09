@@ -553,7 +553,11 @@ export default function HealthWall() {
                             >
                               <Card className={`max-w-[85%] ${isOwnMessage ? 'bg-primary/10' : ''}`}>
                                 <CardContent className="p-3">
-                                  <div className="grid grid-cols-3 gap-1 mb-2">
+                                  <div className={`grid gap-1 mb-2 ${
+                                    group.messages.length === 1 ? 'grid-cols-1' :
+                                    group.messages.length === 2 ? 'grid-cols-2' :
+                                    'grid-cols-3'
+                                  }`}>
                                     {group.messages.map((msg) => (
                                       <img 
                                         key={msg.id}
