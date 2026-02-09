@@ -48,53 +48,72 @@ const months = [
   { value: 12, label: t.december },
 ];
 
+interface TagEntry {
+  tagKey: string;
+  description: string;
+}
+
 interface TagSelectorProps {
   tags: ReadonlyArray<{ readonly key: string; readonly label: string; readonly hint: string }>;
-  selectedTags: string[];
-  onTagsChange: (tags: string[]) => void;
+  selectedEntries: TagEntry[];
+  onToggleTag: (tagKey: string) => void;
+  onUpdateDescription: (tagKey: string, description: string) => void;
   onBlur?: () => void;
 }
 
-function TagSelector({ tags, selectedTags, onTagsChange, onBlur }: TagSelectorProps) {
-  const toggleTag = (tagKey: string) => {
-    const newTags = selectedTags.includes(tagKey)
-      ? selectedTags.filter(t => t !== tagKey)
-      : [...selectedTags, tagKey];
-    onTagsChange(newTags);
-  };
+function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur }: TagSelectorProps) {
+  const selectedKeys = selectedEntries.map(e => e.tagKey);
 
   return (
-    <div 
-      className="space-y-2"
-      onBlur={onBlur}
-    >
-      {tags.map((tag) => (
-        <div key={tag.key} className="flex items-center space-x-2">
-          <Checkbox
-            id={`tag-${tag.key}`}
-            checked={selectedTags.includes(tag.key)}
-            onCheckedChange={() => toggleTag(tag.key)}
-          />
-          <label
-            htmlFor={`tag-${tag.key}`}
-            className="text-sm cursor-pointer flex-1"
-          >
-            {tag.label}
-          </label>
-          {tag.hint && (
-            <Popover>
-              <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
-                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="bottom" align="start">
-                <p className="text-sm text-muted-foreground">{tag.hint}</p>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-      ))}
+    <div className="space-y-2">
+      {tags.map((tag) => {
+        const isSelected = selectedKeys.includes(tag.key);
+        const entry = selectedEntries.find(e => e.tagKey === tag.key);
+        return (
+          <div key={tag.key}>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id={`tag-${tag.key}`}
+                checked={isSelected}
+                onCheckedChange={() => {
+                  onToggleTag(tag.key);
+                  if (onBlur) onBlur();
+                }}
+              />
+              <label
+                htmlFor={`tag-${tag.key}`}
+                className="text-sm cursor-pointer flex-1"
+              >
+                {tag.label}
+              </label>
+              {tag.hint && (
+                <Popover>
+                  <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
+                      <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="bottom" align="start">
+                    <p className="text-sm text-muted-foreground">{tag.hint}</p>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+            {isSelected && (
+              <div className="ml-6 mt-1 mb-2">
+                <Textarea
+                  data-testid={`panel-input-tag-${tag.key}`}
+                  placeholder={t.describeSelectedTraits}
+                  value={entry?.description || ''}
+                  onChange={(e) => onUpdateDescription(tag.key, e.target.value)}
+                  onBlur={onBlur}
+                  className="min-h-[80px] text-sm"
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -129,17 +148,34 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     enabled: !isOwnQuestionnaire,
   });
 
+  const migrateFormData = (data: QuestionnaireData): QuestionnaireData => {
+    const migrated = { ...data };
+    const subsectionKeys = ['moodAndEnergy', 'socialRelations', 'willControl', 'intellectImagination', 'fears', 'emotionalReactions', 'specialMentalStates', 'desiresAversions', 'reactionToSuffering'];
+    for (const key of subsectionKeys) {
+      const val = (migrated as any)[key];
+      if (val && !Array.isArray(val) && val.tags) {
+        (migrated as any)[key] = (val.tags as string[]).map((tagKey: string) => ({
+          tagKey,
+          description: val.description || '',
+        }));
+      }
+    }
+    return migrated;
+  };
+
   useEffect(() => {
     if (savedDataResponse?.data && isOwnQuestionnaire) {
-      setFormData(savedDataResponse.data);
-      formDataRef.current = savedDataResponse.data;
+      const migrated = migrateFormData(savedDataResponse.data);
+      setFormData(migrated);
+      formDataRef.current = migrated;
     }
   }, [savedDataResponse, isOwnQuestionnaire]);
 
   useEffect(() => {
     if (patientData && !isOwnQuestionnaire) {
-      setFormData(patientData.data);
-      formDataRef.current = patientData.data;
+      const migrated = migrateFormData(patientData.data);
+      setFormData(migrated);
+      formDataRef.current = migrated;
     }
   }, [patientData, isOwnQuestionnaire]);
 
@@ -181,18 +217,25 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     return () => clearInterval(intervalId);
   }, [formData, saveMutation]);
 
-  const updateSectionTags = (sectionKey: string, tags: string[]) => {
-    setFormData(prev => ({
-      ...prev,
-      [sectionKey]: { ...(prev as any)[sectionKey], tags },
-    }));
+  const toggleSectionTag = (sectionKey: string, tagKey: string) => {
+    setFormData(prev => {
+      const entries: TagEntry[] = (prev as any)[sectionKey] || [];
+      const exists = entries.some(e => e.tagKey === tagKey);
+      const updated = exists
+        ? entries.filter(e => e.tagKey !== tagKey)
+        : [...entries, { tagKey, description: '' }];
+      return { ...prev, [sectionKey]: updated };
+    });
   };
 
-  const updateSectionDescription = (sectionKey: string, description: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [sectionKey]: { ...(prev as any)[sectionKey], description },
-    }));
+  const updateTagDescription = (sectionKey: string, tagKey: string, description: string) => {
+    setFormData(prev => {
+      const entries: TagEntry[] = (prev as any)[sectionKey] || [];
+      return {
+        ...prev,
+        [sectionKey]: entries.map(e => e.tagKey === tagKey ? { ...e, description } : e),
+      };
+    });
   };
 
   const updateHomeopathNotes = (value: string) => {
@@ -300,20 +343,13 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         {sub.title}
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="space-y-4 pt-2">
+                        <div className="space-y-2 pt-2">
                           <TagSelector
                             tags={sub.tags}
-                            selectedTags={(formData as any)[sub.key]?.tags || []}
-                            onTagsChange={(tags) => updateSectionTags(sub.key, tags)}
+                            selectedEntries={(formData as any)[sub.key] || []}
+                            onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
+                            onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
                             onBlur={triggerAutoSave}
-                          />
-                          <Textarea
-                            data-testid={`panel-input-${sub.key}-description`}
-                            placeholder={t.describeSelectedTraits}
-                            value={(formData as any)[sub.key]?.description || ''}
-                            onChange={(e) => updateSectionDescription(sub.key, e.target.value)}
-                            onBlur={triggerAutoSave}
-                            className="min-h-[200px]"
                           />
                         </div>
                       </AccordionContent>
