@@ -267,12 +267,9 @@ function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSele
 
   return (
     <div 
-      className="border rounded-md p-3 space-y-2"
+      className="space-y-2"
       onBlur={onBlur}
     >
-      <span className="text-sm text-muted-foreground">
-        {t.selectedCount}: {selectedTags.length}
-      </span>
       {tags.map((tag) => (
         <div key={tag.key} className="flex items-center space-x-2">
           <Checkbox
