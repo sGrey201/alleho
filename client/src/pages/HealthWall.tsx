@@ -184,12 +184,14 @@ export default function HealthWall() {
     mutationFn: async (data: { content?: string; imageUrl?: string; messageType: string }) => {
       return apiRequest('POST', `/api/health-wall/${patientUserId}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/health-wall', patientUserId] });
-      setMessage('');
-      setMessageMode('message');
-      const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
-      if (textarea) textarea.style.height = 'auto';
+      if (!variables.imageUrl) {
+        setMessage('');
+        setMessageMode('message');
+        const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
+        if (textarea) textarea.style.height = 'auto';
+      }
     },
     onError: () => {
       toast({
@@ -355,7 +357,7 @@ export default function HealthWall() {
             size="icon"
             disabled={uploadingPhoto}
             onClick={() => document.getElementById('photo-upload')?.click()}
-            className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c]"
+            className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c] h-10 w-10"
             data-testid="button-upload-photo"
           >
             {uploadingPhoto ? (
@@ -394,7 +396,7 @@ export default function HealthWall() {
             onClick={handleSendMessage}
             disabled={!message.trim() || sendMessageMutation.isPending}
             size="icon"
-            className="rounded-full shrink-0"
+            className="rounded-full shrink-0 h-10 w-10"
             data-testid="button-send-message"
           >
             {sendMessageMutation.isPending ? (
