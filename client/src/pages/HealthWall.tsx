@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2 } from "lucide-react";
+import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2, MessageCircle } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -466,7 +466,7 @@ export default function HealthWall() {
           onClick={toggleQuestionnaire}
           data-testid="button-toggle-questionnaire"
         >
-          <FileText className="h-4 w-4" />
+          {showQuestionnaire ? <MessageCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
         </Button>
       </div>
 
