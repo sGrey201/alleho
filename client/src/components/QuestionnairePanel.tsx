@@ -87,7 +87,7 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               >
                 {tag.label}
               </label>
-              {tag.hint && (
+              {(tag.hint || subsectionHint) && (
                 <Popover>
                   <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
@@ -95,7 +95,10 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="bottom" align="start">
-                    <p className="text-sm text-muted-foreground">{tag.hint}</p>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      {tag.hint && <p>{tag.hint}</p>}
+                      {subsectionHint && <p>{subsectionHint}</p>}
+                    </div>
                   </PopoverContent>
                 </Popover>
               )}
@@ -104,7 +107,7 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               <div className="ml-6 mt-1 mb-2">
                 <Textarea
                   data-testid={`panel-input-tag-${tag.key}`}
-                  placeholder={[tag.hint, subsectionHint].filter(Boolean).join('\n') || t.describeSelectedTraits}
+                  placeholder={t.describeSelectedTraits}
                   value={entry?.description || ''}
                   onChange={(e) => onUpdateDescription(tag.key, e.target.value)}
                   onBlur={onBlur}
