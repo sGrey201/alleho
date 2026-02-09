@@ -81,6 +81,18 @@ function TagSelector({ tags, selectedTags, onTagsChange, onBlur }: TagSelectorPr
           >
             {tag.label}
           </label>
+          {tag.hint && (
+            <Popover>
+              <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="bottom" align="start">
+                <p className="text-sm text-muted-foreground">{tag.hint}</p>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       ))}
     </div>
