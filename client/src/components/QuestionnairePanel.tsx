@@ -64,12 +64,14 @@ interface TagSelectorProps {
 
 function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur, subsectionHint }: TagSelectorProps) {
   const selectedKeys = selectedEntries.map(e => e.tagKey);
+  const [justSelected, setJustSelected] = useState<Set<string>>(new Set());
 
   return (
     <div className="space-y-2">
       {tags.map((tag) => {
         const isSelected = selectedKeys.includes(tag.key);
         const entry = selectedEntries.find(e => e.tagKey === tag.key);
+        const shouldPulse = justSelected.has(tag.key);
         return (
           <div key={tag.key}>
             <div className="flex items-center space-x-2">
@@ -77,6 +79,16 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
                 id={`tag-${tag.key}`}
                 checked={isSelected}
                 onCheckedChange={() => {
+                  if (!isSelected) {
+                    setJustSelected(prev => new Set(prev).add(tag.key));
+                    setTimeout(() => {
+                      setJustSelected(prev => {
+                        const next = new Set(prev);
+                        next.delete(tag.key);
+                        return next;
+                      });
+                    }, 1000);
+                  }
                   onToggleTag(tag.key);
                   if (onBlur) onBlur();
                 }}
@@ -90,7 +102,7 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
               {isSelected && (tag.hint || subsectionHint) && (
                 <Popover>
                   <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 animate-hint-pulse">
+                    <Button variant="ghost" size="icon" className={`h-5 w-5 shrink-0 ${shouldPulse ? 'animate-hint-pulse' : ''}`}>
                       <HelpCircle className="h-3 w-3 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
