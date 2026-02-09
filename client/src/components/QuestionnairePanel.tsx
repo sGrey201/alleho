@@ -613,23 +613,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="moodEnergy" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-mood-energy" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionMoodEnergy}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsMoodEnergy}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionMoodEnergy}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -654,23 +638,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="socialRelations" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-social-relations" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionSocialRelations}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsSocialRelations}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionSocialRelations}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -695,23 +663,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="willControl" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-will-control" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionWillControl}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsWillControl}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionWillControl}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -736,23 +688,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="intellectImagination" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-intellect-imagination" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionIntellectImagination}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsIntellectImagination}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionIntellectImagination}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -777,23 +713,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="fears" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-fears" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionFears}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsFears}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionFears}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -818,23 +738,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="emotionalReactions" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-emotional-reactions" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionEmotionalReactions}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsEmotionalReactions}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionEmotionalReactions}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -859,23 +763,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="specialMentalStates" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-special-mental-states" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionSpecialMentalStates}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsSpecialMentalStates}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionSpecialMentalStates}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -900,23 +788,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="desiresAversions" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-desires-aversions" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionDesiresAversions}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsDesiresAversions}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionDesiresAversions}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
@@ -941,23 +813,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
                 <AccordionItem value="reactionToSuffering" className="border-0">
                   <AccordionTrigger data-testid="panel-accordion-reaction-to-suffering" className="py-2 data-[state=open]:font-bold">
-                    <div className="flex items-center gap-2">
-                      {t.subsectionReactionToSuffering}
-                      <Popover>
-                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                          >
-                            <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                          <p className="text-sm text-muted-foreground">{t.hintsReactionToSuffering}</p>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                    {t.subsectionReactionToSuffering}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-4 pt-2">
