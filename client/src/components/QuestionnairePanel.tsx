@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Check, HelpCircle, ChevronDown } from "lucide-react";
+import { Loader2, Check, HelpCircle } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
 
 interface PatientQuestionnaireResponse {
@@ -258,8 +258,6 @@ interface TagSelectorProps {
 }
 
 function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
   const toggleTag = (tagKey: string) => {
     const newTags = selectedTags.includes(tagKey)
       ? selectedTags.filter(t => t !== tagKey)
@@ -268,63 +266,28 @@ function TagSelector({ tags, selectedTags, onTagsChange, hint, onBlur }: TagSele
   };
 
   return (
-    <div className="space-y-2">
-      {selectedTags.length > 0 && (
-        <div className="space-y-1">
-          {selectedTags.map(key => {
-            const tag = tags.find(t => t.key === key);
-            if (!tag) return null;
-            return (
-              <div key={key} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`selected-${key}`}
-                  checked={true}
-                  onCheckedChange={() => toggleTag(key)}
-                />
-                <label
-                  htmlFor={`selected-${key}`}
-                  className="text-sm cursor-pointer"
-                >
-                  {tag.label}
-                </label>
-              </div>
-            );
-          })}
+    <div 
+      className="border rounded-md p-3 space-y-2"
+      onBlur={onBlur}
+    >
+      <span className="text-sm text-muted-foreground">
+        {t.selectedCount}: {selectedTags.length}
+      </span>
+      {tags.map((tag) => (
+        <div key={tag.key} className="flex items-center space-x-2">
+          <Checkbox
+            id={`tag-${tag.key}`}
+            checked={selectedTags.includes(tag.key)}
+            onCheckedChange={() => toggleTag(tag.key)}
+          />
+          <label
+            htmlFor={`tag-${tag.key}`}
+            className="text-sm cursor-pointer flex-1"
+          >
+            {tag.label}
+          </label>
         </div>
-      )}
-      <div 
-        className="border rounded-md p-3 cursor-pointer hover-elevate"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted-foreground">
-            {t.selectedCount}: {selectedTags.length}
-          </span>
-          <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </div>
-      </div>
-      {isOpen && (
-        <div 
-          className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2"
-          onBlur={onBlur}
-        >
-          {tags.map((tag) => (
-            <div key={tag.key} className="flex items-center space-x-2">
-              <Checkbox
-                id={`tag-${tag.key}`}
-                checked={selectedTags.includes(tag.key)}
-                onCheckedChange={() => toggleTag(tag.key)}
-              />
-              <label
-                htmlFor={`tag-${tag.key}`}
-                className="text-sm cursor-pointer flex-1"
-              >
-                {tag.label}
-              </label>
-            </div>
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
