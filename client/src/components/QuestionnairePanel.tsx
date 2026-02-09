@@ -307,22 +307,6 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                             onTagsChange={(tags) => updateSectionTags(sub.key, tags)}
                             onBlur={triggerAutoSave}
                           />
-                          {(() => {
-                            const selectedKeys = (formData as any)[sub.key]?.tags || [];
-                            const hintsToShow = sub.tags
-                              .filter((tag: { key: string; hint: string }) => selectedKeys.includes(tag.key) && tag.hint)
-                              .map((tag: { key: string; label: string; hint: string }) => ({ label: tag.label, hint: tag.hint }));
-                            if (hintsToShow.length > 0) {
-                              return (
-                                <div className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground space-y-1">
-                                  {hintsToShow.map((item: { label: string; hint: string }, idx: number) => (
-                                    <p key={idx}><span className="font-medium">{item.label}:</span> {item.hint}</p>
-                                  ))}
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
                           <Textarea
                             data-testid={`panel-input-${sub.key}-description`}
                             placeholder={t.describeSelectedTraits}

@@ -213,8 +213,8 @@ export const t = {
           title: 'Настроение и энергия',
           hint: 'Выбирайте из списка',
           tags: [
-            { key: 'joyfulness', label: 'Жизнерадостность, эйфория', hint: '' },
-            { key: 'melancholy', label: 'Глубокая меланхолия, уныние', hint: '' },
+            { key: 'joyfulness', label: 'Жизнерадостность, эйфория', hint: '123' },
+            { key: 'melancholy', label: 'Глубокая меланхолия, уныние', hint: '321' },
             { key: 'serenity', label: 'Безмятежность, внутренний покой', hint: '' },
             { key: 'anxiety', label: 'Тревожность, предчувствие беды', hint: '' },
             { key: 'apathy', label: 'Апатия, безразличие ко всему', hint: '' },
