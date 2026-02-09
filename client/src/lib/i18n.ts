@@ -443,8 +443,6 @@ export const t = {
             { key: 'deathWish', label: 'Желание смерти (как покоя)', hint: '' },
             { key: 'thirstForLife', label: 'Сильная жажда жизни', hint: '' },
             { key: 'aversionToStimuli', label: 'Отвращение к определенным цветам, звукам, прикосновениям', hint: '' },
-            { key: 'talkativeness', label: 'Разговорчивость', hint: '' },
-            { key: 'silence', label: 'Молчаливость', hint: '' },
           ],
         },
         {
