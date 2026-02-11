@@ -169,6 +169,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const profileSavedRef = useRef<Record<string, string>>({});
   const profileCurrentRef = useRef<Record<string, string>>({});
   const profileDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const profileInitializedRef = useRef(false);
 
   const isPatientView = !isOwnQuestionnaire;
 
@@ -289,7 +290,8 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   };
 
   useEffect(() => {
-    if (user && isOwnQuestionnaire) {
+    if (user && isOwnQuestionnaire && !profileInitializedRef.current) {
+      profileInitializedRef.current = true;
       const vals: Record<string, string> = {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
@@ -328,7 +330,6 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       weight: snapshot.weight ? parseInt(snapshot.weight) : null,
       city: snapshot.city || null,
     }).then(() => {
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     }).catch(() => {
