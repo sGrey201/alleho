@@ -83,15 +83,8 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
                 id={`tag-${tag.key}`}
                 checked={isSelected}
                 onCheckedChange={() => {
-                  if (!isSelected) {
+                  if (!isSelected && (tag.hint || subsectionHint)) {
                     setJustSelected(prev => new Set(prev).add(tag.key));
-                    setTimeout(() => {
-                      setJustSelected(prev => {
-                        const next = new Set(prev);
-                        next.delete(tag.key);
-                        return next;
-                      });
-                    }, 1000);
                   }
                   onToggleTag(tag.key);
                   if (onBlur) onBlur();
@@ -104,13 +97,21 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
                 {tag.label}
               </label>
               {isSelected && (tag.hint || subsectionHint) && (
-                <Popover>
+                <Popover open={shouldPulse ? true : undefined} onOpenChange={(open) => {
+                  if (!open && shouldPulse) {
+                    setJustSelected(prev => {
+                      const next = new Set(prev);
+                      next.delete(tag.key);
+                      return next;
+                    });
+                  }
+                }}>
                   <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className={`h-5 w-5 shrink-0 ${shouldPulse ? 'animate-hint-pulse' : ''}`}>
                       <HelpCircle className="h-3 w-3 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="bottom" align="start">
+                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-72" side="top" align="start">
                     <div className="text-sm text-muted-foreground space-y-1">
                       {tag.hint && <p>{tag.hint}</p>}
                       {subsectionHint && <p>{subsectionHint}</p>}
@@ -642,7 +643,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                           <HelpCircle className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="top" align="start">
                         <p className="text-sm text-muted-foreground">{section.hint}</p>
                       </PopoverContent>
                     </Popover>
