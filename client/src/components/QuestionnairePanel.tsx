@@ -166,7 +166,9 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const [profileHeight, setProfileHeight] = useState('');
   const [profileWeight, setProfileWeight] = useState('');
   const [profileCity, setProfileCity] = useState('');
-  const profileRef = useRef<Record<string, any>>({});
+  const profileSavedRef = useRef<Record<string, string>>({});
+  const profileCurrentRef = useRef<Record<string, string>>({});
+  const profileDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isPatientView = !isOwnQuestionnaire;
 
@@ -288,7 +290,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
   useEffect(() => {
     if (user && isOwnQuestionnaire) {
-      const vals = {
+      const vals: Record<string, string> = {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         gender: user.gender || '',
@@ -306,51 +308,62 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       setProfileHeight(vals.height);
       setProfileWeight(vals.weight);
       setProfileCity(vals.city);
-      profileRef.current = vals;
+      profileSavedRef.current = vals;
+      profileCurrentRef.current = vals;
     }
   }, [user, isOwnQuestionnaire]);
 
-  const profileSaveMutation = useMutation({
-    mutationFn: async (data: Record<string, any>) => {
-      return apiRequest('PUT', '/api/user/profile', data);
-    },
-    onSuccess: () => {
+  const doProfileSave = useCallback(() => {
+    const snapshot = { ...profileCurrentRef.current };
+    if (JSON.stringify(profileSavedRef.current) === JSON.stringify(snapshot)) return;
+    profileSavedRef.current = snapshot;
+    setSaveStatus('saving');
+    apiRequest('PUT', '/api/user/profile', {
+      firstName: snapshot.firstName || null,
+      lastName: snapshot.lastName || null,
+      gender: snapshot.gender || null,
+      birthMonth: snapshot.birthMonth ? parseInt(snapshot.birthMonth) : null,
+      birthYear: snapshot.birthYear ? parseInt(snapshot.birthYear) : null,
+      height: snapshot.height ? parseInt(snapshot.height) : null,
+      weight: snapshot.weight ? parseInt(snapshot.weight) : null,
+      city: snapshot.city || null,
+    }).then(() => {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
-    },
-    onError: () => {
+    }).catch(() => {
       toast({ title: t.profileSaveError, variant: "destructive" });
       setSaveStatus('idle');
-    },
-  });
+    });
+  }, [toast]);
 
-  const triggerProfileAutoSave = useCallback(() => {
-    const current = {
-      firstName: profileFirstName,
-      lastName: profileLastName,
-      gender: profileGender,
-      birthMonth: profileBirthMonth,
-      birthYear: profileBirthYear,
-      height: profileHeight,
-      weight: profileWeight,
-      city: profileCity,
+  const scheduleProfileSave = useCallback(() => {
+    if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
+    profileDebounceRef.current = setTimeout(() => {
+      doProfileSave();
+    }, 400);
+  }, [doProfileSave]);
+
+  useEffect(() => {
+    return () => {
+      if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
     };
-    if (JSON.stringify(profileRef.current) !== JSON.stringify(current)) {
-      profileRef.current = current;
-      setSaveStatus('saving');
-      profileSaveMutation.mutate({
-        firstName: profileFirstName || null,
-        lastName: profileLastName || null,
-        gender: profileGender || null,
-        birthMonth: profileBirthMonth ? parseInt(profileBirthMonth) : null,
-        birthYear: profileBirthYear ? parseInt(profileBirthYear) : null,
-        height: profileHeight ? parseInt(profileHeight) : null,
-        weight: profileWeight ? parseInt(profileWeight) : null,
-        city: profileCity || null,
-      });
+  }, []);
+
+  const updateProfileField = useCallback((field: string, value: string) => {
+    profileCurrentRef.current = { ...profileCurrentRef.current, [field]: value };
+    switch (field) {
+      case 'firstName': setProfileFirstName(value); break;
+      case 'lastName': setProfileLastName(value); break;
+      case 'gender': setProfileGender(value); break;
+      case 'birthMonth': setProfileBirthMonth(value); break;
+      case 'birthYear': setProfileBirthYear(value); break;
+      case 'height': setProfileHeight(value); break;
+      case 'weight': setProfileWeight(value); break;
+      case 'city': setProfileCity(value); break;
     }
-  }, [profileFirstName, profileLastName, profileGender, profileBirthMonth, profileBirthYear, profileHeight, profileWeight, profileCity, profileSaveMutation]);
+    scheduleProfileSave();
+  }, [scheduleProfileSave]);
 
   const getGenderLabel = (gender?: string) => {
     switch (gender) {
@@ -443,8 +456,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         <Label>{t.lastName}</Label>
                         <Input
                           value={profileLastName}
-                          onChange={(e) => setProfileLastName(e.target.value)}
-                          onBlur={triggerProfileAutoSave}
+                          onChange={(e) => updateProfileField('lastName', e.target.value)}
                           placeholder={t.lastName}
                           data-testid="panel-input-last-name"
                         />
@@ -453,8 +465,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         <Label>{t.firstName}</Label>
                         <Input
                           value={profileFirstName}
-                          onChange={(e) => setProfileFirstName(e.target.value)}
-                          onBlur={triggerProfileAutoSave}
+                          onChange={(e) => updateProfileField('firstName', e.target.value)}
                           placeholder={t.firstName}
                           data-testid="panel-input-first-name"
                         />
@@ -463,7 +474,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>{t.birthMonth}</Label>
-                        <Select value={profileBirthMonth} onValueChange={(v) => { setProfileBirthMonth(v); setTimeout(triggerProfileAutoSave, 0); }}>
+                        <Select value={profileBirthMonth} onValueChange={(v) => updateProfileField('birthMonth', v)}>
                           <SelectTrigger data-testid="panel-select-birth-month">
                             <SelectValue placeholder={t.selectMonth} />
                           </SelectTrigger>
@@ -483,8 +494,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                           min="1900"
                           max={new Date().getFullYear()}
                           value={profileBirthYear}
-                          onChange={(e) => setProfileBirthYear(e.target.value)}
-                          onBlur={triggerProfileAutoSave}
+                          onChange={(e) => updateProfileField('birthYear', e.target.value)}
                           placeholder={t.birthYear}
                           data-testid="panel-input-birth-year"
                         />
@@ -492,7 +502,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                     </div>
                     <div className="space-y-2">
                       <Label>{t.gender}</Label>
-                      <Select value={profileGender} onValueChange={(v) => { setProfileGender(v); setTimeout(triggerProfileAutoSave, 0); }}>
+                      <Select value={profileGender} onValueChange={(v) => updateProfileField('gender', v)}>
                         <SelectTrigger data-testid="panel-select-gender">
                           <SelectValue placeholder={t.selectGender} />
                         </SelectTrigger>
@@ -511,8 +521,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                           min="50"
                           max="300"
                           value={profileHeight}
-                          onChange={(e) => setProfileHeight(e.target.value)}
-                          onBlur={triggerProfileAutoSave}
+                          onChange={(e) => updateProfileField('height', e.target.value)}
                           placeholder={t.height}
                           data-testid="panel-input-height"
                         />
@@ -524,8 +533,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                           min="1"
                           max="500"
                           value={profileWeight}
-                          onChange={(e) => setProfileWeight(e.target.value)}
-                          onBlur={triggerProfileAutoSave}
+                          onChange={(e) => updateProfileField('weight', e.target.value)}
                           placeholder={t.weight}
                           data-testid="panel-input-weight"
                         />
@@ -535,8 +543,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                       <Label>{t.city}</Label>
                       <Input
                         value={profileCity}
-                        onChange={(e) => setProfileCity(e.target.value)}
-                        onBlur={triggerProfileAutoSave}
+                        onChange={(e) => updateProfileField('city', e.target.value)}
                         placeholder={t.city}
                         data-testid="panel-input-city"
                       />
