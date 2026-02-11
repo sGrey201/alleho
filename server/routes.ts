@@ -126,6 +126,9 @@ ${allUrls.map(url => `  <url>
             gender: user.gender,
             birthMonth: user.birthMonth,
             birthYear: user.birthYear,
+            height: user.height,
+            weight: user.weight,
+            city: user.city,
             subscriptionExpiresAt: user.subscriptionExpiresAt,
             isAdmin: user.isAdmin,
             authType: 'email',
@@ -774,7 +777,7 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { firstName, lastName, gender, birthMonth, birthYear } = req.body;
+      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, city } = req.body;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -786,6 +789,9 @@ ${allUrls.map(url => `  <url>
         gender: gender || null,
         birthMonth: birthMonth || null,
         birthYear: birthYear || null,
+        height: height || null,
+        weight: weight || null,
+        city: city || null,
       });
       
       res.json(updatedUser);

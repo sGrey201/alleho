@@ -35,6 +35,9 @@ export default function Profile() {
   const [gender, setGender] = useState<string>("");
   const [birthMonth, setBirthMonth] = useState<number | undefined>();
   const [birthYear, setBirthYear] = useState<string>("");
+  const [height, setHeight] = useState<string>("");
+  const [weight, setWeight] = useState<string>("");
+  const [city, setCity] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -43,11 +46,14 @@ export default function Profile() {
       setGender(user.gender || "");
       setBirthMonth(user.birthMonth || undefined);
       setBirthYear(user.birthYear?.toString() || "");
+      setHeight(user.height?.toString() || "");
+      setWeight(user.weight?.toString() || "");
+      setCity(user.city || "");
     }
   }, [user]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string; gender: string | null; birthMonth: number | null; birthYear: number | null }) => {
+    mutationFn: async (data: { firstName: string; lastName: string; gender: string | null; birthMonth: number | null; birthYear: number | null; height: number | null; weight: number | null; city: string | null }) => {
       return apiRequest('PUT', '/api/user/profile', data);
     },
     onSuccess: () => {
@@ -63,6 +69,9 @@ export default function Profile() {
         gender: gender || null,
         birthMonth: birthMonth || null,
         birthYear: birthYear ? parseInt(birthYear) : null,
+        height: height ? parseInt(height) : null,
+        weight: weight ? parseInt(weight) : null,
+        city: city || null,
       });
 
       toast({
@@ -129,6 +138,46 @@ export default function Profile() {
                 <SelectItem value="other">{t.genderOther}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="height">{t.height}</Label>
+              <Input
+                id="height"
+                type="number"
+                min="50"
+                max="300"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                placeholder={t.height}
+                data-testid="input-height"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="weight">{t.weight}</Label>
+              <Input
+                id="weight"
+                type="number"
+                min="1"
+                max="500"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder={t.weight}
+                data-testid="input-weight"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="city">{t.city}</Label>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder={t.city}
+              data-testid="input-city"
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

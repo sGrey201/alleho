@@ -199,6 +199,9 @@ export const t = {
   sectionHomeopathNotes: 'Заметки гомеопата',
   homeopathNotesDescription: 'Не видны пациенту',
   sectionProfile: 'Профиль',
+  height: 'Рост (см)',
+  weight: 'Вес (кг)',
+  city: 'Город проживания',
   
   describeSelectedTraits: 'Опишите подробно. Ответьте на уточняющие вопросы',
 
