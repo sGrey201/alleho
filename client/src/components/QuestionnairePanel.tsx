@@ -335,6 +335,26 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                       : (user?.gender ? getGenderLabel(user.gender) : '—')}
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t.height}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-height">
+                      {isPatientView ? (patientData?.patient?.height || '—') : (user?.height || '—')}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.weight}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-weight">
+                      {isPatientView ? (patientData?.patient?.weight || '—') : (user?.weight || '—')}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.city}</Label>
+                  <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-city">
+                    {isPatientView ? (patientData?.patient?.city || '—') : (user?.city || '—')}
+                  </div>
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>

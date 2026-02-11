@@ -885,6 +885,9 @@ ${allUrls.map(url => `  <url>
           gender: patient?.gender,
           birthMonth: patient?.birthMonth,
           birthYear: patient?.birthYear,
+          height: patient?.height,
+          weight: patient?.weight,
+          city: patient?.city,
         },
         updatedAt: questionnaire.updatedAt,
       });
@@ -1113,6 +1116,9 @@ ${allUrls.map(url => `  <url>
         birthMonth: patient?.birthMonth,
         birthYear: patient?.birthYear,
         gender: patient?.gender,
+        height: patient?.height,
+        weight: patient?.weight,
+        city: patient?.city,
         patientLastVisitedAt,
       });
     } catch (error) {
