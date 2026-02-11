@@ -87,6 +87,57 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
   });
 }
 
+export async function sendInviteEmail(to: string, password: string, doctorName: string) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  
+  const baseUrl = process.env.APP_URL 
+    ? process.env.APP_URL
+    : process.env.REPLIT_DEV_DOMAIN 
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : process.env.REPLIT_DOMAINS 
+    ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+    : 'http://localhost:5000';
+  
+  const healthWallUrl = `${baseUrl}/health-wall`;
+  
+  await client.emails.send({
+    from: fromEmail,
+    to: [to],
+    subject: 'Приглашение на Materia Medica Pro',
+    html: `
+      <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2C5282; margin-bottom: 20px;">Приглашение от вашего гомеопата</h1>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Здравствуйте!
+        </p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.
+        </p>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Ваши данные для входа:
+        </p>
+        <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
+        </div>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Перейдите на вашу Стену здоровья по ссылке:
+        </p>
+        <a href="${healthWallUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Открыть Стену здоровья
+        </a>
+        <p style="font-size: 14px; color: #666; margin-top: 30px;">
+          Рекомендуем сменить пароль после первого входа.
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999;">
+          Materia Medica Pro — Живые портреты гомеопатических типажей
+        </p>
+      </div>
+    `
+  });
+}
+
 export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAmount: string, paymentDate: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   

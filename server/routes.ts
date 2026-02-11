@@ -6,7 +6,7 @@ import { users, payments, articles } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
-import { sendReceiptEmail } from "./email";
+import { sendReceiptEmail, sendInviteEmail } from "./email";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
 import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
@@ -1251,6 +1251,60 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching patients:", error);
       res.status(500).json({ message: "Failed to fetch patients" });
+    }
+  });
+
+  // Invite patient (create account and send email)
+  app.post('/api/invite-patient', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        return res.status(409).json({ message: "user_exists" });
+      }
+
+      const generatePassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let pass = '';
+        for (let i = 0; i < 10; i++) {
+          pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return pass;
+      };
+
+      const password = generatePassword();
+      const bcrypt = await import('bcryptjs');
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const newUser = await storage.createUserWithPassword(normalizedEmail, passwordHash);
+
+      await storage.addHealthWallDoctor(newUser.id, userId);
+
+      const doctor = await storage.getUser(userId);
+      const doctorName = [doctor?.firstName, doctor?.lastName].filter(Boolean).join(' ') || doctor?.email || 'Ваш гомеопат';
+
+      try {
+        await sendInviteEmail(normalizedEmail, password, doctorName);
+      } catch (emailError) {
+        console.error('Failed to send invite email:', emailError);
+        return res.status(500).json({ message: "Account created but failed to send email. Password: " + password });
+      }
+
+      res.json({ success: true, email: normalizedEmail });
+    } catch (error) {
+      console.error("Error inviting patient:", error);
+      res.status(500).json({ message: "Failed to invite patient" });
     }
   });
 
