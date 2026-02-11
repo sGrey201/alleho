@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
 import { Loader2, Check, HelpCircle } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
@@ -24,7 +25,10 @@ interface PatientQuestionnaireResponse {
     gender?: string;
     birthMonth?: number;
     birthYear?: number;
-  };
+    height?: number;
+    weight?: number;
+    city?: string;
+  } | null;
   updatedAt: string;
 }
 
@@ -154,6 +158,16 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
+  const [profileFirstName, setProfileFirstName] = useState('');
+  const [profileLastName, setProfileLastName] = useState('');
+  const [profileGender, setProfileGender] = useState('');
+  const [profileBirthMonth, setProfileBirthMonth] = useState<string>('');
+  const [profileBirthYear, setProfileBirthYear] = useState('');
+  const [profileHeight, setProfileHeight] = useState('');
+  const [profileWeight, setProfileWeight] = useState('');
+  const [profileCity, setProfileCity] = useState('');
+  const profileRef = useRef<Record<string, any>>({});
+
   const isPatientView = !isOwnQuestionnaire;
 
   const { data: savedDataResponse, isLoading } = useQuery<{ data: QuestionnaireData }>({
@@ -272,6 +286,72 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     }));
   };
 
+  useEffect(() => {
+    if (user && isOwnQuestionnaire) {
+      const vals = {
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        gender: user.gender || '',
+        birthMonth: user.birthMonth?.toString() || '',
+        birthYear: user.birthYear?.toString() || '',
+        height: user.height?.toString() || '',
+        weight: user.weight?.toString() || '',
+        city: user.city || '',
+      };
+      setProfileFirstName(vals.firstName);
+      setProfileLastName(vals.lastName);
+      setProfileGender(vals.gender);
+      setProfileBirthMonth(vals.birthMonth);
+      setProfileBirthYear(vals.birthYear);
+      setProfileHeight(vals.height);
+      setProfileWeight(vals.weight);
+      setProfileCity(vals.city);
+      profileRef.current = vals;
+    }
+  }, [user, isOwnQuestionnaire]);
+
+  const profileSaveMutation = useMutation({
+    mutationFn: async (data: Record<string, any>) => {
+      return apiRequest('PUT', '/api/user/profile', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    },
+    onError: () => {
+      toast({ title: t.profileSaveError, variant: "destructive" });
+      setSaveStatus('idle');
+    },
+  });
+
+  const triggerProfileAutoSave = useCallback(() => {
+    const current = {
+      firstName: profileFirstName,
+      lastName: profileLastName,
+      gender: profileGender,
+      birthMonth: profileBirthMonth,
+      birthYear: profileBirthYear,
+      height: profileHeight,
+      weight: profileWeight,
+      city: profileCity,
+    };
+    if (JSON.stringify(profileRef.current) !== JSON.stringify(current)) {
+      profileRef.current = current;
+      setSaveStatus('saving');
+      profileSaveMutation.mutate({
+        firstName: profileFirstName || null,
+        lastName: profileLastName || null,
+        gender: profileGender || null,
+        birthMonth: profileBirthMonth ? parseInt(profileBirthMonth) : null,
+        birthYear: profileBirthYear ? parseInt(profileBirthYear) : null,
+        height: profileHeight ? parseInt(profileHeight) : null,
+        weight: profileWeight ? parseInt(profileWeight) : null,
+        city: profileCity || null,
+      });
+    }
+  }, [profileFirstName, profileLastName, profileGender, profileBirthMonth, profileBirthYear, profileHeight, profileWeight, profileCity, profileSaveMutation]);
+
   const getGenderLabel = (gender?: string) => {
     switch (gender) {
       case 'male': return t.genderMale;
@@ -299,64 +379,170 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.lastName}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-last-name">
-                      {isPatientView ? (patientData?.patient?.lastName || '—') : (user?.lastName || '—')}
+                {isPatientView ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.lastName}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-last-name">
+                          {patientData?.patient?.lastName || '—'}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.firstName}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-first-name">
+                          {patientData?.patient?.firstName || '—'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.firstName}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-first-name">
-                      {isPatientView ? (patientData?.patient?.firstName || '—') : (user?.firstName || '—')}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.birthMonth}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md">
+                          {patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient.birthMonth)?.label : '—'}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.birthYear}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md">
+                          {patientData?.patient?.birthYear || '—'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.birthMonth}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md">
-                      {isPatientView
-                        ? (patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient.birthMonth)?.label : '—')
-                        : (user?.birthMonth ? months.find(m => m.value === user.birthMonth)?.label : '—')}
+                    <div className="space-y-2">
+                      <Label>{t.gender}</Label>
+                      <div className="text-sm p-2 bg-muted rounded-md">
+                        {patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—'}
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.birthYear}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md">
-                      {isPatientView ? (patientData?.patient?.birthYear || '—') : (user?.birthYear || '—')}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.height}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-height">
+                          {patientData?.patient?.height || '—'}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.weight}</Label>
+                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-weight">
+                          {patientData?.patient?.weight || '—'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.gender}</Label>
-                  <div className="text-sm p-2 bg-muted rounded-md">
-                    {isPatientView 
-                      ? (patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—')
-                      : (user?.gender ? getGenderLabel(user.gender) : '—')}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.height}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-height">
-                      {isPatientView ? (patientData?.patient?.height || '—') : (user?.height || '—')}
+                    <div className="space-y-2">
+                      <Label>{t.city}</Label>
+                      <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-city">
+                        {patientData?.patient?.city || '—'}
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.weight}</Label>
-                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-weight">
-                      {isPatientView ? (patientData?.patient?.weight || '—') : (user?.weight || '—')}
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.lastName}</Label>
+                        <Input
+                          value={profileLastName}
+                          onChange={(e) => setProfileLastName(e.target.value)}
+                          onBlur={triggerProfileAutoSave}
+                          placeholder={t.lastName}
+                          data-testid="panel-input-last-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.firstName}</Label>
+                        <Input
+                          value={profileFirstName}
+                          onChange={(e) => setProfileFirstName(e.target.value)}
+                          onBlur={triggerProfileAutoSave}
+                          placeholder={t.firstName}
+                          data-testid="panel-input-first-name"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.city}</Label>
-                  <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-city">
-                    {isPatientView ? (patientData?.patient?.city || '—') : (user?.city || '—')}
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.birthMonth}</Label>
+                        <Select value={profileBirthMonth} onValueChange={(v) => { setProfileBirthMonth(v); setTimeout(triggerProfileAutoSave, 0); }}>
+                          <SelectTrigger data-testid="panel-select-birth-month">
+                            <SelectValue placeholder={t.selectMonth} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {months.map((month) => (
+                              <SelectItem key={month.value} value={month.value.toString()}>
+                                {month.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.birthYear}</Label>
+                        <Input
+                          type="number"
+                          min="1900"
+                          max={new Date().getFullYear()}
+                          value={profileBirthYear}
+                          onChange={(e) => setProfileBirthYear(e.target.value)}
+                          onBlur={triggerProfileAutoSave}
+                          placeholder={t.birthYear}
+                          data-testid="panel-input-birth-year"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.gender}</Label>
+                      <Select value={profileGender} onValueChange={(v) => { setProfileGender(v); setTimeout(triggerProfileAutoSave, 0); }}>
+                        <SelectTrigger data-testid="panel-select-gender">
+                          <SelectValue placeholder={t.selectGender} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">{t.genderMale}</SelectItem>
+                          <SelectItem value="female">{t.genderFemale}</SelectItem>
+                          <SelectItem value="other">{t.genderOther}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{t.height}</Label>
+                        <Input
+                          type="number"
+                          min="50"
+                          max="300"
+                          value={profileHeight}
+                          onChange={(e) => setProfileHeight(e.target.value)}
+                          onBlur={triggerProfileAutoSave}
+                          placeholder={t.height}
+                          data-testid="panel-input-height"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.weight}</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={profileWeight}
+                          onChange={(e) => setProfileWeight(e.target.value)}
+                          onBlur={triggerProfileAutoSave}
+                          placeholder={t.weight}
+                          data-testid="panel-input-weight"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.city}</Label>
+                      <Input
+                        value={profileCity}
+                        onChange={(e) => setProfileCity(e.target.value)}
+                        onBlur={triggerProfileAutoSave}
+                        placeholder={t.city}
+                        data-testid="panel-input-city"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </AccordionContent>
           </AccordionItem>
