@@ -570,6 +570,9 @@ export const t = {
   changeAvatar: 'Изменить фото',
   profileSaved: 'Профиль сохранён',
   profileSaveError: 'Ошибка сохранения профиля',
+  statusSaving: 'сохраняю',
+  statusSaved: 'сохранено',
+  statusNotSaved: 'не сохранено',
 
   // Errors
   unauthorized: 'Не авторизован',

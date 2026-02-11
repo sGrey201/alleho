@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
-import { Loader2, Check, HelpCircle } from "lucide-react";
+import { Loader2, Check, X, HelpCircle } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
 
 interface PatientQuestionnaireResponse {
@@ -153,10 +153,26 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const { toast } = useToast();
   const { user } = useAuth();
   const [formData, setFormData] = useState<QuestionnaireData>({});
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const formDataRef = useRef<QuestionnaireData>({});
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  type SubSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+  const [subSaveStatus, setSubSaveStatus] = useState<Record<string, SubSaveStatus>>({});
+  const [subTextVisible, setSubTextVisible] = useState<Record<string, boolean>>({});
+  const textTimerRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pendingSaveKeyRef = useRef<string | null>(null);
+
+  const setStatusForKey = useCallback((key: string, status: SubSaveStatus) => {
+    setSubSaveStatus(prev => ({ ...prev, [key]: status }));
+    setSubTextVisible(prev => ({ ...prev, [key]: true }));
+    if (textTimerRefs.current[key]) clearTimeout(textTimerRefs.current[key]);
+    if (status === 'saved' || status === 'saving') {
+      textTimerRefs.current[key] = setTimeout(() => {
+        setSubTextVisible(prev => ({ ...prev, [key]: false }));
+      }, 3000);
+    }
+  }, []);
 
   const [profileFirstName, setProfileFirstName] = useState('');
   const [profileLastName, setProfileLastName] = useState('');
@@ -231,33 +247,41 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     },
     onSuccess: (_data, variables) => {
       formDataRef.current = variables;
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      const key = pendingSaveKeyRef.current;
+      if (key) setStatusForKey(key, 'saved');
+      pendingSaveKeyRef.current = null;
     },
     onError: () => {
-      toast({ title: t.questionnaireSaveError, variant: "destructive" });
-      setSaveStatus('idle');
+      const key = pendingSaveKeyRef.current;
+      if (key) setStatusForKey(key, 'error');
+      pendingSaveKeyRef.current = null;
     },
   });
 
-  const triggerAutoSave = useCallback(() => {
+  const triggerAutoSave = useCallback((subsectionKey?: string) => {
     if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
       formDataRef.current = formData;
-      setSaveStatus('saving');
+      const key = subsectionKey || 'global';
+      pendingSaveKeyRef.current = key;
+      setStatusForKey(key, 'saving');
       saveMutation.mutate(formData);
     }
-  }, [formData, saveMutation]);
+  }, [formData, saveMutation, setStatusForKey]);
 
-  // Auto-save every 30 seconds if there are changes
+  const retrySave = useCallback((subsectionKey: string) => {
+    pendingSaveKeyRef.current = subsectionKey;
+    setStatusForKey(subsectionKey, 'saving');
+    saveMutation.mutate(formDataRef.current);
+  }, [saveMutation, setStatusForKey]);
+
   useEffect(() => {
     const intervalId = setInterval(() => {
       if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
         formDataRef.current = formData;
-        setSaveStatus('saving');
+        pendingSaveKeyRef.current = 'global';
         saveMutation.mutate(formData);
       }
     }, 30000);
-
     return () => clearInterval(intervalId);
   }, [formData, saveMutation]);
 
@@ -319,7 +343,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     const snapshot = { ...profileCurrentRef.current };
     if (JSON.stringify(profileSavedRef.current) === JSON.stringify(snapshot)) return;
     profileSavedRef.current = snapshot;
-    setSaveStatus('saving');
+    setStatusForKey('profile', 'saving');
     apiRequest('PUT', '/api/user/profile', {
       firstName: snapshot.firstName || null,
       lastName: snapshot.lastName || null,
@@ -330,13 +354,11 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       weight: snapshot.weight ? parseInt(snapshot.weight) : null,
       city: snapshot.city || null,
     }).then(() => {
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setStatusForKey('profile', 'saved');
     }).catch(() => {
-      toast({ title: t.profileSaveError, variant: "destructive" });
-      setSaveStatus('idle');
+      setStatusForKey('profile', 'error');
     });
-  }, [toast]);
+  }, [setStatusForKey]);
 
   const scheduleProfileSave = useCallback(() => {
     if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
@@ -348,6 +370,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   useEffect(() => {
     return () => {
       if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
+      Object.values(textTimerRefs.current).forEach(t => clearTimeout(t));
     };
   }, []);
 
@@ -375,6 +398,51 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     }
   };
 
+  const retryProfileSave = useCallback(() => {
+    setStatusForKey('profile', 'saving');
+    const snapshot = { ...profileCurrentRef.current };
+    apiRequest('PUT', '/api/user/profile', {
+      firstName: snapshot.firstName || null,
+      lastName: snapshot.lastName || null,
+      gender: snapshot.gender || null,
+      birthMonth: snapshot.birthMonth ? parseInt(snapshot.birthMonth) : null,
+      birthYear: snapshot.birthYear ? parseInt(snapshot.birthYear) : null,
+      height: snapshot.height ? parseInt(snapshot.height) : null,
+      weight: snapshot.weight ? parseInt(snapshot.weight) : null,
+      city: snapshot.city || null,
+    }).then(() => {
+      setStatusForKey('profile', 'saved');
+    }).catch(() => {
+      setStatusForKey('profile', 'error');
+    });
+  }, [setStatusForKey]);
+
+  const renderSaveStatus = (key: string) => {
+    const status = subSaveStatus[key];
+    if (!status || status === 'idle') return null;
+    const showText = subTextVisible[key];
+    return (
+      <span
+        className={`inline-flex items-center gap-1 text-xs whitespace-nowrap ${status === 'error' ? 'cursor-pointer' : ''}`}
+        onClick={status === 'error' ? (e) => { e.stopPropagation(); key === 'profile' ? retryProfileSave() : retrySave(key); } : undefined}
+        data-testid={`save-status-${key}`}
+      >
+        {status === 'saving' && <Loader2 className="h-3.5 w-3.5 animate-spin text-yellow-500" />}
+        {status === 'saved' && <Check className="h-3.5 w-3.5 text-green-500" />}
+        {status === 'error' && <X className="h-3.5 w-3.5 text-red-500" />}
+        {showText && (
+          <span className={
+            status === 'saving' ? 'text-yellow-500' :
+            status === 'saved' ? 'text-green-500' :
+            'text-red-500'
+          }>
+            {status === 'saving' ? t.statusSaving : status === 'saved' ? t.statusSaved : t.statusNotSaved}
+          </span>
+        )}
+      </span>
+    );
+  };
+
   if (isLoading || isLoadingPatient) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -389,7 +457,10 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
             <AccordionTrigger data-testid="panel-accordion-profile" className="data-[state=open]:font-bold">
-              {t.sectionProfile}
+              <div className="flex items-center gap-2">
+                {t.sectionProfile}
+                {renderSaveStatus('profile')}
+              </div>
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 pt-2">
@@ -560,22 +631,22 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
               <AccordionTrigger data-testid={`panel-accordion-${section.key}`} className="data-[state=open]:font-bold">
                 <div className="flex items-center gap-2">
                   {section.title}
-                  {saveStatus === 'saving' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                  {saveStatus === 'saved' && <Check className="h-4 w-4 text-green-500" />}
-                  <Popover>
-                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                      >
-                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
-                      <p className="text-sm text-muted-foreground">{section.hint}</p>
-                    </PopoverContent>
-                  </Popover>
+                  {section.hint && (
+                    <Popover>
+                      <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                        >
+                          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="bottom" align="start">
+                        <p className="text-sm text-muted-foreground">{section.hint}</p>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
               </AccordionTrigger>
               <AccordionContent>
@@ -583,7 +654,10 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                   {section.subsections.map((sub) => (
                     <AccordionItem key={sub.key} value={sub.key} className="border-0">
                       <AccordionTrigger data-testid={`panel-accordion-${sub.key}`} className="py-2 data-[state=open]:font-bold">
-                        {sub.title}
+                        <div className="flex items-center gap-2">
+                          {sub.title}
+                          {renderSaveStatus(sub.key)}
+                        </div>
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-2 pt-2">
@@ -593,7 +667,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                             selectedEntries={(formData as any)[sub.key] || []}
                             onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
                             onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
-                            onBlur={triggerAutoSave}
+                            onBlur={() => triggerAutoSave(sub.key)}
                           />
                         </div>
                       </AccordionContent>
@@ -617,7 +691,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                     data-testid="panel-input-homeopath-notes"
                     value={formData.homeopathNotes || ''}
                     onChange={(e) => updateHomeopathNotes(e.target.value)}
-                    onBlur={triggerAutoSave}
+                    onBlur={() => triggerAutoSave('homeopathNotes')}
                     className="min-h-[200px]"
                   />
                 </div>
