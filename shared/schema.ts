@@ -256,6 +256,8 @@ export const questionnaireDataSchema = z.object({
   occupation: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   familyStatus: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   appearanceConstitution: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  // Medical history section
+  familyDiseases: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // Psyche and mental section
   moodAndEnergy: z.object({
     tags: z.array(z.string()).optional(),
