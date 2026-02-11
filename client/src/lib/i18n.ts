@@ -147,7 +147,7 @@ export const t = {
   
   // Questionnaire
   questionnaire: 'Анкета',
-  questionnaireTitle: 'Анкета пациента',
+  questionnaireTitle: 'Анкета',
   questionnaireDescription: 'Заполните информацию о себе',
   questionnaireSaved: 'Анкета сохранена',
   questionnaireSaveError: 'Ошибка сохранения анкеты',
@@ -197,7 +197,7 @@ export const t = {
   
   // Homeopath notes section
   sectionHomeopathNotes: 'Заметки гомеопата',
-  homeopathNotesDescription: 'Не видны пациенту',
+  homeopathNotesDescription: 'Не видны клиенту',
   sectionProfile: 'Профиль',
   height: 'Рост (см)',
   weight: 'Вес (кг)',
@@ -208,7 +208,7 @@ export const t = {
   questionnaireSections: [
     {
       key: 'generalPatientInfo',
-      title: 'Общие сведения о пациенте',
+      title: 'Общие сведения',
       hint: '',
       subsections: [
         {
@@ -573,7 +573,7 @@ export const t = {
 
   // Questionnaire settings
   questionnaireSettings: 'Настройки анкеты',
-  patientName: 'Имя пациента',
+  patientName: 'Имя',
   birthMonth: 'Месяц рождения',
   birthYear: 'Год рождения',
   createdAt: 'Дата создания',
@@ -606,14 +606,13 @@ export const t = {
   emailAlreadyAdded: 'Этот email уже добавлен',
 
   // My Patients
-  myPatients: 'Мои пациенты',
-  myPatientsDescription: 'Пациенты, предоставившие доступ к своим анкетам',
-  noPatientsYet: 'Пока нет пациентов',
-  noPatientsDescription: 'Пациенты появятся здесь, когда предоставят вам доступ к своим анкетам',
+  myPatients: 'Мои клиенты',
+  noPatientsYet: 'Пока нет клиентов',
+  noPatientsDescription: 'Дайте доступ клиенту, чтобы начать работу',
   viewQuestionnaire: 'Просмотреть анкету',
   lastUpdated: 'Обновлено',
-  patientQuestionnaire: 'Анкета пациента',
-  backToPatients: 'Назад к пациентам',
+  patientQuestionnaire: 'Анкета клиента',
+  backToPatients: 'Назад к клиентам',
   backToHealthWall: 'Назад',
   accessDenied: 'Доступ запрещён',
   questionnaireNotFound: 'Анкета не найдена',
