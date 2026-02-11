@@ -252,6 +252,10 @@ export const questionnaireDataSchema = z.object({
   general: z.string().optional(),
   medicalHistory: z.string().optional(),
   homeopathNotes: z.string().optional(),
+  // General patient info section
+  occupation: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  familyStatus: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  appearanceConstitution: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // Psyche and mental section
   moodAndEnergy: z.object({
     tags: z.array(z.string()).optional(),

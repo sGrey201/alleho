@@ -194,7 +194,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
 
   const migrateFormData = (data: QuestionnaireData): QuestionnaireData => {
     const migrated = { ...data };
-    const subsectionKeys = ['moodAndEnergy', 'socialRelations', 'willControl', 'intellectImagination', 'fears', 'emotionalReactions', 'specialMentalStates', 'desiresAversions', 'reactionToSuffering'];
+    const subsectionKeys = ['occupation', 'familyStatus', 'appearanceConstitution', 'moodAndEnergy', 'socialRelations', 'willControl', 'intellectImagination', 'fears', 'emotionalReactions', 'specialMentalStates', 'desiresAversions', 'reactionToSuffering'];
     for (const key of subsectionKeys) {
       const val = (migrated as any)[key];
       if (val && !Array.isArray(val) && val.tags) {
