@@ -412,7 +412,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                       <div className="space-y-2">
                         <Label>{t.birthMonth}</Label>
                         <div className="text-sm p-2 bg-muted rounded-md">
-                          {patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient.birthMonth)?.label : '—'}
+                          {patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient!.birthMonth)?.label : '—'}
                         </div>
                       </div>
                       <div className="space-y-2">
