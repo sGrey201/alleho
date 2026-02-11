@@ -299,16 +299,18 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-4 pt-2">
-                <div className="space-y-2">
-                  <Label>{t.patientName}</Label>
-                  <div className="text-sm p-2 bg-muted rounded-md">
-                    {isPatientView 
-                      ? (patientData?.patient?.firstName && patientData?.patient?.lastName 
-                          ? `${patientData.patient.firstName} ${patientData.patient.lastName}` 
-                          : patientData?.patient?.email || '—')
-                      : (user?.firstName && user?.lastName 
-                          ? `${user.firstName} ${user.lastName}` 
-                          : user?.email || '—')}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t.lastName}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-last-name">
+                      {isPatientView ? (patientData?.patient?.lastName || '—') : (user?.lastName || '—')}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.firstName}</Label>
+                    <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-first-name">
+                      {isPatientView ? (patientData?.patient?.firstName || '—') : (user?.firstName || '—')}
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
