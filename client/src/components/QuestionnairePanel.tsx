@@ -418,9 +418,31 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     });
   }, [setStatusForKey]);
 
+  const hasSubsectionData = useCallback((key: string): boolean => {
+    const val = (formData as any)[key];
+    if (!val) return false;
+    if (Array.isArray(val)) return val.length > 0;
+    if (typeof val === 'string') return val.trim().length > 0;
+    if (typeof val === 'object') {
+      if (val.tags && val.tags.length > 0) return true;
+      if (val.problem || val.better || val.worse) return true;
+      if (val.description && val.description.trim().length > 0) return true;
+    }
+    return false;
+  }, [formData]);
+
   const renderSaveStatus = (key: string) => {
     const status = subSaveStatus[key];
-    if (!status || status === 'idle') return null;
+    if (!status || status === 'idle') {
+      if (hasSubsectionData(key)) {
+        return (
+          <span className="inline-flex items-center" data-testid={`save-status-${key}`}>
+            <Check className="h-3.5 w-3.5 text-green-500" />
+          </span>
+        );
+      }
+      return null;
+    }
     const showText = subTextVisible[key];
     return (
       <span
