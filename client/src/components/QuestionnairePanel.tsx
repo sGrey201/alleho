@@ -655,7 +655,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                   {section.subsections.map((sub) => (
                     <AccordionItem key={sub.key} value={sub.key} className="border-0">
                       <AccordionTrigger data-testid={`panel-accordion-${sub.key}`} className="py-2 data-[state=open]:font-bold">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 text-left">
                           {sub.title}
                           {renderSaveStatus(sub.key)}
                         </div>
