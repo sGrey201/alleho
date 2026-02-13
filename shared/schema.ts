@@ -266,6 +266,8 @@ export const questionnaireDataSchema = z.object({
   childhoodHistory: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // General symptoms and modalities section
   thirstAndThermoregulation: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
+  // Unusual body sensations section (under psycheMental)
+  unusualSensations: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // Sleep section (under psycheMental)
   sleepPatterns: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
   // Psyche and mental section
