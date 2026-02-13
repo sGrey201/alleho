@@ -347,6 +347,10 @@ export default function AuthPage() {
           </Tabs>
         </CardContent>
       </Card>
+      <p className="mt-6 max-w-md text-center text-xs text-muted-foreground" data-testid="text-disclaimer">
+        Платформа materiamedica.pro является программным обеспечением для хранения информации и обмена сообщениями между специалистами и их клиентами.
+        Платформа не является медицинской организацией и не оказывает медицинские услуги.
+      </p>
     </div>
   );
 }
