@@ -249,6 +249,12 @@ export const t = {
       ],
     },
     {
+      key: 'complaints',
+      title: 'Жалобы на момент обращения',
+      hint: '',
+      subsections: [],
+    },
+    {
       key: 'medicalHistory',
       title: 'История болезни',
       hint: '',
@@ -304,6 +310,42 @@ export const t = {
           ],
         },
       ],
+    },
+    {
+      key: 'generalSymptomsModalities',
+      title: 'Общие симптомы и модальности',
+      hint: 'От чего в целом становится ЛУЧШЕ или ХУЖЕ',
+      subsections: [],
+    },
+    {
+      key: 'pain',
+      title: 'Боль',
+      hint: '',
+      subsections: [],
+    },
+    {
+      key: 'thirstThermoregulation',
+      title: 'Жажда и теплообмен обычно',
+      hint: '',
+      subsections: [],
+    },
+    {
+      key: 'discharges',
+      title: 'Выделения всех видов',
+      hint: '',
+      subsections: [],
+    },
+    {
+      key: 'sensations',
+      title: 'Ощущения',
+      hint: '',
+      subsections: [],
+    },
+    {
+      key: 'sleep',
+      title: 'Сон',
+      hint: '',
+      subsections: [],
     },
     {
       key: 'psycheMental',
