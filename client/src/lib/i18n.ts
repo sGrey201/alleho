@@ -386,7 +386,7 @@ export const t = {
     {
       key: 'modalitiesImprovement',
       title: 'Модальности улучшения',
-      hint: '',
+      hint: 'От чего и когда вам в целом лучше',
       subsections: [
         {
           key: 'impTime',
@@ -508,7 +508,7 @@ export const t = {
     {
       key: 'modalitiesWorsening',
       title: 'Модальности ухудшения',
-      hint: '',
+      hint: 'От чего и когда вам в целом хуже',
       subsections: [
         {
           key: 'worTime',
