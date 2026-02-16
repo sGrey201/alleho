@@ -429,6 +429,18 @@ export const t = {
       ],
     },
     {
+      key: 'modalitiesImprovement',
+      title: 'Модальности улучшения',
+      hint: '',
+      subsections: [],
+    },
+    {
+      key: 'modalitiesWorsening',
+      title: 'Модальности ухудшения',
+      hint: '',
+      subsections: [],
+    },
+    {
       key: 'pain',
       title: 'Боль',
       hint: '',
