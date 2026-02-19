@@ -64,15 +64,18 @@ interface TagSelectorProps {
   onToggleTag: (tagKey: string) => void;
   onUpdateDescription: (tagKey: string, description: string) => void;
   onBlur?: () => void;
+  hideUnselected?: boolean;
 }
 
-function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur, subsectionHint }: TagSelectorProps) {
+function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, onBlur, subsectionHint, hideUnselected }: TagSelectorProps) {
   const selectedKeys = selectedEntries.map(e => e.tagKey);
   const [justSelected, setJustSelected] = useState<Set<string>>(new Set());
 
+  const visibleTags = hideUnselected ? tags.filter(tag => selectedKeys.includes(tag.key)) : tags;
+
   return (
     <div className="space-y-2">
-      {tags.map((tag) => {
+      {visibleTags.map((tag) => {
         const isSelected = selectedKeys.includes(tag.key);
         const entry = selectedEntries.find(e => e.tagKey === tag.key);
         const shouldPulse = justSelected.has(tag.key);
@@ -649,6 +652,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
         onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
         onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
         onBlur={() => triggerAutoSave(sub.key)}
+        hideUnselected={isExpanded}
       />
     </div>
   );
