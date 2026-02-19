@@ -475,18 +475,199 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     );
   }
 
-  const hasSectionData = (section: typeof t.questionnaireSections[number]) => {
-    return section.subsections.some(sub => hasSubsectionData(sub.key));
-  };
+  const isExpanded = viewMode === 'view';
 
-  const hasProfileData = () => {
-    if (isPatientView) {
-      return !!(patientData?.patient?.firstName || patientData?.patient?.lastName || patientData?.patient?.gender || patientData?.patient?.birthYear || patientData?.patient?.height || patientData?.patient?.weight || patientData?.patient?.city);
-    }
-    return !!(profileFirstName || profileLastName || profileGender || profileBirthYear || profileHeight || profileWeight || profileCity);
-  };
+  const profileContentBlock = (
+    <div className="space-y-4 pt-2">
+      {isPatientView ? (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.lastName}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-last-name">
+                {patientData?.patient?.lastName || '—'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.firstName}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-first-name">
+                {patientData?.patient?.firstName || '—'}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.birthMonth}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md">
+                {patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient!.birthMonth)?.label : '—'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.birthYear}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md">
+                {patientData?.patient?.birthYear || '—'}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t.gender}</Label>
+            <div className="text-sm p-2 bg-muted rounded-md">
+              {patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—'}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.height}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-height">
+                {patientData?.patient?.height || '—'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.weight}</Label>
+              <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-weight">
+                {patientData?.patient?.weight || '—'}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t.city}</Label>
+            <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-city">
+              {patientData?.patient?.city || '—'}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.lastName}</Label>
+              <Input
+                value={profileLastName}
+                onChange={(e) => updateProfileField('lastName', e.target.value)}
+                placeholder={t.lastName}
+                data-testid="panel-input-last-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t.firstName}</Label>
+              <Input
+                value={profileFirstName}
+                onChange={(e) => updateProfileField('firstName', e.target.value)}
+                placeholder={t.firstName}
+                data-testid="panel-input-first-name"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.birthMonth}</Label>
+              <Select value={profileBirthMonth} onValueChange={(v) => updateProfileField('birthMonth', v)}>
+                <SelectTrigger data-testid="panel-select-birth-month">
+                  <SelectValue placeholder={t.selectMonth} />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value.toString()}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.birthYear}</Label>
+              <Input
+                type="number"
+                min="1900"
+                max={new Date().getFullYear()}
+                value={profileBirthYear}
+                onChange={(e) => updateProfileField('birthYear', e.target.value)}
+                placeholder={t.birthYear}
+                data-testid="panel-input-birth-year"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t.gender}</Label>
+            <Select value={profileGender} onValueChange={(v) => updateProfileField('gender', v)}>
+              <SelectTrigger data-testid="panel-select-gender">
+                <SelectValue placeholder={t.selectGender} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">{t.genderMale}</SelectItem>
+                <SelectItem value="female">{t.genderFemale}</SelectItem>
+                <SelectItem value="other">{t.genderOther}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>{t.height}</Label>
+              <Input
+                type="number"
+                min="50"
+                max="300"
+                value={profileHeight}
+                onChange={(e) => updateProfileField('height', e.target.value)}
+                placeholder={t.height}
+                data-testid="panel-input-height"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t.weight}</Label>
+              <Input
+                type="number"
+                min="1"
+                max="500"
+                value={profileWeight}
+                onChange={(e) => updateProfileField('weight', e.target.value)}
+                placeholder={t.weight}
+                data-testid="panel-input-weight"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t.city}</Label>
+            <Input
+              value={profileCity}
+              onChange={(e) => updateProfileField('city', e.target.value)}
+              placeholder={t.city}
+              data-testid="panel-input-city"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
 
-  if (viewMode === 'view') {
+  const renderSubsectionContent = (sub: typeof t.questionnaireSections[number]['subsections'][number]) => (
+    <div className="space-y-2 pt-2">
+      <TagSelector
+        tags={sub.tags}
+        subsectionHint={sub.hint}
+        selectedEntries={(formData as any)[sub.key] || []}
+        onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
+        onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
+        onBlur={() => triggerAutoSave(sub.key)}
+      />
+    </div>
+  );
+
+  const homeopathNotesBlock = isPatientView ? (
+    <div className="space-y-2 pt-2">
+      <p className="text-sm text-muted-foreground">{t.homeopathNotesDescription}</p>
+      <Textarea
+        id="panel-homeopath-notes"
+        data-testid="panel-input-homeopath-notes"
+        value={formData.homeopathNotes || ''}
+        onChange={(e) => updateHomeopathNotes(e.target.value)}
+        onBlur={() => triggerAutoSave('homeopathNotes')}
+        className="min-h-[200px]"
+      />
+    </div>
+  ) : null;
+
+  if (isExpanded) {
     return (
       <div className="h-full overflow-y-auto">
         <div className="px-4 py-4">
@@ -511,74 +692,44 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
             </Button>
           </div>
 
-          {hasProfileData() && (
-            <div className="mb-4">
-              <h3 className="font-bold text-base mb-2">{t.sectionProfile}</h3>
-              <div className="space-y-1 pl-2 text-sm">
-                {(isPatientView ? patientData?.patient?.lastName : profileLastName) && (
-                  <div><span className="text-muted-foreground">{t.lastName}:</span> {isPatientView ? patientData?.patient?.lastName : profileLastName}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.firstName : profileFirstName) && (
-                  <div><span className="text-muted-foreground">{t.firstName}:</span> {isPatientView ? patientData?.patient?.firstName : profileFirstName}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.gender : profileGender) && (
-                  <div><span className="text-muted-foreground">{t.gender}:</span> {getGenderLabel((isPatientView ? patientData?.patient?.gender : profileGender) || '')}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.birthMonth : profileBirthMonth) && (
-                  <div><span className="text-muted-foreground">{t.birthMonth}:</span> {months.find(m => m.value.toString() === (isPatientView ? patientData?.patient?.birthMonth?.toString() : profileBirthMonth))?.label}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.birthYear : profileBirthYear) && (
-                  <div><span className="text-muted-foreground">{t.birthYear}:</span> {isPatientView ? patientData?.patient?.birthYear : profileBirthYear}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.height : profileHeight) && (
-                  <div><span className="text-muted-foreground">{t.height}:</span> {isPatientView ? patientData?.patient?.height : profileHeight}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.weight : profileWeight) && (
-                  <div><span className="text-muted-foreground">{t.weight}:</span> {isPatientView ? patientData?.patient?.weight : profileWeight}</div>
-                )}
-                {(isPatientView ? patientData?.patient?.city : profileCity) && (
-                  <div><span className="text-muted-foreground">{t.city}:</span> {isPatientView ? patientData?.patient?.city : profileCity}</div>
+          <div className="mb-6 border-b pb-4">
+            <h3 className="font-bold text-base mb-2">{t.sectionProfile} {renderSaveStatus('profile')}</h3>
+            {profileContentBlock}
+          </div>
+
+          {t.questionnaireSections.map((section) => (
+            <div key={section.key} className="mb-6 border-b pb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-bold text-base">{section.title}</h3>
+                {section.hint && (
+                  <Popover>
+                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="top" align="start">
+                      <p className="text-sm text-muted-foreground">{section.hint}</p>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </div>
+              {section.subsections.map((sub) => (
+                <div key={sub.key} className="mb-4 pl-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold text-sm">{sub.title}</h4>
+                    {renderSaveStatus(sub.key)}
+                  </div>
+                  {renderSubsectionContent(sub)}
+                </div>
+              ))}
             </div>
-          )}
+          ))}
 
-          {t.questionnaireSections.map((section) => {
-            if (!hasSectionData(section)) return null;
-            return (
-              <div key={section.key} className="mb-4">
-                <h3 className="font-bold text-base mb-2">{section.title}</h3>
-                {section.subsections.map((sub) => {
-                  const entries: TagEntry[] = (formData as any)[sub.key] || [];
-                  if (entries.length === 0) return null;
-                  return (
-                    <div key={sub.key} className="mb-3 pl-2">
-                      <h4 className="font-semibold text-sm mb-1 text-muted-foreground">{sub.title}</h4>
-                      <div className="space-y-1 pl-2">
-                        {entries.map((entry) => {
-                          const tagDef = sub.tags.find(tg => tg.key === entry.tagKey);
-                          if (!tagDef) return null;
-                          return (
-                            <div key={entry.tagKey} className="text-sm">
-                              <span className="font-medium">{tagDef.label}</span>
-                              {entry.description && (
-                                <span className="text-muted-foreground"> — {entry.description}</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          {isPatientView && formData.homeopathNotes && (
-            <div className="mb-4">
+          {isPatientView && (
+            <div className="mb-6">
               <h3 className="font-bold text-base mb-2">{t.sectionHomeopathNotes}</h3>
-              <div className="text-sm pl-2 whitespace-pre-wrap">{formData.homeopathNotes}</div>
+              {homeopathNotesBlock}
             </div>
           )}
         </div>
@@ -618,166 +769,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-4 pt-2">
-                {isPatientView ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.lastName}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-last-name">
-                          {patientData?.patient?.lastName || '—'}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.firstName}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-first-name">
-                          {patientData?.patient?.firstName || '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.birthMonth}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md">
-                          {patientData?.patient?.birthMonth ? months.find(m => m.value === patientData.patient!.birthMonth)?.label : '—'}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.birthYear}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md">
-                          {patientData?.patient?.birthYear || '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.gender}</Label>
-                      <div className="text-sm p-2 bg-muted rounded-md">
-                        {patientData?.patient?.gender ? getGenderLabel(patientData.patient.gender) : '—'}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.height}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-height">
-                          {patientData?.patient?.height || '—'}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.weight}</Label>
-                        <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-weight">
-                          {patientData?.patient?.weight || '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.city}</Label>
-                      <div className="text-sm p-2 bg-muted rounded-md" data-testid="text-profile-city">
-                        {patientData?.patient?.city || '—'}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.lastName}</Label>
-                        <Input
-                          value={profileLastName}
-                          onChange={(e) => updateProfileField('lastName', e.target.value)}
-                          placeholder={t.lastName}
-                          data-testid="panel-input-last-name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.firstName}</Label>
-                        <Input
-                          value={profileFirstName}
-                          onChange={(e) => updateProfileField('firstName', e.target.value)}
-                          placeholder={t.firstName}
-                          data-testid="panel-input-first-name"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.birthMonth}</Label>
-                        <Select value={profileBirthMonth} onValueChange={(v) => updateProfileField('birthMonth', v)}>
-                          <SelectTrigger data-testid="panel-select-birth-month">
-                            <SelectValue placeholder={t.selectMonth} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {months.map((month) => (
-                              <SelectItem key={month.value} value={month.value.toString()}>
-                                {month.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.birthYear}</Label>
-                        <Input
-                          type="number"
-                          min="1900"
-                          max={new Date().getFullYear()}
-                          value={profileBirthYear}
-                          onChange={(e) => updateProfileField('birthYear', e.target.value)}
-                          placeholder={t.birthYear}
-                          data-testid="panel-input-birth-year"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.gender}</Label>
-                      <Select value={profileGender} onValueChange={(v) => updateProfileField('gender', v)}>
-                        <SelectTrigger data-testid="panel-select-gender">
-                          <SelectValue placeholder={t.selectGender} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="male">{t.genderMale}</SelectItem>
-                          <SelectItem value="female">{t.genderFemale}</SelectItem>
-                          <SelectItem value="other">{t.genderOther}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t.height}</Label>
-                        <Input
-                          type="number"
-                          min="50"
-                          max="300"
-                          value={profileHeight}
-                          onChange={(e) => updateProfileField('height', e.target.value)}
-                          placeholder={t.height}
-                          data-testid="panel-input-height"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.weight}</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="500"
-                          value={profileWeight}
-                          onChange={(e) => updateProfileField('weight', e.target.value)}
-                          placeholder={t.weight}
-                          data-testid="panel-input-weight"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.city}</Label>
-                      <Input
-                        value={profileCity}
-                        onChange={(e) => updateProfileField('city', e.target.value)}
-                        placeholder={t.city}
-                        data-testid="panel-input-city"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
+              {profileContentBlock}
             </AccordionContent>
           </AccordionItem>
 
@@ -815,16 +807,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="space-y-2 pt-2">
-                          <TagSelector
-                            tags={sub.tags}
-                            subsectionHint={sub.hint}
-                            selectedEntries={(formData as any)[sub.key] || []}
-                            onToggleTag={(tagKey) => toggleSectionTag(sub.key, tagKey)}
-                            onUpdateDescription={(tagKey, desc) => updateTagDescription(sub.key, tagKey, desc)}
-                            onBlur={() => triggerAutoSave(sub.key)}
-                          />
-                        </div>
+                        {renderSubsectionContent(sub)}
                       </AccordionContent>
                     </AccordionItem>
                   ))}
@@ -839,17 +822,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
                 {t.sectionHomeopathNotes}
               </AccordionTrigger>
               <AccordionContent>
-                <div className="space-y-2 pt-2">
-                  <p className="text-sm text-muted-foreground">{t.homeopathNotesDescription}</p>
-                  <Textarea
-                    id="panel-homeopath-notes"
-                    data-testid="panel-input-homeopath-notes"
-                    value={formData.homeopathNotes || ''}
-                    onChange={(e) => updateHomeopathNotes(e.target.value)}
-                    onBlur={() => triggerAutoSave('homeopathNotes')}
-                    className="min-h-[200px]"
-                  />
-                </div>
+                {homeopathNotesBlock}
               </AccordionContent>
             </AccordionItem>
           )}
