@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
-import { Loader2, Check, X, HelpCircle } from "lucide-react";
+import { Loader2, Check, X, HelpCircle, Eye, Pencil } from "lucide-react";
 import type { QuestionnaireData } from "@shared/schema";
 
 interface PatientQuestionnaireResponse {
@@ -157,6 +157,7 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const formDataRef = useRef<QuestionnaireData>({});
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [viewMode, setViewMode] = useState<'edit' | 'view'>('edit');
 
   type SubSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
   const [subSaveStatus, setSubSaveStatus] = useState<Record<string, SubSaveStatus>>({});
@@ -474,9 +475,140 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
     );
   }
 
+  const hasSectionData = (section: typeof t.questionnaireSections[number]) => {
+    return section.subsections.some(sub => hasSubsectionData(sub.key));
+  };
+
+  const hasProfileData = () => {
+    if (isPatientView) {
+      return !!(patientData?.patient?.firstName || patientData?.patient?.lastName || patientData?.patient?.gender || patientData?.patient?.birthYear || patientData?.patient?.height || patientData?.patient?.weight || patientData?.patient?.city);
+    }
+    return !!(profileFirstName || profileLastName || profileGender || profileBirthYear || profileHeight || profileWeight || profileCity);
+  };
+
+  if (viewMode === 'view') {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="px-4 py-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode('edit')}
+              data-testid="button-switch-edit-mode"
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Редактирование
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              data-testid="button-switch-view-mode"
+              disabled
+            >
+              <Eye className="h-4 w-4 mr-1" />
+              Просмотр
+            </Button>
+          </div>
+
+          {hasProfileData() && (
+            <div className="mb-4">
+              <h3 className="font-bold text-base mb-2">{t.sectionProfile}</h3>
+              <div className="space-y-1 pl-2 text-sm">
+                {(isPatientView ? patientData?.patient?.lastName : profileLastName) && (
+                  <div><span className="text-muted-foreground">{t.lastName}:</span> {isPatientView ? patientData?.patient?.lastName : profileLastName}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.firstName : profileFirstName) && (
+                  <div><span className="text-muted-foreground">{t.firstName}:</span> {isPatientView ? patientData?.patient?.firstName : profileFirstName}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.gender : profileGender) && (
+                  <div><span className="text-muted-foreground">{t.gender}:</span> {getGenderLabel((isPatientView ? patientData?.patient?.gender : profileGender) || '')}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.birthMonth : profileBirthMonth) && (
+                  <div><span className="text-muted-foreground">{t.birthMonth}:</span> {months.find(m => m.value.toString() === (isPatientView ? patientData?.patient?.birthMonth?.toString() : profileBirthMonth))?.label}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.birthYear : profileBirthYear) && (
+                  <div><span className="text-muted-foreground">{t.birthYear}:</span> {isPatientView ? patientData?.patient?.birthYear : profileBirthYear}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.height : profileHeight) && (
+                  <div><span className="text-muted-foreground">{t.height}:</span> {isPatientView ? patientData?.patient?.height : profileHeight}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.weight : profileWeight) && (
+                  <div><span className="text-muted-foreground">{t.weight}:</span> {isPatientView ? patientData?.patient?.weight : profileWeight}</div>
+                )}
+                {(isPatientView ? patientData?.patient?.city : profileCity) && (
+                  <div><span className="text-muted-foreground">{t.city}:</span> {isPatientView ? patientData?.patient?.city : profileCity}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {t.questionnaireSections.map((section) => {
+            if (!hasSectionData(section)) return null;
+            return (
+              <div key={section.key} className="mb-4">
+                <h3 className="font-bold text-base mb-2">{section.title}</h3>
+                {section.subsections.map((sub) => {
+                  const entries: TagEntry[] = (formData as any)[sub.key] || [];
+                  if (entries.length === 0) return null;
+                  return (
+                    <div key={sub.key} className="mb-3 pl-2">
+                      <h4 className="font-semibold text-sm mb-1 text-muted-foreground">{sub.title}</h4>
+                      <div className="space-y-1 pl-2">
+                        {entries.map((entry) => {
+                          const tagDef = sub.tags.find(tg => tg.key === entry.tagKey);
+                          if (!tagDef) return null;
+                          return (
+                            <div key={entry.tagKey} className="text-sm">
+                              <span className="font-medium">{tagDef.label}</span>
+                              {entry.description && (
+                                <span className="text-muted-foreground"> — {entry.description}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          {isPatientView && formData.homeopathNotes && (
+            <div className="mb-4">
+              <h3 className="font-bold text-base mb-2">{t.sectionHomeopathNotes}</h3>
+              <div className="text-sm pl-2 whitespace-pre-wrap">{formData.homeopathNotes}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="px-4 py-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Button
+            variant="default"
+            size="sm"
+            data-testid="button-switch-edit-mode"
+            disabled
+          >
+            <Pencil className="h-4 w-4 mr-1" />
+            Редактирование
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewMode('view')}
+            data-testid="button-switch-view-mode"
+          >
+            <Eye className="h-4 w-4 mr-1" />
+            Просмотр
+          </Button>
+        </div>
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
             <AccordionTrigger data-testid="panel-accordion-profile" className="data-[state=open]:font-bold">
