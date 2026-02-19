@@ -701,34 +701,38 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
             {profileContentBlock}
           </div>
 
-          {t.questionnaireSections.map((section) => (
-            <div key={section.key} className="mb-6 border-b pb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="font-bold text-base">{section.title}</h3>
-                {section.hint && (
-                  <Popover>
-                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="top" align="start">
-                      <p className="text-sm text-muted-foreground">{section.hint}</p>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-              {section.subsections.map((sub) => (
-                <div key={sub.key} className="mb-4 pl-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold text-sm">{sub.title}</h4>
-                    {renderSaveStatus(sub.key)}
-                  </div>
-                  {renderSubsectionContent(sub)}
+          {t.questionnaireSections.map((section) => {
+            const visibleSubs = section.subsections.filter((sub) => ((formData as any)[sub.key] || []).length > 0);
+            if (visibleSubs.length === 0) return null;
+            return (
+              <div key={section.key} className="mb-6 border-b pb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-bold text-base">{section.title}</h3>
+                  {section.hint && (
+                    <Popover>
+                      <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                          <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[calc(100vw-2rem)] max-w-80" side="top" align="start">
+                        <p className="text-sm text-muted-foreground">{section.hint}</p>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
-              ))}
-            </div>
-          ))}
+                {visibleSubs.map((sub) => (
+                  <div key={sub.key} className="mb-4 pl-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-sm">{sub.title}</h4>
+                      {renderSaveStatus(sub.key)}
+                    </div>
+                    {renderSubsectionContent(sub)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
 
           {isPatientView && (
             <div className="mb-6">
