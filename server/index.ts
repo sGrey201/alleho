@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
@@ -19,6 +20,20 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
+
+// Prevent caching of error responses (4xx/5xx) so a one-time 403 doesn't stick in the browser
+app.use((req, res, next) => {
+  const originalStatus = res.status.bind(res);
+  res.status = function (code: number) {
+    const result = originalStatus(code);
+    if (code >= 400) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("Pragma", "no-cache");
+    }
+    return result;
+  };
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -78,11 +93,20 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
+  
+  // On macOS, reusePort is not supported with 0.0.0.0, so we use it conditionally
+  const isMacOS = process.platform === 'darwin';
+  const listenOptions: any = {
     port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+    host: isMacOS ? "127.0.0.1" : "0.0.0.0",
+  };
+  
+  // reusePort is only supported on Linux and not needed on macOS
+  if (!isMacOS) {
+    listenOptions.reusePort = true;
+  }
+  
+  server.listen(listenOptions, () => {
     log(`serving on port ${port}`);
   });
 })();

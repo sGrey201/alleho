@@ -192,3 +192,39 @@ export const logoutEmail: RequestHandler = (req, res) => {
     res.json({ message: 'Выход выполнен успешно' });
   });
 };
+
+export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  const session = req.session as any;
+  
+  if (!session?.userId || session?.authType !== 'email') {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const user = await storage.getUser(session.userId);
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  (req as any).dbUser = user;
+  return next();
+};
+
+export const isAdmin: RequestHandler = async (req, res, next) => {
+  const session = req.session as any;
+  
+  if (!session?.userId || session?.authType !== 'email') {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const user = await storage.getUser(session.userId);
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (!user.isAdmin) {
+    return res.status(403).json({ message: "Forbidden - Admin access required" });
+  }
+
+  (req as any).dbUser = user;
+  next();
+};

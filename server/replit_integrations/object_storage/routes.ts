@@ -45,7 +45,8 @@ export function registerObjectStorageRoutes(app: Express): void {
         });
       }
 
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      // Always sign with application/octet-stream so client must send the same (no signature mismatch)
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL("application/octet-stream");
 
       // Extract object path from the presigned URL for later reference
       const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
@@ -65,15 +66,18 @@ export function registerObjectStorageRoutes(app: Express): void {
   /**
    * Serve uploaded objects.
    *
-   * GET /objects/:objectPath(*)
-   *
-   * This serves files from object storage. For public files, no auth needed.
-   * For protected files, add authentication middleware and ACL checks.
+   * GET /objects/<key> — full file.
+   * GET /objects/<key>?size=thumb — thumbnail for chat preview (max width 400px).
    */
-  app.get("/objects/:objectPath(*)", async (req, res) => {
+  app.get(/^\/objects\/.+/, async (req, res) => {
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      await objectStorageService.downloadObject(objectFile, res);
+      const useThumb = req.query.size === "thumb";
+      if (useThumb) {
+        await objectStorageService.downloadObjectAsThumb(objectFile, res);
+      } else {
+        await objectStorageService.downloadObject(objectFile, res);
+      }
     } catch (error) {
       console.error("Error serving object:", error);
       if (error instanceof ObjectNotFoundError) {

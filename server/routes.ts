@@ -1,10 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 import { db } from "./db";
 import { users, payments, articles } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
-import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { isAuthenticated, isAdmin } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail, sendInviteEmail } from "./email";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
@@ -19,17 +21,8 @@ const PREVIEW_LENGTH = 500;
 async function checkSubscription(req: any): Promise<boolean> {
   const session = req.session as any;
   
-  // Check email auth
   if (session?.userId && session?.authType === 'email') {
     const user = await storage.getUser(session.userId);
-    return user?.subscriptionExpiresAt 
-      ? new Date(user.subscriptionExpiresAt) > new Date() 
-      : false;
-  }
-  
-  // Check Replit Auth
-  if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-    const user = await storage.getUser(req.user.claims.sub);
     return user?.subscriptionExpiresAt 
       ? new Date(user.subscriptionExpiresAt) > new Date() 
       : false;
@@ -45,16 +38,36 @@ async function getCurrentUserId(req: any): Promise<string | null> {
     return session.userId;
   }
   
-  if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-    return req.user.claims.sub;
-  }
-  
   return null;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
+  // Session middleware (required for email auth)
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET must be set in environment variables");
+  }
+  
+  app.set("trust proxy", 1);
+  const sessionTtl = 28 * 24 * 60 * 60 * 1000; // 4 weeks
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
+  app.use(session({
+    secret: process.env.SESSION_SECRET,
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: sessionTtl,
+    },
+  }));
 
   // Sitemap.xml - dynamic generation
   app.get('/sitemap.xml', async (req, res) => {
@@ -108,12 +121,11 @@ ${allUrls.map(url => `  <url>
   app.get('/api/auth/email-user', getEmailUser);
   app.post('/api/auth/logout', logoutEmail);
 
-  // Auth routes (supports both Replit Auth and email auth)
+  // Auth routes (email auth only)
   app.get('/api/auth/user', async (req: any, res) => {
     try {
       const session = req.session as any;
       
-      // Check email auth first
       if (session?.userId && session?.authType === 'email') {
         const user = await storage.getUser(session.userId);
         if (user) {
@@ -132,18 +144,6 @@ ${allUrls.map(url => `  <url>
             subscriptionExpiresAt: user.subscriptionExpiresAt,
             isAdmin: user.isAdmin,
             authType: 'email',
-          });
-        }
-      }
-      
-      // Check Replit Auth
-      if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-        const userId = req.user.claims.sub;
-        const user = await storage.getUser(userId);
-        if (user) {
-          return res.json({
-            ...user,
-            authType: 'replit',
           });
         }
       }

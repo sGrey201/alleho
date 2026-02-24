@@ -4,18 +4,7 @@ export {
   objectStorageClient,
 } from "./objectStorage";
 
-export type {
-  ObjectAclPolicy,
-  ObjectAccessGroup,
-  ObjectAccessGroupType,
-  ObjectAclRule,
-} from "./objectAcl";
-
-export {
-  canAccessObject,
-  getObjectAclPolicy,
-  setObjectAclPolicy,
-} from "./objectAcl";
+export type { S3ObjectRef } from "./objectStorage";
 
 export { registerObjectStorageRoutes } from "./routes";
 

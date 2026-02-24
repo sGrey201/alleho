@@ -93,12 +93,16 @@ export function useUpload(options: UseUploadOptions = {}) {
         method: "PUT",
         body: file,
         headers: {
-          "Content-Type": file.type || "application/octet-stream",
+          "Content-Type": "application/octet-stream",
         },
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload file to storage");
+        const body = await response.text();
+        console.error("[upload] PUT failed:", response.status, response.statusText);
+        console.error("[upload] Response body (Yandex/S3 error):", body);
+        console.error("[upload] Request URL (first 120 chars):", uploadURL.slice(0, 120) + "...");
+        throw new Error(`Upload failed: ${response.status}. See console for details.`);
       }
     },
     []
@@ -182,7 +186,7 @@ export function useUpload(options: UseUploadOptions = {}) {
       return {
         method: "PUT",
         url: data.uploadURL,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
+        headers: { "Content-Type": "application/octet-stream" },
       };
     },
     []

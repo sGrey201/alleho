@@ -82,6 +82,11 @@ function formatDoctorLastVisit(lastVisitedAt?: string): string {
 const MAX_PANEL_PERCENT = 66;
 const DEFAULT_PANEL_PERCENT = 50;
 
+/** Thumbnail URL for chat list; full image loads only when user clicks to enlarge. */
+function getThumbUrl(url: string): string {
+  return url + (url.includes("?") ? "&" : "?") + "size=thumb";
+}
+
 export default function HealthWall() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [, setLocation] = useLocation();
@@ -578,7 +583,7 @@ export default function HealthWall() {
                                     {group.messages.map((msg) => (
                                       <img 
                                         key={msg.id}
-                                        src={msg.imageUrl!} 
+                                        src={getThumbUrl(msg.imageUrl!)} 
                                         alt="Uploaded" 
                                         className="rounded-md w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
                                         data-testid={`image-${msg.id}`}
@@ -635,7 +640,7 @@ export default function HealthWall() {
                                 )}
                                 {msg.imageUrl && (
                                   <img 
-                                    src={msg.imageUrl} 
+                                    src={getThumbUrl(msg.imageUrl)} 
                                     alt="Uploaded" 
                                     className="rounded-md max-h-64 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
                                     data-testid={`image-${msg.id}`}

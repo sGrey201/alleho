@@ -1,33 +1,38 @@
-import { Storage, File } from "@google-cloud/storage";
-import { Response } from "express";
-import { randomUUID } from "crypto";
 import {
-  ObjectAclPolicy,
-  ObjectPermission,
-  canAccessObject,
-  getObjectAclPolicy,
-  setObjectAclPolicy,
-} from "./objectAcl";
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { Response } from "express";
+import { randomUUID } from "crypto";
+import sharp from "sharp";
 
-const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+const YC_ENDPOINT = "https://storage.yandexcloud.net";
 
-// The object storage client is used to interact with the object storage service.
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
-      },
-    },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
+function getS3Config() {
+  const bucket = process.env.YC_BUCKET;
+  const region = process.env.YC_REGION;
+  const accessKeyId = process.env.YC_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.YC_SECRET_ACCESS_KEY;
+  if (!bucket || !region || !accessKeyId || !secretAccessKey) {
+    throw new Error(
+      "YC_BUCKET, YC_REGION, YC_ACCESS_KEY_ID and YC_SECRET_ACCESS_KEY must be set for object storage"
+    );
+  }
+  return { bucket, region, accessKeyId, secretAccessKey };
+}
+
+export const objectStorageClient = new S3Client({
+  endpoint: YC_ENDPOINT,
+  region: process.env.YC_REGION || "ru-central1",
+  credentials: process.env.YC_ACCESS_KEY_ID
+    ? {
+        accessKeyId: process.env.YC_ACCESS_KEY_ID,
+        secretAccessKey: process.env.YC_SECRET_ACCESS_KEY!,
+      }
+    : undefined,
 });
 
 export class ObjectNotFoundError extends Error {
@@ -38,90 +43,125 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
-// The object storage service is used to interact with the object storage service.
+/** Internal ref for S3 object (bucket + key). */
+export interface S3ObjectRef {
+  bucket: string;
+  key: string;
+}
+
+const UPLOADS_PREFIX = "uploads";
+
 export class ObjectStorageService {
-  constructor() {}
+  private bucket: string;
+  private client: S3Client;
 
-  // Gets the public object search paths.
-  getPublicObjectSearchPaths(): Array<string> {
-    const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
-    const paths = Array.from(
-      new Set(
-        pathsStr
-          .split(",")
-          .map((path) => path.trim())
-          .filter((path) => path.length > 0)
-      )
-    );
-    if (paths.length === 0) {
-      throw new Error(
-        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
-          "tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths)."
-      );
-    }
-    return paths;
+  constructor() {
+    const config = getS3Config();
+    this.bucket = config.bucket;
+    this.client = new S3Client({
+      region: config.region,
+      endpoint: YC_ENDPOINT,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+      // Without this, SDK adds x-amz-checksum-* to presigned URL; client doesn't send them → AccessDenied
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
+    });
   }
 
-  // Gets the private object directory.
-  getPrivateObjectDir(): string {
-    const dir = process.env.PRIVATE_OBJECT_DIR || "";
-    if (!dir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
+  /**
+   * Returns presigned PUT URL for uploading.
+   * Path-style URL (storage.yandexcloud.net/bucket/key) for Yandex compatibility.
+   * No ContentType in signature so client can send Content-Type: application/octet-stream freely.
+   */
+  async getObjectEntityUploadURL(_contentType?: string): Promise<string> {
+    const objectId = randomUUID();
+    const key = `${UPLOADS_PREFIX}/${objectId}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const uploadURL = await getSignedUrl(this.client, command, { expiresIn: 900 });
+    const hasChecksumInUrl = uploadURL.includes("x-amz-checksum") || uploadURL.includes("x-amz-sdk");
+    if (hasChecksumInUrl) {
+      console.warn("[objectStorage] Presigned URL contains checksum/sdk params — browser PUT may get 403. Params:", new URL(uploadURL).searchParams.toString().slice(0, 200));
     }
-    return dir;
+    return uploadURL;
   }
 
-  // Search for a public object from the search paths.
-  async searchPublicObject(filePath: string): Promise<File | null> {
-    for (const searchPath of this.getPublicObjectSearchPaths()) {
-      const fullPath = `${searchPath}/${filePath}`;
-
-      // Full path format: /<bucket_name>/<object_name>
-      const { bucketName, objectName } = parseObjectPath(fullPath);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
-
-      // Check if file exists
-      const [exists] = await file.exists();
-      if (exists) {
-        return file;
-      }
+  /**
+   * From request path /objects/uploads/<id> resolve to S3 ref.
+   */
+  async getObjectEntityFile(objectPath: string): Promise<S3ObjectRef> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
     }
-
-    return null;
-  }
-
-  // Downloads an object to the response.
-  async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {
+    const suffix = objectPath.slice("/objects/".length);
+    if (!suffix) {
+      throw new ObjectNotFoundError();
+    }
+    const key = suffix;
     try {
-      // Get file metadata
-      const [metadata] = await file.getMetadata();
-      // Get the ACL policy for the object.
-      const aclPolicy = await getObjectAclPolicy(file);
-      const isPublic = aclPolicy?.visibility === "public";
-      // Set appropriate headers
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+    } catch {
+      throw new ObjectNotFoundError();
+    }
+    return { bucket: this.bucket, key };
+  }
+
+  /**
+   * Normalize presigned or storage URL to app path /objects/uploads/<id>.
+   * Handles: https://storage.yandexcloud.net/bucket/key (path-style)
+   * and https://bucket.storage.yandexcloud.net/key (virtual-hosted).
+   */
+  normalizeObjectEntityPath(rawPath: string): string {
+    if (!rawPath.startsWith("https://") || !rawPath.includes("storage.yandexcloud.net")) {
+      return rawPath;
+    }
+    const url = new URL(rawPath);
+    const pathname = url.pathname;
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length < 1) {
+      return rawPath;
+    }
+    // Path-style: /bucket/uploads/uuid → key = uploads/uuid
+    // Virtual-hosted: /uploads/uuid → key = uploads/uuid
+    const key = parts[0] === this.bucket && parts.length > 1
+      ? parts.slice(1).join("/")
+      : pathname.replace(/^\//, "");
+    return `/objects/${key}`;
+  }
+
+  /**
+   * Stream S3 object to HTTP response.
+   */
+  async downloadObject(
+    ref: S3ObjectRef,
+    res: Response,
+    cacheTtlSec: number = 3600
+  ): Promise<void> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
+      );
+      const contentType =
+        response.ContentType || "application/octet-stream";
+      const contentLength = response.ContentLength;
       res.set({
-        "Content-Type": metadata.contentType || "application/octet-stream",
-        "Content-Length": metadata.size,
-        "Cache-Control": `${
-          isPublic ? "public" : "private"
-        }, max-age=${cacheTtlSec}`,
+        "Content-Type": contentType,
+        "Cache-Control": `private, max-age=${cacheTtlSec}`,
+        ...(contentLength != null && { "Content-Length": String(contentLength) }),
       });
-
-      // Stream the file to the response
-      const stream = file.createReadStream();
-
-      stream.on("error", (err) => {
-        console.error("Stream error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Error streaming file" });
-        }
-      });
-
-      stream.pipe(res);
+      if (response.Body) {
+        response.Body.pipe(res);
+      } else {
+        res.end();
+      }
     } catch (error) {
       console.error("Error downloading file:", error);
       if (!res.headersSent) {
@@ -130,171 +170,44 @@ export class ObjectStorageService {
     }
   }
 
-  // Gets the upload URL for an object entity.
-  async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
+  /**
+   * Stream S3 object as thumbnail (max width 400px) for chat preview.
+   * Non-image content-types are streamed as-is (no resize).
+   */
+  async downloadObjectAsThumb(
+    ref: S3ObjectRef,
+    res: Response,
+    cacheTtlSec: number = 3600
+  ): Promise<void> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
       );
+      const contentType = response.ContentType || "application/octet-stream";
+      if (!contentType.startsWith("image/")) {
+        return this.downloadObject(ref, res, cacheTtlSec);
+      }
+      if (!response.Body) {
+        res.status(404).end();
+        return;
+      }
+      res.set({
+        "Content-Type": contentType,
+        "Cache-Control": `private, max-age=${cacheTtlSec}`,
+      });
+      const pipeline = sharp()
+        .resize({ maxWidth: 400, withoutEnlargement: true })
+        .on("error", (err: Error) => {
+          console.error("Sharp resize error:", err);
+          if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });
+        });
+      const bodyStream = response.Body as NodeJS.ReadableStream;
+      bodyStream.pipe(pipeline).pipe(res);
+    } catch (error) {
+      console.error("Error downloading thumbnail:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error downloading file" });
+      }
     }
-
-    const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-
-    // Sign URL for PUT method with TTL
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
-  }
-
-  // Gets the object entity file from the object path.
-  async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith("/objects/")) {
-      throw new ObjectNotFoundError();
-    }
-
-    const parts = objectPath.slice(1).split("/");
-    if (parts.length < 2) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = parts.slice(1).join("/");
-    let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith("/")) {
-      entityDir = `${entityDir}/`;
-    }
-    const objectEntityPath = `${entityDir}${entityId}`;
-    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const objectFile = bucket.file(objectName);
-    const [exists] = await objectFile.exists();
-    if (!exists) {
-      throw new ObjectNotFoundError();
-    }
-    return objectFile;
-  }
-
-  normalizeObjectEntityPath(
-    rawPath: string,
-  ): string {
-    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
-      return rawPath;
-    }
-  
-    // Extract the path from the URL by removing query parameters and domain
-    const url = new URL(rawPath);
-    const rawObjectPath = url.pathname;
-  
-    let objectEntityDir = this.getPrivateObjectDir();
-    if (!objectEntityDir.endsWith("/")) {
-      objectEntityDir = `${objectEntityDir}/`;
-    }
-  
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
-      return rawObjectPath;
-    }
-  
-    // Extract the entity ID from the path
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
-    return `/objects/${entityId}`;
-  }
-
-  // Tries to set the ACL policy for the object entity and return the normalized path.
-  async trySetObjectEntityAclPolicy(
-    rawPath: string,
-    aclPolicy: ObjectAclPolicy
-  ): Promise<string> {
-    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
-    if (!normalizedPath.startsWith("/")) {
-      return normalizedPath;
-    }
-
-    const objectFile = await this.getObjectEntityFile(normalizedPath);
-    await setObjectAclPolicy(objectFile, aclPolicy);
-    return normalizedPath;
-  }
-
-  // Checks if the user can access the object entity.
-  async canAccessObjectEntity({
-    userId,
-    objectFile,
-    requestedPermission,
-  }: {
-    userId?: string;
-    objectFile: File;
-    requestedPermission?: ObjectPermission;
-  }): Promise<boolean> {
-    return canAccessObject({
-      userId,
-      objectFile,
-      requestedPermission: requestedPermission ?? ObjectPermission.READ,
-    });
   }
 }
-
-function parseObjectPath(path: string): {
-  bucketName: string;
-  objectName: string;
-} {
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
-  const pathParts = path.split("/");
-  if (pathParts.length < 3) {
-    throw new Error("Invalid path: must contain at least a bucket name");
-  }
-
-  const bucketName = pathParts[1];
-  const objectName = pathParts.slice(2).join("/");
-
-  return {
-    bucketName,
-    objectName,
-  };
-}
-
-async function signObjectURL({
-  bucketName,
-  objectName,
-  method,
-  ttlSec,
-}: {
-  bucketName: string;
-  objectName: string;
-  method: "GET" | "PUT" | "DELETE" | "HEAD";
-  ttlSec: number;
-}): Promise<string> {
-  const request = {
-    bucket_name: bucketName,
-    object_name: objectName,
-    method,
-    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
-  };
-  const response = await fetch(
-    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-    }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
-    );
-  }
-
-  const { signed_url: signedURL } = await response.json();
-  return signedURL;
-}
-
