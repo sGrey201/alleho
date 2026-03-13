@@ -22,6 +22,15 @@ CREATE TABLE "articles" (
 	CONSTRAINT "articles_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
+CREATE TABLE "health_wall_doctors" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"patient_user_id" varchar NOT NULL,
+	"doctor_user_id" varchar NOT NULL,
+	"created_at" timestamp DEFAULT now(),
+	"last_visited_at" timestamp,
+	"patient_last_visited_at" timestamp
+);
+--> statement-breakpoint
 CREATE TABLE "health_wall_messages" (
 	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"patient_user_id" varchar NOT NULL,
@@ -81,6 +90,9 @@ CREATE TABLE "users" (
 	"gender" varchar(20),
 	"birth_month" integer,
 	"birth_year" integer,
+	"height" integer,
+	"weight" integer,
+	"city" varchar(255),
 	"password_hash" varchar,
 	"reset_token" varchar,
 	"reset_token_expires_at" timestamp,
@@ -95,6 +107,8 @@ ALTER TABLE "article_likes" ADD CONSTRAINT "article_likes_article_id_articles_id
 ALTER TABLE "article_likes" ADD CONSTRAINT "article_likes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "article_tags" ADD CONSTRAINT "article_tags_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "public"."articles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "article_tags" ADD CONSTRAINT "article_tags_tag_id_tags_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."tags"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "health_wall_doctors" ADD CONSTRAINT "health_wall_doctors_patient_user_id_users_id_fk" FOREIGN KEY ("patient_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "health_wall_doctors" ADD CONSTRAINT "health_wall_doctors_doctor_user_id_users_id_fk" FOREIGN KEY ("doctor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "health_wall_messages" ADD CONSTRAINT "health_wall_messages_patient_user_id_users_id_fk" FOREIGN KEY ("patient_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "health_wall_messages" ADD CONSTRAINT "health_wall_messages_author_user_id_users_id_fk" FOREIGN KEY ("author_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -104,6 +118,8 @@ CREATE INDEX "article_likes_user_idx" ON "article_likes" USING btree ("user_id")
 CREATE INDEX "article_tags_article_idx" ON "article_tags" USING btree ("article_id");--> statement-breakpoint
 CREATE INDEX "article_tags_tag_idx" ON "article_tags" USING btree ("tag_id");--> statement-breakpoint
 CREATE INDEX "articles_created_at_idx" ON "articles" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "health_wall_doctors_patient_idx" ON "health_wall_doctors" USING btree ("patient_user_id");--> statement-breakpoint
+CREATE INDEX "health_wall_doctors_doctor_idx" ON "health_wall_doctors" USING btree ("doctor_user_id");--> statement-breakpoint
 CREATE INDEX "health_wall_patient_idx" ON "health_wall_messages" USING btree ("patient_user_id");--> statement-breakpoint
 CREATE INDEX "health_wall_created_idx" ON "health_wall_messages" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "payments_user_idx" ON "payments" USING btree ("user_id");--> statement-breakpoint

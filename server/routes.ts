@@ -52,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
+    createTableIfMissing: true,
     ttl: sessionTtl,
     tableName: "sessions",
   });
@@ -63,7 +63,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      // Secure только по HTTPS; при доступе по HTTP (localhost/docker dev) — false
+      secure: process.env.COOKIE_SECURE === 'true',
       sameSite: 'lax',
       maxAge: sessionTtl,
     },

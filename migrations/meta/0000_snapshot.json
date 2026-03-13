@@ -1,5 +1,5 @@
 {
-  "id": "b4e3a90c-dac2-4c54-81c6-0bc03b2d5a4e",
+  "id": "f65091f9-e5ac-41e5-ba0e-405fa87d13f2",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -270,6 +270,115 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.health_wall_doctors": {
+      "name": "health_wall_doctors",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "patient_user_id": {
+          "name": "patient_user_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doctor_user_id": {
+          "name": "doctor_user_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "last_visited_at": {
+          "name": "last_visited_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "patient_last_visited_at": {
+          "name": "patient_last_visited_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "health_wall_doctors_patient_idx": {
+          "name": "health_wall_doctors_patient_idx",
+          "columns": [
+            {
+              "expression": "patient_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "health_wall_doctors_doctor_idx": {
+          "name": "health_wall_doctors_doctor_idx",
+          "columns": [
+            {
+              "expression": "doctor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "health_wall_doctors_patient_user_id_users_id_fk": {
+          "name": "health_wall_doctors_patient_user_id_users_id_fk",
+          "tableFrom": "health_wall_doctors",
+          "tableTo": "users",
+          "columnsFrom": [
+            "patient_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "health_wall_doctors_doctor_user_id_users_id_fk": {
+          "name": "health_wall_doctors_doctor_user_id_users_id_fk",
+          "tableFrom": "health_wall_doctors",
+          "tableTo": "users",
+          "columnsFrom": [
+            "doctor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -785,6 +894,24 @@
         "birth_year": {
           "name": "birth_year",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weight": {
+          "name": "weight",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
