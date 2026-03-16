@@ -157,8 +157,8 @@ export class ObjectStorageService {
         "Cache-Control": `private, max-age=${cacheTtlSec}`,
         ...(contentLength != null && { "Content-Length": String(contentLength) }),
       });
-      if (response.Body) {
-        response.Body.pipe(res);
+      if (response.Body && typeof (response.Body as NodeJS.ReadableStream).pipe === "function") {
+        (response.Body as NodeJS.ReadableStream).pipe(res);
       } else {
         res.end();
       }
@@ -196,7 +196,7 @@ export class ObjectStorageService {
         "Cache-Control": `private, max-age=${cacheTtlSec}`,
       });
       const pipeline = sharp()
-        .resize({ maxWidth: 400, withoutEnlargement: true })
+        .resize(400, undefined, { withoutEnlargement: true })
         .on("error", (err: Error) => {
           console.error("Sharp resize error:", err);
           if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });

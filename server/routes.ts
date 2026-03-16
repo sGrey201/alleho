@@ -14,7 +14,23 @@ import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
-import { insertHealthWallMessageSchema, type QuestionnaireData as QData } from "@shared/schema";
+import {
+  insertHealthWallMessageSchema,
+  insertConversationSchema,
+  insertConversationMessageSchema,
+  type QuestionnaireData as QData,
+} from "@shared/schema";
+import {
+  getHealthWallRecentMessages,
+  pushHealthWallRecentMessage,
+  publishHealthWallMessage,
+  backfillHealthWallRecent,
+  getConversationRecentMessages,
+  pushConversationRecentMessage,
+  publishConversationMessage,
+  backfillConversationRecent,
+} from "./redis";
+import { setupWebSocket } from "./ws";
 
 const PREVIEW_LENGTH = 500;
 
@@ -1004,26 +1020,27 @@ ${allUrls.map(url => `  <url>
       // Track visits
       if (currentUserId) {
         if (currentUserId === patientUserId) {
-          // Patient viewing their own wall - update patientLastVisitedAt
           await storage.updatePatientLastVisit(patientUserId);
         } else {
-          // Doctor viewing patient's wall - update lastVisitedAt
           const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
           if (isConnected) {
             await storage.updateDoctorLastVisit(patientUserId, currentUserId);
           }
         }
       }
-      
-      const messages = await storage.getHealthWallMessages(patientUserId);
-      
-      // Get author info for each message
+
+      const fromRedis = await getHealthWallRecentMessages(patientUserId);
+      if (fromRedis.length > 0) {
+        return res.json(fromRedis);
+      }
+
+      const messages = await storage.getHealthWallMessagesRecent(patientUserId, 100);
       const authorIds = Array.from(new Set(messages.map(m => m.authorUserId)));
       const authors = await Promise.all(authorIds.map(id => storage.getUser(id)));
       const authorMap = new Map(authors.filter(Boolean).map(u => [u!.id, u!]));
-      
       const messagesWithAuthors = messages.map(msg => ({
         ...msg,
+        createdAt: msg.createdAt instanceof Date ? msg.createdAt.toISOString() : String(msg.createdAt),
         author: {
           id: msg.authorUserId,
           email: authorMap.get(msg.authorUserId)?.email,
@@ -1032,8 +1049,10 @@ ${allUrls.map(url => `  <url>
           isAdmin: authorMap.get(msg.authorUserId)?.isAdmin,
         },
       }));
-      
       res.json(messagesWithAuthors);
+      backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
+        console.error("Redis backfill error:", err)
+      );
     } catch (error) {
       console.error("Error fetching health wall messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
@@ -1070,10 +1089,9 @@ ${allUrls.map(url => `  <url>
       });
       
       const message = await storage.createHealthWallMessage(validatedData);
-      
-      // Return with author info
-      res.json({
+      const messageWithAuthor = {
         ...message,
+        createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : String(message.createdAt),
         author: {
           id: currentUserId,
           email: currentUser?.email,
@@ -1081,10 +1099,286 @@ ${allUrls.map(url => `  <url>
           lastName: currentUser?.lastName,
           isAdmin: currentUser?.isAdmin,
         },
-      });
+      };
+      await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
+      await publishHealthWallMessage(patientUserId, messageWithAuthor);
+      res.json(messageWithAuthor);
     } catch (error) {
       console.error("Error posting health wall message:", error);
       if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid message data" });
+      }
+      res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
+  // --- Messenger: unified chat list for doctors (three folders: personal, groups, channels) ---
+  app.get("/api/me/chats", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+
+      const chats: Array<{
+        source: "health_wall" | "conversation";
+        folder: "personal" | "groups" | "channels";
+        patientUserId?: string;
+        patientName?: string;
+        patientEmail?: string;
+        lastMessageAt?: string | null;
+        unreadCount?: number;
+        chatKind?: "patient";
+        conversationId?: string;
+        type?: string;
+        name?: string | null;
+        participantCount?: number;
+        myRole?: string;
+      }> = [];
+
+      const patients = await storage.getHealthWallPatients(currentUserId);
+      for (const { connection, patient } of patients) {
+        const stats = await storage.getPatientHealthWallStats(connection.patientUserId, currentUserId);
+        chats.push({
+          source: "health_wall",
+          folder: "personal",
+          patientUserId: connection.patientUserId,
+          patientName: patient.firstName && patient.lastName
+            ? `${patient.firstName} ${patient.lastName}`.trim()
+            : patient.firstName || patient.lastName || patient.email?.split("@")[0] || "Patient",
+          patientEmail: patient.email ?? undefined,
+          lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
+          unreadCount: stats.unreadCount,
+          chatKind: "patient",
+        });
+      }
+
+      const convList = await storage.getConversationsForUser(currentUserId);
+      for (const conv of convList) {
+        const lastMsg = await storage.getLastConversationMessage(conv.id);
+        const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
+        let folder: "personal" | "groups" | "channels" = "groups";
+        if (conv.type === "direct") folder = "personal";
+        else if (conv.type === "channel") folder = "channels";
+        else if (conv.type === "group" || conv.type === "consilium") folder = "groups";
+
+        chats.push({
+          source: "conversation",
+          folder,
+          conversationId: conv.id,
+          type: conv.type,
+          name: conv.name ?? undefined,
+          participantCount: conv.participants.length,
+          patientUserId: conv.patientUserId ?? undefined,
+          myRole,
+          lastMessageAt: lastMsg?.createdAt instanceof Date ? lastMsg.createdAt.toISOString() : lastMsg?.createdAt ?? null,
+        });
+      }
+
+      chats.sort((a, b) => {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        return bTime - aTime;
+      });
+      res.json(chats);
+    } catch (error) {
+      console.error("Error fetching /api/me/chats:", error);
+      res.status(500).json({ message: "Failed to fetch chats" });
+    }
+  });
+
+  // Create conversation (direct, group, consilium, channel)
+  app.post("/api/conversations", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const body = req.body as { type: string; name?: string; participantUserIds?: string[]; patientUserId?: string };
+      const validated = insertConversationSchema.parse({
+        type: body.type,
+        name: body.name ?? null,
+        patientUserId: body.patientUserId ?? null,
+      });
+      const conv = await storage.createConversation(validated);
+      await storage.addConversationParticipant(conv.id, currentUserId, "owner");
+      const participantIds = body.participantUserIds ?? [];
+      for (const uid of participantIds) {
+        if (uid !== currentUserId) {
+          try {
+            await storage.addConversationParticipant(conv.id, uid, "member");
+          } catch {
+            // ignore duplicate
+          }
+        }
+      }
+      const participants = await storage.getConversationParticipants(conv.id);
+      res.status(201).json({ ...conv, participants });
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid input" });
+      }
+      res.status(500).json({ message: "Failed to create conversation" });
+    }
+  });
+
+  // Get conversation by id
+  app.get("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      const participants = await storage.getConversationParticipants(id);
+      res.json({ ...conv, participants });
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      res.status(500).json({ message: "Failed to fetch conversation" });
+    }
+  });
+
+  // Update conversation (name, add participants)
+  app.patch("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner" && role !== "admin") return res.status(403).json({ message: "Only owner or admin can update" });
+      const body = req.body as { name?: string; addParticipantIds?: string[] };
+      if (body.name != null) await storage.updateConversation(id, { name: body.name });
+      if (Array.isArray(body.addParticipantIds)) {
+        for (const uid of body.addParticipantIds) {
+          try {
+            await storage.addConversationParticipant(id, uid, "member");
+          } catch {
+            // ignore duplicate
+          }
+        }
+      }
+      const conv = await storage.getConversation(id);
+      const participants = await storage.getConversationParticipants(id);
+      res.json({ ...conv, participants });
+    } catch (error) {
+      console.error("Error updating conversation:", error);
+      res.status(500).json({ message: "Failed to update conversation" });
+    }
+  });
+
+  // Leave conversation
+  app.post("/api/conversations/:id/leave", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      await storage.removeConversationParticipant(id, currentUserId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error leaving conversation:", error);
+      res.status(500).json({ message: "Failed to leave" });
+    }
+  });
+
+  // Subscribe to channel (join as member)
+  app.post("/api/conversations/:id/subscribe", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") return res.status(404).json({ message: "Not a channel" });
+      await storage.addConversationParticipant(id, currentUserId, "member");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error subscribing to channel:", error);
+      res.status(500).json({ message: "Failed to subscribe" });
+    }
+  });
+
+  // Unsubscribe from channel
+  app.delete("/api/conversations/:id/subscribe", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      await storage.removeConversationParticipant(id, currentUserId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error unsubscribing:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+
+  // Get conversation messages (Redis first, then DB)
+  app.get("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const fromRedis = await getConversationRecentMessages(id);
+      if (fromRedis.length > 0) return res.json(fromRedis);
+      const messages = await storage.getConversationMessagesRecent(id, 100);
+      const authorIds = Array.from(new Set(messages.map((m) => m.authorUserId)));
+      const authors = await Promise.all(authorIds.map((uid) => storage.getUser(uid)));
+      const authorMap = new Map(authors.filter(Boolean).map((u) => [u!.id, u!]));
+      const withAuthors = messages.map((msg) => ({
+        ...msg,
+        createdAt: msg.createdAt instanceof Date ? msg.createdAt.toISOString() : String(msg.createdAt),
+        author: {
+          id: msg.authorUserId,
+          email: authorMap.get(msg.authorUserId)?.email,
+          firstName: authorMap.get(msg.authorUserId)?.firstName,
+          lastName: authorMap.get(msg.authorUserId)?.lastName,
+          isAdmin: authorMap.get(msg.authorUserId)?.isAdmin,
+        },
+      }));
+      res.json(withAuthors);
+      backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
+    } catch (error) {
+      console.error("Error fetching conversation messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Post conversation message
+  app.post("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      const body = req.body as { content?: string; imageUrl?: string; messageType?: string };
+      const validated = insertConversationMessageSchema.parse({
+        conversationId: id,
+        authorUserId: currentUserId,
+        messageType: body.messageType ?? "message",
+        content: body.content ?? null,
+        imageUrl: body.imageUrl ?? null,
+      });
+      const message = await storage.createConversationMessage(validated);
+      const currentUser = await storage.getUser(currentUserId);
+      const messageWithAuthor = {
+        ...message,
+        createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : String(message.createdAt),
+        author: {
+          id: currentUserId,
+          email: currentUser?.email,
+          firstName: currentUser?.firstName,
+          lastName: currentUser?.lastName,
+          isAdmin: currentUser?.isAdmin,
+        },
+      };
+      await pushConversationRecentMessage(id, messageWithAuthor);
+      await publishConversationMessage(id, messageWithAuthor);
+      res.status(201).json(messageWithAuthor);
+    } catch (error) {
+      console.error("Error posting conversation message:", error);
+      if (error instanceof Error && error.name === "ZodError") {
         return res.status(400).json({ message: "Invalid message data" });
       }
       res.status(500).json({ message: "Failed to post message" });
@@ -1313,5 +1607,6 @@ ${allUrls.map(url => `  <url>
   registerObjectStorageRoutes(app);
 
   const httpServer = createServer(app);
+  setupWebSocket(httpServer, sessionStore as Parameters<typeof setupWebSocket>[1], process.env.SESSION_SECRET!);
   return httpServer;
 }

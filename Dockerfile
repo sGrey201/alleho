@@ -15,8 +15,8 @@ COPY vite.config.ts tailwind.config.ts tsconfig.json drizzle.config.ts postcss.c
 
 RUN npm run build
 
-# Run stage
-FROM node:20-alpine AS run
+# Run stage (same base as build to avoid extra pull; use -slim for smaller final image)
+FROM node:20-bookworm-slim AS run
 
 WORKDIR /app
 

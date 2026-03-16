@@ -12,6 +12,7 @@ import { Footer } from "@/components/Footer";
 import { AppSidebar } from "@/components/AppSidebar";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
+import Landing from "@/pages/Landing";
 import ArticleReader from "@/pages/ArticleReader";
 import Terms from "@/pages/Terms";
 import Oferta from "@/pages/Oferta";
@@ -29,6 +30,7 @@ import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
 import MyPatients from "@/pages/MyPatients";
 import HealthWall from "@/pages/HealthWall";
+import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
 
 function Router() {
@@ -47,8 +49,8 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/article/">{() => <Redirect to="/" />}</Route>
+      <Route path="/portraits" component={Home} />
+      <Route path="/article/">{() => <Redirect to="/portraits" />}</Route>
       <Route path="/article/:slug" component={ArticleReader} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -61,6 +63,8 @@ function Router() {
       <Route path="/my-patients" component={MyPatients} />
       <Route path="/health-wall" component={HealthWall} />
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
+      <Route path="/messenger" component={Messenger} />
+      <Route path="/messenger/conv/:conversationId" component={Messenger} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
@@ -102,6 +106,10 @@ function AppContent() {
     );
   }
 
+  if (location === "/" || location === "") {
+    return <Landing />;
+  }
+
   if (isAdmin && location.startsWith('/admin')) {
     const style = {
       "--sidebar-width": "16rem",
@@ -125,7 +133,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = location.startsWith('/health-wall');
+  const isFullscreenPage = location.startsWith('/health-wall') || location.startsWith('/messenger');
 
   if (isFullscreenPage) {
     return (

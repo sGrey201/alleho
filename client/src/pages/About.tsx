@@ -1,20 +1,7 @@
-import bannerVideo from '@assets/баннер_1764664948472.mp4';
-
 export default function About() {
   return (
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
       <div className="max-w-3xl px-6 py-12 text-center">
-        <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full"
-          >
-            <source src={bannerVideo} type="video/mp4" />
-          </video>
-        </div>
         
         <h1 className="text-3xl font-bold text-foreground mb-8">О проекте</h1>
         

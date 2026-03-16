@@ -8,6 +8,9 @@ import {
   userQuestionnaires,
   healthWallMessages,
   healthWallDoctors,
+  conversations,
+  conversationParticipants,
+  conversationMessages,
   type User,
   type UpsertUser,
   type Article,
@@ -25,6 +28,12 @@ import {
   type InsertHealthWallMessage,
   type HealthWallDoctor,
   type InsertHealthWallDoctor,
+  type Conversation,
+  type InsertConversation,
+  type ConversationParticipant,
+  type InsertConversationParticipant,
+  type ConversationMessage,
+  type InsertConversationMessage,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
@@ -86,6 +95,7 @@ export interface IStorage {
 
   // Health wall operations
   getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
+  getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]>;
   createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
   getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }>;
 
@@ -95,6 +105,21 @@ export interface IStorage {
   addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor>;
   removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean>;
   isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean>;
+
+  // Messenger conversations (doctors only)
+  createConversation(data: InsertConversation): Promise<Conversation>;
+  getConversation(id: string): Promise<Conversation | undefined>;
+  getConversationsForUser(userId: string): Promise<(Conversation & { participants: (ConversationParticipant & { user: User })[] })[]>;
+  getConversationParticipants(conversationId: string): Promise<(ConversationParticipant & { user: User })[]>;
+  addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
+  removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
+  isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
+  getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
+  getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
+  getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
+  createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
+  getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
+  updateConversation(id: string, data: { name?: string }): Promise<Conversation | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -603,6 +628,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(healthWallMessages.createdAt);
   }
 
+  async getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]> {
+    const rows = await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.patientUserId, patientUserId))
+      .orderBy(desc(healthWallMessages.createdAt))
+      .limit(limit);
+    return rows.reverse();
+  }
+
   async createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage> {
     const [created] = await db
       .insert(healthWallMessages)
@@ -749,6 +784,140 @@ export class DatabaseStorage implements IStorage {
       .orderBy(healthWallDoctors.patientLastVisitedAt)
       .limit(1);
     return connection?.patientLastVisitedAt || null;
+  }
+
+  // Messenger conversations
+  async createConversation(data: InsertConversation): Promise<Conversation> {
+    const [c] = await db.insert(conversations).values(data).returning();
+    return c;
+  }
+
+  async getConversation(id: string): Promise<Conversation | undefined> {
+    const [c] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return c;
+  }
+
+  async getConversationsForUser(userId: string): Promise<(Conversation & { participants: (ConversationParticipant & { user: User })[] })[]> {
+    const parts = await db
+      .select()
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, userId));
+    const convIds = parts.map((p) => p.conversationId);
+    if (convIds.length === 0) return [];
+    const list = await db
+      .select()
+      .from(conversations)
+      .where(inArray(conversations.id, convIds));
+    const result: (Conversation & { participants: (ConversationParticipant & { user: User })[] })[] = [];
+    for (const conv of list) {
+      const participants = await this.getConversationParticipants(conv.id);
+      result.push({ ...conv, participants });
+    }
+    return result;
+  }
+
+  async getConversationParticipants(conversationId: string): Promise<(ConversationParticipant & { user: User })[]> {
+    const parts = await db
+      .select()
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversationId, conversationId));
+    const result: (ConversationParticipant & { user: User })[] = [];
+    for (const p of parts) {
+      const user = await this.getUser(p.userId);
+      if (user) result.push({ ...p, user });
+    }
+    return result;
+  }
+
+  async addConversationParticipant(conversationId: string, userId: string, role: string = "member"): Promise<ConversationParticipant> {
+    const [p] = await db
+      .insert(conversationParticipants)
+      .values({ conversationId, userId, role })
+      .returning();
+    return p;
+  }
+
+  async removeConversationParticipant(conversationId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      )
+      .returning();
+    return result.length > 0;
+  }
+
+  async isUserInConversation(userId: string, conversationId: string): Promise<boolean> {
+    const [p] = await db
+      .select()
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return !!p;
+  }
+
+  async getParticipantRole(conversationId: string, userId: string): Promise<string | undefined> {
+    const [p] = await db
+      .select({ role: conversationParticipants.role })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return p?.role;
+  }
+
+  async getConversationMessages(conversationId: string, limit: number = 100): Promise<ConversationMessage[]> {
+    const rows = await db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(conversationMessages.createdAt)
+      .limit(limit);
+    return rows;
+  }
+
+  async getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]> {
+    const rows = await db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(desc(conversationMessages.createdAt))
+      .limit(limit);
+    return rows.reverse();
+  }
+
+  async createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage> {
+    const [m] = await db.insert(conversationMessages).values(msg).returning();
+    return m;
+  }
+
+  async getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null> {
+    const [m] = await db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(desc(conversationMessages.createdAt))
+      .limit(1);
+    return m || null;
+  }
+
+  async updateConversation(id: string, data: { name?: string }): Promise<Conversation | undefined> {
+    const [c] = await db
+      .update(conversations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .returning();
+    return c;
   }
 }
 

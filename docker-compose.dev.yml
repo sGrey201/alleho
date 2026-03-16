@@ -32,7 +32,8 @@ services:
     env_file: .env
     environment:
       POSTGRES_USER: materiamedica
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Default dev password if POSTGRES_PASSWORD not set in .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-materiamedica_dev}
       POSTGRES_DB: materiamedica
     ports:
       - "5432:5432"

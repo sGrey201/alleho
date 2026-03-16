@@ -1,81 +1,65 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { BookOpen, Users, Globe } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 
 export default function Landing() {
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      if (isAdmin) {
+        setLocation("/messenger");
+        return;
+      }
+      setLocation("/health-wall");
+    }
+  }, [isLoading, isAuthenticated, isAdmin, setLocation]);
+
+  const handleLogin = () => setLocation("/auth");
+  const handlePortraits = () => setLocation("/portraits");
+
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="text-center">
-          <h1 className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl mb-6">
-            {t.welcomeTitle}
-          </h1>
-          <p className="mx-auto max-w-2xl text-xl text-muted-foreground mb-12">
-            {t.welcomeSubtitle}
-          </p>
-          <div className="flex justify-center gap-4">
-            <Button 
-              size="lg" 
-              className="text-base px-8" 
-              onClick={() => window.location.href = `/api/login?returnTo=${encodeURIComponent(window.location.pathname)}`}
-              data-testid="button-login"
-            >
-              {t.loginToStart}
-            </Button>
-          </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b px-4 py-3 flex items-center justify-between">
+        <span className="font-semibold text-lg">Alleho</span>
+        <Button variant="outline" size="sm" onClick={handleLogin}>
+          Войти
+        </Button>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 text-center max-w-2xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">
+          Alle Homöopathen
+        </h1>
+        <p className="text-muted-foreground text-lg mb-6">
+          Закрытое сообщество для гомеопатов
+        </p>
+
+        <p className="text-muted-foreground mb-8 leading-relaxed">
+          Общение и работа в одном месте. Современные технологии вместе с накопленной мудростью —
+          безопасная среда для обмена опытом, консилиумов и поддержки пациентов.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button onClick={handleLogin} size="lg">
+            Войти в сообщество
+          </Button>
+          <Button variant="outline" size="lg" onClick={handlePortraits}>
+            Статьи и портреты препаратов
+          </Button>
         </div>
-
-        <div className="mt-20">
-          <h2 className="text-center text-3xl font-bold text-foreground mb-12">
-            {t.features}
-          </h2>
-          <div className="grid gap-8 md:grid-cols-3">
-            <Card className="border-2 hover-elevate">
-              <CardContent className="p-8">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <BookOpen className="h-6 w-6" />
-                </div>
-                <h3 className="mb-2 text-xl font-semibold text-foreground">
-                  {t.feature1Title}
-                </h3>
-                <p className="text-muted-foreground">
-                  {t.feature1Description}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 hover-elevate">
-              <CardContent className="p-8">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-                  <Users className="h-6 w-6" />
-                </div>
-                <h3 className="mb-2 text-xl font-semibold text-foreground">
-                  {t.feature2Title}
-                </h3>
-                <p className="text-muted-foreground">
-                  {t.feature2Description}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-2 hover-elevate">
-              <CardContent className="p-8">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <Globe className="h-6 w-6" />
-                </div>
-                <h3 className="mb-2 text-xl font-semibold text-foreground">
-                  {t.feature3Title}
-                </h3>
-                <p className="text-muted-foreground">
-                  {t.feature3Description}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

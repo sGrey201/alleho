@@ -15,6 +15,7 @@ import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserP
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
+import { useHealthWallWs } from "@/hooks/useHealthWallWs";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 
 interface Author {
@@ -134,8 +135,9 @@ export default function HealthWall() {
   const { data: messages, isLoading: messagesLoading } = useQuery<HealthWallMessage[]>({
     queryKey: ['/api/health-wall', patientUserId],
     enabled: isAuthenticated && !!patientUserId,
-    refetchInterval: 3000,
   });
+
+  useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId);
 
   const { data: patientInfo } = useQuery<PatientInfo>({
     queryKey: ['/api/health-wall', patientUserId, 'info'],

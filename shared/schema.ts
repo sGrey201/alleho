@@ -351,3 +351,84 @@ export const insertHealthWallDoctorSchema = createInsertSchema(healthWallDoctors
 
 export type InsertHealthWallDoctor = z.infer<typeof insertHealthWallDoctorSchema>;
 export type HealthWallDoctor = typeof healthWallDoctors.$inferSelect;
+
+// Messenger: conversation types (doctor-to-doctor, groups, consiliums, channels)
+export const conversationTypeEnum = z.enum(["direct", "group", "consilium", "channel"]);
+export type ConversationType = z.infer<typeof conversationTypeEnum>;
+
+export const participantRoleEnum = z.enum(["member", "admin", "owner"]);
+export type ParticipantRole = z.infer<typeof participantRoleEnum>;
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    type: varchar("type", { length: 20 }).notNull(),
+    name: varchar("name", { length: 255 }),
+    patientUserId: varchar("patient_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("conversations_type_idx").on(table.type),
+    index("conversations_patient_idx").on(table.patientUserId),
+  ]
+);
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({ type: conversationTypeEnum });
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+
+export const conversationParticipants = pgTable(
+  "conversation_participants",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).notNull().default("member"),
+    joinedAt: timestamp("joined_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_participants_conversation_idx").on(table.conversationId),
+    index("conversation_participants_user_idx").on(table.userId),
+    sql`CONSTRAINT conversation_participants_unique UNIQUE (conversation_id, user_id)`,
+  ]
+);
+
+export const insertConversationParticipantSchema = createInsertSchema(conversationParticipants).omit({
+  id: true,
+  joinedAt: true,
+}).extend({ role: participantRoleEnum.default("member") });
+
+export type ConversationParticipant = typeof conversationParticipants.$inferSelect;
+export type InsertConversationParticipant = z.infer<typeof insertConversationParticipantSchema>;
+
+export const conversationMessages = pgTable(
+  "conversation_messages",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    authorUserId: varchar("author_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    messageType: varchar("message_type", { length: 50 }).notNull().default("message"),
+    content: text("content"),
+    imageUrl: text("image_url"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_messages_conversation_idx").on(table.conversationId),
+    index("conversation_messages_created_idx").on(table.createdAt),
+  ]
+);
+
+export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({
+  id: true,
+  createdAt: true,
+}).extend({ messageType: healthWallMessageTypeEnum.default("message") });
+
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
