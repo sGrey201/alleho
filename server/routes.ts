@@ -1160,12 +1160,27 @@ ${allUrls.map(url => `  <url>
         else if (conv.type === "channel") folder = "channels";
         else if (conv.type === "group" || conv.type === "consilium") folder = "groups";
 
+        let otherParticipantName: string | undefined;
+        let otherParticipantId: string | undefined;
+        if (conv.type === "direct") {
+          const other = conv.participants.find((p) => p.userId !== currentUserId);
+          if (other) {
+            otherParticipantId = other.userId;
+            if (other.user) {
+              const parts = [other.user.firstName, other.user.lastName].filter(Boolean);
+              otherParticipantName = parts.length > 0 ? parts.join(" ").trim() : undefined;
+            }
+          }
+        }
+
         chats.push({
           source: "conversation",
           folder,
           conversationId: conv.id,
           type: conv.type,
           name: conv.name ?? undefined,
+          otherParticipantName,
+          otherParticipantId,
           participantCount: conv.participants.length,
           patientUserId: conv.patientUserId ?? undefined,
           myRole,
@@ -1182,6 +1197,90 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching /api/me/chats:", error);
       res.status(500).json({ message: "Failed to fetch chats" });
+    }
+  });
+
+  // Get or create direct conversation with another user (by their userId). Prevents duplicate direct chats.
+  app.get("/api/messenger/direct/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const { userId: partnerUserId } = req.params;
+      if (partnerUserId === currentUserId) return res.status(400).json({ message: "Cannot open direct chat with yourself" });
+      const partner = await storage.getUser(partnerUserId);
+      if (!partner) return res.status(404).json({ message: "User not found" });
+      if (!partner.isAdmin) return res.status(404).json({ message: "User not found" });
+      let conversationId = await storage.getDirectConversationBetween(currentUserId, partnerUserId);
+      if (!conversationId) {
+        const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: null });
+        await storage.addConversationParticipant(conv.id, currentUserId, "owner");
+        await storage.addConversationParticipant(conv.id, partnerUserId, "member");
+        conversationId = conv.id;
+      }
+      res.json({ conversationId });
+    } catch (error) {
+      console.error("Error get-or-create direct conversation:", error);
+      res.status(500).json({ message: "Failed to get conversation" });
+    }
+  });
+
+  // Messenger search: doctors, groups (no consilium), channels
+  app.get("/api/messenger/search", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+      const adminUsers = await storage.getAdminUsers(currentUserId, q || undefined);
+      const doctors = await Promise.all(
+        adminUsers.map(async (u) => {
+          const conversationId = await storage.getDirectConversationBetween(currentUserId, u.id);
+          return {
+            userId: u.id,
+            firstName: u.firstName ?? undefined,
+            lastName: u.lastName ?? undefined,
+            email: u.email ?? undefined,
+            conversationId: conversationId ?? undefined,
+          };
+        })
+      );
+
+      const groups = await storage.getDiscoverableConversations(currentUserId, {
+        type: "group",
+        nameFilter: q || undefined,
+      });
+      const channels = await storage.getDiscoverableConversations(currentUserId, {
+        type: "channel",
+        nameFilter: q || undefined,
+      });
+
+      res.json({
+        doctors,
+        groups: groups.map((g) => ({ id: g.id, name: g.name, participantCount: g.participantCount, isMember: g.isMember })),
+        channels: channels.map((c) => ({ id: c.id, name: c.name, isMember: c.isMember })),
+      });
+    } catch (error) {
+      console.error("Error fetching /api/messenger/search:", error);
+      res.status(500).json({ message: "Failed to search" });
+    }
+  });
+
+  // Join group (add current user as member)
+  app.post("/api/conversations/:id/join", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "group") return res.status(400).json({ message: "Not a group" });
+      const alreadyIn = await storage.isUserInConversation(currentUserId, id);
+      if (alreadyIn) return res.json({ success: true });
+      await storage.addConversationParticipant(id, currentUserId, "member");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error joining conversation:", error);
+      res.status(500).json({ message: "Failed to join" });
     }
   });
 

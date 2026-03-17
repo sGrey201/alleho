@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+
+export type ProfileProps = {
+  onSaveSuccess?: () => void;
+};
 
 const months = [
   { value: 1, label: t.january },
@@ -26,29 +30,21 @@ const months = [
   { value: 12, label: t.december },
 ];
 
-export default function Profile() {
+export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [gender, setGender] = useState<string>("");
   const [birthMonth, setBirthMonth] = useState<number | undefined>();
   const [birthYear, setBirthYear] = useState<string>("");
-  const [height, setHeight] = useState<string>("");
-  const [weight, setWeight] = useState<string>("");
-  const [city, setCity] = useState("");
 
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
-      setGender(user.gender || "");
       setBirthMonth(user.birthMonth || undefined);
       setBirthYear(user.birthYear?.toString() || "");
-      setHeight(user.height?.toString() || "");
-      setWeight(user.weight?.toString() || "");
-      setCity(user.city || "");
     }
   }, [user]);
 
@@ -66,23 +62,30 @@ export default function Profile() {
       await updateProfileMutation.mutateAsync({
         firstName,
         lastName,
-        gender: gender || null,
+        gender: user?.gender || null,
         birthMonth: birthMonth || null,
         birthYear: birthYear ? parseInt(birthYear) : null,
-        height: height ? parseInt(height) : null,
-        weight: weight ? parseInt(weight) : null,
-        city: city || null,
+        height: user?.height ?? null,
+        weight: user?.weight ?? null,
+        city: user?.city || null,
       });
 
       toast({
         title: t.profileSaved,
       });
+      onSaveSuccess?.();
     } catch (error) {
       toast({
         title: t.profileSaveError,
         variant: "destructive",
       });
     }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    queryClient.clear();
+    window.location.href = "/";
   };
 
   if (authLoading) {
@@ -124,60 +127,6 @@ export default function Profile() {
                 data-testid="input-last-name"
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t.gender}</Label>
-            <Select value={gender} onValueChange={setGender}>
-              <SelectTrigger data-testid="select-gender">
-                <SelectValue placeholder={t.selectGender} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">{t.genderMale}</SelectItem>
-                <SelectItem value="female">{t.genderFemale}</SelectItem>
-                <SelectItem value="other">{t.genderOther}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="height">{t.height}</Label>
-              <Input
-                id="height"
-                type="number"
-                min="50"
-                max="300"
-                value={height}
-                onChange={(e) => setHeight(e.target.value)}
-                placeholder={t.height}
-                data-testid="input-height"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="weight">{t.weight}</Label>
-              <Input
-                id="weight"
-                type="number"
-                min="1"
-                max="500"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder={t.weight}
-                data-testid="input-weight"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="city">{t.city}</Label>
-            <Input
-              id="city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder={t.city}
-              data-testid="input-city"
-            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -228,6 +177,17 @@ export default function Profile() {
             ) : (
               t.save
             )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleLogout}
+            data-testid="button-logout-profile"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            {t.logout}
           </Button>
         </CardContent>
       </Card>

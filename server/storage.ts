@@ -36,7 +36,7 @@ import {
   type InsertConversationMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
@@ -48,6 +48,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserProfile(id: string, profileData: Partial<User>): Promise<User>;
   getAllUsers(): Promise<User[]>;
+  getAdminUsers(excludeUserId: string, nameFilter?: string): Promise<User[]>;
   updateUserSubscription(id: string, expiresAt: Date | null): Promise<User>;
   createUserWithPassword(email: string, passwordHash: string): Promise<User>;
   updateUserPassword(id: string, passwordHash: string): Promise<User>;
@@ -111,6 +112,11 @@ export interface IStorage {
   getConversation(id: string): Promise<Conversation | undefined>;
   getConversationsForUser(userId: string): Promise<(Conversation & { participants: (ConversationParticipant & { user: User })[] })[]>;
   getConversationParticipants(conversationId: string): Promise<(ConversationParticipant & { user: User })[]>;
+  getDirectConversationBetween(userId1: string, userId2: string): Promise<string | undefined>;
+  getDiscoverableConversations(
+    currentUserId: string,
+    options: { type: "group" | "channel"; nameFilter?: string }
+  ): Promise<Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }>>;
   addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
@@ -151,6 +157,27 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(users.createdAt);
+  }
+
+  async getAdminUsers(excludeUserId: string, nameFilter?: string): Promise<User[]> {
+    const conditions = [eq(users.isAdmin, true), ne(users.id, excludeUserId)];
+    if (nameFilter?.trim()) {
+      const pattern = `%${nameFilter.trim()}%`;
+      // Search in firstName, lastName, email, and combined full name (handles NULLs and "Таня" etc.)
+      conditions.push(
+        or(
+          ilike(users.firstName, pattern),
+          ilike(users.lastName, pattern),
+          ilike(users.email, pattern),
+          sql`(COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')) ILIKE ${pattern}`
+        )!
+      );
+    }
+    return await db
+      .select()
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.lastName, users.firstName);
   }
 
   async updateUserSubscription(id: string, expiresAt: Date | null): Promise<User> {
@@ -825,6 +852,57 @@ export class DatabaseStorage implements IStorage {
     for (const p of parts) {
       const user = await this.getUser(p.userId);
       if (user) result.push({ ...p, user });
+    }
+    return result;
+  }
+
+  async getDirectConversationBetween(userId1: string, userId2: string): Promise<string | undefined> {
+    const directConvs = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(eq(conversations.type, "direct"));
+    for (const conv of directConvs) {
+      const participants = await db
+        .select({ userId: conversationParticipants.userId })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversationId, conv.id));
+      if (participants.length !== 2) continue;
+      const ids = new Set(participants.map((p) => p.userId));
+      if (ids.has(userId1) && ids.has(userId2)) return conv.id;
+    }
+    return undefined;
+  }
+
+  async getDiscoverableConversations(
+    currentUserId: string,
+    options: { type: "group" | "channel"; nameFilter?: string }
+  ): Promise<Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }>> {
+    const conditions = [eq(conversations.type, options.type)];
+    if (options.nameFilter?.trim()) {
+      conditions.push(ilike(conversations.name, `%${options.nameFilter.trim()}%`));
+    }
+    const list = await db
+      .select()
+      .from(conversations)
+      .where(and(...conditions));
+    const myParticipation = await db
+      .select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, currentUserId));
+    const myConvIds = new Set(myParticipation.map((p) => p.conversationId));
+    const result: Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }> = [];
+    for (const conv of list) {
+      const countRows = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversationId, conv.id));
+      const participantCount = Number(countRows[0]?.count ?? 0);
+      result.push({
+        id: conv.id,
+        name: conv.name,
+        participantCount,
+        isMember: myConvIds.has(conv.id),
+      });
     }
     return result;
   }
