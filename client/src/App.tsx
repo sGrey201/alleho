@@ -62,9 +62,9 @@ function Router() {
       <Route path="/situations" component={AllSituations} />
       <Route path="/my-patients" component={MyPatients} />
       <Route path="/health-wall" component={HealthWall} />
+      <Route path="/health-wall/chat/:userId" component={HealthWall} />
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
       <Route path="/messenger" component={Messenger} />
-      <Route path="/messenger/direct/:userId" component={Messenger} />
       <Route path="/messenger/conv/:conversationId" component={Messenger} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />

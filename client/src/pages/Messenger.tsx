@@ -61,26 +61,10 @@ export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const [location, setLocation] = useLocation();
   const [, convParams] = useRoute("/messenger/conv/:conversationId");
-  const [, directParams] = useRoute("/messenger/direct/:userId");
   const conversationId = convParams?.conversationId;
-  const partnerUserId = directParams?.userId;
-
-  const { data: directConversation, isLoading: directResolving, isError: directError } = useQuery<{ conversationId: string }>({
-    queryKey: ["/api/messenger/direct", partnerUserId],
-    queryFn: async () => {
-      const res = await fetch(`/api/messenger/direct/${partnerUserId}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    enabled: isAuthenticated && isAdmin && !!partnerUserId,
-  });
-  const resolvedDirectConversationId = directConversation?.conversationId;
-  const effectiveConversationId = conversationId ?? resolvedDirectConversationId;
 
   const isChatSelected = (chat: ChatItem) =>
-    chat.source === "conversation" &&
-    ((chat.type === "direct" && !!partnerUserId && chat.otherParticipantId === partnerUserId) ||
-      (!!conversationId && chat.conversationId === conversationId));
+    chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,17 +78,6 @@ export default function Messenger() {
     const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 280);
     return () => clearTimeout(t);
   }, [showSearchBar, searchQuery]);
-
-  useEffect(() => {
-    if (resolvedDirectConversationId) qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
-  }, [resolvedDirectConversationId, qc]);
-
-  useEffect(() => {
-    if (partnerUserId && directError) {
-      toast({ title: "Не удалось открыть чат", variant: "destructive" });
-      setLocation("/messenger");
-    }
-  }, [partnerUserId, directError, toast, setLocation]);
 
   const [folder, setFolder] = useState<"personal" | "groups" | "channels">("personal");
 
@@ -155,7 +128,7 @@ export default function Messenger() {
       return;
     }
     if (chat.source === "conversation" && chat.type === "direct" && chat.otherParticipantId) {
-      setLocation(`/messenger/direct/${chat.otherParticipantId}`);
+      setLocation(`/health-wall/chat/${chat.otherParticipantId}`);
       setShowSearchBar(false);
       setSearchQuery("");
       return;
@@ -168,7 +141,7 @@ export default function Messenger() {
   const handleSelectDoctor = (doctor: MessengerSearchDoctor) => {
     setShowSearchBar(false);
     setSearchQuery("");
-    setLocation(`/messenger/direct/${doctor.userId}`);
+    setLocation(`/health-wall/chat/${doctor.userId}`);
   };
 
   const handleSelectGroup = async (group: MessengerSearchGroup) => {
@@ -463,11 +436,7 @@ export default function Messenger() {
           <div className="flex-1 min-h-0 overflow-auto">
             <Profile onSaveSuccess={() => setShowProfilePanel(false)} />
           </div>
-        ) : partnerUserId && directResolving ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : effectiveConversationId ? (
+        ) : conversationId ? (
           <div
             className="flex-1 flex flex-col min-h-0"
             style={{
@@ -477,7 +446,7 @@ export default function Messenger() {
               backgroundRepeat: "no-repeat",
             }}
           >
-            <ConversationChat conversationId={effectiveConversationId} onBack={() => setLocation("/messenger")} />
+            <ConversationChat conversationId={conversationId} onBack={() => setLocation("/messenger")} />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground" style={{ backgroundColor: "rgba(249, 250, 251, 0)" }}>

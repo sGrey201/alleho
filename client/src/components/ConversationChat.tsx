@@ -46,8 +46,15 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
+    onSuccess: (newMessage: ConversationMessageWithAuthor) => {
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+        ["/api/conversations", conversationId, "messages"],
+        (old) => {
+          if (!old) return [newMessage];
+          if (old.some((m) => m.id === newMessage.id)) return old;
+          return [...old, newMessage];
+        }
+      );
       setMessage("");
     },
   });
@@ -96,7 +103,9 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : messages && messages.length > 0 ? (
-          messages.map((msg) => (
+          [...messages]
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            .map((msg) => (
             <div
               key={msg.id}
               className={`flex flex-col max-w-[85%] ${msg.authorUserId === user?.id ? "ml-auto items-end" : "mr-auto items-start"}`}
