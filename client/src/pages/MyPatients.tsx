@@ -1,15 +1,11 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
 import { t } from "@/lib/i18n";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Users, MessageCircle, UserPlus, Send } from "lucide-react";
+import { Loader2, Users, MessageCircle } from "lucide-react";
 
 interface Patient {
   id: string;
@@ -27,43 +23,10 @@ interface Patient {
 export default function MyPatients() {
   const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
 
   const { data: patients, isLoading } = useQuery<Patient[]>({
     queryKey: ['/api/my-patients'],
     enabled: isAuthenticated && isAdmin,
-  });
-
-  const inviteMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const res = await apiRequest('POST', '/api/invite-patient', { email });
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: t.inviteSuccess,
-        description: t.inviteSuccessDescription,
-      });
-      setInviteEmail('');
-      setShowInviteForm(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/my-patients'] });
-    },
-    onError: (error: any) => {
-      const msg = error?.message || '';
-      if (msg.includes('409')) {
-        toast({
-          title: t.inviteUserExists,
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: t.inviteError,
-          variant: 'destructive',
-        });
-      }
-    },
   });
 
   useEffect(() => {
@@ -86,66 +49,11 @@ export default function MyPatients() {
     return null;
   }
 
-  const getGenderLabel = (gender?: string) => {
-    switch (gender) {
-      case 'male': return t.genderMale;
-      case 'female': return t.genderFemale;
-      case 'other': return t.genderOther;
-      default: return '';
-    }
-  };
-
-  const handleInviteSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inviteEmail.trim()) {
-      inviteMutation.mutate(inviteEmail.trim());
-    }
-  };
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold" data-testid="text-my-patients-title">{t.myPatients}</h1>
-        <Button
-          data-testid="button-invite-patient"
-          onClick={() => setShowInviteForm(!showInviteForm)}
-          variant={showInviteForm ? "secondary" : "default"}
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          {t.invitePatient}
-        </Button>
       </div>
-
-      {showInviteForm && (
-        <Card className="mb-6">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm text-muted-foreground mb-3">{t.invitePatientDescription}</p>
-            <form onSubmit={handleInviteSubmit} className="flex gap-2 flex-wrap">
-              <Input
-                data-testid="input-invite-email"
-                type="email"
-                placeholder={t.inviteEmailPlaceholder}
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-                className="flex-1 min-w-[200px]"
-              />
-              <Button
-                data-testid="button-send-invite"
-                type="submit"
-                disabled={inviteMutation.isPending || !inviteEmail.trim()}
-              >
-                {inviteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Send className="h-4 w-4 mr-2" />
-                )}
-                {t.sendInvite}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
 
       {patients && patients.length > 0 ? (
         <div className="space-y-4">
@@ -186,6 +94,12 @@ export default function MyPatients() {
             <h3 className="text-lg font-medium mb-2">{t.noPatientsYet}</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
               {t.noPatientsDescription}
+            </p>
+            <p className="text-sm text-muted-foreground text-center max-w-md mt-3">
+              {t.inviteFromMessengerHint}{' '}
+              <Link href="/messenger" className="text-primary underline">
+                {t.messenger}
+              </Link>
             </p>
           </CardContent>
         </Card>

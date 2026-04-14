@@ -98,7 +98,12 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
   });
 }
 
-export async function sendInviteEmail(to: string, password: string, doctorName: string) {
+export async function sendInviteEmail(
+  to: string,
+  password: string,
+  doctorName: string,
+  doctorEmail?: string | null
+) {
   const { client, fromEmail } = await getUncachableResendClient();
   
   const baseUrl = process.env.APP_URL 
@@ -110,6 +115,10 @@ export async function sendInviteEmail(to: string, password: string, doctorName: 
     : 'http://localhost:5000';
   
   const healthWallUrl = `${baseUrl}/health-wall`;
+  const inviterLine =
+    doctorEmail && doctorEmail.trim()
+      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.`
+      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.`;
   
   await client.emails.send({
     from: fromEmail,
@@ -122,7 +131,7 @@ export async function sendInviteEmail(to: string, password: string, doctorName: 
           Здравствуйте!
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.
+          ${inviterLine}
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Ваши данные для входа:

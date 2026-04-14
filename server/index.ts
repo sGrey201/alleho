@@ -1,9 +1,7 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { prerenderMiddleware } from "./prerender";
+import { log } from "./logger";
 
 const app = express();
 
@@ -12,6 +10,12 @@ declare module 'http' {
     rawBody: unknown
   }
 }
+
+app.use((req, _res, next) => {
+  console.log(`[http] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(express.json({
   limit: '50mb',
   verify: (req, _res, buf) => {
@@ -66,6 +70,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Static imports run before this line; `./routes` and `./prerender` are dynamic so you see logs while large graphs load.
+  console.log("[server] starting…");
+  console.log("[server] loading routes module (first run can take 10–30s)…");
+  const { registerRoutes } = await import("./routes");
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -77,14 +85,19 @@ app.use((req, res, next) => {
   });
 
   // Prerender middleware for SEO bots (before Vite/static serving)
+  const { prerenderMiddleware } = await import("./prerender");
   app.use(prerenderMiddleware);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    console.log("[server] loading Vite dev server…");
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
+    console.log("[server] Vite ready");
   } else {
+    const { serveStatic } = await import("./vite");
     serveStatic(app);
   }
 
@@ -105,7 +118,18 @@ app.use((req, res, next) => {
   if (!isMacOS) {
     listenOptions.reusePort = true;
   }
-  
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `[server] Port ${port} is already in use. Stop the other process (e.g. Docker: docker compose -f docker-compose.dev.yml down) or set PORT=5000 in .env`,
+      );
+    } else {
+      console.error("[server] listen error:", err);
+    }
+    process.exit(1);
+  });
+
   server.listen(listenOptions, () => {
     log(`serving on port ${port}`);
   });

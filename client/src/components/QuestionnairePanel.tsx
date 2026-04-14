@@ -90,7 +90,6 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
                     setJustSelected(prev => new Set(prev).add(tag.key));
                   }
                   onToggleTag(tag.key);
-                  if (onBlur) onBlur();
                 }}
               />
               <label
@@ -167,6 +166,9 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
   const [subTextVisible, setSubTextVisible] = useState<Record<string, boolean>>({});
   const textTimerRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const pendingSaveKeyRef = useRef<string | null>(null);
+  /** After toggleSectionTag, save once when formData has committed (avoids stale state + Strict Mode double mutate). */
+  const pendingAfterRenderSaveRef = useRef<{ key: string } | null>(null);
+  const saveQueueRef = useRef(Promise.resolve());
 
   const setStatusForKey = useCallback((key: string, status: SubSaveStatus) => {
     setSubSaveStatus(prev => ({ ...prev, [key]: status }));
@@ -211,6 +213,9 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       return res.json();
     },
     enabled: !isOwnQuestionnaire,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const migrateFormData = (data: QuestionnaireData): QuestionnaireData => {
@@ -250,53 +255,83 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }
       const res = await apiRequest("POST", url, data);
       return res.json();
     },
-    onSuccess: (_data, variables) => {
-      formDataRef.current = variables;
-      const key = pendingSaveKeyRef.current;
-      if (key) setStatusForKey(key, 'saved');
-      pendingSaveKeyRef.current = null;
-    },
-    onError: () => {
-      const key = pendingSaveKeyRef.current;
-      if (key) setStatusForKey(key, 'error');
-      pendingSaveKeyRef.current = null;
-    },
   });
 
-  const triggerAutoSave = useCallback((subsectionKey?: string) => {
-    if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
-      formDataRef.current = formData;
-      const key = subsectionKey || 'global';
-      pendingSaveKeyRef.current = key;
-      setStatusForKey(key, 'saving');
-      saveMutation.mutate(formData);
-    }
-  }, [formData, saveMutation, setStatusForKey]);
+  const enqueueSave = useCallback(
+    (payload: QuestionnaireData, statusKey: string) => {
+      formDataRef.current = payload;
+      pendingSaveKeyRef.current = statusKey;
+      setStatusForKey(statusKey, "saving");
 
-  const retrySave = useCallback((subsectionKey: string) => {
-    pendingSaveKeyRef.current = subsectionKey;
-    setStatusForKey(subsectionKey, 'saving');
-    saveMutation.mutate(formDataRef.current);
-  }, [saveMutation, setStatusForKey]);
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => {})
+        .then(async () => {
+          try {
+            await saveMutation.mutateAsync(payload);
+            formDataRef.current = payload;
+            setStatusForKey(statusKey, "saved");
+            if (isPatientView) {
+              await queryClient.invalidateQueries({
+                queryKey: ["/api/patient", patientUserId, "questionnaire"],
+              });
+            }
+          } catch (e) {
+            setStatusForKey(statusKey, "error");
+            const msg = e instanceof Error ? e.message : String(e);
+            toast({ title: t.questionnaireSaveError, description: msg, variant: "destructive" });
+          } finally {
+            if (pendingSaveKeyRef.current === statusKey) {
+              pendingSaveKeyRef.current = null;
+            }
+          }
+        });
+    },
+    [saveMutation, setStatusForKey, toast, isPatientView, patientUserId]
+  );
+
+  const triggerAutoSave = useCallback(
+    (subsectionKey?: string) => {
+      if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
+        formDataRef.current = formData;
+        const key = subsectionKey || "global";
+        enqueueSave(formData, key);
+      }
+    },
+    [formData, enqueueSave]
+  );
+
+  const retrySave = useCallback(
+    (subsectionKey: string) => {
+      enqueueSave(formDataRef.current, subsectionKey);
+    },
+    [enqueueSave]
+  );
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       if (JSON.stringify(formDataRef.current) !== JSON.stringify(formData)) {
         formDataRef.current = formData;
-        pendingSaveKeyRef.current = 'global';
-        saveMutation.mutate(formData);
+        enqueueSave(formData, "global");
       }
     }, 30000);
     return () => clearInterval(intervalId);
-  }, [formData, saveMutation]);
+  }, [formData, enqueueSave]);
+
+  useEffect(() => {
+    const pending = pendingAfterRenderSaveRef.current;
+    if (!pending) return;
+    pendingAfterRenderSaveRef.current = null;
+    enqueueSave(formData, pending.key);
+  }, [formData, enqueueSave]);
 
   const toggleSectionTag = (sectionKey: string, tagKey: string) => {
+    pendingAfterRenderSaveRef.current = { key: sectionKey };
     setFormData(prev => {
       const entries: TagEntry[] = (prev as any)[sectionKey] || [];
       const exists = entries.some(e => e.tagKey === tagKey);
       const updated = exists
         ? entries.filter(e => e.tagKey !== tagKey)
-        : [...entries, { tagKey, description: '' }];
+        : [...entries, { tagKey, description: "" }];
       return { ...prev, [sectionKey]: updated };
     });
   };

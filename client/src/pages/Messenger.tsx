@@ -1,16 +1,30 @@
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useRoute, Link } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useRoute, Link, Redirect } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
-import { Loader2, User, Users, MessageCircle, Radio, Search } from "lucide-react";
+import { Loader2, User, Users, MessageCircle, Radio, Search, Plus, Send } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import Profile from "@/pages/Profile";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 function formatChatTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -80,6 +94,10 @@ export default function Messenger() {
   }, [showSearchBar, searchQuery]);
 
   const [folder, setFolder] = useState<"personal" | "groups" | "channels">("personal");
+  const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
+  const [createConversationName, setCreateConversationName] = useState("");
+  const [invitePatientOpen, setInvitePatientOpen] = useState(false);
+  const [invitePatientEmail, setInvitePatientEmail] = useState("");
 
   const { data: chats, isLoading } = useQuery<ChatItem[]>({
     queryKey: ["/api/me/chats"],
@@ -158,6 +176,51 @@ export default function Messenger() {
     }
   };
 
+  const invitePatientMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/invite-patient", { email });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: t.inviteSuccess,
+        description: t.inviteSuccessDescription,
+      });
+      setInvitePatientEmail("");
+      setInvitePatientOpen(false);
+      qc.invalidateQueries({ queryKey: ["/api/my-patients"] });
+      qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
+    },
+    onError: (error: Error) => {
+      const msg = error?.message || "";
+      if (msg.includes("409")) {
+        toast({ title: t.inviteUserExists, variant: "destructive" });
+      } else {
+        toast({ title: t.inviteError, variant: "destructive" });
+      }
+    },
+  });
+
+  const createConversationMutation = useMutation({
+    mutationFn: async (payload: { type: "group" | "channel"; name: string }) => {
+      const res = await apiRequest("POST", "/api/conversations", {
+        type: payload.type,
+        name: payload.name.trim(),
+      });
+      return res.json() as { id: string };
+    },
+    onSuccess: (data, variables) => {
+      qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      setCreateConversationType(null);
+      setCreateConversationName("");
+      setFolder(variables.type === "channel" ? "channels" : "groups");
+      setLocation(`/messenger/conv/${data.id}`);
+    },
+    onError: () => {
+      toast({ title: t.messengerCreateFailed, variant: "destructive" });
+    },
+  });
+
   const handleSelectChannel = async (channel: MessengerSearchChannel) => {
     if (channel.isMember) {
       setLocation(`/messenger/conv/${channel.id}`);
@@ -172,12 +235,16 @@ export default function Messenger() {
     }
   };
 
-  if (authLoading || !isAuthenticated) {
+  if (authLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/auth" />;
   }
   if (!isAdmin) {
     setLocation("/");
@@ -190,31 +257,104 @@ export default function Messenger() {
       <div className={`w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background ${showSearchBar ? "min-h-[50vh] md:min-h-0" : ""}`}>
         <Tabs value={folder} onValueChange={(v) => setFolder(v as typeof folder)} className="flex-1 flex flex-col min-h-0 bg-gray-50">
           {/* Floating top panel on mobile — Telegram-style */}
-          <div className="mt-2 mx-3 md:mt-0 md:mx-0 md:rounded-none rounded-2xl md:shadow-none shadow-md bg-background shrink-0 z-10 md:border-b pt-1.5 px-1.5 pb-1 md:pt-0 md:px-0 md:pb-0">
-            <TabsList className="grid grid-cols-3 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
-              <TabsTrigger
-                value="personal"
-                className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-              >
-                <User className="h-4 w-4 mr-1" />
-                {t.folderPersonal}
-              </TabsTrigger>
-              <TabsTrigger
-                value="groups"
-                className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-              >
-                <Users className="h-4 w-4 mr-1" />
-                {t.folderGroups}
-              </TabsTrigger>
-              <TabsTrigger
-                value="channels"
-                className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-              >
-                <Radio className="h-4 w-4 mr-1" />
-                {t.folderChannels}
-              </TabsTrigger>
-            </TabsList>
+          <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center gap-1.5 shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
+            <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
+              <TabsList className="grid grid-cols-3 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
+                <TabsTrigger
+                  value="personal"
+                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <User className="h-4 w-4 mr-1" />
+                  {t.folderPersonal}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="groups"
+                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <Users className="h-4 w-4 mr-1" />
+                  {t.folderGroups}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="channels"
+                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <Radio className="h-4 w-4 mr-1" />
+                  {t.folderChannels}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 rounded-full shadow-md md:shadow-none border-border"
+                  aria-label={t.newChat}
+                >
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setInvitePatientEmail("");
+                    setInvitePatientOpen(true);
+                  }}
+                >
+                  {t.messengerInvitePatient}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setShowSearchBar(true);
+                    setSearchQuery("");
+                    setFolder("personal");
+                  }}
+                >
+                  {t.messengerInviteHomeopath}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setCreateConversationName("");
+                    setCreateConversationType("group");
+                  }}
+                >
+                  {t.createGroup}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setCreateConversationName("");
+                    setCreateConversationType("channel");
+                  }}
+                >
+                  {t.createChannel}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+          {showSearchBar ? (
+            <div className="hidden md:flex mx-0 px-3 py-2 gap-2 items-center border-b border-border/60 bg-background shrink-0">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t.searchMessengerPlaceholder}
+                className="flex-1"
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setShowSearchBar(false);
+                  setSearchQuery("");
+                }}
+              >
+                {t.cancel}
+              </Button>
+            </div>
+          ) : null}
           <TabsContent value={folder} className="flex-1 m-0 min-h-0 overflow-hidden bg-background">
             {showSearchBar ? (
               searchLoading && !searchResults ? (
@@ -457,6 +597,117 @@ export default function Messenger() {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={invitePatientOpen}
+        onOpenChange={(open) => {
+          setInvitePatientOpen(open);
+          if (!open) setInvitePatientEmail("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.messengerInvitePatient}</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (invitePatientEmail.trim()) {
+                invitePatientMutation.mutate(invitePatientEmail.trim());
+              }
+            }}
+            className="space-y-4"
+          >
+            <Input
+              id="messenger-invite-email"
+              type="email"
+              autoComplete="email"
+              placeholder={t.inviteEmailPlaceholder}
+              aria-label={t.inviteEmailPlaceholder}
+              value={invitePatientEmail}
+              onChange={(e) => setInvitePatientEmail(e.target.value)}
+              required
+            />
+            <DialogFooter className="flex flex-row justify-end gap-2">
+              <Button type="submit" disabled={invitePatientMutation.isPending || !invitePatientEmail.trim()}>
+                {invitePatientMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {t.messengerInviteSend}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createConversationType !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateConversationType(null);
+            setCreateConversationName("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {createConversationType === "group" ? t.createGroup : createConversationType === "channel" ? t.createChannel : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <Input
+            value={createConversationName}
+            onChange={(e) => setCreateConversationName(e.target.value)}
+            placeholder={t.messengerConversationNamePlaceholder}
+            autoFocus
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                createConversationName.trim() &&
+                createConversationType &&
+                !createConversationMutation.isPending
+              ) {
+                e.preventDefault();
+                createConversationMutation.mutate({
+                  type: createConversationType,
+                  name: createConversationName,
+                });
+              }
+            }}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setCreateConversationType(null);
+                setCreateConversationName("");
+              }}
+            >
+              {t.cancel}
+            </Button>
+            <Button
+              type="button"
+              disabled={!createConversationName.trim() || createConversationMutation.isPending}
+              onClick={() => {
+                if (!createConversationType || !createConversationName.trim()) return;
+                createConversationMutation.mutate({
+                  type: createConversationType,
+                  name: createConversationName,
+                });
+              }}
+            >
+              {createConversationMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t.create
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Floating bottom nav or search bar (mobile only) */}
       <nav className="fixed bottom-0 left-0 right-0 md:hidden z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-1">

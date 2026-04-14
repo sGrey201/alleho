@@ -10,10 +10,8 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail, sendInviteEmail } from "./email";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
-import { generatePaymentUrl, checkPayment, robokassa } from "./robokassa";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
-import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import {
   insertHealthWallMessageSchema,
   insertConversationSchema,
@@ -33,6 +31,22 @@ import {
 import { setupWebSocket } from "./ws";
 
 const PREVIEW_LENGTH = 500;
+let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
+let objectStorageModulePromise: Promise<typeof import("./replit_integrations/object_storage")> | null = null;
+
+function getRobokassaModule(): Promise<typeof import("./robokassa")> {
+  if (!robokassaModulePromise) {
+    robokassaModulePromise = import("./robokassa");
+  }
+  return robokassaModulePromise;
+}
+
+function getObjectStorageModule(): Promise<typeof import("./replit_integrations/object_storage")> {
+  if (!objectStorageModulePromise) {
+    objectStorageModulePromise = import("./replit_integrations/object_storage");
+  }
+  return objectStorageModulePromise;
+}
 
 async function checkSubscription(req: any): Promise<boolean> {
   const session = req.session as any;
@@ -58,6 +72,7 @@ async function getCurrentUserId(req: any): Promise<string | null> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  console.log("[routes] registerRoutes: begin");
   // Session middleware (required for email auth)
   if (!process.env.SESSION_SECRET) {
     throw new Error("SESSION_SECRET must be set in environment variables");
@@ -72,9 +87,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  const useMemorySessionStore = process.env.NODE_ENV === "development";
+  const activeSessionStore = useMemorySessionStore
+    ? new session.MemoryStore()
+    : sessionStore;
+  console.log("[routes] registerRoutes: session store configured");
   app.use(session({
     secret: process.env.SESSION_SECRET,
-    store: sessionStore,
+    store: activeSessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -645,7 +665,8 @@ ${allUrls.map(url => `  <url>
   // Payment routes
   app.post('/api/payment/create', isAuthenticated, async (req: any, res) => {
     try {
-      if (!robokassa) {
+      const robokassaModule = await getRobokassaModule();
+      if (!robokassaModule.robokassa) {
         return res.status(503).json({ message: "Payment system not configured" });
       }
 
@@ -694,7 +715,7 @@ ${allUrls.map(url => `  <url>
       });
 
       // Generate payment URL with user email
-      const paymentUrl = generatePaymentUrl({
+      const paymentUrl = robokassaModule.generatePaymentUrl({
         amount,
         description,
         invoiceId,
@@ -719,13 +740,14 @@ ${allUrls.map(url => `  <url>
     });
 
     try {
-      if (!robokassa) {
+      const robokassaModule = await getRobokassaModule();
+      if (!robokassaModule.robokassa) {
         console.error('Robokassa not configured but received callback');
         return res.status(503).send('Payment system not configured');
       }
 
       // Validate signature
-      const isValid = checkPayment(req.body);
+      const isValid = robokassaModule.checkPayment(req.body);
       
       if (!isValid) {
         console.error('❌ Invalid Robokassa signature:', req.body);
@@ -794,7 +816,7 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, city } = req.body;
+      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, city, profileImageUrl } = req.body;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -809,6 +831,7 @@ ${allUrls.map(url => `  <url>
         height: height || null,
         weight: weight || null,
         city: city || null,
+        profileImageUrl: profileImageUrl || null,
       });
       
       res.json(updatedUser);
@@ -865,7 +888,20 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Get a patient's questionnaire (only if shared with current user)
+  /** Doctor may edit if linked on Health Wall (invite / health_wall_doctors) or listed in sharedWithEmails. */
+  async function canDoctorAccessPatientQuestionnaire(
+    doctorUserId: string,
+    doctorEmail: string,
+    patientId: string,
+    existingData: QuestionnaireData | undefined
+  ): Promise<boolean> {
+    if (await storage.isHealthWallDoctorConnected(patientId, doctorUserId)) {
+      return true;
+    }
+    return !!existingData?.sharedWithEmails?.includes(doctorEmail);
+  }
+
+  // Get a patient's questionnaire (Health Wall doctor or sharedWithEmails)
   app.get('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
@@ -880,33 +916,43 @@ ${allUrls.map(url => `  <url>
       
       const patientId = req.params.userId;
       const questionnaire = await storage.getQuestionnaire(patientId);
-      
+      const patient = await storage.getUser(patientId);
+      const patientPayload = {
+        id: patient?.id,
+        email: patient?.email,
+        firstName: patient?.firstName,
+        lastName: patient?.lastName,
+        gender: patient?.gender,
+        birthMonth: patient?.birthMonth,
+        birthYear: patient?.birthYear,
+        height: patient?.height,
+        weight: patient?.weight,
+        city: patient?.city,
+      };
+
       if (!questionnaire) {
-        return res.status(404).json({ message: "Questionnaire not found" });
+        if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, undefined))) {
+          return res.status(404).json({ message: "Questionnaire not found" });
+        }
+        return res.json({
+          data: {} as QuestionnaireData,
+          patient: patientPayload,
+          updatedAt: new Date().toISOString(),
+        });
       }
-      
+
       const data = questionnaire.data as QuestionnaireData;
-      if (!data.sharedWithEmails?.includes(currentUser.email)) {
+      if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, data))) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
-      const patient = await storage.getUser(patientId);
-      
+
       res.json({
         data: questionnaire.data,
-        patient: {
-          id: patient?.id,
-          email: patient?.email,
-          firstName: patient?.firstName,
-          lastName: patient?.lastName,
-          gender: patient?.gender,
-          birthMonth: patient?.birthMonth,
-          birthYear: patient?.birthYear,
-          height: patient?.height,
-          weight: patient?.weight,
-          city: patient?.city,
-        },
-        updatedAt: questionnaire.updatedAt,
+        patient: patientPayload,
+        updatedAt:
+          questionnaire.updatedAt instanceof Date
+            ? questionnaire.updatedAt.toISOString()
+            : questionnaire.updatedAt,
       });
     } catch (error) {
       console.error("Error fetching patient questionnaire:", error);
@@ -914,7 +960,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Save a patient's questionnaire (only if shared with current user)
+  // Save a patient's questionnaire (Health Wall doctor or sharedWithEmails)
   app.post('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
@@ -929,17 +975,17 @@ ${allUrls.map(url => `  <url>
       
       const patientId = req.params.userId;
       const existingQuestionnaire = await storage.getQuestionnaire(patientId);
-      
-      if (!existingQuestionnaire) {
-        return res.status(404).json({ message: "Questionnaire not found" });
-      }
-      
-      const existingData = existingQuestionnaire.data as QuestionnaireData;
-      if (!existingData.sharedWithEmails?.includes(currentUser.email)) {
+      const existingData = existingQuestionnaire?.data as QuestionnaireData | undefined;
+
+      if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, existingData))) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
-      const questionnaire = await storage.saveQuestionnaire(patientId, req.body);
+
+      // Shallow merge: doctor UI may send a partial payload (e.g. stale cache); never wipe patient-filled fields.
+      const incoming = (req.body || {}) as QuestionnaireData;
+      const base = (existingData || {}) as Record<string, unknown>;
+      const merged = { ...base, ...incoming } as QuestionnaireData;
+      const questionnaire = await storage.saveQuestionnaire(patientId, merged);
       res.json(questionnaire);
     } catch (error) {
       console.error("Error saving patient questionnaire:", error);
@@ -1689,7 +1735,7 @@ ${allUrls.map(url => `  <url>
       const doctorName = [doctor?.firstName, doctor?.lastName].filter(Boolean).join(' ') || doctor?.email || 'Ваш гомеопат';
 
       try {
-        await sendInviteEmail(normalizedEmail, password, doctorName);
+        await sendInviteEmail(normalizedEmail, password, doctorName, doctor?.email);
       } catch (emailError) {
         console.error('Failed to send invite email:', emailError);
         return res.status(500).json({ message: "Account created but failed to send email. Password: " + password });
@@ -1702,10 +1748,19 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Register object storage routes for file uploads
-  registerObjectStorageRoutes(app);
+  // Do not block server startup on object storage integration initialization.
+  void getObjectStorageModule()
+    .then((objectStorageModule) => {
+      objectStorageModule.registerObjectStorageRoutes(app);
+      console.log("[routes] object storage routes registered");
+    })
+    .catch((err) => {
+      console.error("[routes] object storage init failed:", err);
+    });
+  console.log("[routes] registerRoutes: handlers registered, creating HTTP server");
 
   const httpServer = createServer(app);
-  setupWebSocket(httpServer, sessionStore as Parameters<typeof setupWebSocket>[1], process.env.SESSION_SECRET!);
+  setupWebSocket(httpServer, activeSessionStore as Parameters<typeof setupWebSocket>[1], process.env.SESSION_SECRET!);
+  console.log("[routes] registerRoutes: websocket ready");
   return httpServer;
 }

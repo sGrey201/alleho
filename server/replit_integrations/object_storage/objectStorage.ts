@@ -7,7 +7,6 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Response } from "express";
 import { randomUUID } from "crypto";
-import sharp from "sharp";
 
 const YC_ENDPOINT = "https://storage.yandexcloud.net";
 
@@ -191,6 +190,7 @@ export class ObjectStorageService {
         res.status(404).end();
         return;
       }
+      const { default: sharp } = await import("sharp");
       res.set({
         "Content-Type": contentType,
         "Cache-Control": `private, max-age=${cacheTtlSec}`,

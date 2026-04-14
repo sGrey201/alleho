@@ -3,23 +3,17 @@ import fs from "fs";
 import path from "path";
 import { type Server } from "http";
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
+export { log } from "./logger";
 
 export async function setupVite(app: Express, server: Server) {
+  console.log("[vite] setup start");
   const { createServer: createViteServer, createLogger } = await import("vite");
+  console.log("[vite] module imported");
   const viteConfig = (await import("../vite.config")).default;
   const { nanoid } = await import("nanoid");
   const logger = createLogger();
 
+  console.log("[vite] creating Vite server");
   const vite = await createViteServer({
     ...viteConfig,
     configFile: false,
@@ -37,10 +31,12 @@ export async function setupVite(app: Express, server: Server) {
     },
     appType: "custom",
   });
+  console.log("[vite] Vite server created");
 
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+    console.log(`[vite] html middleware start: ${url}`);
 
     try {
       const clientTemplate = path.resolve(
@@ -52,13 +48,16 @@ export async function setupVite(app: Express, server: Server) {
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      console.log("[vite] index.html read");
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
+      console.log("[vite] index transformed, sending");
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
+      console.error("[vite] html middleware error:", e);
       vite.ssrFixStacktrace(e as Error);
       next(e);
     }

@@ -400,7 +400,11 @@ export default function HealthWall() {
     }
   };
 
-  const handleKeyDown = (_e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -464,7 +468,7 @@ export default function HealthWall() {
     if (isOwnWall) {
       setLocation('/');
     } else {
-      setLocation('/my-patients');
+      setLocation('/messenger');
     }
   };
 

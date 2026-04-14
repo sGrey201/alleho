@@ -93,7 +93,7 @@ function ScrollToTop() {
 }
 
 function AppContent() {
-  const { isAdmin, isLoading } = useAuth();
+  const { isAdmin, isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
   if (isLoading) {
@@ -109,6 +109,12 @@ function AppContent() {
 
   if (location === "/" || location === "") {
     return <Landing />;
+  }
+
+  const isAuthPage = location === "/auth";
+  const isResetPasswordPage = location.startsWith("/reset-password");
+  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage) {
+    return <Redirect to="/auth" />;
   }
 
   if (isAdmin && location.startsWith('/admin')) {

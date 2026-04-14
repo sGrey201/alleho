@@ -89,11 +89,12 @@ export function useUpload(options: UseUploadOptions = {}) {
    */
   const uploadToPresignedUrl = useCallback(
     async (file: File, uploadURL: string): Promise<void> => {
+      const contentType = file.type || "application/octet-stream";
       const response = await fetch(uploadURL, {
         method: "PUT",
         body: file,
         headers: {
-          "Content-Type": "application/octet-stream",
+          "Content-Type": contentType,
         },
       });
 
@@ -186,7 +187,7 @@ export function useUpload(options: UseUploadOptions = {}) {
       return {
         method: "PUT",
         url: data.uploadURL,
-        headers: { "Content-Type": "application/octet-stream" },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
       };
     },
     []
