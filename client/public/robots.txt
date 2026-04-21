@@ -6,4 +6,4 @@ Disallow: /api/
 Disallow: /auth
 Disallow: /reset-password
 
-Sitemap: https://materiamedica.pro/sitemap.xml
+Sitemap: https://alleho.ru/sitemap.xml

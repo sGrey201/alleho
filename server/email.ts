@@ -70,12 +70,12 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Восстановление пароля - Materia Medica Pro',
+    subject: 'Восстановление пароля - Alleho',
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #2C5282; margin-bottom: 20px;">Восстановление пароля</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Вы запросили восстановление пароля для вашего аккаунта на Materia Medica Pro.
+          Вы запросили восстановление пароля для вашего аккаунта на Alleho.
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Нажмите на кнопку ниже, чтобы установить новый пароль:
@@ -91,7 +91,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Materia Medica Pro — Живые портреты гомеопатических типажей
+          Alleho - пространство для работы и общения гомеопатов
         </p>
       </div>
     `
@@ -117,13 +117,13 @@ export async function sendInviteEmail(
   const healthWallUrl = `${baseUrl}/health-wall`;
   const inviterLine =
     doctorEmail && doctorEmail.trim()
-      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.`
-      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Materia Medica Pro для ведения вашей истории здоровья.`;
+      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`
+      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`;
   
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Приглашение на Materia Medica Pro',
+    subject: 'Приглашение на Alleho',
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #2C5282; margin-bottom: 20px;">Приглашение от вашего гомеопата</h1>
@@ -151,7 +151,7 @@ export async function sendInviteEmail(
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Materia Medica Pro — Живые портреты гомеопатических типажей
+          Alleho - пространство для работы и общения гомеопатов
         </p>
       </div>
     `
@@ -164,7 +164,7 @@ export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAm
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Чек об оплате - Materia Medica Pro',
+    subject: 'Чек об оплате - Alleho',
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #2C5282; margin-bottom: 20px;">Чек об оплате</h1>
@@ -185,7 +185,7 @@ export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAm
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Materia Medica Pro — Живые портреты гомеопатических типажей
+          Alleho - пространство для работы и общения гомеопатов
         </p>
       </div>
     `

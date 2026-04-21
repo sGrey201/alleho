@@ -1356,7 +1356,7 @@ export const t = {
         {
           key: 'socialRelations',
           title: 'Социальные отношения и реакции',
-          hint: 'Выбирайте из списка',
+          hint: '',
           tags: [
             { key: 'extroversion', label: 'Общительность, экстраверсия', hint: '' },
             { key: 'introversion', label: 'Замкнутость, интроверсия', hint: '' },
@@ -1407,7 +1407,7 @@ export const t = {
         {
           key: 'willControl',
           title: 'Воля, деятельность, контроль',
-          hint: 'Выбирайте из списка',
+          hint: '',
           tags: [
             { key: 'strongWill', label: 'Сильная воля, решительность', hint: '' },
             { key: 'weakWill', label: 'Слабость воли, нерешительность', hint: '' },
@@ -1434,7 +1434,7 @@ export const t = {
         {
           key: 'intellectImagination',
           title: 'Интеллектуальная сфера и воображение',
-          hint: 'Выбирайте из списка и распишите подробнее',
+          hint: '',
           tags: [
             { key: 'clarityOfThinking', label: 'Ясность мышления', hint: '' },
             { key: 'confusion', label: 'Спутанность, туман в голове', hint: '' },
@@ -1493,7 +1493,7 @@ export const t = {
         {
           key: 'emotionalReactions',
           title: 'Эмоциональные реакции и проявления',
-          hint: 'Выбирайте из списка и распишите подробнее',
+          hint: 'Распишите подробнее',
           tags: [
             { key: 'irritability', label: 'Гневливость, вспыльчивость', hint: '' },
             { key: 'phlegmatic', label: 'Флегматичность, невозмутимость', hint: '' },
@@ -1533,7 +1533,7 @@ export const t = {
         {
           key: 'specialMentalStates',
           title: 'Особые ментальные состояния и ощущения',
-          hint: 'Выбирайте из списка и распишите подробнее',
+          hint: 'Распишите подробнее',
           tags: [
             { key: 'splitPersonality', label: 'Ощущение раздвоенности личности', hint: '' },
             { key: 'unrealityFeeling', label: 'Чувство, что происходит что-то нереальное', hint: '' },
@@ -1552,7 +1552,7 @@ export const t = {
         {
           key: 'desiresAversions',
           title: 'Желания и отвращения (ментально-эмоциональные)',
-          hint: 'Выбирайте из списка и распишите подробнее',
+          hint: ' и распишите подробнее',
           tags: [
             { key: 'desireForComfort', label: 'Желание быть утешенным', hint: '' },
             { key: 'desireToBeAlone', label: 'Желание, чтобы его оставили в покое', hint: '' },
@@ -1574,7 +1574,7 @@ export const t = {
         {
           key: 'reactionToSuffering',
           title: 'Реакция на страдание и болезнь',
-          hint: 'Выбирайте из списка и распишите подробнее',
+          hint: 'Распишите подробнее',
           tags: [
             { key: 'stoicism', label: 'Стойкость в страдании', hint: '' },
             { key: 'painIntolerance', label: 'Нетерпимость к боли, требовательность', hint: '' },
@@ -1822,6 +1822,11 @@ export const t = {
   messengerInviteSend: 'Отправить',
   inviteFromMessengerHint: 'Чтобы пригласить пациента, откройте Мессенджер и нажмите «+» → «Пригласить пациента».',
   messengerInviteHomeopath: 'Пригласить гомеопата',
+  addToGroup: 'Добавить',
+  searchDoctorsToAdd: 'Найдите врача для добавления',
+  onlyOwnerCanAddMembers: 'Добавлять участников в группу может только владелец',
+  userAddedToGroup: 'Пользователь добавлен в группу',
+  userAlreadyInGroup: 'Пользователь уже состоит в группе',
   messengerCreateFailed: 'Не удалось создать',
   messengerConversationNamePlaceholder: 'Название',
   createGroup: 'Создать группу',

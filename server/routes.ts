@@ -109,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sitemap.xml - dynamic generation
   app.get('/sitemap.xml', async (req, res) => {
     try {
-      const baseUrl = process.env.APP_URL || 'https://materiamedica.pro';
+      const baseUrl = process.env.APP_URL || 'https://alleho.ru';
       
       const articles = await storage.getAllArticles();
       
@@ -1176,6 +1176,7 @@ ${allUrls.map(url => `  <url>
         conversationId?: string;
         type?: string;
         name?: string | null;
+        avatarUrl?: string | null;
         participantCount?: number;
         myRole?: string;
       }> = [];
@@ -1225,6 +1226,7 @@ ${allUrls.map(url => `  <url>
           conversationId: conv.id,
           type: conv.type,
           name: conv.name ?? undefined,
+          avatarUrl: conv.avatarUrl ?? null,
           otherParticipantName,
           otherParticipantId,
           participantCount: conv.participants.length,
@@ -1302,8 +1304,8 @@ ${allUrls.map(url => `  <url>
 
       res.json({
         doctors,
-        groups: groups.map((g) => ({ id: g.id, name: g.name, participantCount: g.participantCount, isMember: g.isMember })),
-        channels: channels.map((c) => ({ id: c.id, name: c.name, isMember: c.isMember })),
+        groups: groups.map((g) => ({ id: g.id, name: g.name, avatarUrl: g.avatarUrl ?? null, participantCount: g.participantCount, isMember: g.isMember })),
+        channels: channels.map((c) => ({ id: c.id, name: c.name, avatarUrl: c.avatarUrl ?? null, isMember: c.isMember })),
       });
     } catch (error) {
       console.error("Error fetching /api/messenger/search:", error);
@@ -1311,7 +1313,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Join group (add current user as member)
+  // Join group (self-join disabled; owner adds members)
   app.post("/api/conversations/:id/join", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -1320,10 +1322,7 @@ ${allUrls.map(url => `  <url>
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
       if (conv.type !== "group") return res.status(400).json({ message: "Not a group" });
-      const alreadyIn = await storage.isUserInConversation(currentUserId, id);
-      if (alreadyIn) return res.json({ success: true });
-      await storage.addConversationParticipant(id, currentUserId, "member");
-      res.json({ success: true });
+      return res.status(403).json({ message: "only_owner_can_add_members" });
     } catch (error) {
       console.error("Error joining conversation:", error);
       res.status(500).json({ message: "Failed to join" });
@@ -1382,7 +1381,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Update conversation (name, add participants)
+  // Update conversation (owner can edit group/channel name/avatar; group owner can add participants)
   app.patch("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -1390,10 +1389,24 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const role = await storage.getParticipantRole(id, currentUserId);
       if (role !== "owner" && role !== "admin") return res.status(403).json({ message: "Only owner or admin can update" });
-      const body = req.body as { name?: string; addParticipantIds?: string[] };
-      if (body.name != null) await storage.updateConversation(id, { name: body.name });
+      const body = req.body as { name?: string; avatarUrl?: string | null; addParticipantIds?: string[] };
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (body.name != null || body.avatarUrl !== undefined) {
+        if (role !== "owner") return res.status(403).json({ message: "only_owner_can_edit_conversation" });
+        if (conv.type !== "group" && conv.type !== "channel") {
+          return res.status(400).json({ message: "settings_available_only_for_group_or_channel" });
+        }
+        await storage.updateConversation(id, {
+          name: body.name ?? conv.name ?? undefined,
+          avatarUrl: body.avatarUrl === undefined ? conv.avatarUrl ?? null : body.avatarUrl,
+        });
+      }
       if (Array.isArray(body.addParticipantIds)) {
+        if (role !== "owner") return res.status(403).json({ message: "only_owner_can_add_members" });
+        if (conv.type !== "group") return res.status(400).json({ message: "members_can_be_added_only_to_groups" });
         for (const uid of body.addParticipantIds) {
+          if (!uid || uid === currentUserId) continue;
           try {
             await storage.addConversationParticipant(id, uid, "member");
           } catch {
@@ -1401,12 +1414,34 @@ ${allUrls.map(url => `  <url>
           }
         }
       }
-      const conv = await storage.getConversation(id);
+      const updatedConv = await storage.getConversation(id);
       const participants = await storage.getConversationParticipants(id);
-      res.json({ ...conv, participants });
+      res.json({ ...updatedConv, participants });
     } catch (error) {
       console.error("Error updating conversation:", error);
       res.status(500).json({ message: "Failed to update conversation" });
+    }
+  });
+
+  // Remove participant from group (owner only; owner cannot remove self)
+  app.delete("/api/conversations/:id/participants/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, userId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "group") return res.status(400).json({ message: "participants_can_be_removed_only_from_groups" });
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner") return res.status(403).json({ message: "only_owner_can_remove_members" });
+      if (userId === currentUserId) return res.status(400).json({ message: "owner_cannot_remove_self" });
+      await storage.removeConversationParticipant(id, userId);
+      const updatedConv = await storage.getConversation(id);
+      const participants = await storage.getConversationParticipants(id);
+      res.json({ ...updatedConv, participants });
+    } catch (error) {
+      console.error("Error removing participant:", error);
+      res.status(500).json({ message: "Failed to remove participant" });
     }
   });
 

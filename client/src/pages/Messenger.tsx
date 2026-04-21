@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { Loader2, User, Users, MessageCircle, Radio, Search, Plus, Send } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
+import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import Profile from "@/pages/Profile";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function formatChatTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -50,6 +52,7 @@ export type ChatItem = {
   conversationId?: string;
   type?: string;
   name?: string | null;
+  avatarUrl?: string | null;
   otherParticipantName?: string;
   otherParticipantId?: string;
   participantCount?: number;
@@ -63,19 +66,38 @@ export type MessengerSearchDoctor = {
   email?: string;
   conversationId?: string;
 };
-export type MessengerSearchGroup = { id: string; name: string | null; participantCount: number; isMember: boolean };
-export type MessengerSearchChannel = { id: string; name: string | null; isMember: boolean };
+export type MessengerSearchGroup = { id: string; name: string | null; avatarUrl?: string | null; participantCount: number; isMember: boolean };
+export type MessengerSearchChannel = { id: string; name: string | null; avatarUrl?: string | null; isMember: boolean };
 export type MessengerSearchResults = {
   doctors: MessengerSearchDoctor[];
   groups: MessengerSearchGroup[];
   channels: MessengerSearchChannel[];
 };
 
+function chatInitial(label: string): string {
+  return (label || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
 export default function Messenger() {
-  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [location, setLocation] = useLocation();
-  const [, convParams] = useRoute("/messenger/conv/:conversationId");
-  const conversationId = convParams?.conversationId;
+  const [, groupParams] = useRoute("/messenger/group/:conversationId");
+  const [, channelParams] = useRoute("/messenger/channel/:conversationId");
+  const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
+  const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
+  const conversationId =
+    groupParams?.conversationId ||
+    channelParams?.conversationId ||
+    groupSettingsParams?.conversationId ||
+    channelSettingsParams?.conversationId;
+  const isGroupChat = !!groupParams?.conversationId;
+  const isChannelChat = !!channelParams?.conversationId;
+  const isGroupSettings = !!groupSettingsParams?.conversationId;
+  const isChannelSettings = !!channelSettingsParams?.conversationId;
+  const [isMobileView, setIsMobileView] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
+  );
+  const isMobileConversationOpen = !!conversationId && isMobileView;
 
   const isChatSelected = (chat: ChatItem) =>
     chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
@@ -93,6 +115,15 @@ export default function Messenger() {
     return () => clearTimeout(t);
   }, [showSearchBar, searchQuery]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const onChange = (event: MediaQueryListEvent) => setIsMobileView(event.matches);
+    setIsMobileView(mediaQuery.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => mediaQuery.removeEventListener("change", onChange);
+  }, []);
+
   const [folder, setFolder] = useState<"personal" | "groups" | "channels">("personal");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
@@ -102,6 +133,9 @@ export default function Messenger() {
   const { data: chats, isLoading } = useQuery<ChatItem[]>({
     queryKey: ["/api/me/chats"],
     enabled: isAuthenticated && isAdmin,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch: refetchSearch } = useQuery<MessengerSearchResults>({
@@ -152,7 +186,9 @@ export default function Messenger() {
       return;
     }
     if (chat.source === "conversation" && chat.conversationId) {
-      setLocation(`/messenger/conv/${chat.conversationId}`);
+      if (chat.type === "group") setLocation(`/messenger/group/${chat.conversationId}`);
+      else if (chat.type === "channel") setLocation(`/messenger/channel/${chat.conversationId}`);
+      else setLocation(`/messenger/channel/${chat.conversationId}`);
     }
   };
 
@@ -164,16 +200,10 @@ export default function Messenger() {
 
   const handleSelectGroup = async (group: MessengerSearchGroup) => {
     if (group.isMember) {
-      setLocation(`/messenger/conv/${group.id}`);
+      setLocation(`/messenger/group/${group.id}`);
       return;
     }
-    try {
-      await apiRequest("POST", `/api/conversations/${group.id}/join`);
-      await qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
-      setLocation(`/messenger/conv/${group.id}`);
-    } catch (e) {
-      toast({ title: "Ошибка вступления в группу", variant: "destructive" });
-    }
+    toast({ title: t.onlyOwnerCanAddMembers, variant: "destructive" });
   };
 
   const invitePatientMutation = useMutation({
@@ -214,7 +244,7 @@ export default function Messenger() {
       setCreateConversationType(null);
       setCreateConversationName("");
       setFolder(variables.type === "channel" ? "channels" : "groups");
-      setLocation(`/messenger/conv/${data.id}`);
+      setLocation(variables.type === "channel" ? `/messenger/channel/${data.id}` : `/messenger/group/${data.id}`);
     },
     onError: () => {
       toast({ title: t.messengerCreateFailed, variant: "destructive" });
@@ -223,13 +253,13 @@ export default function Messenger() {
 
   const handleSelectChannel = async (channel: MessengerSearchChannel) => {
     if (channel.isMember) {
-      setLocation(`/messenger/conv/${channel.id}`);
+      setLocation(`/messenger/channel/${channel.id}`);
       return;
     }
     try {
       await apiRequest("POST", `/api/conversations/${channel.id}/subscribe`);
       await qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
-      setLocation(`/messenger/conv/${channel.id}`);
+      setLocation(`/messenger/channel/${channel.id}`);
     } catch (e) {
       toast({ title: "Ошибка подписки на канал", variant: "destructive" });
     }
@@ -252,8 +282,8 @@ export default function Messenger() {
   }
 
   return (
-    <div className="flex h-full flex-col md:flex-row pb-14 md:pb-0">
-      {!showProfilePanel && (
+    <div className={`flex h-full flex-col md:flex-row ${isMobileConversationOpen ? "pb-0" : "pb-14"} md:pb-0`}>
+      {!showProfilePanel && !isMobileConversationOpen && (
       <div className={`w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background ${showSearchBar ? "min-h-[50vh] md:min-h-0" : ""}`}>
         <Tabs value={folder} onValueChange={(v) => setFolder(v as typeof folder)} className="flex-1 flex flex-col min-h-0 bg-gray-50">
           {/* Floating top panel on mobile — Telegram-style */}
@@ -401,15 +431,22 @@ export default function Messenger() {
                               onClick={() => handleSelectChat(chat)}
                               className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
                             >
-                              <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
-                                {chat.source === "health_wall" || chat.type === "direct" ? (
-                                  <User className="h-5 w-5 text-primary" />
-                                ) : chat.type === "channel" ? (
-                                  <Radio className="h-5 w-5 text-primary" />
-                                ) : (
-                                  <Users className="h-5 w-5 text-primary" />
-                                )}
-                              </div>
+                              {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
+                                <Avatar className="shrink-0 size-11">
+                                  <AvatarImage src={chat.avatarUrl || undefined} />
+                                  <AvatarFallback>{chatInitial(label)}</AvatarFallback>
+                                </Avatar>
+                              ) : (
+                                <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
+                                  {chat.source === "health_wall" || chat.type === "direct" ? (
+                                    <User className="h-5 w-5 text-primary" />
+                                  ) : chat.type === "channel" ? (
+                                    <Radio className="h-5 w-5 text-primary" />
+                                  ) : (
+                                    <Users className="h-5 w-5 text-primary" />
+                                  )}
+                                </div>
+                              )}
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-foreground truncate">{label}</p>
                                 <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
@@ -459,13 +496,14 @@ export default function Messenger() {
                             onClick={() => handleSelectGroup(group)}
                             className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
-                            <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
-                              <Users className="h-5 w-5 text-primary" />
-                            </div>
+                            <Avatar className="shrink-0 size-11">
+                              <AvatarImage src={group.avatarUrl || undefined} />
+                              <AvatarFallback>{chatInitial(group.name || t.chatGroup)}</AvatarFallback>
+                            </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-foreground truncate">{group.name || t.chatGroup}</p>
                               <p className="text-[13px] text-muted-foreground truncate mt-0.5">
-                                {group.isMember ? t.chatsTab : t.actionJoin}
+                                {group.isMember ? t.chatsTab : t.onlyOwnerCanAddMembers}
                               </p>
                             </div>
                           </button>
@@ -484,9 +522,10 @@ export default function Messenger() {
                             onClick={() => handleSelectChannel(channel)}
                             className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
-                            <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
-                              <Radio className="h-5 w-5 text-primary" />
-                            </div>
+                            <Avatar className="shrink-0 size-11">
+                              <AvatarImage src={channel.avatarUrl || undefined} />
+                              <AvatarFallback>{chatInitial(channel.name || t.channelSub)}</AvatarFallback>
+                            </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-foreground truncate">{channel.name || t.channelSub}</p>
                               <p className="text-[13px] text-muted-foreground truncate mt-0.5">
@@ -537,15 +576,22 @@ export default function Messenger() {
                         onClick={() => handleSelectChat(chat)}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
                       >
-                        <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
-                          {chat.source === "health_wall" || chat.type === "direct" ? (
-                            <User className="h-5 w-5 text-primary" />
-                          ) : chat.type === "channel" ? (
-                            <Radio className="h-5 w-5 text-primary" />
-                          ) : (
-                            <Users className="h-5 w-5 text-primary" />
-                          )}
-                        </div>
+                        {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
+                          <Avatar className="shrink-0 size-11">
+                            <AvatarImage src={chat.avatarUrl || undefined} />
+                            <AvatarFallback>{chatInitial(label)}</AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
+                            {chat.source === "health_wall" || chat.type === "direct" ? (
+                              <User className="h-5 w-5 text-primary" />
+                            ) : chat.type === "channel" ? (
+                              <Radio className="h-5 w-5 text-primary" />
+                            ) : (
+                              <Users className="h-5 w-5 text-primary" />
+                            )}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-foreground truncate">{label}</p>
                           <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
@@ -576,6 +622,15 @@ export default function Messenger() {
           <div className="flex-1 min-h-0 overflow-auto">
             <Profile onSaveSuccess={() => setShowProfilePanel(false)} />
           </div>
+        ) : (isGroupSettings || isChannelSettings) && conversationId ? (
+          <div className="flex-1 flex flex-col min-h-0">
+            <GroupOrChannelSettings
+              conversationId={conversationId}
+              mode={isGroupSettings ? "group" : "channel"}
+              currentUserId={user?.id}
+              onBack={() => setLocation(isGroupSettings ? `/messenger/group/${conversationId}` : `/messenger/channel/${conversationId}`)}
+            />
+          </div>
         ) : conversationId ? (
           <div
             className="flex-1 flex flex-col min-h-0"
@@ -586,7 +641,14 @@ export default function Messenger() {
               backgroundRepeat: "no-repeat",
             }}
           >
-            <ConversationChat conversationId={conversationId} onBack={() => setLocation("/messenger")} />
+            <ConversationChat
+              conversationId={conversationId}
+              onBack={() => setLocation("/messenger")}
+              onTitleClick={() => {
+                if (isGroupChat) setLocation(`/messenger/group/${conversationId}/settings`);
+                if (isChannelChat) setLocation(`/messenger/channel/${conversationId}/settings`);
+              }}
+            />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground" style={{ backgroundColor: "rgba(249, 250, 251, 0)" }}>
@@ -710,6 +772,7 @@ export default function Messenger() {
       </Dialog>
 
       {/* Floating bottom nav or search bar (mobile only) */}
+      {!isMobileConversationOpen && (
       <nav className="fixed bottom-0 left-0 right-0 md:hidden z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-1">
         {showSearchBar ? (
           <div className="rounded-2xl bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center gap-2 py-2 px-3">
@@ -776,6 +839,7 @@ export default function Messenger() {
         </div>
         )}
       </nav>
+      )}
     </div>
   );
 }

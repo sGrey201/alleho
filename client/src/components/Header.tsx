@@ -76,11 +76,15 @@ export function Header() {
             data-testid="link-home"
             onClick={() => window.dispatchEvent(new CustomEvent('resetFilters'))}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-[18px]">
-              M
-            </div>
+            <img
+              src="/iconpack/icon-128x128.png"
+              alt="Alleho"
+              className="h-10 w-10 rounded-md object-cover"
+              loading="eager"
+              decoding="async"
+            />
             <span className="text-lg font-bold text-foreground">
-              MateriaMedica
+              Alleho
             </span>
           </Link>
         </div>

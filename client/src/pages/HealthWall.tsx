@@ -119,6 +119,15 @@ export default function HealthWall() {
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("questionnaire") === "1") {
+      setShowQuestionnaire(true);
+      localStorage.setItem(STORAGE_KEY_PANEL, "true");
+    }
+  }, []);
+
   const { data: directConversation, isError: directChatError } = useQuery<{ conversationId: string }>({
     queryKey: ["/api/messenger/direct", peerDoctorUserId],
     queryFn: async () => {

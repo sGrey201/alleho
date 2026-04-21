@@ -116,7 +116,7 @@ export interface IStorage {
   getDiscoverableConversations(
     currentUserId: string,
     options: { type: "group" | "channel"; nameFilter?: string }
-  ): Promise<Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }>>;
+  ): Promise<Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }>>;
   addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
@@ -125,7 +125,7 @@ export interface IStorage {
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
-  updateConversation(id: string, data: { name?: string }): Promise<Conversation | undefined>;
+  updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -876,7 +876,7 @@ export class DatabaseStorage implements IStorage {
   async getDiscoverableConversations(
     currentUserId: string,
     options: { type: "group" | "channel"; nameFilter?: string }
-  ): Promise<Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }>> {
+  ): Promise<Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }>> {
     const conditions = [eq(conversations.type, options.type)];
     if (options.nameFilter?.trim()) {
       conditions.push(ilike(conversations.name, `%${options.nameFilter.trim()}%`));
@@ -890,7 +890,7 @@ export class DatabaseStorage implements IStorage {
       .from(conversationParticipants)
       .where(eq(conversationParticipants.userId, currentUserId));
     const myConvIds = new Set(myParticipation.map((p) => p.conversationId));
-    const result: Array<{ id: string; name: string | null; participantCount: number; isMember: boolean }> = [];
+    const result: Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }> = [];
     for (const conv of list) {
       const countRows = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -900,6 +900,7 @@ export class DatabaseStorage implements IStorage {
       result.push({
         id: conv.id,
         name: conv.name,
+        avatarUrl: conv.avatarUrl ?? null,
         participantCount,
         isMember: myConvIds.has(conv.id),
       });
@@ -989,7 +990,7 @@ export class DatabaseStorage implements IStorage {
     return m || null;
   }
 
-  async updateConversation(id: string, data: { name?: string }): Promise<Conversation | undefined> {
+  async updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined> {
     const [c] = await db
       .update(conversations)
       .set({ ...data, updatedAt: new Date() })

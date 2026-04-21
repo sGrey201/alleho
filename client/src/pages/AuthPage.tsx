@@ -115,10 +115,7 @@ export default function AuthPage() {
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Materia Medica Pro</CardTitle>
-          <CardDescription>
-            Живые портреты гомеопатических типажей
-          </CardDescription>
+          <CardTitle className="text-2xl">Alleho - пространство для работы и общения гомеопатов</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -348,7 +345,7 @@ export default function AuthPage() {
         </CardContent>
       </Card>
       <p className="mt-6 max-w-md text-center text-xs text-muted-foreground" data-testid="text-disclaimer">
-        Платформа materiamedica.pro является программным обеспечением для хранения информации и обмена сообщениями между специалистами и их клиентами.
+        Платформа alleho.ru является программным обеспечением для хранения информации и обмена сообщениями между специалистами и их клиентами.
         Платформа не является медицинской организацией и не оказывает медицинские услуги.
       </p>
     </div>

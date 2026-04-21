@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2, LogOut, Camera } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,21 +17,6 @@ export type ProfileProps = {
   onSaveSuccess?: () => void;
 };
 
-const months = [
-  { value: 1, label: t.january },
-  { value: 2, label: t.february },
-  { value: 3, label: t.march },
-  { value: 4, label: t.april },
-  { value: 5, label: t.may },
-  { value: 6, label: t.june },
-  { value: 7, label: t.july },
-  { value: 8, label: t.august },
-  { value: 9, label: t.september },
-  { value: 10, label: t.october },
-  { value: 11, label: t.november },
-  { value: 12, label: t.december },
-];
-
 export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -39,16 +24,12 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string>("");
-  const [birthMonth, setBirthMonth] = useState<number | undefined>();
-  const [birthYear, setBirthYear] = useState<string>("");
 
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
       setProfileImageUrl(user.profileImageUrl || "");
-      setBirthMonth(user.birthMonth || undefined);
-      setBirthYear(user.birthYear?.toString() || "");
     }
   }, [user]);
 
@@ -77,8 +58,8 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         firstName,
         lastName,
         gender: user?.gender || null,
-        birthMonth: birthMonth || null,
-        birthYear: birthYear ? parseInt(birthYear) : null,
+        birthMonth: user?.birthMonth ?? null,
+        birthYear: user?.birthYear ?? null,
         height: user?.height ?? null,
         weight: user?.weight ?? null,
         city: user?.city || null,
@@ -115,8 +96,8 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           firstName,
           lastName,
           gender: user?.gender || null,
-          birthMonth: birthMonth || null,
-          birthYear: birthYear ? parseInt(birthYear) : null,
+          birthMonth: user?.birthMonth ?? null,
+          birthYear: user?.birthYear ?? null,
           height: user?.height ?? null,
           weight: user?.weight ?? null,
           city: user?.city || null,
@@ -158,7 +139,6 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
               <AvatarFallback>{initials.toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="space-y-2">
-              <Label htmlFor="avatar-upload">Аватар</Label>
               <div className="flex items-center gap-2">
                 <input
                   id="avatar-upload"
@@ -203,39 +183,9 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>{t.birthMonth}</Label>
-              <Select 
-                value={birthMonth?.toString() || ""} 
-                onValueChange={(v) => setBirthMonth(v ? parseInt(v) : undefined)}
-              >
-                <SelectTrigger data-testid="select-birth-month">
-                  <SelectValue placeholder={t.selectMonth} />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((month) => (
-                    <SelectItem key={month.value} value={month.value.toString()}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="birthYear">{t.birthYear}</Label>
-              <Input
-                id="birthYear"
-                type="number"
-                min="1900"
-                max={new Date().getFullYear()}
-                value={birthYear}
-                onChange={(e) => setBirthYear(e.target.value)}
-                placeholder={t.birthYear}
-                data-testid="input-birth-year"
-              />
-            </div>
-          </div>
+          <Button type="button" variant="outline" asChild className="w-full">
+            <Link href="/health-wall?questionnaire=1">{t.viewQuestionnaireFull}</Link>
+          </Button>
 
           <Button
             onClick={handleSave}

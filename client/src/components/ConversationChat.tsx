@@ -2,31 +2,62 @@ import { useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, ArrowLeft } from "lucide-react";
+import { Loader2, Send, ArrowLeft, Users } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface ConversationInfo {
   id: string;
   type: string;
   name?: string | null;
+  avatarUrl?: string | null;
   patientUserId?: string | null;
-  participants?: unknown[];
+  participants?: Array<{
+    userId: string;
+    role: string;
+    user?: {
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+    };
+  }>;
 }
+
+type SearchDoctor = {
+  userId: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+};
+
+type SearchResponse = { doctors: SearchDoctor[]; groups: unknown[]; channels: unknown[] };
 
 interface ConversationChatProps {
   conversationId: string;
   onBack: () => void;
+  onTitleClick?: () => void;
 }
 
-export default function ConversationChat({ conversationId, onBack }: ConversationChatProps) {
+export default function ConversationChat({ conversationId, onBack, onTitleClick }: ConversationChatProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [message, setMessage] = useState("");
+  const [addMembersOpen, setAddMembersOpen] = useState(false);
+  const [doctorSearch, setDoctorSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
@@ -40,6 +71,17 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
   });
 
   useConversationWs(conversationId, !!conversationId);
+
+  const { data: doctorSearchData, isLoading: doctorSearchLoading } = useQuery<SearchResponse>({
+    queryKey: ["/api/messenger/search", doctorSearch],
+    queryFn: async () => {
+      const url = `/api/messenger/search?q=${encodeURIComponent(doctorSearch.trim())}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: addMembersOpen,
+  });
 
   const sendMutation = useMutation({
     mutationFn: async (data: { content?: string; messageType?: string }) => {
@@ -56,6 +98,28 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
         }
       );
       setMessage("");
+    },
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, {
+        addParticipantIds: [userId],
+      });
+      return res.json() as Promise<ConversationInfo>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({ title: t.userAddedToGroup });
+    },
+    onError: (error: Error) => {
+      const msg = error?.message || "";
+      if (msg.includes("only_owner_can_add_members")) {
+        toast({ title: t.onlyOwnerCanAddMembers, variant: "destructive" });
+      } else {
+        toast({ title: t.inviteError, description: msg, variant: "destructive" });
+      }
     },
   });
 
@@ -88,13 +152,34 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
     );
   }
 
+  const title = conv.name ?? (conv.type === "direct" ? t.chatWithDoctor : conv.type);
+
+  const isGroup = conv.type === "group";
+  const myRole = conv.participants?.find((p) => p.userId === user?.id)?.role;
+  const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
+  const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
+
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="font-semibold truncate flex-1">{conv.name ?? (conv.type === "direct" ? t.chatWithDoctor : conv.type)}</h1>
+        {(conv.type === "group" || conv.type === "channel") && (
+          <Avatar
+            className={`h-8 w-8 shrink-0 ${onTitleClick ? "cursor-pointer hover:opacity-80" : ""}`}
+            onClick={onTitleClick}
+          >
+            <AvatarImage src={conv.avatarUrl || undefined} />
+            <AvatarFallback>{(title || "?").charAt(0).toUpperCase()}</AvatarFallback>
+          </Avatar>
+        )}
+        <h1
+          className={`font-semibold truncate flex-1 ${onTitleClick ? "cursor-pointer hover:opacity-80" : ""}`}
+          onClick={onTitleClick}
+        >
+          {title}
+        </h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -163,6 +248,53 @@ export default function ConversationChat({ conversationId, onBack }: Conversatio
           )}
         </Button>
       </div>
+
+      <Dialog open={addMembersOpen} onOpenChange={setAddMembersOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.addToGroup}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={doctorSearch}
+              onChange={(e) => setDoctorSearch(e.target.value)}
+              placeholder={t.searchDoctorsToAdd}
+              autoFocus
+            />
+            <div className="max-h-72 overflow-y-auto space-y-1">
+              {doctorSearchLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              ) : candidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3 text-center">{t.noResults}</p>
+              ) : (
+                candidates.map((doctor) => {
+                  const name =
+                    [doctor.firstName, doctor.lastName].filter(Boolean).join(" ").trim() ||
+                    doctor.email ||
+                    t.chatWithDoctor;
+                  return (
+                    <button
+                      key={doctor.userId}
+                      type="button"
+                      onClick={() => addMemberMutation.mutate(doctor.userId)}
+                      disabled={addMemberMutation.isPending}
+                      className="w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 disabled:opacity-60"
+                    >
+                      <Users className="h-4 w-4 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{name}</p>
+                        {doctor.email && <p className="text-xs text-muted-foreground truncate">{doctor.email}</p>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -48,8 +48,8 @@ function formatArticleTitle(tags: { name: string; category: string }[]): string 
 }
 
 function generateArticleHtml(article: any, tags: any[]): string {
-  const BASE_URL = 'https://materiamedica.pro';
-  const SITE_NAME = 'Materia Medica Pro';
+  const BASE_URL = 'https://alleho.ru';
+  const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
   
   const title = formatArticleTitle(tags);
   const fullTitle = `${title} | ${SITE_NAME}`;
@@ -140,14 +140,14 @@ function generateArticleHtml(article: any, tags: any[]): string {
 }
 
 function generateTagListHtml(tags: any[], category: 'remedy' | 'situation'): string {
-  const BASE_URL = 'https://materiamedica.pro';
-  const SITE_NAME = 'Materia Medica Pro';
+  const BASE_URL = 'https://alleho.ru';
+  const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
   
   const isRemedy = category === 'remedy';
   const title = isRemedy ? 'Все препараты' : 'Все случаи';
   const fullTitle = `${title} | ${SITE_NAME}`;
   const description = isRemedy 
-    ? 'Полный каталог гомеопатических препаратов из Materia Medica Boericke'
+    ? 'Полный каталог гомеопатических препаратов из Boericke'
     : 'Полный каталог клинических случаев и ситуаций для гомеопатического анализа';
   const canonicalUrl = `${BASE_URL}/${isRemedy ? 'remedies' : 'situations'}`;
   

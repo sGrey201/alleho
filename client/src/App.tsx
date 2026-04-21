@@ -65,7 +65,10 @@ function Router() {
       <Route path="/health-wall/chat/:userId" component={HealthWall} />
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
       <Route path="/messenger" component={Messenger} />
-      <Route path="/messenger/conv/:conversationId" component={Messenger} />
+      <Route path="/messenger/group/:conversationId" component={Messenger} />
+      <Route path="/messenger/channel/:conversationId" component={Messenger} />
+      <Route path="/messenger/group/:conversationId/settings" component={Messenger} />
+      <Route path="/messenger/channel/:conversationId/settings" component={Messenger} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />

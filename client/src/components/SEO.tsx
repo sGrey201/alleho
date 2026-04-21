@@ -16,10 +16,10 @@ interface SEOProps {
   schema?: object;
 }
 
-const BASE_URL = 'https://materiamedica.pro';
+const BASE_URL = 'https://alleho.ru';
 const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`;
-const SITE_NAME = 'Materia Medica Pro';
-const DEFAULT_TITLE = 'Materia Medica Pro — Живые портреты гомеопатических типажей';
+const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
+const DEFAULT_TITLE = 'Alleho - пространство для работы и общения гомеопатов';
 const DEFAULT_DESCRIPTION = 'Уникальная галерея живых гомеопатических портретов. Ресурс, динамично пополняющийся новыми зарисовками из жизни.';
 
 export function SEO({

@@ -365,6 +365,7 @@ export const conversations = pgTable(
     id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
     type: varchar("type", { length: 20 }).notNull(),
     name: varchar("name", { length: 255 }),
+    avatarUrl: text("avatar_url"),
     patientUserId: varchar("patient_user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),

@@ -32,7 +32,7 @@ export default function AllSituations() {
     <>
       <SEO
         title="Все случаи"
-        description="Полный список клинических случаев и ситуаций на Materia Medica Pro. Изучайте гомеопатию через реальные примеры."
+        description="Полный список клинических случаев и ситуаций на Alleho - пространство для работы и общения гомеопатов. Изучайте гомеопатию через реальные примеры."
         keywords={situations.map(s => s.name).join(', ')}
         url="/situations"
         schema={schema}
