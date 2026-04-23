@@ -29,7 +29,6 @@ import AdminTags from "@/pages/admin/AdminTags";
 import About from "@/pages/About";
 import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
-import MyPatients from "@/pages/MyPatients";
 import HealthWall from "@/pages/HealthWall";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
@@ -50,6 +49,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/" component={Landing} />
       <Route path="/portraits" component={Home} />
       <Route path="/article/">{() => <Redirect to="/portraits" />}</Route>
       <Route path="/article/:slug" component={ArticleReader} />
@@ -62,7 +62,6 @@ function Router() {
       <Route path="/subscribe" component={Subscribe} />
       <Route path="/remedies" component={AllRemedies} />
       <Route path="/situations" component={AllSituations} />
-      <Route path="/my-patients" component={MyPatients} />
       <Route path="/health-wall" component={HealthWall} />
       <Route path="/health-wall/chat/:userId" component={HealthWall} />
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
@@ -71,8 +70,8 @@ function Router() {
       <Route path="/messenger/channel/:conversationId" component={Messenger} />
       <Route path="/messenger/group/:conversationId/settings" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/settings" component={Messenger} />
-      <Route path="/profile/:userId" component={Profile} />
-      <Route path="/profile" component={Profile} />
+      <Route path="/profile/:userId">{() => <Profile />}</Route>
+      <Route path="/profile">{() => <Profile />}</Route>
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (
@@ -116,6 +115,9 @@ function AppContent() {
   const isAuthPage = location === "/auth";
   const isInviteAcceptPage = location.startsWith("/invite/accept");
   const isResetPasswordPage = location.startsWith("/reset-password");
+  if (isAuthenticated && isAuthPage) {
+    return <Redirect to="/" />;
+  }
   if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage) {
     return <Redirect to="/auth" />;
   }

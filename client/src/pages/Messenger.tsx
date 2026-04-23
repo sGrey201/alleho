@@ -174,6 +174,27 @@ export default function Messenger() {
     enabled: isAuthenticated && isAdmin && showSearchBar,
   });
 
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin) return;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data as string) as { type?: string };
+        if (data.type !== "doctor_chats_updated") return;
+        void qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      } catch {
+        // ignore malformed ws payloads
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [isAuthenticated, isAdmin, qc]);
+
   function filterChatsBySearch(items: ChatItem[], query: string): ChatItem[] {
     const q = query.trim().toLowerCase();
     if (!q) return items;
@@ -767,14 +788,7 @@ export default function Messenger() {
               }}
             />
           </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground" style={{ backgroundColor: "rgba(249, 250, 251, 0)" }}>
-            <div className="text-center">
-              <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>{listToShow.length === 0 ? t.noChats : t.selectChat}</p>
-            </div>
-          </div>
-        )}
+        ) : null}
 
       </div>
 

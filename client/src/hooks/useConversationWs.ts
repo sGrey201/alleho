@@ -77,7 +77,9 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
         reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: "unsubscribe_conversation", conversationId }));
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "unsubscribe_conversation", conversationId }));
+        }
         wsRef.current.close();
         wsRef.current = null;
       }

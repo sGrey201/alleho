@@ -23,6 +23,7 @@ import {
   getHealthWallRecentMessages,
   pushHealthWallRecentMessage,
   publishHealthWallMessage,
+  publishDoctorChatsUpdated,
   backfillHealthWallRecent,
   getConversationRecentMessages,
   pushConversationRecentMessage,
@@ -269,6 +270,35 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  app.get('/api/invites/preview', async (req: any, res) => {
+    try {
+      const token = String(req.query?.token || "").trim();
+      if (!token) return res.status(400).json({ message: "token_required" });
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const invite = await storage.getInviteByTokenHash(tokenHash);
+      if (!invite) return res.status(404).json({ message: "invalid_invite" });
+
+      const inviter = await storage.getUser(invite.invitedByUserId);
+      const inviterName =
+        [inviter?.firstName, inviter?.lastName].filter(Boolean).join(" ").trim() ||
+        inviter?.email ||
+        "Ваш гомеопат";
+
+      res.json({
+        inviteType: invite.inviteType,
+        inviter: {
+          id: inviter?.id ?? null,
+          name: inviterName,
+          email: inviter?.email ?? null,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching invite preview:", error);
+      res.status(500).json({ message: "Failed to fetch invite preview" });
+    }
+  });
+
   app.post('/api/invites/accept', async (req: any, res) => {
     try {
       const email = String(req.body?.email || "").trim().toLowerCase();
@@ -312,6 +342,7 @@ ${allUrls.map(url => `  <url>
         await storage.updateUserProfile(newUser.id, { isAdmin: true });
       } else {
         await storage.addHealthWallDoctor(newUser.id, invite.invitedByUserId);
+        await publishDoctorChatsUpdated(invite.invitedByUserId);
       }
 
       await storage.markInviteAccepted(invite.id, newUser.id, email);
@@ -1294,6 +1325,29 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  app.post('/api/health-wall/:patientUserId/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      if (currentUserId !== patientUserId) {
+        const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
+        if (isConnected) {
+          await storage.updateDoctorLastVisit(patientUserId, currentUserId);
+        }
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking health wall as read:", error);
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
   // Post a new message to health wall
   app.post('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
     try {
@@ -1371,8 +1425,11 @@ ${allUrls.map(url => `  <url>
       };
 
       if (folder === "personal") {
-        const contacts = await storage.getMessengerPersonalContacts(currentUserId);
-        const items = contacts.map((contact) => {
+        const [contacts, connectedPatients] = await Promise.all([
+          storage.getMessengerPersonalContacts(currentUserId),
+          storage.getHealthWallPatients(currentUserId),
+        ]);
+        const doctorItems = contacts.map((contact) => {
           const otherParticipantName =
             [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
           return {
@@ -1385,6 +1442,32 @@ ${allUrls.map(url => `  <url>
             lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
             lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
           };
+        });
+        const patientItems = await Promise.all(
+          connectedPatients.map(async ({ patient }) => {
+            const stats = await storage.getPatientHealthWallStats(patient.id, currentUserId);
+            const patientName = [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() || patient.email || "Patient";
+            return {
+              source: "health_wall" as const,
+              folder: "personal" as const,
+              chatKind: "patient" as const,
+              patientUserId: patient.id,
+              patientName,
+              patientEmail: patient.email,
+              lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
+              unreadCount: stats.unreadCount,
+            };
+          })
+        );
+        const items = [...patientItems, ...doctorItems];
+        items.sort((a, b) => {
+          const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+          const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+          if (aTime !== bTime) return bTime - aTime;
+          if (a.source !== b.source) return a.source === "health_wall" ? -1 : 1;
+          const aName = a.source === "health_wall" ? a.patientName ?? a.patientEmail ?? "" : a.otherParticipantName ?? "";
+          const bName = b.source === "health_wall" ? b.patientName ?? b.patientEmail ?? "" : b.otherParticipantName ?? "";
+          return aName.localeCompare(bName, "ru");
         });
         return res.json(paged(items));
       }

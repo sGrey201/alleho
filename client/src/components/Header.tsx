@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, Plus, Check, AlertTriangle, X, ClipboardList, Users, Heart, MessageCircle } from 'lucide-react';
+import { User, Settings, LogOut, Plus, Check, AlertTriangle, X, ClipboardList, Heart, MessageCircle } from 'lucide-react';
 import { ArticleDialog } from '@/components/ArticleDialog';
 import { format } from 'date-fns';
 
@@ -176,12 +176,6 @@ export function Header() {
                         {t.messenger}
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/my-patients" className="flex w-full items-center" data-testid="link-my-patients">
-                        <Users className="mr-2 h-4 w-4" />
-                        {t.myPatients}
-                      </Link>
-                    </DropdownMenuItem>
                   </>
                 )}
                 {isAdmin && (
@@ -210,13 +204,13 @@ export function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
+          ) : location !== '/auth' && !location.startsWith('/invite') ? (
             <Button asChild data-testid="button-login">
               <Link href="/auth">
                 {t.login}
               </Link>
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </header>

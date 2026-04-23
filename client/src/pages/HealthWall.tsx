@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,9 @@ export default function HealthWall() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastHealthWallReadAtRef = useRef<number>(0);
+  const lastMarkedMessageIdRef = useRef<string | null>(null);
+  const markReadInFlightRef = useRef(false);
   
   const [showQuestionnaire, setShowQuestionnaire] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_PANEL);
@@ -220,6 +223,25 @@ export default function HealthWall() {
 
   useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId && !isDoctorChatMode);
 
+  const isDoctorViewingPatientWall = isAuthenticated && isAdmin && !isDoctorChatMode && !!patientUserId && !isOwnWall;
+
+  const markCurrentHealthWallAsRead = useCallback(async (reason: 'enter' | 'leave' | 'incoming') => {
+    if (!isDoctorViewingPatientWall || !patientUserId) return;
+    if (markReadInFlightRef.current) return;
+    const now = Date.now();
+    if (reason === 'incoming' && now - lastHealthWallReadAtRef.current < 1200) return;
+    lastHealthWallReadAtRef.current = now;
+    markReadInFlightRef.current = true;
+    try {
+      await apiRequest('POST', `/api/health-wall/${patientUserId}/read`);
+      queryClient.invalidateQueries({ queryKey: ['/api/me/chats'] });
+    } catch {
+      // keep silent: mark-read failures should not interrupt chat UX
+    } finally {
+      markReadInFlightRef.current = false;
+    }
+  }, [isDoctorViewingPatientWall, patientUserId]);
+
   const { data: patientInfo } = useQuery<PatientInfo>({
     queryKey: ['/api/health-wall', patientUserId, 'info'],
     enabled: isAuthenticated && !!patientUserId && !isOwnWall,
@@ -302,7 +324,7 @@ export default function HealthWall() {
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  const displayMessages: HealthWallMessage[] = (() => {
+  const displayMessages: HealthWallMessage[] = useMemo(() => {
     const raw = isDoctorChatMode
       ? (conversationMessages ?? []).map((m) => ({
           id: m.id,
@@ -322,11 +344,27 @@ export default function HealthWall() {
         }))
       : (messages ?? []);
     return [...raw].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  })();
+  }, [isDoctorChatMode, conversationMessages, messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [displayMessages]);
+
+  useEffect(() => {
+    if (!isDoctorViewingPatientWall || !patientUserId) return;
+    void markCurrentHealthWallAsRead('enter');
+    return () => {
+      void markCurrentHealthWallAsRead('leave');
+    };
+  }, [isDoctorViewingPatientWall, patientUserId, markCurrentHealthWallAsRead]);
+
+  useEffect(() => {
+    if (!isDoctorViewingPatientWall || displayMessages.length === 0) return;
+    const lastMessage = displayMessages[displayMessages.length - 1];
+    if (!lastMessage?.id || lastMarkedMessageIdRef.current === lastMessage.id) return;
+    lastMarkedMessageIdRef.current = lastMessage.id;
+    void markCurrentHealthWallAsRead('incoming');
+  }, [displayMessages, isDoctorViewingPatientWall, markCurrentHealthWallAsRead]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PANEL, showQuestionnaire.toString());

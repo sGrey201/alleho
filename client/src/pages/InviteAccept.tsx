@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,14 @@ const acceptInviteSchema = z.object({
 });
 
 type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
+type InvitePreview = {
+  inviteType: "patient" | "homeopath";
+  inviter: {
+    id: string | null;
+    name: string;
+    email: string | null;
+  };
+};
 
 export default function InviteAccept() {
   const [, setLocation] = useLocation();
@@ -28,6 +36,19 @@ export default function InviteAccept() {
   const form = useForm<AcceptInviteFormData>({
     resolver: zodResolver(acceptInviteSchema),
     defaultValues: { email: initialEmail },
+  });
+
+  const { data: invitePreview } = useQuery<InvitePreview>({
+    queryKey: ["/api/invites/preview", token],
+    queryFn: async () => {
+      const res = await fetch(`/api/invites/preview?token=${encodeURIComponent(token)}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!token,
+    retry: false,
   });
 
   const acceptInviteMutation = useMutation({
@@ -75,6 +96,11 @@ export default function InviteAccept() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Регистрация по приглашению</CardTitle>
+          {invitePreview?.inviter?.name && (
+            <p className="text-sm text-muted-foreground pt-2">
+              Вас пригласил: <span className="font-medium text-foreground">{invitePreview.inviter.name}</span>
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <Form {...form}>

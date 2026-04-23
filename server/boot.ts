@@ -14,12 +14,16 @@ const heartbeat = setInterval(() => {
   console.log(`[boot] still loading… ${seconds}s`);
 }, 2000);
 
-try {
-  console.log("[boot] start");
-  // `index.ts` no longer static-imports `./vite` (heavy); only express/cookie-parser/logger.
-  console.log("[boot] import server/index");
-  await import("./index");
-  console.log("[boot] server/index imported");
-} finally {
-  clearInterval(heartbeat);
+async function boot() {
+  try {
+    console.log("[boot] start");
+    // `index.ts` no longer static-imports `./vite` (heavy); only express/cookie-parser/logger.
+    console.log("[boot] import server/index");
+    await import("./index");
+    console.log("[boot] server/index imported");
+  } finally {
+    clearInterval(heartbeat);
+  }
 }
+
+void boot();

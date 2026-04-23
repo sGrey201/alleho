@@ -717,19 +717,14 @@ export class DatabaseStorage implements IStorage {
     }
 
     const lastMessageAt = messages[0].createdAt;
-    
-    const doctorLastMessageIndex = messages.findIndex(m => m.authorUserId === doctorUserId);
-    
-    let unreadCount = 0;
-    if (doctorLastMessageIndex === -1) {
-      unreadCount = messages.filter(m => m.authorUserId === patientUserId).length;
-    } else {
-      for (let i = 0; i < doctorLastMessageIndex; i++) {
-        if (messages[i].authorUserId === patientUserId) {
-          unreadCount++;
-        }
-      }
-    }
+    const doctorLastVisit = await this.getDoctorLastVisit(patientUserId, doctorUserId);
+    const doctorLastVisitTs = doctorLastVisit ? new Date(doctorLastVisit).getTime() : null;
+    const unreadCount = messages.filter((m) => {
+      if (m.authorUserId !== patientUserId) return false;
+      if (doctorLastVisitTs == null) return true;
+      if (!m.createdAt) return false;
+      return new Date(m.createdAt).getTime() > doctorLastVisitTs;
+    }).length;
 
     return { unreadCount, lastMessageAt };
   }

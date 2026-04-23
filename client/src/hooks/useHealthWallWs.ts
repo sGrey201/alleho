@@ -78,7 +78,9 @@ export function useHealthWallWs(patientUserId: string | undefined, enabled: bool
         reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
-        wsRef.current.send(JSON.stringify({ type: "unsubscribe", patientUserId }));
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "unsubscribe", patientUserId }));
+        }
         wsRef.current.close();
         wsRef.current = null;
       }

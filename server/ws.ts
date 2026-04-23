@@ -13,6 +13,7 @@ import {
 const WS_PATH = "/ws";
 const HEALTH_WALL_CHANNEL_PREFIX = "health-wall:channel:";
 const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
+const DOCTOR_EVENTS_CHANNEL_PREFIX = "doctor:events:";
 
 export type SessionStore = {
   get: (sid: string, callback: (err: unknown, session?: { userId?: string } | null) => void) => void;
@@ -29,6 +30,7 @@ export function setupWebSocket(
   const socketToChannels = new Map<WsWebSocket, Set<string>>();
   const conversationChannelToSockets = new Map<string, Set<WsWebSocket>>();
   const socketToConversationChannels = new Map<WsWebSocket, Set<string>>();
+  const doctorToSockets = new Map<string, Set<WsWebSocket>>();
 
   function subscribeSocketToChannel(ws: WsWebSocket, patientUserId: string): void {
     const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
@@ -127,6 +129,20 @@ export function setupWebSocket(
         } catch {
           // ignore
         }
+      } else if (channel.startsWith(DOCTOR_EVENTS_CHANNEL_PREFIX)) {
+        const doctorUserId = channel.slice(DOCTOR_EVENTS_CHANNEL_PREFIX.length);
+        const sockets = doctorToSockets.get(doctorUserId);
+        if (!sockets || sockets.size === 0) return;
+        try {
+          const payload = JSON.parse(message) as { type?: string; timestamp?: string };
+          if (payload.type !== "doctor_chats_updated") return;
+          const data = JSON.stringify({ type: "doctor_chats_updated", payload: { timestamp: payload.timestamp ?? null } });
+          Array.from(sockets).forEach((ws) => {
+            if (ws.readyState === 1) ws.send(data);
+          });
+        } catch {
+          // ignore
+        }
       }
     });
   }
@@ -176,7 +192,14 @@ export function setupWebSocket(
     });
   });
 
-  wss.on("connection", (ws: WsWebSocket, _req: unknown, _userId: string) => {
+  wss.on("connection", (ws: WsWebSocket, _req: unknown, userId: string) => {
+    if (!doctorToSockets.has(userId)) {
+      doctorToSockets.set(userId, new Set());
+    }
+    doctorToSockets.get(userId)!.add(ws);
+    if (redisSub) {
+      void redisSub.subscribe(DOCTOR_EVENTS_CHANNEL_PREFIX + userId);
+    }
     const subscribedChannels = new Set<string>();
 
     ws.on("message", (raw: string | Buffer | ArrayBuffer | Buffer[]) => {
@@ -211,10 +234,30 @@ export function setupWebSocket(
 
     ws.on("close", () => {
       cleanupSocket(ws);
+      const doctorSockets = doctorToSockets.get(userId);
+      if (doctorSockets) {
+        doctorSockets.delete(ws);
+        if (doctorSockets.size === 0) {
+          doctorToSockets.delete(userId);
+          if (redisSub) {
+            void redisSub.unsubscribe(DOCTOR_EVENTS_CHANNEL_PREFIX + userId);
+          }
+        }
+      }
     });
 
     ws.on("error", () => {
       cleanupSocket(ws);
+      const doctorSockets = doctorToSockets.get(userId);
+      if (doctorSockets) {
+        doctorSockets.delete(ws);
+        if (doctorSockets.size === 0) {
+          doctorToSockets.delete(userId);
+          if (redisSub) {
+            void redisSub.unsubscribe(DOCTOR_EVENTS_CHANNEL_PREFIX + userId);
+          }
+        }
+      }
     });
   });
 }

@@ -5,6 +5,7 @@ const HEALTH_WALL_RECENT_PREFIX = "health-wall:recent:";
 const HEALTH_WALL_CHANNEL_PREFIX = "health-wall:channel:";
 const CONVERSATION_RECENT_PREFIX = "conversation:recent:";
 const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
+const DOCTOR_EVENTS_CHANNEL_PREFIX = "doctor:events:";
 const RECENT_LIMIT = 100;
 
 export type HealthWallMessageWithAuthor = {
@@ -106,6 +107,19 @@ export async function backfillHealthWallRecent(patientUserId: string, messages: 
 
 export function isRedisAvailable(): boolean {
   return !!REDIS_URL;
+}
+
+export async function publishDoctorChatsUpdated(doctorUserId: string): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      DOCTOR_EVENTS_CHANNEL_PREFIX + doctorUserId,
+      JSON.stringify({ type: "doctor_chats_updated", doctorUserId, timestamp: new Date().toISOString() })
+    );
+  } catch (err) {
+    console.error("[Redis] publishDoctorChatsUpdated error:", err);
+  }
 }
 
 // Conversation messages (for doctor-to-doctor, groups, consiliums, channels)
