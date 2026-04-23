@@ -234,7 +234,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">{t.searchDoctors}</p>
+          <p className="text-sm font-medium">{t.participants}</p>
           {(conv.participants ?? []).map((p) => {
             const displayName =
               [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ").trim() || p.user?.email || p.userId;

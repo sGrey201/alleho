@@ -8,6 +8,7 @@ import {
   userQuestionnaires,
   healthWallMessages,
   healthWallDoctors,
+  invites,
   conversations,
   conversationParticipants,
   conversationMessages,
@@ -28,6 +29,8 @@ import {
   type InsertHealthWallMessage,
   type HealthWallDoctor,
   type InsertHealthWallDoctor,
+  type Invite,
+  type InsertInvite,
   type Conversation,
   type InsertConversation,
   type ConversationParticipant,
@@ -36,10 +39,29 @@ import {
   type InsertConversationMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ne, or, ilike, sql, inArray, and, desc } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, and, desc, count } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
+export type MessengerPersonalContact = {
+  userId: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  conversationId?: string;
+  lastMessageAt?: Date | null;
+  lastVisitedAt?: Date | null;
+};
+export type MessengerChannelListItem = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+  isMember: boolean;
+  participantCount: number;
+  createdAt: Date | null;
+  lastPostAt: Date | null;
+  myRole?: string;
+};
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -107,6 +129,14 @@ export interface IStorage {
   removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean>;
   isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean>;
 
+  // Invite operations
+  createInvite(invite: InsertInvite): Promise<Invite>;
+  getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined>;
+  markInviteAccepted(inviteId: string, acceptedUserId: string, acceptedEmail?: string): Promise<Invite>;
+  markInviteExpired(inviteId: string): Promise<Invite>;
+  getInviterOfUser(userId: string): Promise<User | undefined>;
+  getAcceptedInvitesCountByUser(inviterUserId: string): Promise<number>;
+
   // Messenger conversations (doctors only)
   createConversation(data: InsertConversation): Promise<Conversation>;
   getConversation(id: string): Promise<Conversation | undefined>;
@@ -126,6 +156,8 @@ export interface IStorage {
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
+  getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
+  getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -813,6 +845,68 @@ export class DatabaseStorage implements IStorage {
     return connection?.patientLastVisitedAt || null;
   }
 
+  async createInvite(invite: InsertInvite): Promise<Invite> {
+    const [created] = await db
+      .insert(invites)
+      .values(invite)
+      .returning();
+    return created;
+  }
+
+  async getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(eq(invites.tokenHash, tokenHash));
+    return invite;
+  }
+
+  async markInviteAccepted(inviteId: string, acceptedUserId: string, acceptedEmail?: string): Promise<Invite> {
+    const [updated] = await db
+      .update(invites)
+      .set({
+        email: acceptedEmail ?? undefined,
+        status: "accepted",
+        acceptedUserId,
+        acceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(invites.id, inviteId))
+      .returning();
+    return updated;
+  }
+
+  async markInviteExpired(inviteId: string): Promise<Invite> {
+    const [updated] = await db
+      .update(invites)
+      .set({
+        status: "expired",
+        updatedAt: new Date(),
+      })
+      .where(eq(invites.id, inviteId))
+      .returning();
+    return updated;
+  }
+
+  async getInviterOfUser(userId: string): Promise<User | undefined> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(and(eq(invites.acceptedUserId, userId), eq(invites.status, "accepted")))
+      .orderBy(desc(invites.acceptedAt))
+      .limit(1);
+    if (!invite) return undefined;
+    return this.getUser(invite.invitedByUserId);
+  }
+
+  async getAcceptedInvitesCountByUser(inviterUserId: string): Promise<number> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(invites)
+      .where(and(eq(invites.invitedByUserId, inviterUserId), eq(invites.status, "accepted")));
+    return row?.value ?? 0;
+  }
+
   // Messenger conversations
   async createConversation(data: InsertConversation): Promise<Conversation> {
     const [c] = await db.insert(conversations).values(data).returning();
@@ -997,6 +1091,108 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversations.id, id))
       .returning();
     return c;
+  }
+
+  async getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]> {
+    const adminUsers = await this.getAdminUsers(currentUserId);
+    const contacts = await Promise.all(
+      adminUsers.map(async (user) => {
+        const conversationId = await this.getDirectConversationBetween(currentUserId, user.id);
+        const lastVisitedAt = await this.getDoctorLastVisit(currentUserId, user.id);
+        let lastMessageAt: Date | null = null;
+        if (conversationId) {
+          const lastMessage = await this.getLastConversationMessage(conversationId);
+          lastMessageAt = lastMessage?.createdAt ?? null;
+        }
+        return {
+          userId: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          conversationId,
+          lastMessageAt,
+          lastVisitedAt,
+        };
+      })
+    );
+
+    contacts.sort((a, b) => {
+      const aHasConversation = !!a.conversationId && !!a.lastMessageAt;
+      const bHasConversation = !!b.conversationId && !!b.lastMessageAt;
+      if (aHasConversation !== bHasConversation) return bHasConversation ? 1 : -1;
+
+      if (aHasConversation && bHasConversation) {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        if (aTime !== bTime) return bTime - aTime;
+      }
+
+      const aVisit = a.lastVisitedAt ? new Date(a.lastVisitedAt).getTime() : 0;
+      const bVisit = b.lastVisitedAt ? new Date(b.lastVisitedAt).getTime() : 0;
+      if (aVisit !== bVisit) return bVisit - aVisit;
+
+      const aName = [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || a.email || "";
+      const bName = [b.firstName, b.lastName].filter(Boolean).join(" ").trim() || b.email || "";
+      return aName.localeCompare(bName, "ru");
+    });
+
+    return contacts;
+  }
+
+  async getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]> {
+    const allChannels = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.type, "channel"))
+      .orderBy(desc(conversations.createdAt));
+
+    const myParticipation = await db
+      .select({
+        conversationId: conversationParticipants.conversationId,
+        role: conversationParticipants.role,
+      })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, currentUserId));
+    const myParticipationByConversation = new Map(myParticipation.map((row) => [row.conversationId, row.role]));
+
+    const channels = await Promise.all(
+      allChannels.map(async (channel) => {
+        const [participantCountRow] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(conversationParticipants)
+          .where(eq(conversationParticipants.conversationId, channel.id));
+        const lastPost = await this.getLastConversationMessage(channel.id);
+        const myRole = myParticipationByConversation.get(channel.id);
+        return {
+          id: channel.id,
+          name: channel.name,
+          avatarUrl: channel.avatarUrl ?? null,
+          participantCount: Number(participantCountRow?.count ?? 0),
+          isMember: !!myRole,
+          myRole: myRole ?? undefined,
+          createdAt: channel.createdAt ?? null,
+          lastPostAt: lastPost?.createdAt ?? null,
+        };
+      })
+    );
+
+    channels.sort((a, b) => {
+      if (a.isMember !== b.isMember) return a.isMember ? -1 : 1;
+
+      if (a.isMember && b.isMember) {
+        const aLastPostTime = a.lastPostAt ? new Date(a.lastPostAt).getTime() : 0;
+        const bLastPostTime = b.lastPostAt ? new Date(b.lastPostAt).getTime() : 0;
+        if (aLastPostTime !== bLastPostTime) return bLastPostTime - aLastPostTime;
+      }
+
+      const aCreatedAt = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bCreatedAt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (aCreatedAt !== bCreatedAt) return bCreatedAt - aCreatedAt;
+
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+
+    return channels;
   }
 }
 

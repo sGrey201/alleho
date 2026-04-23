@@ -468,6 +468,7 @@ export default function HealthWall() {
     : isOwnWall
       ? t.healthWall
       : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
+  const profileTargetUserId = isDoctorChatMode ? peerDoctorUserId : (!isOwnWall ? patientUserId : null);
 
   const handleBackClick = () => {
     if (isDoctorChatMode) {
@@ -580,7 +581,11 @@ export default function HealthWall() {
         </Button>
         <div className="flex-1">
           {isDoctorChatMode ? (
-            <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
+            <h1
+              className={`text-lg font-bold ${profileTargetUserId ? "cursor-pointer hover:opacity-80" : ""}`}
+              data-testid="text-health-wall-title"
+              onClick={() => profileTargetUserId && setLocation(`/profile/${profileTargetUserId}`)}
+            >
               {displayName}
             </h1>
           ) : isOwnWall ? (
@@ -622,7 +627,11 @@ export default function HealthWall() {
             </>
           ) : (
             <>
-              <h1 className="text-lg font-bold" data-testid="text-health-wall-title">
+              <h1
+                className={`text-lg font-bold ${profileTargetUserId ? "cursor-pointer hover:opacity-80" : ""}`}
+                data-testid="text-health-wall-title"
+                onClick={() => profileTargetUserId && setLocation(`/profile/${profileTargetUserId}`)}
+              >
                 {displayName}
               </h1>
               {patientInfo && (

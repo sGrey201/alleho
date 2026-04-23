@@ -22,6 +22,27 @@
       "when": 1773800000000,
       "tag": "0002_conversation_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773810000000,
+      "tag": "0003_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773813000000,
+      "tag": "0004_invites_email_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773816000000,
+      "tag": "0005_users_country",
+      "breakpoints": true
     }
   ]
 }

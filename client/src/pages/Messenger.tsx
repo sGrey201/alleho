@@ -1,15 +1,14 @@
-import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, Link, Redirect } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
-import { Loader2, User, Users, MessageCircle, Radio, Search, Plus, Send } from "lucide-react";
+import { Loader2, User, Users, MessageCircle, Radio, Search, Plus, Copy, Share2 } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
-import Profile from "@/pages/Profile";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -57,6 +56,15 @@ export type ChatItem = {
   otherParticipantId?: string;
   participantCount?: number;
   myRole?: string;
+  isMember?: boolean;
+  lastVisitedAt?: string | null;
+};
+
+type PaginatedChatsResponse = {
+  items: ChatItem[];
+  hasMore: boolean;
+  nextOffset: number | null;
+  total: number;
 };
 
 export type MessengerSearchDoctor = {
@@ -77,6 +85,8 @@ export type MessengerSearchResults = {
 function chatInitial(label: string): string {
   return (label || "?").trim().charAt(0).toUpperCase() || "?";
 }
+
+const PAGE_SIZE = 20;
 
 export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
@@ -101,11 +111,9 @@ export default function Messenger() {
 
   const isChatSelected = (chat: ChatItem) =>
     chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
-  const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const isProfile = showProfilePanel;
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -127,16 +135,33 @@ export default function Messenger() {
   const [folder, setFolder] = useState<"personal" | "groups" | "channels">("personal");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
-  const [invitePatientOpen, setInvitePatientOpen] = useState(false);
-  const [invitePatientEmail, setInvitePatientEmail] = useState("");
+  const [inviteLinkData, setInviteLinkData] = useState<{
+    open: boolean;
+    inviteType: "patient" | "homeopath";
+    inviteUrl: string;
+    expiresAt: string;
+  }>({ open: false, inviteType: "patient", inviteUrl: "", expiresAt: "" });
 
-  const { data: chats, isLoading } = useQuery<ChatItem[]>({
-    queryKey: ["/api/me/chats"],
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
+    queryKey: ["/api/me/chats", folder],
+    queryFn: async ({ pageParam = 0 }) => {
+      const url = `/api/me/chats?folder=${folder}&limit=${PAGE_SIZE}&offset=${pageParam}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextOffset : undefined),
     enabled: isAuthenticated && isAdmin,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
+
+  const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
 
   const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch: refetchSearch } = useQuery<MessengerSearchResults>({
     queryKey: ["/api/messenger/search", debouncedSearchQuery],
@@ -148,8 +173,6 @@ export default function Messenger() {
     },
     enabled: isAuthenticated && isAdmin && showSearchBar,
   });
-
-  const filtered = (chats ?? []).filter((c) => c.folder === folder);
 
   function filterChatsBySearch(items: ChatItem[], query: string): ChatItem[] {
     const q = query.trim().toLowerCase();
@@ -169,10 +192,28 @@ export default function Messenger() {
 
   const searchFiltered =
     showSearchBar && searchQuery.trim()
-      ? filterChatsBySearch(chats ?? [], searchQuery)
+      ? filterChatsBySearch(chats, searchQuery)
       : [];
   const listToShow =
-    showSearchBar && searchQuery.trim() ? searchFiltered : filtered;
+    showSearchBar && searchQuery.trim() ? searchFiltered : chats;
+
+  useEffect(() => {
+    if (showSearchBar || !hasNextPage || isFetchingNextPage) return;
+    const root = listScrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
+    const target = loadMoreRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) fetchNextPage();
+      },
+      { root, rootMargin: "0px 0px 200px 0px", threshold: 0.1 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [showSearchBar, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
 
   const handleSelectChat = (chat: ChatItem) => {
     if (chat.source === "health_wall" && chat.patientUserId) {
@@ -206,20 +247,18 @@ export default function Messenger() {
     toast({ title: t.onlyOwnerCanAddMembers, variant: "destructive" });
   };
 
-  const invitePatientMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const res = await apiRequest("POST", "/api/invite-patient", { email });
+  const createInviteLinkMutation = useMutation({
+    mutationFn: async (inviteType: "patient" | "homeopath") => {
+      const res = await apiRequest("POST", "/api/invites", { inviteType });
       return res.json();
     },
-    onSuccess: () => {
-      toast({
-        title: t.inviteSuccess,
-        description: t.inviteSuccessDescription,
+    onSuccess: (data, inviteType) => {
+      setInviteLinkData({
+        open: true,
+        inviteType,
+        inviteUrl: data.inviteUrl,
+        expiresAt: data.expiresAt,
       });
-      setInvitePatientEmail("");
-      setInvitePatientOpen(false);
-      qc.invalidateQueries({ queryKey: ["/api/my-patients"] });
-      qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
     },
     onError: (error: Error) => {
       const msg = error?.message || "";
@@ -237,7 +276,7 @@ export default function Messenger() {
         type: payload.type,
         name: payload.name.trim(),
       });
-      return res.json() as { id: string };
+      return (await res.json()) as { id: string };
     },
     onSuccess: (data, variables) => {
       qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
@@ -283,7 +322,7 @@ export default function Messenger() {
 
   return (
     <div className={`flex h-full flex-col md:flex-row ${isMobileConversationOpen ? "pb-0" : "pb-14"} md:pb-0`}>
-      {!showProfilePanel && !isMobileConversationOpen && (
+      {!isMobileConversationOpen && (
       <div className={`w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background ${showSearchBar ? "min-h-[50vh] md:min-h-0" : ""}`}>
         <Tabs value={folder} onValueChange={(v) => setFolder(v as typeof folder)} className="flex-1 flex flex-col min-h-0 bg-gray-50">
           {/* Floating top panel on mobile — Telegram-style */}
@@ -328,17 +367,14 @@ export default function Messenger() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
                   onSelect={() => {
-                    setInvitePatientEmail("");
-                    setInvitePatientOpen(true);
+                    createInviteLinkMutation.mutate("patient");
                   }}
                 >
                   {t.messengerInvitePatient}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
-                    setShowSearchBar(true);
-                    setSearchQuery("");
-                    setFolder("personal");
+                    createInviteLinkMutation.mutate("homeopath");
                   }}
                 >
                   {t.messengerInviteHomeopath}
@@ -426,9 +462,20 @@ export default function Messenger() {
                                     : t.chatGroup;
                           return (
                             <button
-                              key={chat.source === "health_wall" ? chat.patientUserId! : chat.conversationId!}
+                              key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
                               type="button"
-                              onClick={() => handleSelectChat(chat)}
+                              onClick={() => {
+                                if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
+                                  void handleSelectChannel({
+                                    id: chat.conversationId,
+                                    name: chat.name ?? null,
+                                    avatarUrl: chat.avatarUrl ?? null,
+                                    isMember: false,
+                                  });
+                                  return;
+                                }
+                                handleSelectChat(chat);
+                              }}
                               className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
                             >
                               {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
@@ -549,7 +596,7 @@ export default function Messenger() {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : listToShow.length === 0 ? null : (
-              <ScrollArea className="h-full">
+              <ScrollArea ref={listScrollRef} className="h-full">
                 <div className="pt-1">
                   {listToShow.map((chat) => {
                     const isSelected = isChatSelected(chat);
@@ -571,9 +618,20 @@ export default function Messenger() {
                               : t.chatGroup;
                     return (
                       <button
-                        key={chat.source === "health_wall" ? chat.patientUserId! : chat.conversationId!}
+                        key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
                         type="button"
-                        onClick={() => handleSelectChat(chat)}
+                        onClick={() => {
+                          if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
+                            void handleSelectChannel({
+                              id: chat.conversationId,
+                              name: chat.name ?? null,
+                              avatarUrl: chat.avatarUrl ?? null,
+                              isMember: false,
+                            });
+                            return;
+                          }
+                          handleSelectChat(chat);
+                        }}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
                       >
                         {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
@@ -609,20 +667,79 @@ export default function Messenger() {
                       </button>
                     );
                   })}
+                  {!showSearchBar && hasNextPage && <div ref={loadMoreRef} className="h-4" />}
+                  {!showSearchBar && isFetchingNextPage && (
+                    <div className="flex items-center justify-center py-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             )}
           </TabsContent>
         </Tabs>
+        {!isMobileConversationOpen && (
+          <nav className="hidden md:block shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-md px-3 py-2">
+            {showSearchBar ? (
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchMessengerPlaceholder}
+                  className="flex-1 min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSearchBar(false);
+                    setSearchQuery("");
+                  }}
+                  className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-0 py-1">
+                <Link
+                  href="/profile"
+                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
+                >
+                  <span className="relative flex items-center justify-center size-8 rounded-full">
+                    <User className="h-4 w-4" />
+                  </span>
+                  <span className="text-[10px] font-medium">{t.profile}</span>
+                </Link>
+                <Link
+                  href="/messenger"
+                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary"
+                >
+                  <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
+                    <MessageCircle className="h-4 w-4" />
+                  </span>
+                  <span className="text-[10px] font-medium">{t.chatsTab}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowSearchBar(true)}
+                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
+                >
+                  <span className="relative flex items-center justify-center size-8 rounded-full">
+                    <Search className="h-4 w-4" />
+                  </span>
+                  <span className="text-[10px] font-medium">{t.search}</span>
+                </button>
+              </div>
+            )}
+          </nav>
+        )}
       </div>
       )}
 
-      <div className={`flex-1 flex flex-col min-h-0 ${showProfilePanel ? "bg-background" : "bg-muted/20"}`}>
-        {showProfilePanel ? (
-          <div className="flex-1 min-h-0 overflow-auto">
-            <Profile onSaveSuccess={() => setShowProfilePanel(false)} />
-          </div>
-        ) : (isGroupSettings || isChannelSettings) && conversationId ? (
+      <div className="flex-1 flex flex-col min-h-0 bg-muted/20">
+        {(isGroupSettings || isChannelSettings) && conversationId ? (
           <div className="flex-1 flex flex-col min-h-0">
             <GroupOrChannelSettings
               conversationId={conversationId}
@@ -658,49 +775,60 @@ export default function Messenger() {
             </div>
           </div>
         )}
+
       </div>
 
-      <Dialog
-        open={invitePatientOpen}
-        onOpenChange={(open) => {
-          setInvitePatientOpen(open);
-          if (!open) setInvitePatientEmail("");
-        }}
-      >
+      <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t.messengerInvitePatient}</DialogTitle>
+            <DialogTitle>
+              {inviteLinkData.inviteType === "homeopath" ? t.messengerInviteHomeopath : t.messengerInvitePatient}
+            </DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (invitePatientEmail.trim()) {
-                invitePatientMutation.mutate(invitePatientEmail.trim());
-              }
-            }}
-            className="space-y-4"
-          >
-            <Input
-              id="messenger-invite-email"
-              type="email"
-              autoComplete="email"
-              placeholder={t.inviteEmailPlaceholder}
-              aria-label={t.inviteEmailPlaceholder}
-              value={invitePatientEmail}
-              onChange={(e) => setInvitePatientEmail(e.target.value)}
-              required
-            />
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="text-xs text-muted-foreground mb-1">Ссылка-приглашение</p>
+              <p className="break-all text-sm">{inviteLinkData.inviteUrl}</p>
+            </div>
+            <p className="text-sm text-muted-foreground">Ссылка действительна 24 часа.</p>
             <DialogFooter className="flex flex-row justify-end gap-2">
-              <Button type="submit" disabled={invitePatientMutation.isPending || !invitePatientEmail.trim()}>
-                {invitePatientMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Send className="h-4 w-4 mr-2" />
-                )}
-                {t.messengerInviteSend}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!inviteLinkData.inviteUrl) return;
+                  await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                  toast({ title: "Ссылка скопирована" });
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Скопировать
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!inviteLinkData.inviteUrl) return;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: "Приглашение в Alleho",
+                        text: "Присоединяйтесь по ссылке:",
+                        url: inviteLinkData.inviteUrl,
+                      });
+                    } catch {
+                      // ignore user cancel
+                    }
+                  } else {
+                    await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                    toast({ title: "Ссылка скопирована" });
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Поделиться
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -794,38 +922,24 @@ export default function Messenger() {
           </div>
         ) : (
         <div className="rounded-2xl bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center justify-center gap-0 py-1">
-          <button
-            type="button"
-            onClick={() => setShowProfilePanel(true)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0 py-1 ${isProfile ? "text-primary" : "text-muted-foreground"}`}
+          <Link
+            href="/profile"
+            className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
           >
-            <span className={`relative flex items-center justify-center size-8 rounded-full ${isProfile ? "bg-primary/10" : ""}`}>
+            <span className="relative flex items-center justify-center size-8 rounded-full">
               <User className="h-4 w-4" />
             </span>
             <span className="text-[9px] font-medium">{t.profile}</span>
-          </button>
-          {showProfilePanel ? (
-            <button
-              type="button"
-              onClick={() => setShowProfilePanel(false)}
-              className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
-            >
-              <span className="relative flex items-center justify-center size-8 rounded-full">
-                <MessageCircle className="h-4 w-4" />
-              </span>
-              <span className="text-[9px] font-medium">{t.chatsTab}</span>
-            </button>
-          ) : (
-            <Link
-              href="/messenger"
-              className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary"
-            >
-              <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
-                <MessageCircle className="h-4 w-4" />
-              </span>
-              <span className="text-[9px] font-medium">{t.chatsTab}</span>
-            </Link>
-          )}
+          </Link>
+          <Link
+            href="/messenger"
+            className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary"
+          >
+            <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
+              <MessageCircle className="h-4 w-4" />
+            </span>
+            <span className="text-[9px] font-medium">{t.chatsTab}</span>
+          </Link>
           <button
             type="button"
             onClick={() => setShowSearchBar(true)}

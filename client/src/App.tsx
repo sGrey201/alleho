@@ -20,6 +20,7 @@ import Subscribe from "@/pages/Subscribe";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentFail from "@/pages/PaymentFail";
 import AuthPage from "@/pages/AuthPage";
+import InviteAccept from "@/pages/InviteAccept";
 import ResetPassword from "@/pages/ResetPassword";
 import AdminHome from "@/pages/admin/AdminHome";
 import AdminArticles from "@/pages/admin/AdminArticles";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/article/">{() => <Redirect to="/portraits" />}</Route>
       <Route path="/article/:slug" component={ArticleReader} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/invite/accept" component={InviteAccept} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/terms" component={Terms} />
       <Route path="/oferta" component={Oferta} />
@@ -69,6 +71,7 @@ function Router() {
       <Route path="/messenger/channel/:conversationId" component={Messenger} />
       <Route path="/messenger/group/:conversationId/settings" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/settings" component={Messenger} />
+      <Route path="/profile/:userId" component={Profile} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
@@ -110,13 +113,10 @@ function AppContent() {
     );
   }
 
-  if (location === "/" || location === "") {
-    return <Landing />;
-  }
-
   const isAuthPage = location === "/auth";
+  const isInviteAcceptPage = location.startsWith("/invite/accept");
   const isResetPasswordPage = location.startsWith("/reset-password");
-  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage) {
+  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage) {
     return <Redirect to="/auth" />;
   }
 
@@ -143,9 +143,24 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = location.startsWith('/health-wall') || location.startsWith('/messenger');
+  const isProfilePage = location.startsWith('/profile');
+  const isFullscreenPage =
+    location.startsWith('/health-wall') ||
+    location.startsWith('/messenger') ||
+    isProfilePage;
 
   if (isFullscreenPage) {
+    if (isProfilePage) {
+      return (
+        <div className="h-screen bg-background flex flex-col">
+          <ScrollToTop />
+          <main className="flex-1 overflow-y-auto">
+            <Router />
+          </main>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen bg-background flex flex-col overflow-hidden">
         <ScrollToTop />

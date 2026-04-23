@@ -35,6 +35,7 @@ export const users = pgTable("users", {
   birthYear: integer("birth_year"),
   height: integer("height"),
   weight: integer("weight"),
+  country: varchar("country", { length: 255 }),
   city: varchar("city", { length: 255 }),
   passwordHash: varchar("password_hash"),
   resetToken: varchar("reset_token"),
@@ -47,6 +48,49 @@ export const users = pgTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+export const inviteTypeEnum = z.enum(["patient", "homeopath"]);
+export type InviteType = z.infer<typeof inviteTypeEnum>;
+
+export const inviteStatusEnum = z.enum(["pending", "accepted", "expired", "revoked"]);
+export type InviteStatus = z.infer<typeof inviteStatusEnum>;
+
+export const invites = pgTable("invites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email"),
+  inviteType: varchar("invite_type", { length: 20 }).notNull().default("patient"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(),
+  invitedByUserId: varchar("invited_by_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  acceptedUserId: varchar("accepted_user_id").references(() => users.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("invites_email_idx").on(table.email),
+  index("invites_status_idx").on(table.status),
+  index("invites_invited_by_idx").on(table.invitedByUserId),
+  index("invites_expires_at_idx").on(table.expiresAt),
+  index("invites_accepted_user_idx").on(table.acceptedUserId),
+]);
+
+export const insertInviteSchema = createInsertSchema(invites).omit({
+  id: true,
+  acceptedAt: true,
+  revokedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  inviteType: inviteTypeEnum.default("patient"),
+  status: inviteStatusEnum.default("pending"),
+});
+
+export type InsertInvite = z.infer<typeof insertInviteSchema>;
+export type Invite = typeof invites.$inferSelect;
 
 // Tag category enum
 export const tagCategoryEnum = z.enum(['remedy', 'situation']);

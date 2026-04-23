@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
@@ -18,21 +18,11 @@ const loginSchema = z.object({
   password: z.string().min(1, "Введите пароль"),
 });
 
-const registerSchema = z.object({
-  email: z.string().email("Некорректный email"),
-  password: z.string().min(6, "Пароль должен быть не менее 6 символов"),
-  confirmPassword: z.string().min(1, "Подтвердите пароль"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Пароли не совпадают",
-  path: ["confirmPassword"],
-});
-
 const forgotPasswordSchema = z.object({
   email: z.string().email("Некорректный email"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
-type RegisterFormData = z.infer<typeof registerSchema>;
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 export default function AuthPage() {
@@ -44,11 +34,6 @@ export default function AuthPage() {
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
-  });
-
-  const registerForm = useForm<RegisterFormData>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
   const forgotPasswordForm = useForm<ForgotPasswordFormData>({
@@ -69,25 +54,6 @@ export default function AuthPage() {
       toast({ 
         title: "Ошибка входа", 
         description: error.message || "Неверный email или пароль",
-        variant: "destructive" 
-      });
-    },
-  });
-
-  const registerMutation = useMutation({
-    mutationFn: async (data: RegisterFormData) => {
-      const res = await apiRequest("POST", "/api/auth/register", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({ title: "Регистрация успешна" });
-      setLocation("/");
-    },
-    onError: (error: Error) => {
-      toast({ 
-        title: "Ошибка регистрации", 
-        description: error.message,
         variant: "destructive" 
       });
     },
@@ -119,11 +85,6 @@ export default function AuthPage() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2" data-testid="auth-tabs">
-              <TabsTrigger value="login" data-testid="tab-login">Вход</TabsTrigger>
-              <TabsTrigger value="register" data-testid="tab-register">Регистрация</TabsTrigger>
-            </TabsList>
-            
             <TabsContent value="login" className="space-y-4 mt-4">
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-4">
@@ -191,87 +152,6 @@ export default function AuthPage() {
                   Забыли пароль?
                 </button>
               </div>
-            </TabsContent>
-
-            <TabsContent value="register" className="space-y-4 mt-4">
-              <Form {...registerForm}>
-                <form onSubmit={registerForm.handleSubmit((data) => registerMutation.mutate(data))} className="space-y-4">
-                  <FormField
-                    control={registerForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              {...field} 
-                              type="email" 
-                              placeholder="your@email.com" 
-                              className="pl-10"
-                              data-testid="input-register-email"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={registerForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Пароль</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              {...field} 
-                              type="password" 
-                              placeholder="Минимум 6 символов" 
-                              className="pl-10"
-                              data-testid="input-register-password"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={registerForm.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Подтверждение пароля</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                              {...field} 
-                              type="password" 
-                              placeholder="Повторите пароль" 
-                              className="pl-10"
-                              data-testid="input-register-confirm"
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={registerMutation.isPending}
-                    data-testid="button-register"
-                  >
-                    {registerMutation.isPending ? "Регистрация..." : "Зарегистрироваться"}
-                  </Button>
-                </form>
-              </Form>
             </TabsContent>
 
             <TabsContent value="forgot" className="space-y-4 mt-4">

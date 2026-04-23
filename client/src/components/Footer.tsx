@@ -9,7 +9,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div>
-            <h3 className="mb-4 text-sm font-semibold text-foreground">MateriaMedica</h3>
+            <h3 className="mb-4 text-sm font-semibold text-foreground">Alle Homöopathen</h3>
             <p className="text-sm text-muted-foreground">Профессиональная платформа для гомеопатов</p>
           </div>
 

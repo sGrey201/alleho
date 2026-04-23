@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
@@ -7,8 +8,8 @@ import { db } from "./db";
 import { users, payments, articles } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin } from "./emailAuth";
-import { register, login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
-import { sendReceiptEmail, sendInviteEmail } from "./email";
+import { login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
+import { sendReceiptEmail, sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
@@ -151,7 +152,9 @@ ${allUrls.map(url => `  <url>
   });
 
   // Email auth routes
-  app.post('/api/auth/register', register);
+  app.post('/api/auth/register', (_req, res) => {
+    res.status(403).json({ message: "Регистрация доступна только по ссылке-приглашению" });
+  });
   app.post('/api/auth/login', login);
   app.post('/api/auth/forgot-password', requestPasswordReset);
   app.post('/api/auth/reset-password', resetPassword);
@@ -177,6 +180,7 @@ ${allUrls.map(url => `  <url>
             birthYear: user.birthYear,
             height: user.height,
             weight: user.weight,
+            country: user.country,
             city: user.city,
             subscriptionExpiresAt: user.subscriptionExpiresAt,
             isAdmin: user.isAdmin,
@@ -189,6 +193,141 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get('/api/invites/profile-summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      const inviter = await storage.getInviterOfUser(userId);
+      const invitedCount = await storage.getAcceptedInvitesCountByUser(userId);
+
+      res.json({
+        inviter: inviter
+          ? {
+              id: inviter.id,
+              email: inviter.email,
+              firstName: inviter.firstName,
+              lastName: inviter.lastName,
+            }
+          : null,
+        invitedCount,
+      });
+    } catch (error) {
+      console.error("Error fetching invite profile summary:", error);
+      res.status(500).json({ message: "Failed to fetch invite summary" });
+    }
+  });
+
+  app.post('/api/invites', isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      const emailRaw = String(req.body?.email || "").trim().toLowerCase();
+      const email = emailRaw || null;
+      const inviteTypeRaw = String(req.body?.inviteType || "patient").trim().toLowerCase();
+      const inviteType = inviteTypeRaw === "homeopath" ? "homeopath" : "patient";
+      if (email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) return res.status(400).json({ message: "Invalid email" });
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser) return res.status(409).json({ message: "user_exists" });
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await storage.createInvite({
+        email,
+        inviteType,
+        status: "pending",
+        tokenHash,
+        invitedByUserId: userId,
+        expiresAt,
+      });
+
+      const inviter = await storage.getUser(userId);
+      const doctorName =
+        [inviter?.firstName, inviter?.lastName].filter(Boolean).join(" ") ||
+        inviter?.email ||
+        "Ваш гомеопат";
+      const baseUrl = process.env.APP_URL || "https://alleho.ru";
+      const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+      if (email) {
+        const inviteUrlWithEmail = `${inviteUrl}&email=${encodeURIComponent(email)}`;
+        await sendInviteEmail(email, inviteUrlWithEmail, inviteType, doctorName, inviter?.email);
+      }
+
+      res.json({ success: true, email, inviteType, expiresAt, inviteUrl });
+    } catch (error) {
+      console.error("Error creating invite:", error);
+      res.status(500).json({ message: "Failed to create invite" });
+    }
+  });
+
+  app.post('/api/invites/accept', async (req: any, res) => {
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const token = String(req.body?.token || "").trim();
+      if (!email || !token) return res.status(400).json({ message: "Email and token are required" });
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const invite = await storage.getInviteByTokenHash(tokenHash);
+      if (!invite) {
+        return res.status(400).json({ message: "invalid_invite" });
+      }
+      if (invite.email && invite.email !== email) {
+        return res.status(400).json({ message: "invalid_invite_email" });
+      }
+      if (invite.status !== "pending") {
+        return res.status(400).json({ message: "invite_inactive" });
+      }
+      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+        await storage.markInviteExpired(invite.id);
+        return res.status(400).json({ message: "invite_expired" });
+      }
+
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({ message: "user_exists" });
+      }
+
+      const generatePassword = () => {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+        let pass = "";
+        for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        return pass;
+      };
+
+      const password = generatePassword();
+      const bcrypt = await import("bcryptjs");
+      const passwordHash = await bcrypt.hash(password, 10);
+      const newUser = await storage.createUserWithPassword(email, passwordHash);
+
+      if (invite.inviteType === "homeopath") {
+        await storage.updateUserProfile(newUser.id, { isAdmin: true });
+      } else {
+        await storage.addHealthWallDoctor(newUser.id, invite.invitedByUserId);
+      }
+
+      await storage.markInviteAccepted(invite.id, newUser.id, email);
+      await sendInviteAccessEmail(email, password);
+
+      (req.session as any).userId = newUser.id;
+      (req.session as any).authType = "email";
+
+      res.json({
+        id: newUser.id,
+        email: newUser.email,
+        isAdmin: invite.inviteType === "homeopath" ? true : newUser.isAdmin,
+      });
+    } catch (error) {
+      console.error("Error accepting invite:", error);
+      res.status(500).json({ message: "Failed to accept invite" });
     }
   });
 
@@ -809,6 +948,55 @@ ${allUrls.map(url => `  <url>
   });
 
   // User profile update route
+  app.get('/api/users/:id/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const targetUserId = req.params.id;
+      if (!targetUserId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      let inviter: Awaited<ReturnType<typeof storage.getInviterOfUser>> | undefined;
+      let invitedCount = 0;
+      try {
+        inviter = await storage.getInviterOfUser(targetUserId);
+        invitedCount = await storage.getAcceptedInvitesCountByUser(targetUserId);
+      } catch (inviteError) {
+        // Do not block profile view if invite subsystem is unavailable.
+        console.error("Invite summary unavailable for profile:", inviteError);
+      }
+
+      res.json({
+        user: {
+          id: targetUser.id,
+          email: targetUser.email,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName,
+          profileImageUrl: targetUser.profileImageUrl,
+          country: targetUser.country,
+          city: targetUser.city,
+          isAdmin: targetUser.isAdmin,
+        },
+        inviter: inviter
+          ? {
+              id: inviter.id,
+              email: inviter.email,
+              firstName: inviter.firstName,
+              lastName: inviter.lastName,
+            }
+          : null,
+        invitedCount,
+      });
+    } catch (error) {
+      console.error("Error fetching public profile:", error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
   app.put('/api/user/profile', isAuthenticated, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
@@ -816,7 +1004,7 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, city, profileImageUrl } = req.body;
+      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, country, city, profileImageUrl } = req.body;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -830,6 +1018,7 @@ ${allUrls.map(url => `  <url>
         birthYear: birthYear || null,
         height: height || null,
         weight: weight || null,
+        country: country || null,
         city: city || null,
         profileImageUrl: profileImageUrl || null,
       });
@@ -1158,90 +1347,92 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // --- Messenger: unified chat list for doctors (three folders: personal, groups, channels) ---
+  // --- Messenger: paginated chat list for doctors ---
   app.get("/api/me/chats", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
 
-      const chats: Array<{
-        source: "health_wall" | "conversation";
-        folder: "personal" | "groups" | "channels";
-        patientUserId?: string;
-        patientName?: string;
-        patientEmail?: string;
-        lastMessageAt?: string | null;
-        unreadCount?: number;
-        chatKind?: "patient";
-        conversationId?: string;
-        type?: string;
-        name?: string | null;
-        avatarUrl?: string | null;
-        participantCount?: number;
-        myRole?: string;
-      }> = [];
+      const folder = typeof req.query.folder === "string" ? req.query.folder : "personal";
+      const parsedLimit = Number(req.query.limit);
+      const parsedOffset = Number(req.query.offset);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20;
+      const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
 
-      const patients = await storage.getHealthWallPatients(currentUserId);
-      for (const { connection, patient } of patients) {
-        const stats = await storage.getPatientHealthWallStats(connection.patientUserId, currentUserId);
-        chats.push({
-          source: "health_wall",
-          folder: "personal",
-          patientUserId: connection.patientUserId,
-          patientName: patient.firstName && patient.lastName
-            ? `${patient.firstName} ${patient.lastName}`.trim()
-            : patient.firstName || patient.lastName || patient.email?.split("@")[0] || "Patient",
-          patientEmail: patient.email ?? undefined,
-          lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
-          unreadCount: stats.unreadCount,
-          chatKind: "patient",
+      const paged = <T,>(items: T[]) => {
+        const rows = items.slice(offset, offset + limit);
+        const nextOffset = offset + rows.length;
+        return {
+          items: rows,
+          hasMore: nextOffset < items.length,
+          nextOffset: nextOffset < items.length ? nextOffset : null,
+          total: items.length,
+        };
+      };
+
+      if (folder === "personal") {
+        const contacts = await storage.getMessengerPersonalContacts(currentUserId);
+        const items = contacts.map((contact) => {
+          const otherParticipantName =
+            [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
+          return {
+            source: "conversation" as const,
+            folder: "personal" as const,
+            type: "direct",
+            conversationId: contact.conversationId,
+            otherParticipantId: contact.userId,
+            otherParticipantName,
+            lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
+            lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
+          };
         });
+        return res.json(paged(items));
+      }
+
+      if (folder === "channels") {
+        const channels = await storage.getMessengerChannels(currentUserId);
+        const items = channels.map((channel) => ({
+          source: "conversation" as const,
+          folder: "channels" as const,
+          conversationId: channel.id,
+          type: "channel",
+          name: channel.name ?? undefined,
+          avatarUrl: channel.avatarUrl ?? null,
+          participantCount: channel.participantCount,
+          myRole: channel.myRole,
+          isMember: channel.isMember,
+          lastMessageAt: channel.lastPostAt?.toISOString() ?? null,
+        }));
+        return res.json(paged(items));
       }
 
       const convList = await storage.getConversationsForUser(currentUserId);
-      for (const conv of convList) {
-        const lastMsg = await storage.getLastConversationMessage(conv.id);
-        const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
-        let folder: "personal" | "groups" | "channels" = "groups";
-        if (conv.type === "direct") folder = "personal";
-        else if (conv.type === "channel") folder = "channels";
-        else if (conv.type === "group" || conv.type === "consilium") folder = "groups";
-
-        let otherParticipantName: string | undefined;
-        let otherParticipantId: string | undefined;
-        if (conv.type === "direct") {
-          const other = conv.participants.find((p) => p.userId !== currentUserId);
-          if (other) {
-            otherParticipantId = other.userId;
-            if (other.user) {
-              const parts = [other.user.firstName, other.user.lastName].filter(Boolean);
-              otherParticipantName = parts.length > 0 ? parts.join(" ").trim() : undefined;
-            }
-          }
-        }
-
-        chats.push({
-          source: "conversation",
-          folder,
-          conversationId: conv.id,
-          type: conv.type,
-          name: conv.name ?? undefined,
-          avatarUrl: conv.avatarUrl ?? null,
-          otherParticipantName,
-          otherParticipantId,
-          participantCount: conv.participants.length,
-          patientUserId: conv.patientUserId ?? undefined,
-          myRole,
-          lastMessageAt: lastMsg?.createdAt instanceof Date ? lastMsg.createdAt.toISOString() : lastMsg?.createdAt ?? null,
-        });
-      }
-
-      chats.sort((a, b) => {
+      const groups = await Promise.all(
+        convList
+          .filter((conv) => conv.type === "group" || conv.type === "consilium")
+          .map(async (conv) => {
+            const lastMsg = await storage.getLastConversationMessage(conv.id);
+            const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
+            return {
+              source: "conversation" as const,
+              folder: "groups" as const,
+              conversationId: conv.id,
+              type: conv.type,
+              name: conv.name ?? undefined,
+              avatarUrl: conv.avatarUrl ?? null,
+              participantCount: conv.participants.length,
+              patientUserId: conv.patientUserId ?? undefined,
+              myRole,
+              lastMessageAt: lastMsg?.createdAt instanceof Date ? lastMsg.createdAt.toISOString() : lastMsg?.createdAt ?? null,
+            };
+          })
+      );
+      groups.sort((a, b) => {
         const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
         return bTime - aTime;
       });
-      res.json(chats);
+      return res.json(paged(groups));
     } catch (error) {
       console.error("Error fetching /api/me/chats:", error);
       res.status(500).json({ message: "Failed to fetch chats" });
@@ -1729,7 +1920,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Invite patient (create account and send email)
+  // Invite patient (legacy endpoint kept for compatibility with existing client)
   app.post('/api/invite-patient', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
@@ -1749,31 +1940,28 @@ ${allUrls.map(url => `  <url>
         return res.status(409).json({ message: "user_exists" });
       }
 
-      const generatePassword = () => {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-        let pass = '';
-        for (let i = 0; i < 10; i++) {
-          pass += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return pass;
-      };
-
-      const password = generatePassword();
-      const bcrypt = await import('bcryptjs');
-      const passwordHash = await bcrypt.hash(password, 10);
-
-      const newUser = await storage.createUserWithPassword(normalizedEmail, passwordHash);
-
-      await storage.addHealthWallDoctor(newUser.id, userId);
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.createInvite({
+        email: normalizedEmail,
+        inviteType: "patient",
+        status: "pending",
+        tokenHash,
+        invitedByUserId: userId,
+        expiresAt,
+      });
 
       const doctor = await storage.getUser(userId);
       const doctorName = [doctor?.firstName, doctor?.lastName].filter(Boolean).join(' ') || doctor?.email || 'Ваш гомеопат';
+      const baseUrl = process.env.APP_URL || "https://alleho.ru";
+      const inviteUrl = `${baseUrl}/invite/accept?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
 
       try {
-        await sendInviteEmail(normalizedEmail, password, doctorName, doctor?.email);
+        await sendInviteEmail(normalizedEmail, inviteUrl, "patient", doctorName, doctor?.email);
       } catch (emailError) {
         console.error('Failed to send invite email:', emailError);
-        return res.status(500).json({ message: "Account created but failed to send email. Password: " + password });
+        return res.status(500).json({ message: "Failed to send invite email" });
       }
 
       res.json({ success: true, email: normalizedEmail });

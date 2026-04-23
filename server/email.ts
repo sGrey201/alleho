@@ -52,6 +52,16 @@ export async function getUncachableResendClient() {
   };
 }
 
+function getBaseUrl() {
+  return process.env.APP_URL
+    ? process.env.APP_URL
+    : process.env.REPLIT_DEV_DOMAIN
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+        : "http://localhost:5000";
+}
+
 export async function sendPasswordResetEmail(to: string, resetToken: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   
@@ -100,25 +110,18 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
 
 export async function sendInviteEmail(
   to: string,
-  password: string,
+  inviteUrl: string,
+  inviteType: "patient" | "homeopath",
   doctorName: string,
   doctorEmail?: string | null
 ) {
   const { client, fromEmail } = await getUncachableResendClient();
-  
-  const baseUrl = process.env.APP_URL 
-    ? process.env.APP_URL
-    : process.env.REPLIT_DEV_DOMAIN 
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : process.env.REPLIT_DOMAINS 
-    ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-    : 'http://localhost:5000';
-  
-  const healthWallUrl = `${baseUrl}/health-wall`;
+
   const inviterLine =
     doctorEmail && doctorEmail.trim()
       ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`
       : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`;
+  const inviteTitle = inviteType === "homeopath" ? "Приглашение в сообщество гомеопатов" : "Приглашение на Стену здоровья";
   
   await client.emails.send({
     from: fromEmail,
@@ -126,7 +129,7 @@ export async function sendInviteEmail(
     subject: 'Приглашение на Alleho',
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2C5282; margin-bottom: 20px;">Приглашение от вашего гомеопата</h1>
+        <h1 style="color: #2C5282; margin-bottom: 20px;">${inviteTitle}</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Здравствуйте!
         </p>
@@ -134,20 +137,13 @@ export async function sendInviteEmail(
           ${inviterLine}
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Ваши данные для входа:
+          Перейдите по ссылке, чтобы завершить регистрацию. Ссылка действует 24 часа и может быть использована только один раз:
         </p>
-        <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>
-          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
-        </div>
-        <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Перейдите на вашу Стену здоровья по ссылке:
-        </p>
-        <a href="${healthWallUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
-          Открыть Стену здоровья
+        <a href="${inviteUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Перейти к регистрации
         </a>
         <p style="font-size: 14px; color: #666; margin-top: 30px;">
-          Рекомендуем сменить пароль после первого входа.
+          После подтверждения мы пришлем вам пароль для входа отдельным письмом.
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
@@ -155,6 +151,35 @@ export async function sendInviteEmail(
         </p>
       </div>
     `
+  });
+}
+
+export async function sendInviteAccessEmail(to: string, password: string) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const loginUrl = `${getBaseUrl()}/auth`;
+
+  await client.emails.send({
+    from: fromEmail,
+    to: [to],
+    subject: "Данные для входа в Alleho",
+    html: `
+      <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #2C5282; margin-bottom: 20px;">Регистрация завершена</h1>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Ваш аккаунт создан. Используйте эти данные для входа:
+        </p>
+        <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
+        </div>
+        <a href="${loginUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Войти в Alleho
+        </a>
+        <p style="font-size: 14px; color: #666; margin-top: 30px;">
+          Рекомендуем сменить пароль после первого входа.
+        </p>
+      </div>
+    `,
   });
 }
 

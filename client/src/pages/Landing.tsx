@@ -19,7 +19,6 @@ export default function Landing() {
   }, [isLoading, isAuthenticated, isAdmin, setLocation]);
 
   const handleLogin = () => setLocation("/auth");
-  const handlePortraits = () => setLocation("/portraits");
 
   if (isLoading || isAuthenticated) {
     return (
@@ -31,13 +30,6 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b px-4 py-3 flex items-center justify-between">
-        <span className="font-semibold text-lg">Alleho</span>
-        <Button variant="outline" size="sm" onClick={handleLogin}>
-          Войти
-        </Button>
-      </header>
-
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 text-center max-w-2xl mx-auto">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">
           Alle Homöopathen
@@ -54,9 +46,6 @@ export default function Landing() {
         <div className="flex flex-col sm:flex-row gap-3">
           <Button onClick={handleLogin} size="lg">
             Войти в сообщество
-          </Button>
-          <Button variant="outline" size="lg" onClick={handlePortraits}>
-            Статьи и портреты препаратов
           </Button>
         </div>
       </main>
