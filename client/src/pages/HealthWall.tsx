@@ -529,7 +529,7 @@ export default function HealthWall() {
   };
 
   const inputArea = (
-    <div className="border-t px-4 py-4 shrink-0">
+    <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4">
         <div className="flex items-end gap-2">
           {!message.trim() && (
             <Button
@@ -732,7 +732,7 @@ export default function HealthWall() {
           </>
         )}
 
-        <div className={`flex flex-col ${showQuestionnaire && !isMobile && !isDoctorChatMode ? '' : 'flex-1'}`} style={showQuestionnaire && !isMobile && !isDoctorChatMode ? { width: `${100 - panelWidth}%` } : {}}>
+        <div className={`relative flex flex-col ${showQuestionnaire && !isMobile && !isDoctorChatMode ? '' : 'flex-1'}`} style={showQuestionnaire && !isMobile && !isDoctorChatMode ? { width: `${100 - panelWidth}%` } : {}}>
           <div className="flex-1 relative min-h-0">
             {isMobile && showQuestionnaire && !isDoctorChatMode ? (
               <div className="absolute inset-0 z-10 bg-background overflow-y-auto">
@@ -743,7 +743,7 @@ export default function HealthWall() {
                 />
               </div>
             ) : (
-              <div className="h-full overflow-y-auto px-4 py-4 space-y-3">
+              <div className="h-full overflow-y-auto px-4 py-4 pb-32 space-y-3">
                 {displayMessages.length > 0 ? (
                   <>
                     {(() => {
