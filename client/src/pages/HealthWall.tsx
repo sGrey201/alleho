@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -507,6 +508,13 @@ export default function HealthWall() {
       ? t.healthWall
       : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
   const profileTargetUserId = isDoctorChatMode ? peerDoctorUserId : (!isOwnWall ? patientUserId : null);
+  const canSelectMessageType = isAdmin && !isOwnWall && !isDoctorChatMode;
+  const messageTypeConfig: Record<'message' | 'prescription' | 'followup', { label: string; icon: typeof MessageCircle; activeClass: string }> = {
+    message: { label: "Сообщение", icon: MessageCircle, activeClass: "" },
+    prescription: { label: t.prescription, icon: Pill, activeClass: "bg-green-600 hover:bg-green-700 text-white" },
+    followup: { label: t.followup, icon: FileText, activeClass: "bg-purple-600 hover:bg-purple-700 text-white" },
+  };
+  const selectedMode = messageTypeConfig[messageMode];
 
   const handleBackClick = () => {
     if (isDoctorChatMode) {
@@ -522,30 +530,6 @@ export default function HealthWall() {
 
   const inputArea = (
     <div className="border-t px-4 py-4 shrink-0">
-        {isAdmin && !isOwnWall && !isDoctorChatMode && (
-          <div className="flex items-center gap-2 mb-2">
-            <Button
-              variant={messageMode === 'prescription' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMessageMode(messageMode === 'prescription' ? 'message' : 'prescription')}
-              className={messageMode === 'prescription' ? 'bg-green-600 hover:bg-green-700' : ''}
-              data-testid="button-toggle-prescription"
-            >
-              <Pill className="h-4 w-4 mr-1" />
-              {t.prescription}
-            </Button>
-            <Button
-              variant={messageMode === 'followup' ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMessageMode(messageMode === 'followup' ? 'message' : 'followup')}
-              className={messageMode === 'followup' ? 'bg-purple-600 hover:bg-purple-700' : ''}
-              data-testid="button-toggle-followup"
-            >
-              <FileText className="h-4 w-4 mr-1" />
-              {t.followup}
-            </Button>
-          </div>
-        )}
         <div className="flex items-end gap-2">
           {!message.trim() && (
             <Button
@@ -571,24 +555,57 @@ export default function HealthWall() {
             className="hidden"
             onChange={handlePhotoUpload}
           />
-          <Textarea
-            placeholder={
-              messageMode === 'prescription' ? t.prescriptionPlaceholder : 
-              messageMode === 'followup' ? t.followupPlaceholder : 
-              t.writeMessage
-            }
-            value={message}
-            onChange={handleTextareaInput}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            className={`flex-1 min-h-[36px] resize-none overflow-y-auto rounded-2xl ${
-              messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
-              messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
-              ''
-            }`}
-            style={{ maxHeight: '144px' }}
-            data-testid="input-message"
-          />
+          <div className="relative flex-1">
+            <Textarea
+              placeholder={
+                messageMode === 'prescription' ? t.prescriptionPlaceholder : 
+                messageMode === 'followup' ? t.followupPlaceholder : 
+                t.writeMessage
+              }
+              value={message}
+              onChange={handleTextareaInput}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              className={`min-h-[36px] resize-none overflow-y-auto rounded-full ${
+                messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
+                messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
+                ''
+              } ${canSelectMessageType ? 'pr-14' : ''}`}
+              style={{ maxHeight: '144px' }}
+              data-testid="input-message"
+            />
+            {canSelectMessageType && (
+              <div className="absolute inset-y-1.5 right-1.5 flex items-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={messageMode === "message" ? "outline" : "default"}
+                      size="icon"
+                      className={`rounded-full !h-8 !w-8 min-h-0 p-0 shadow-sm ${messageMode === "message" ? "bg-background" : selectedMode.activeClass}`}
+                      data-testid="button-message-type-trigger"
+                    >
+                      <selectedMode.icon className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onSelect={() => setMessageMode("message")} data-testid="menu-item-message-type-message">
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Сообщение
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMessageMode("prescription")} data-testid="menu-item-message-type-prescription">
+                      <Pill className="h-4 w-4 mr-2" />
+                      {t.prescription}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMessageMode("followup")} data-testid="menu-item-message-type-followup">
+                      <FileText className="h-4 w-4 mr-2" />
+                      {t.followup}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
           <Button
             onClick={handleSendMessage}
             disabled={!message.trim() || (isDoctorChatMode ? sendConversationMessageMutation.isPending : sendMessageMutation.isPending)}
@@ -702,6 +719,7 @@ export default function HealthWall() {
               <QuestionnairePanel 
                 patientUserId={patientUserId!} 
                 isOwnQuestionnaire={isOwnWall}
+                initialViewMode="view"
               />
             </div>
             <div
@@ -721,6 +739,7 @@ export default function HealthWall() {
                 <QuestionnairePanel 
                   patientUserId={patientUserId!} 
                   isOwnQuestionnaire={isOwnWall}
+                  initialViewMode="view"
                 />
               </div>
             ) : (

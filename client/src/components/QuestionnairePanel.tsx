@@ -35,6 +35,7 @@ interface PatientQuestionnaireResponse {
 interface QuestionnairePanelProps {
   patientUserId: string;
   isOwnQuestionnaire: boolean;
+  initialViewMode?: 'edit' | 'view';
 }
 
 const months = [
@@ -152,14 +153,14 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
   );
 }
 
-export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire }: QuestionnairePanelProps) {
+export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire, initialViewMode = 'edit' }: QuestionnairePanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [formData, setFormData] = useState<QuestionnaireData>({});
   const formDataRef = useRef<QuestionnaireData>({});
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [viewMode, setViewMode] = useState<'edit' | 'view'>('edit');
+  const [viewMode, setViewMode] = useState<'edit' | 'view'>(initialViewMode);
 
   type SubSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
   const [subSaveStatus, setSubSaveStatus] = useState<Record<string, SubSaveStatus>>({});

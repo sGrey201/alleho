@@ -132,7 +132,7 @@ export default function Messenger() {
     return () => mediaQuery.removeEventListener("change", onChange);
   }, []);
 
-  const [folder, setFolder] = useState<"personal" | "groups" | "channels">("personal");
+  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("doctors");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteLinkData, setInviteLinkData] = useState<{
@@ -145,10 +145,12 @@ export default function Messenger() {
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
+  const apiFolder = folder === "doctors" || folder === "patients" ? "personal" : folder;
+
   const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
-    queryKey: ["/api/me/chats", folder],
+    queryKey: ["/api/me/chats", apiFolder, folder],
     queryFn: async ({ pageParam = 0 }) => {
-      const url = `/api/me/chats?folder=${folder}&limit=${PAGE_SIZE}&offset=${pageParam}`;
+      const url = `/api/me/chats?folder=${apiFolder}&limit=${PAGE_SIZE}&offset=${pageParam}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -162,6 +164,15 @@ export default function Messenger() {
   });
 
   const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
+  const chatsByFolder = useMemo(() => {
+    if (folder === "doctors") {
+      return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
+    }
+    if (folder === "patients") {
+      return chats.filter((chat) => chat.source === "health_wall");
+    }
+    return chats;
+  }, [chats, folder]);
 
   const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch: refetchSearch } = useQuery<MessengerSearchResults>({
     queryKey: ["/api/messenger/search", debouncedSearchQuery],
@@ -213,10 +224,10 @@ export default function Messenger() {
 
   const searchFiltered =
     showSearchBar && searchQuery.trim()
-      ? filterChatsBySearch(chats, searchQuery)
+      ? filterChatsBySearch(chatsByFolder, searchQuery)
       : [];
   const listToShow =
-    showSearchBar && searchQuery.trim() ? searchFiltered : chats;
+    showSearchBar && searchQuery.trim() ? searchFiltered : chatsByFolder;
 
   useEffect(() => {
     if (showSearchBar || !hasNextPage || isFetchingNextPage) return;
@@ -349,13 +360,20 @@ export default function Messenger() {
           {/* Floating top panel on mobile — Telegram-style */}
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center gap-1.5 shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className="grid grid-cols-3 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
+              <TabsList className="grid grid-cols-4 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
                 <TabsTrigger
-                  value="personal"
+                  value="doctors"
                   className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
                 >
                   <User className="h-4 w-4 mr-1" />
-                  {t.folderPersonal}
+                  {t.searchDoctors}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="patients"
+                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <User className="h-4 w-4 mr-1" />
+                  Пациенты
                 </TabsTrigger>
                 <TabsTrigger
                   value="groups"
