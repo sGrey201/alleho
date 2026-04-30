@@ -1862,6 +1862,7 @@ ${allUrls.map(url => `  <url>
         id: patient?.id,
         email: patient?.email,
         patientName: patient?.firstName || patient?.email,
+        profileImageUrl: patient?.profileImageUrl ?? null,
         birthMonth: patient?.birthMonth,
         birthYear: patient?.birthYear,
         gender: patient?.gender,

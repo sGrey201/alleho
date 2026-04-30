@@ -1,16 +1,16 @@
 import { useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, ArrowLeft, Users } from "lucide-react";
+import { Loader2, ArrowLeft, Users } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useState } from "react";
+import { useUpload } from "@/hooks/use-upload";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import ChatInputBar from "@/components/ChatInputBar";
 
 interface ConversationInfo {
   id: string;
@@ -33,6 +34,7 @@ interface ConversationInfo {
       firstName?: string | null;
       lastName?: string | null;
       email?: string | null;
+      profileImageUrl?: string | null;
     };
   }>;
 }
@@ -84,7 +86,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   });
 
   const sendMutation = useMutation({
-    mutationFn: async (data: { content?: string; messageType?: string }) => {
+    mutationFn: async (data: { content?: string; imageUrl?: string; messageType?: string }) => {
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, data);
       return res.json();
     },
@@ -98,6 +100,23 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         }
       );
       setMessage("");
+    },
+  });
+
+  const { uploadFile, isUploading: isUploadingPhoto } = useUpload({
+    onSuccess: async (response) => {
+      await sendMutation.mutateAsync({
+        content: "",
+        imageUrl: response.objectPath,
+        messageType: "message",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: t.error,
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -132,6 +151,12 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     sendMutation.mutate({ content: message.trim(), messageType: "message" });
   };
 
+  const handleUploadImages = async (files: File[]) => {
+    for (const file of files) {
+      await uploadFile(file);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     if (isToday(d)) return format(d, "HH:mm", { locale: ru });
@@ -153,6 +178,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   }
 
   const title = conv.name ?? (conv.type === "direct" ? t.chatWithDoctor : conv.type);
+  const peerParticipant = conv.type === "direct"
+    ? conv.participants?.find((p) => p.userId !== user?.id)
+    : undefined;
+  const headerAvatarUrl = conv.type === "direct"
+    ? (peerParticipant?.user?.profileImageUrl ?? null)
+    : (conv.avatarUrl ?? null);
+  const headerInitials = title
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
 
   const isGroup = conv.type === "group";
   const myRole = conv.participants?.find((p) => p.userId === user?.id)?.role;
@@ -160,29 +197,40 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      <div className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        {(conv.type === "group" || conv.type === "channel") && (
-          <Avatar
-            className={`h-8 w-8 shrink-0 ${onTitleClick ? "cursor-pointer hover:opacity-80" : ""}`}
-            onClick={onTitleClick}
+    <div className="relative flex flex-col h-full">
+      <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={onBack}
+            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 backdrop-blur-md"
           >
-            <AvatarImage src={conv.avatarUrl || undefined} />
-            <AvatarFallback>{(title || "?").charAt(0).toUpperCase()}</AvatarFallback>
-          </Avatar>
-        )}
-        <h1
-          className={`font-semibold truncate flex-1 ${onTitleClick ? "cursor-pointer hover:opacity-80" : ""}`}
-          onClick={onTitleClick}
-        >
-          {title}
-        </h1>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <button
+            type="button"
+            onClick={onTitleClick}
+            disabled={!onTitleClick}
+            className={`flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 text-left backdrop-blur-md ${onTitleClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+          >
+            <p className="text-sm font-semibold truncate">{title}</p>
+          </button>
+          <button
+            type="button"
+            onClick={onTitleClick}
+            disabled={!onTitleClick}
+            className={`h-10 w-10 rounded-full border border-border/40 bg-background/55 p-0 backdrop-blur-md ${onTitleClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+          >
+            <Avatar className="h-full w-full">
+              <AvatarImage src={headerAvatarUrl || undefined} />
+              <AvatarFallback className="text-xs font-semibold">{headerInitials}</AvatarFallback>
+            </Avatar>
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 pt-20 pb-32 space-y-3">
         {messagesLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -221,33 +269,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t px-4 py-3 shrink-0 flex gap-2 items-end">
-        <Textarea
-          placeholder={t.writeMessage}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          rows={1}
-          className="min-h-[40px] max-h-32 resize-none"
-        />
-        <Button
-          size="icon"
-          onClick={handleSend}
-          disabled={!message.trim() || sendMutation.isPending}
-          className="shrink-0 h-10 w-10"
-        >
-          {sendMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+      <ChatInputBar
+        value={message}
+        placeholder={t.writeMessage}
+        onChange={setMessage}
+        onSend={handleSend}
+        isSending={sendMutation.isPending}
+        onUploadImages={handleUploadImages}
+        isUploadingImages={isUploadingPhoto}
+        wrapperClassName="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4"
+      />
 
       <Dialog open={addMembersOpen} onOpenChange={setAddMembersOpen}>
         <DialogContent>

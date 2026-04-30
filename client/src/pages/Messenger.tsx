@@ -791,7 +791,7 @@ export default function Messenger() {
           <div
             className="flex-1 flex flex-col min-h-0"
             style={{
-              backgroundImage: "url(/messenger_chat_background.png)",
+              backgroundImage: "url(/chat_bg_manual.png)",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
