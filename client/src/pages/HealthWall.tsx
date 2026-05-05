@@ -18,8 +18,10 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
 import { useHealthWallWs } from "@/hooks/useHealthWallWs";
-import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
+import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
+import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import { cn } from "@/lib/utils";
 
 interface Author {
   id: string;
@@ -92,6 +94,53 @@ function getThumbUrl(url: string): string {
   return url + (url.includes("?") ? "&" : "?") + "size=thumb";
 }
 
+function QuestionnaireViewModeSegment({
+  mode,
+  onChange,
+}: {
+  mode: "edit" | "view";
+  onChange: (m: "edit" | "view") => void;
+}) {
+  return (
+    <div
+      className="flex min-h-9 min-w-0 flex-1 items-stretch rounded-[10px] bg-muted/70 p-0.5 dark:bg-muted/50"
+      role="tablist"
+      aria-label="Режим анкеты"
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === "edit"}
+        className={cn(
+          "flex min-w-0 flex-1 items-center justify-center rounded-[8px] px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition-colors sm:px-2 sm:text-xs",
+          mode === "edit"
+            ? "bg-white text-foreground shadow-sm dark:bg-background"
+            : "text-muted-foreground",
+        )}
+        onClick={() => onChange("edit")}
+        data-testid="segment-questionnaire-edit"
+      >
+        Редактирование
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === "view"}
+        className={cn(
+          "flex min-w-0 flex-1 items-center justify-center rounded-[8px] px-1.5 py-1.5 text-center text-[10px] font-semibold leading-tight transition-colors sm:px-2 sm:text-xs",
+          mode === "view"
+            ? "bg-white text-foreground shadow-sm dark:bg-background"
+            : "text-muted-foreground",
+        )}
+        onClick={() => onChange("view")}
+        data-testid="segment-questionnaire-view"
+      >
+        Просмотр
+      </button>
+    </div>
+  );
+}
+
 export default function HealthWall() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [, setLocation] = useLocation();
@@ -101,6 +150,8 @@ export default function HealthWall() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
   const lastHealthWallReadAtRef = useRef<number>(0);
   const lastMarkedMessageIdRef = useRef<string | null>(null);
   const markReadInFlightRef = useRef(false);
@@ -109,19 +160,18 @@ export default function HealthWall() {
     const saved = localStorage.getItem(STORAGE_KEY_PANEL);
     return saved === 'true';
   });
+  const [questionnaireViewMode, setQuestionnaireViewMode] = useState<"edit" | "view">("view");
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY_DIVIDER);
     return saved ? parseInt(saved) : DEFAULT_PANEL_PERCENT;
   });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [, chatParams] = useRoute("/health-wall/chat/:userId");
   const [, patientParams] = useRoute("/health-wall/:patientUserId");
-  const peerDoctorUserId = chatParams?.userId;
-  const isDoctorChatMode = !!peerDoctorUserId;
-  const patientUserId = isDoctorChatMode ? undefined : (patientParams?.patientUserId || user?.id);
-  const isOwnWall = !isDoctorChatMode && !!patientUserId && patientUserId === user?.id;
+  const patientUserId = patientParams?.patientUserId || user?.id;
+  const isOwnWall = !!patientUserId && patientUserId === user?.id;
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
@@ -134,81 +184,13 @@ export default function HealthWall() {
     }
   }, []);
 
-  const { data: directConversation, isError: directChatError } = useQuery<{ conversationId: string }>({
-    queryKey: ["/api/messenger/direct", peerDoctorUserId],
-    queryFn: async () => {
-      const res = await fetch(`/api/messenger/direct/${peerDoctorUserId}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    enabled: isAuthenticated && isDoctorChatMode && !!peerDoctorUserId,
-  });
-  const doctorChatConversationId = directConversation?.conversationId;
-
-  useEffect(() => {
-    if (isDoctorChatMode && directChatError) {
-      toast({ title: "Не удалось открыть чат", variant: "destructive" });
-      setLocation("/messenger");
-    }
-  }, [isDoctorChatMode, directChatError, toast, setLocation]);
-
-  const { data: doctorChatConv } = useQuery<{ id: string; participants: { userId: string; user?: { firstName?: string; lastName?: string; email?: string; profileImageUrl?: string | null } }[] }>({
-    queryKey: ["/api/conversations", doctorChatConversationId],
-    enabled: !!doctorChatConversationId,
-  });
-
-  const { data: conversationMessages, isLoading: conversationMessagesLoading } = useQuery<ConversationMessageWithAuthor[]>({
-    queryKey: ["/api/conversations", doctorChatConversationId, "messages"],
-    enabled: !!doctorChatConversationId,
-  });
-
-  useConversationWs(doctorChatConversationId, !!doctorChatConversationId);
-
-  const sendConversationMessageMutation = useMutation({
-    mutationFn: async (data: { content?: string; imageUrl?: string; messageType?: string }) => {
-      const res = await apiRequest("POST", `/api/conversations/${doctorChatConversationId}/messages`, data);
-      return res.json();
-    },
-    onSuccess: (newMessage: ConversationMessageWithAuthor, variables) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", doctorChatConversationId, "messages"],
-        (old) => {
-          if (!old) return [newMessage];
-          if (old.some((m) => m.id === newMessage.id)) return old;
-          return [...old, newMessage];
-        }
-      );
-      if (!variables.imageUrl) {
-        setMessage("");
-        const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.style.height = "auto";
-          textarea.focus();
-        }
-      } else {
-        focusMessageInput();
-      }
-    },
-    onError: () => {
-      toast({ title: t.error, description: t.somethingWrong, variant: "destructive" });
-    },
-  });
-
   const { uploadFile, isUploading: uploadingPhoto } = useUpload({
     onSuccess: async (response) => {
-      if (isDoctorChatMode && doctorChatConversationId) {
-        await sendConversationMessageMutation.mutateAsync({
-          content: "",
-          imageUrl: response.objectPath,
-          messageType: "message",
-        });
-      } else {
-        await sendMessageMutation.mutateAsync({
-          content: '',
-          imageUrl: response.objectPath,
-          messageType: 'message',
-        });
-      }
+      await sendMessageMutation.mutateAsync({
+        content: '',
+        imageUrl: response.objectPath,
+        messageType: 'message',
+      });
     },
     onError: (error) => {
       toast({
@@ -221,12 +203,12 @@ export default function HealthWall() {
 
   const { data: messages, isLoading: messagesLoading } = useQuery<HealthWallMessage[]>({
     queryKey: ['/api/health-wall', patientUserId],
-    enabled: isAuthenticated && !!patientUserId && !isDoctorChatMode,
+    enabled: isAuthenticated && !!patientUserId,
   });
 
-  useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId && !isDoctorChatMode);
+  useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId);
 
-  const isDoctorViewingPatientWall = isAuthenticated && isAdmin && !isDoctorChatMode && !!patientUserId && !isOwnWall;
+  const isDoctorViewingPatientWall = isAuthenticated && isAdmin && !!patientUserId && !isOwnWall;
 
   const markCurrentHealthWallAsRead = useCallback(async (reason: 'enter' | 'leave' | 'incoming') => {
     if (!isDoctorViewingPatientWall || !patientUserId) return;
@@ -303,11 +285,7 @@ export default function HealthWall() {
       if (!variables.imageUrl) {
         setMessage('');
         setMessageMode('message');
-        const textarea = document.querySelector('[data-testid="input-message"]') as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.style.height = 'auto';
-          textarea.focus();
-        }
+        setTimeout(() => messageTextareaRef.current?.focus(), 0);
       } else {
         focusMessageInput();
       }
@@ -322,36 +300,46 @@ export default function HealthWall() {
   });
 
   useEffect(() => {
+    if (message !== "") return;
+    const el = messageTextareaRef.current;
+    if (el) syncChatTextareaHeight(el);
+  }, [message]);
+
+  useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       setLocation('/auth');
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
   const displayMessages: HealthWallMessage[] = useMemo(() => {
-    const raw = isDoctorChatMode
-      ? (conversationMessages ?? []).map((m) => ({
-          id: m.id,
-          patientUserId: "",
-          authorUserId: m.authorUserId,
-          messageType: (m.messageType || "message") as "message" | "prescription" | "followup",
-          content: m.content ?? undefined,
-          imageUrl: m.imageUrl ?? undefined,
-          createdAt: m.createdAt,
-          author: {
-            id: m.author.id,
-            email: m.author.email ?? undefined,
-            firstName: m.author.firstName ?? undefined,
-            lastName: m.author.lastName ?? undefined,
-            isAdmin: m.author.isAdmin ?? undefined,
-          },
-        }))
-      : (messages ?? []);
-    return [...raw].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [isDoctorChatMode, conversationMessages, messages]);
+    return [...(messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [messages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [displayMessages]);
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const scroll = () => scrollChatPaneToBottom(root);
+    scroll();
+    const raf = requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    const t1 = window.setTimeout(scroll, 80);
+    const t2 = window.setTimeout(scroll, 350);
+    const contentEl = messagesContentRef.current;
+    const ro =
+      contentEl &&
+      new ResizeObserver(() => {
+        scrollChatPaneToBottom(root);
+      });
+    if (contentEl && ro) ro.observe(contentEl);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+    };
+  }, [displayMessages, patientUserId]);
 
   useEffect(() => {
     if (!isDoctorViewingPatientWall || !patientUserId) return;
@@ -371,6 +359,10 @@ export default function HealthWall() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_PANEL, showQuestionnaire.toString());
+  }, [showQuestionnaire]);
+
+  useEffect(() => {
+    if (!showQuestionnaire) setQuestionnaireViewMode("view");
   }, [showQuestionnaire]);
 
   useEffect(() => {
@@ -412,16 +404,14 @@ export default function HealthWall() {
     }, 100);
   };
 
-  const toggleQuestionnaire = () => {
-    setShowQuestionnaire(prev => {
-      if (prev) focusMessageInput();
-      return !prev;
-    });
+  const closeQuestionnaire = () => {
+    setShowQuestionnaire(false);
+    focusMessageInput();
   };
 
-  const isLoadingMessages = isDoctorChatMode
-    ? (!doctorChatConversationId || conversationMessagesLoading)
-    : messagesLoading;
+  const openQuestionnaire = () => setShowQuestionnaire(true);
+
+  const isLoadingMessages = messagesLoading;
 
   if (authLoading || isLoadingMessages) {
     return (
@@ -437,17 +427,10 @@ export default function HealthWall() {
 
   const handleSendMessage = () => {
     if (!message.trim()) return;
-    if (isDoctorChatMode) {
-      sendConversationMessageMutation.mutate({
-        content: message.trim(),
-        messageType: "message",
-      });
-    } else {
-      sendMessageMutation.mutate({
-        content: message.trim(),
-        messageType: messageMode,
-      });
-    }
+    sendMessageMutation.mutate({
+      content: message.trim(),
+      messageType: messageMode,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -459,11 +442,7 @@ export default function HealthWall() {
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    const lineHeight = 24;
-    const maxHeight = lineHeight * 6;
-    el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+    syncChatTextareaHeight(e.target);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,55 +456,29 @@ export default function HealthWall() {
     e.target.value = '';
   };
 
-  const formatMessageDate = (dateStr: string) => {
+  /** Short time in bubble — no year */
+  const formatMessageBubbleTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    if (isToday(date)) {
-      return `${t.today}, ${format(date, 'HH:mm')}`;
-    }
-    if (isYesterday(date)) {
-      return `${t.yesterday}, ${format(date, 'HH:mm')}`;
-    }
-    return format(date, 'd MMMM, HH:mm', { locale: ru });
+    if (isToday(date)) return format(date, "HH:mm", { locale: ru });
+    if (isYesterday(date)) return `вч. ${format(date, "HH:mm", { locale: ru })}`;
+    return format(date, "dd.MM. HH:mm", { locale: ru });
   };
 
-  const getAuthorName = (author: Author) => {
-    if (author.firstName) {
-      return author.firstName;
-    }
-    return author.email?.split('@')[0] || 'User';
-  };
-
-  const peerDoctorName = isDoctorChatMode && doctorChatConv?.participants
-    ? (() => {
-        const other = doctorChatConv.participants.find((p) => p.userId !== user?.id);
-        if (!other?.user) return t.chatWithDoctor;
-        const parts = [other.user.firstName, other.user.lastName].filter(Boolean);
-        return parts.length > 0 ? parts.join(" ").trim() : other.user.email?.split("@")[0] || t.chatWithDoctor;
-      })()
-    : null;
-
-  const displayName = isDoctorChatMode
-    ? (peerDoctorName ?? t.chatWithDoctor)
-    : isOwnWall
-      ? t.healthWall
-      : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
-  const profileTargetUserId = isDoctorChatMode ? peerDoctorUserId : (!isOwnWall ? patientUserId : null);
-  const canSelectMessageType = isAdmin && !isOwnWall && !isDoctorChatMode;
+  const displayName = isOwnWall
+    ? t.healthWall
+    : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
+  const profileTargetUserId = !isOwnWall ? patientUserId : null;
+  const canSelectMessageType = isAdmin && !isOwnWall;
   const messageTypeConfig: Record<'message' | 'prescription' | 'followup', { label: string; icon: typeof MessageCircle; activeClass: string }> = {
     message: { label: "Сообщение", icon: MessageCircle, activeClass: "" },
     prescription: { label: t.prescription, icon: Pill, activeClass: "bg-green-600 hover:bg-green-700 text-white" },
     followup: { label: t.followup, icon: FileText, activeClass: "bg-purple-600 hover:bg-purple-700 text-white" },
   };
   const selectedMode = messageTypeConfig[messageMode];
-  const peerDoctorParticipant = isDoctorChatMode && doctorChatConv?.participants
-    ? doctorChatConv.participants.find((p) => p.userId !== user?.id)
-    : null;
-  const headerAvatarUrl = isDoctorChatMode
-    ? (peerDoctorParticipant?.user?.profileImageUrl ?? null)
-    : isOwnWall
-      ? (user?.profileImageUrl ?? null)
-      : (patientInfo?.profileImageUrl ?? null);
-  const headerInitials = (isDoctorChatMode ? (peerDoctorName ?? t.chatWithDoctor) : displayName)
+  const headerAvatarUrl = isOwnWall
+    ? (user?.profileImageUrl ?? null)
+    : (patientInfo?.profileImageUrl ?? null);
+  const headerInitials = displayName
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -533,10 +486,6 @@ export default function HealthWall() {
     .join("") || "U";
 
   const handleBackClick = () => {
-    if (isDoctorChatMode) {
-      setLocation("/messenger");
-      return;
-    }
     if (isOwnWall) {
       setLocation('/');
     } else {
@@ -573,6 +522,7 @@ export default function HealthWall() {
           />
           <div className="relative flex-1">
             <Textarea
+              ref={messageTextareaRef}
               placeholder={
                 messageMode === 'prescription' ? t.prescriptionPlaceholder : 
                 messageMode === 'followup' ? t.followupPlaceholder : 
@@ -582,7 +532,7 @@ export default function HealthWall() {
               onChange={handleTextareaInput}
               onKeyDown={handleKeyDown}
               rows={1}
-              className={`min-h-[36px] resize-none overflow-y-auto rounded-full ${
+              className={`min-h-[36px] resize-none overflow-y-auto rounded-[22px] ${
                 messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
                 messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
                 ''
@@ -624,12 +574,12 @@ export default function HealthWall() {
           </div>
           <Button
             onClick={handleSendMessage}
-            disabled={!message.trim() || (isDoctorChatMode ? sendConversationMessageMutation.isPending : sendMessageMutation.isPending)}
+            disabled={!message.trim() || sendMessageMutation.isPending}
             size="icon"
             className="rounded-full shrink-0 h-10 w-10"
             data-testid="button-send-message"
           >
-            {(isDoctorChatMode ? sendConversationMessageMutation.isPending : sendMessageMutation.isPending) ? (
+            {sendMessageMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
@@ -641,13 +591,14 @@ export default function HealthWall() {
 
   return (
     <div className="relative flex flex-col h-full" ref={containerRef}>
+      {!showQuestionnaire && (
       <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">
         <Button
           variant="secondary"
           size="icon"
           onClick={handleBackClick}
-          className="h-10 w-10 rounded-full border border-border/40 bg-background/55 backdrop-blur-md"
+          className="h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
           data-testid="button-back"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -665,9 +616,7 @@ export default function HealthWall() {
             }
           }}
         >
-          {isDoctorChatMode ? (
-            <p className="text-sm font-semibold truncate" data-testid="text-health-wall-title">{displayName}</p>
-          ) : isOwnWall ? (
+          {isOwnWall ? (
             <>
               {connectedDoctors && connectedDoctors.length > 0 ? (
                 <div data-testid="button-manage-doctors">
@@ -703,17 +652,15 @@ export default function HealthWall() {
             </>
           )}
         </div>
-        {!isDoctorChatMode && (
-          <Button
-            variant={showQuestionnaire ? "default" : "secondary"}
-            size="icon"
-            onClick={toggleQuestionnaire}
-            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 backdrop-blur-md"
-            data-testid="button-toggle-questionnaire"
-          >
-            {showQuestionnaire ? <MessageCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-          </Button>
-        )}
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={openQuestionnaire}
+          className="h-10 w-10 rounded-full border border-border/40 bg-background/55 backdrop-blur-md !text-black [&_svg]:!text-black hover:bg-background/70"
+          data-testid="button-open-questionnaire"
+        >
+          <FileText className="h-4 w-4" />
+        </Button>
         <button
           type="button"
           onClick={() => profileTargetUserId && setLocation(`/profile/${profileTargetUserId}`)}
@@ -728,19 +675,40 @@ export default function HealthWall() {
         </button>
         </div>
       </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden relative">
-        {showQuestionnaire && !isMobile && !isDoctorChatMode && (
+        {showQuestionnaire && !isMobile && (
           <>
-            <div 
-              className="h-full overflow-hidden border-r bg-background"
+            <div
+              className="flex h-full min-h-0 flex-col border-r bg-white dark:bg-background"
               style={{ width: `${panelWidth}%` }}
             >
-              <QuestionnairePanel 
-                patientUserId={patientUserId!} 
-                isOwnQuestionnaire={isOwnWall}
-                initialViewMode="view"
-              />
+              <div className="flex shrink-0 items-center gap-2 border-b border-border/50 bg-white px-3 py-3 dark:bg-background md:px-4">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={closeQuestionnaire}
+                  className="h-10 w-10 shrink-0 rounded-full border border-border/40 bg-white text-black dark:bg-background"
+                  data-testid="button-questionnaire-back"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <QuestionnaireViewModeSegment
+                  mode={questionnaireViewMode}
+                  onChange={setQuestionnaireViewMode}
+                />
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-6 dark:bg-background md:px-4">
+                <QuestionnairePanel
+                  patientUserId={patientUserId!}
+                  isOwnQuestionnaire={isOwnWall}
+                  initialViewMode="view"
+                  viewMode={questionnaireViewMode}
+                  onViewModeChange={setQuestionnaireViewMode}
+                  hideViewModeToggle
+                />
+              </div>
             </div>
             <div
               className="w-2 h-full cursor-col-resize flex items-center justify-center bg-border hover:bg-primary/20 transition-colors shrink-0"
@@ -753,42 +721,58 @@ export default function HealthWall() {
         )}
 
         <div
-          className={`relative flex flex-col ${showQuestionnaire && !isMobile && !isDoctorChatMode ? '' : 'flex-1'}`}
+          className={`relative flex flex-col ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`}
           style={{
-            ...(showQuestionnaire && !isMobile && !isDoctorChatMode ? { width: `${100 - panelWidth}%` } : {}),
-            backgroundImage: "url(/chat_bg_manual.png)",
+            ...(showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : {}),
+            backgroundImage: "url(/chat_bg_pattern.png)",
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
           }}
         >
           <div className="flex-1 relative min-h-0">
-            {isMobile && showQuestionnaire && !isDoctorChatMode ? (
+            {isMobile && showQuestionnaire ? (
               <div
-                className="absolute inset-0 z-10 overflow-y-auto"
-                style={{
-                  backgroundImage: "url(/chat_bg_manual.png)",
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  backgroundRepeat: "no-repeat",
-                }}
+                className="absolute inset-0 z-10 flex flex-col overflow-hidden bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] dark:bg-background"
               >
-                <QuestionnairePanel 
-                  patientUserId={patientUserId!} 
-                  isOwnQuestionnaire={isOwnWall}
-                  initialViewMode="view"
-                />
+                <div className="flex shrink-0 items-center gap-2 border-b border-border/40 bg-white px-4 py-3 dark:bg-background">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    onClick={closeQuestionnaire}
+                    className="h-10 w-10 shrink-0 rounded-full border border-border/40 bg-white text-black dark:bg-background"
+                    data-testid="button-questionnaire-back"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  <QuestionnaireViewModeSegment
+                    mode={questionnaireViewMode}
+                    onChange={setQuestionnaireViewMode}
+                  />
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 dark:bg-background">
+                  <QuestionnairePanel
+                    patientUserId={patientUserId!}
+                    isOwnQuestionnaire={isOwnWall}
+                    initialViewMode="view"
+                    viewMode={questionnaireViewMode}
+                    onViewModeChange={setQuestionnaireViewMode}
+                    hideViewModeToggle
+                  />
+                </div>
               </div>
             ) : (
-              <div className="h-full overflow-y-auto px-4 pt-20 pb-32 space-y-3">
+              <div
+                ref={messagesScrollRef}
+                className={`h-full overflow-y-auto px-4 pb-32 ${showQuestionnaire ? "pt-4" : "pt-20"}`}
+              >
+                <div ref={messagesContentRef} className="space-y-3">
                 {displayMessages.length > 0 ? (
                   <>
                     {(() => {
-                      const filteredMessages = isDoctorChatMode
-                        ? displayMessages
-                        : isOwnWall 
-                          ? displayMessages.filter(msg => msg.messageType !== 'followup')
-                          : displayMessages;
+                      const filteredMessages = isOwnWall 
+                        ? displayMessages.filter(msg => msg.messageType !== 'followup')
+                        : displayMessages;
                       const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
                       
                       filteredMessages.forEach((msg, index) => {
@@ -820,9 +804,9 @@ export default function HealthWall() {
                               className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                               data-testid={`message-group-${groupIndex}`}
                             >
-                              <Card className={`max-w-[85%] ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
-                                <CardContent className="p-3">
-                                  <div className={`grid gap-1 mb-2 ${
+                              <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
+                                <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
+                                  <div className={`grid gap-1 ${
                                     group.messages.length === 1 ? 'grid-cols-1' :
                                     group.messages.length === 2 ? 'grid-cols-2' :
                                     'grid-cols-3'
@@ -838,9 +822,9 @@ export default function HealthWall() {
                                       />
                                     ))}
                                   </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatMessageDate(lastMsg.createdAt)}
-                                  </p>
+                                  <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                                    {formatMessageBubbleTime(lastMsg.createdAt)}
+                                  </span>
                                 </CardContent>
                               </Card>
                             </div>
@@ -858,7 +842,7 @@ export default function HealthWall() {
                             data-testid={`message-${msg.id}`}
                           >
                             <Card 
-                              className={`max-w-[85%] ${
+                              className={`max-w-[85%] min-w-28 ${
                                 isPrescription 
                                   ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' 
                                   : isFollowup
@@ -868,9 +852,9 @@ export default function HealthWall() {
                                       : ''
                               }`}
                             >
-                              <CardContent className="p-3">
+                              <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
                                 {isPrescription && (
-                                  <div className="mb-1">
+                                  <div className="mb-0.5">
                                     <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
                                       <Pill className="h-3 w-3 mr-1" />
                                       {t.prescription}
@@ -878,7 +862,7 @@ export default function HealthWall() {
                                   </div>
                                 )}
                                 {isFollowup && (
-                                  <div className="mb-1">
+                                  <div className="mb-0.5">
                                     <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
                                       <FileText className="h-3 w-3 mr-1" />
                                       {t.followup}
@@ -889,17 +873,19 @@ export default function HealthWall() {
                                   <img 
                                     src={getThumbUrl(msg.imageUrl)} 
                                     alt="Uploaded" 
-                                    className="rounded-md max-h-64 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                                    className="rounded-md max-h-64 mb-0.5 cursor-pointer hover:opacity-90 transition-opacity"
                                     data-testid={`image-${msg.id}`}
                                     onClick={() => setSelectedImage(msg.imageUrl!)}
                                   />
                                 )}
                                 {msg.content && (
-                                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                  <p className="text-sm whitespace-pre-wrap leading-snug pr-7 pb-0.5">
+                                    {msg.content}
+                                  </p>
                                 )}
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {formatMessageDate(msg.createdAt)}
-                                </p>
+                                <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                                  {formatMessageBubbleTime(msg.createdAt)}
+                                </span>
                               </CardContent>
                             </Card>
                           </div>
@@ -914,6 +900,7 @@ export default function HealthWall() {
                     <p className="text-sm text-muted-foreground">{t.noMessagesDescription}</p>
                   </div>
                 )}
+                </div>
               </div>
             )}
           </div>

@@ -36,6 +36,11 @@ interface QuestionnairePanelProps {
   patientUserId: string;
   isOwnQuestionnaire: boolean;
   initialViewMode?: 'edit' | 'view';
+  /** When set with onViewModeChange, mode is controlled by the parent */
+  viewMode?: 'edit' | 'view';
+  onViewModeChange?: (mode: 'edit' | 'view') => void;
+  /** Hide built-in edit/view controls (e.g. when the parent shows a segment control) */
+  hideViewModeToggle?: boolean;
 }
 
 const months = [
@@ -153,14 +158,28 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
   );
 }
 
-export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire, initialViewMode = 'edit' }: QuestionnairePanelProps) {
+export default function QuestionnairePanel({
+  patientUserId,
+  isOwnQuestionnaire,
+  initialViewMode = 'edit',
+  viewMode: controlledViewMode,
+  onViewModeChange,
+  hideViewModeToggle = false,
+}: QuestionnairePanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [formData, setFormData] = useState<QuestionnaireData>({});
   const formDataRef = useRef<QuestionnaireData>({});
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [viewMode, setViewMode] = useState<'edit' | 'view'>(initialViewMode);
+  const [internalViewMode, setInternalViewMode] = useState<'edit' | 'view'>(initialViewMode);
+  const isViewModeControlled =
+    controlledViewMode !== undefined && onViewModeChange !== undefined;
+  const viewMode = isViewModeControlled ? controlledViewMode! : internalViewMode;
+  const setViewMode = (mode: 'edit' | 'view') => {
+    if (isViewModeControlled) onViewModeChange!(mode);
+    else setInternalViewMode(mode);
+  };
 
   type SubSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
   const [subSaveStatus, setSubSaveStatus] = useState<Record<string, SubSaveStatus>>({});
@@ -711,26 +730,28 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire, 
     return (
       <div className="h-full overflow-y-auto">
         <div className="px-4 py-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewMode('edit')}
-              data-testid="button-switch-edit-mode"
-            >
-              <Pencil className="h-4 w-4 mr-1" />
-              Редактирование
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              data-testid="button-switch-view-mode"
-              disabled
-            >
-              <Eye className="h-4 w-4 mr-1" />
-              Просмотр
-            </Button>
-          </div>
+          {!hideViewModeToggle && (
+            <div className="flex items-center gap-2 mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewMode('edit')}
+                data-testid="button-switch-edit-mode"
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Редактирование
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                data-testid="button-switch-view-mode"
+                disabled
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                Просмотр
+              </Button>
+            </div>
+          )}
 
           <div className="mb-6 border-b pb-4">
             <h3 className="font-bold text-base mb-2">{t.sectionProfile} {renderSaveStatus('profile')}</h3>
@@ -784,26 +805,28 @@ export default function QuestionnairePanel({ patientUserId, isOwnQuestionnaire, 
   return (
     <div className="h-full overflow-y-auto">
       <div className="px-4 py-4">
-        <div className="flex items-center gap-2 mb-4">
-          <Button
-            variant="default"
-            size="sm"
-            data-testid="button-switch-edit-mode"
-            disabled
-          >
-            <Pencil className="h-4 w-4 mr-1" />
-            Редактирование
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode('view')}
-            data-testid="button-switch-view-mode"
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            Просмотр
-          </Button>
-        </div>
+        {!hideViewModeToggle && (
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="default"
+              size="sm"
+              data-testid="button-switch-edit-mode"
+              disabled
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Редактирование
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode('view')}
+              data-testid="button-switch-view-mode"
+            >
+              <Eye className="h-4 w-4 mr-1" />
+              Просмотр
+            </Button>
+          </div>
+        )}
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="profile">
             <AccordionTrigger data-testid="panel-accordion-profile" className="data-[state=open]:font-bold">

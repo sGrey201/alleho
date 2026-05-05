@@ -1233,7 +1233,8 @@ ${allUrls.map(url => `  <url>
         return {
           id: connection.id,
           userId: patient.id,
-          patientName: patient.firstName || patient.email,
+          patientName:
+            [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() || patient.email || "",
           birthMonth: patient.birthMonth,
           birthYear: patient.birthYear,
           gender: patient.gender,
@@ -1439,7 +1440,9 @@ ${allUrls.map(url => `  <url>
             conversationId: contact.conversationId,
             otherParticipantId: contact.userId,
             otherParticipantName,
+            avatarUrl: contact.profileImageUrl ?? null,
             lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
+            lastMessagePreview: contact.lastMessagePreview ?? null,
             lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
           };
         });
@@ -1455,6 +1458,7 @@ ${allUrls.map(url => `  <url>
               patientName,
               patientEmail: patient.email,
               lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
+              lastMessagePreview: stats.lastMessagePreview ?? null,
               unreadCount: stats.unreadCount,
             };
           })
@@ -1485,31 +1489,31 @@ ${allUrls.map(url => `  <url>
           myRole: channel.myRole,
           isMember: channel.isMember,
           lastMessageAt: channel.lastPostAt?.toISOString() ?? null,
+          lastMessagePreview: channel.lastMessagePreview ?? null,
         }));
         return res.json(paged(items));
       }
 
       const convList = await storage.getConversationsForUser(currentUserId);
-      const groups = await Promise.all(
-        convList
-          .filter((conv) => conv.type === "group" || conv.type === "consilium")
-          .map(async (conv) => {
-            const lastMsg = await storage.getLastConversationMessage(conv.id);
-            const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
-            return {
-              source: "conversation" as const,
-              folder: "groups" as const,
-              conversationId: conv.id,
-              type: conv.type,
-              name: conv.name ?? undefined,
-              avatarUrl: conv.avatarUrl ?? null,
-              participantCount: conv.participants.length,
-              patientUserId: conv.patientUserId ?? undefined,
-              myRole,
-              lastMessageAt: lastMsg?.createdAt instanceof Date ? lastMsg.createdAt.toISOString() : lastMsg?.createdAt ?? null,
-            };
-          })
-      );
+      const groups = convList
+        .filter((conv) => conv.type === "group" || conv.type === "consilium")
+        .map((conv) => {
+          const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
+          const lm = conv.lastMessageAt;
+          return {
+            source: "conversation" as const,
+            folder: "groups" as const,
+            conversationId: conv.id,
+            type: conv.type,
+            name: conv.name ?? undefined,
+            avatarUrl: conv.avatarUrl ?? null,
+            participantCount: conv.participants.length,
+            patientUserId: conv.patientUserId ?? undefined,
+            myRole,
+            lastMessageAt: lm instanceof Date ? lm.toISOString() : lm ?? null,
+            lastMessagePreview: conv.lastMessagePreview ?? null,
+          };
+        });
       groups.sort((a, b) => {
         const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -1858,10 +1862,12 @@ ${allUrls.map(url => `  <url>
       }
       
       // Use patient profile data, not questionnaire data
+      const patientDisplayName =
+        [patient?.firstName, patient?.lastName].filter(Boolean).join(" ").trim() || patient?.email || "";
       res.json({
         id: patient?.id,
         email: patient?.email,
-        patientName: patient?.firstName || patient?.email,
+        patientName: patientDisplayName,
         profileImageUrl: patient?.profileImageUrl ?? null,
         birthMonth: patient?.birthMonth,
         birthYear: patient?.birthYear,

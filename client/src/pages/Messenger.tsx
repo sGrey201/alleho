@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 function formatChatTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -46,6 +47,7 @@ export type ChatItem = {
   patientName?: string;
   patientEmail?: string;
   lastMessageAt?: string | null;
+  lastMessagePreview?: string | null;
   unreadCount?: number;
   chatKind?: "patient";
   conversationId?: string;
@@ -93,15 +95,18 @@ export default function Messenger() {
   const [location, setLocation] = useLocation();
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
   const [, channelParams] = useRoute("/messenger/channel/:conversationId");
+  const [, directParams] = useRoute("/messenger/direct/:conversationId");
   const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
   const conversationId =
     groupParams?.conversationId ||
     channelParams?.conversationId ||
+    directParams?.conversationId ||
     groupSettingsParams?.conversationId ||
     channelSettingsParams?.conversationId;
   const isGroupChat = !!groupParams?.conversationId;
   const isChannelChat = !!channelParams?.conversationId;
+  const isDirectChat = !!directParams?.conversationId;
   const isGroupSettings = !!groupSettingsParams?.conversationId;
   const isChannelSettings = !!channelSettingsParams?.conversationId;
   const [isMobileView, setIsMobileView] = useState(() =>
@@ -132,7 +137,7 @@ export default function Messenger() {
     return () => mediaQuery.removeEventListener("change", onChange);
   }, []);
 
-  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("doctors");
+  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("patients");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteLinkData, setInviteLinkData] = useState<{
@@ -247,15 +252,38 @@ export default function Messenger() {
     return () => observer.disconnect();
   }, [showSearchBar, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
 
-  const handleSelectChat = (chat: ChatItem) => {
+  const openDirectChat = async (params: { userId?: string; conversationId?: string }) => {
+    let targetConversationId = params.conversationId;
+
+    if (!targetConversationId && params.userId) {
+      try {
+        const res = await fetch(`/api/messenger/direct/${params.userId}`, { credentials: "include" });
+        if (!res.ok) throw new Error(await res.text());
+        const data = (await res.json()) as { conversationId: string };
+        targetConversationId = data.conversationId;
+      } catch (error) {
+        toast({ title: t.error, description: t.somethingWrong, variant: "destructive" });
+        return;
+      }
+    }
+
+    if (!targetConversationId) {
+      toast({ title: t.error, description: t.somethingWrong, variant: "destructive" });
+      return;
+    }
+
+    setLocation(`/messenger/direct/${targetConversationId}`);
+    setShowSearchBar(false);
+    setSearchQuery("");
+  };
+
+  const handleSelectChat = async (chat: ChatItem) => {
     if (chat.source === "health_wall" && chat.patientUserId) {
       setLocation(`/health-wall/${chat.patientUserId}`);
       return;
     }
-    if (chat.source === "conversation" && chat.type === "direct" && chat.otherParticipantId) {
-      setLocation(`/health-wall/chat/${chat.otherParticipantId}`);
-      setShowSearchBar(false);
-      setSearchQuery("");
+    if (chat.source === "conversation" && chat.type === "direct") {
+      await openDirectChat({ userId: chat.otherParticipantId, conversationId: chat.conversationId });
       return;
     }
     if (chat.source === "conversation" && chat.conversationId) {
@@ -268,7 +296,7 @@ export default function Messenger() {
   const handleSelectDoctor = (doctor: MessengerSearchDoctor) => {
     setShowSearchBar(false);
     setSearchQuery("");
-    setLocation(`/health-wall/chat/${doctor.userId}`);
+    void openDirectChat({ userId: doctor.userId, conversationId: doctor.conversationId });
   };
 
   const handleSelectGroup = async (group: MessengerSearchGroup) => {
@@ -362,29 +390,29 @@ export default function Messenger() {
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
               <TabsList className="grid grid-cols-4 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
                 <TabsTrigger
-                  value="doctors"
-                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-                >
-                  <User className="h-4 w-4 mr-1" />
-                  {t.searchDoctors}
-                </TabsTrigger>
-                <TabsTrigger
                   value="patients"
-                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
                 >
                   <User className="h-4 w-4 mr-1" />
                   Пациенты
                 </TabsTrigger>
                 <TabsTrigger
+                  value="doctors"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <User className="h-4 w-4 mr-1" />
+                  {t.searchDoctors}
+                </TabsTrigger>
+                <TabsTrigger
                   value="groups"
-                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
                 >
                   <Users className="h-4 w-4 mr-1" />
                   {t.folderGroups}
                 </TabsTrigger>
                 <TabsTrigger
                   value="channels"
-                  className="rounded-md data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
                 >
                   <Radio className="h-4 w-4 mr-1" />
                   {t.folderChannels}
@@ -478,7 +506,7 @@ export default function Messenger() {
                   <div className="pt-1 pb-2">
                     {searchFiltered.length > 0 && (
                       <section className="mb-2">
-                        <p className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.chatsTab}
                         </p>
                         {searchFiltered.map((chat) => {
@@ -499,6 +527,10 @@ export default function Messenger() {
                                   : chat.type === "channel"
                                     ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                                     : t.chatGroup;
+                          const isHw = chat.source === "health_wall";
+                          const hasMsgPreview = !!chat.lastMessagePreview?.trim();
+                          const alignTop = isHw || hasMsgPreview;
+                          const subtitleText = chat.lastMessagePreview?.trim() || badge;
                           return (
                             <button
                               key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
@@ -513,19 +545,28 @@ export default function Messenger() {
                                   });
                                   return;
                                 }
-                                handleSelectChat(chat);
+                                void handleSelectChat(chat);
                               }}
-                              className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
+                              className={cn(
+                                "w-full flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60",
+                                alignTop ? "items-start" : "items-center",
+                                isSelected ? "bg-muted/70" : "bg-background"
+                              )}
                             >
-                              {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
+                              {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
                                 <Avatar className="shrink-0 size-11">
                                   <AvatarImage src={chat.avatarUrl || undefined} />
                                   <AvatarFallback>{chatInitial(label)}</AvatarFallback>
                                 </Avatar>
                               ) : (
-                                <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
+                                <div
+                                  className={cn(
+                                    "rounded-full bg-primary/10 flex shrink-0 items-center justify-center",
+                                    isHw ? "size-[3.3rem] p-3" : "size-11 p-2.5"
+                                  )}
+                                >
                                   {chat.source === "health_wall" || chat.type === "direct" ? (
-                                    <User className="h-5 w-5 text-primary" />
+                                    <User className={cn("text-primary", isHw ? "h-6 w-6" : "h-5 w-5")} />
                                   ) : chat.type === "channel" ? (
                                     <Radio className="h-5 w-5 text-primary" />
                                   ) : (
@@ -535,7 +576,13 @@ export default function Messenger() {
                               )}
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-foreground truncate">{label}</p>
-                                <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
+                                {hasMsgPreview ? (
+                                  <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 break-words leading-snug">
+                                    {subtitleText}
+                                  </p>
+                                ) : (
+                                  <p className="text-[13px] text-muted-foreground truncate mt-0.5">{subtitleText}</p>
+                                )}
                               </div>
                             </button>
                           );
@@ -544,7 +591,7 @@ export default function Messenger() {
                     )}
                     {searchResults && searchResults.doctors.length > 0 && (
                       <section className="mb-2">
-                        <p className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchDoctors}
                         </p>
                         {searchResults.doctors.map((doctor) => {
@@ -554,7 +601,7 @@ export default function Messenger() {
                               key={doctor.userId}
                               type="button"
                               onClick={() => handleSelectDoctor(doctor)}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                             >
                               <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
                                 <User className="h-5 w-5 text-primary" />
@@ -572,7 +619,7 @@ export default function Messenger() {
                     )}
                     {searchResults && searchResults.groups.length > 0 && (
                       <section className="mb-2">
-                        <p className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchGroups}
                         </p>
                         {searchResults.groups.map((group) => (
@@ -580,7 +627,7 @@ export default function Messenger() {
                             key={group.id}
                             type="button"
                             onClick={() => handleSelectGroup(group)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
                               <AvatarImage src={group.avatarUrl || undefined} />
@@ -598,7 +645,7 @@ export default function Messenger() {
                     )}
                     {searchResults && searchResults.channels.length > 0 && (
                       <section className="mb-2">
-                        <p className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchChannels}
                         </p>
                         {searchResults.channels.map((channel) => (
@@ -606,7 +653,7 @@ export default function Messenger() {
                             key={channel.id}
                             type="button"
                             onClick={() => handleSelectChannel(channel)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
                               <AvatarImage src={channel.avatarUrl || undefined} />
@@ -623,7 +670,7 @@ export default function Messenger() {
                       </section>
                     )}
                     {showSearchBar && !searchLoading && searchResults && searchFiltered.length === 0 && searchResults.doctors.length === 0 && searchResults.groups.length === 0 && searchResults.channels.length === 0 && (
-                      <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                         {debouncedSearchQuery.trim() ? t.noResults : t.searchEmptyHint}
                       </p>
                     )}
@@ -655,6 +702,10 @@ export default function Messenger() {
                             : chat.type === "channel"
                               ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                               : t.chatGroup;
+                    const isHw = chat.source === "health_wall";
+                    const hasMsgPreview = !!chat.lastMessagePreview?.trim();
+                    const alignTop = isHw || hasMsgPreview;
+                    const subtitleText = chat.lastMessagePreview?.trim() || badge;
                     return (
                       <button
                         key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
@@ -669,19 +720,28 @@ export default function Messenger() {
                             });
                             return;
                           }
-                          handleSelectChat(chat);
+                          void handleSelectChat(chat);
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 ${isSelected ? "bg-muted/70" : "bg-background"}`}
+                        className={cn(
+                          "w-full flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60",
+                          alignTop ? "items-start" : "items-center",
+                          isSelected ? "bg-muted/70" : "bg-background"
+                        )}
                       >
-                        {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel") ? (
+                        {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
                           <Avatar className="shrink-0 size-11">
                             <AvatarImage src={chat.avatarUrl || undefined} />
                             <AvatarFallback>{chatInitial(label)}</AvatarFallback>
                           </Avatar>
                         ) : (
-                          <div className="rounded-full bg-primary/10 p-2.5 shrink-0 size-11 flex items-center justify-center">
+                          <div
+                            className={cn(
+                              "rounded-full bg-primary/10 flex shrink-0 items-center justify-center",
+                              isHw ? "size-[3.3rem] p-3" : "size-11 p-2.5"
+                            )}
+                          >
                             {chat.source === "health_wall" || chat.type === "direct" ? (
-                              <User className="h-5 w-5 text-primary" />
+                              <User className={cn("text-primary", isHw ? "h-6 w-6" : "h-5 w-5")} />
                             ) : chat.type === "channel" ? (
                               <Radio className="h-5 w-5 text-primary" />
                             ) : (
@@ -691,9 +751,15 @@ export default function Messenger() {
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-foreground truncate">{label}</p>
-                          <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
+                          {hasMsgPreview ? (
+                            <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 break-words leading-snug">
+                              {subtitleText}
+                            </p>
+                          ) : (
+                            <p className="text-[13px] text-muted-foreground truncate mt-0.5">{subtitleText}</p>
+                          )}
                         </div>
-                        <div className="shrink-0 flex flex-col items-end gap-0.5">
+                        <div className={cn("shrink-0 flex flex-col items-end gap-0.5", alignTop && "pt-0.5")}>
                           {chat.lastMessageAt && (
                             <span className="text-xs text-muted-foreground">{formatChatTime(chat.lastMessageAt)}</span>
                           )}
@@ -791,7 +857,7 @@ export default function Messenger() {
           <div
             className="flex-1 flex flex-col min-h-0"
             style={{
-              backgroundImage: "url(/chat_bg_manual.png)",
+              backgroundImage: "url(/chat_bg_pattern.png)",
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
@@ -803,6 +869,7 @@ export default function Messenger() {
               onTitleClick={() => {
                 if (isGroupChat) setLocation(`/messenger/group/${conversationId}/settings`);
                 if (isChannelChat) setLocation(`/messenger/channel/${conversationId}/settings`);
+                if (isDirectChat) return;
               }}
             />
           </div>
@@ -935,7 +1002,7 @@ export default function Messenger() {
       {!isMobileConversationOpen && (
       <nav className="fixed bottom-0 left-0 right-0 md:hidden z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-1">
         {showSearchBar ? (
-          <div className="rounded-2xl bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center gap-2 py-2 px-3">
+          <div className="rounded-full bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center gap-2 py-2 px-3">
             <input
               type="text"
               value={searchQuery}
@@ -953,7 +1020,7 @@ export default function Messenger() {
             </button>
           </div>
         ) : (
-        <div className="rounded-2xl bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center justify-center gap-0 py-1">
+        <div className="rounded-full bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center justify-center gap-0 py-1">
           <Link
             href="/profile"
             className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"

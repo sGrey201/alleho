@@ -1104,7 +1104,7 @@ export const t = {
     },
     {
       key: 'thirstThermoregulation',
-      title: 'Жажда и теплообмен в обычном состоянии',
+      title: 'Жажда и теплообмен обычно',
       hint: '',
       subsections: [
         {

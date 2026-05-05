@@ -42,6 +42,9 @@ export const users = pgTable("users", {
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   isAdmin: boolean("is_admin").default(false).notNull(),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
+  /** Denormalized from latest health_wall_messages for this patient’s wall */
+  healthWallLastMessageAt: timestamp("health_wall_last_message_at"),
+  healthWallLastMessagePreview: text("health_wall_last_message_preview"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -411,6 +414,9 @@ export const conversations = pgTable(
     name: varchar("name", { length: 255 }),
     avatarUrl: text("avatar_url"),
     patientUserId: varchar("patient_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** Denormalized from latest conversation_messages row — avoids list queries on messages table */
+    lastMessageAt: timestamp("last_message_at"),
+    lastMessagePreview: text("last_message_preview"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

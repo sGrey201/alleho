@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react";
 import { Loader2, Send, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
 
 type ChatInputBarProps = {
   value: string;
@@ -25,15 +27,19 @@ export default function ChatInputBar({
   onUploadImages,
   isUploadingImages = false,
 }: ChatInputBarProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isSendDisabled = disabled || !value.trim() || isSending;
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || value !== "") return;
+    syncChatTextareaHeight(el);
+  }, [value]);
+
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
     onChange(nextValue);
-
-    const el = e.target;
-    el.style.height = "auto";
-    const lineHeight = 24;
-    const maxHeight = lineHeight * 6;
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    syncChatTextareaHeight(e.target);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -84,12 +90,13 @@ export default function ChatInputBar({
         )}
         <div className="relative flex-1">
           <Textarea
+            ref={textareaRef}
             placeholder={placeholder}
             value={value}
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="min-h-[36px] resize-none overflow-y-auto rounded-full"
+            className="min-h-[36px] resize-none overflow-y-auto rounded-[22px]"
             style={{ maxHeight: "144px" }}
             data-testid="input-message"
           />
@@ -97,8 +104,8 @@ export default function ChatInputBar({
         <Button
           size="icon"
           onClick={onSend}
-          disabled={disabled || !value.trim() || isSending}
-          className="rounded-full shrink-0 h-10 w-10 disabled:opacity-20"
+          disabled={isSendDisabled}
+          className={`rounded-full shrink-0 h-10 w-10 ${isSendDisabled ? "!opacity-20" : "!opacity-100"}`}
           data-testid="button-send-message"
         >
           {isSending ? (

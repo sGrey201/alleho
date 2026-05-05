@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar from "@/components/ChatInputBar";
+import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 
 interface ConversationInfo {
   id: string;
@@ -35,6 +37,7 @@ interface ConversationInfo {
       lastName?: string | null;
       email?: string | null;
       profileImageUrl?: string | null;
+      lastVisitedAt?: string | null;
     };
   }>;
 }
@@ -56,11 +59,14 @@ interface ConversationChatProps {
 
 export default function ConversationChat({ conversationId, onBack, onTitleClick }: ConversationChatProps) {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [addMembersOpen, setAddMembersOpen] = useState(false);
   const [doctorSearch, setDoctorSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
     queryKey: ["/api/conversations", conversationId],
@@ -143,8 +149,30 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   });
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const scroll = () => scrollChatPaneToBottom(root);
+    scroll();
+    const raf = requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    const t1 = window.setTimeout(scroll, 80);
+    const t2 = window.setTimeout(scroll, 350);
+    const contentEl = messagesContentRef.current;
+    const ro =
+      contentEl &&
+      new ResizeObserver(() => {
+        scrollChatPaneToBottom(root);
+      });
+    if (contentEl && ro) ro.observe(contentEl);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+    };
+  }, [messages, conversationId]);
 
   const handleSend = () => {
     if (!message.trim()) return;
@@ -157,11 +185,21 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  /** Compact time in message bubble (no year) */
+  const formatBubbleTime = (dateStr: string) => {
     const d = new Date(dateStr);
     if (isToday(d)) return format(d, "HH:mm", { locale: ru });
-    if (isYesterday(d)) return `${t.yesterday} ${format(d, "HH:mm", { locale: ru })}`;
-    return format(d, "dd.MM.yyyy HH:mm", { locale: ru });
+    if (isYesterday(d)) return `вч. ${format(d, "HH:mm", { locale: ru })}`;
+    return format(d, "dd.MM. HH:mm", { locale: ru });
+  };
+
+  const formatLastSeen = (dateStr?: string | null) => {
+    if (!dateStr) return t.neverVisited;
+    const date = new Date(dateStr);
+    const time = format(date, "HH:mm");
+    if (isToday(date)) return `${t.wasOnlineToday} ${time}`;
+    if (isYesterday(date)) return `${t.wasOnlineYesterday} ${time}`;
+    return `${t.wasOnlineAt} ${format(date, "dd.MM.yyyy", { locale: ru })} в ${time}`;
   };
 
   const authorName = (msg: ConversationMessageWithAuthor) =>
@@ -181,10 +219,24 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const peerParticipant = conv.type === "direct"
     ? conv.participants?.find((p) => p.userId !== user?.id)
     : undefined;
+  const directDisplayName = conv.type === "direct"
+    ? [peerParticipant?.user?.firstName, peerParticipant?.user?.lastName].filter(Boolean).join(" ").trim() ||
+      peerParticipant?.user?.email?.split("@")[0] ||
+      t.chatWithDoctor
+    : title;
   const headerAvatarUrl = conv.type === "direct"
     ? (peerParticipant?.user?.profileImageUrl ?? null)
     : (conv.avatarUrl ?? null);
-  const headerInitials = title
+  const directProfileUserId = conv.type === "direct" ? peerParticipant?.userId : undefined;
+  const handleHeaderProfileClick = () => {
+    if (directProfileUserId) {
+      setLocation(`/profile/${directProfileUserId}`);
+      return;
+    }
+    onTitleClick?.();
+  };
+  const canClickHeader = !!directProfileUserId || !!onTitleClick;
+  const headerInitials = directDisplayName
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -192,6 +244,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     .join("") || "?";
 
   const isGroup = conv.type === "group";
+  const showMessageAuthorName = conv.type !== "direct";
   const myRole = conv.participants?.find((p) => p.userId === user?.id)?.role;
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
@@ -204,23 +257,26 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             variant="secondary"
             size="icon"
             onClick={onBack}
-            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 backdrop-blur-md"
+            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <button
             type="button"
-            onClick={onTitleClick}
-            disabled={!onTitleClick}
-            className={`flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 text-left backdrop-blur-md ${onTitleClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+            onClick={handleHeaderProfileClick}
+            disabled={!canClickHeader}
+            className={`flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 text-left backdrop-blur-md ${canClickHeader ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
           >
-            <p className="text-sm font-semibold truncate">{title}</p>
+            <p className="text-sm font-semibold truncate">{directDisplayName}</p>
+            {conv.type === "direct" && (
+              <p className="text-xs text-muted-foreground truncate">{formatLastSeen(peerParticipant?.user?.lastVisitedAt)}</p>
+            )}
           </button>
           <button
             type="button"
-            onClick={onTitleClick}
-            disabled={!onTitleClick}
-            className={`h-10 w-10 rounded-full border border-border/40 bg-background/55 p-0 backdrop-blur-md ${onTitleClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+            onClick={handleHeaderProfileClick}
+            disabled={!canClickHeader}
+            className={`h-10 w-10 rounded-full border border-border/40 bg-background/55 p-0 backdrop-blur-md ${canClickHeader ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
           >
             <Avatar className="h-full w-full">
               <AvatarImage src={headerAvatarUrl || undefined} />
@@ -230,43 +286,56 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-20 pb-32 space-y-3">
-        {messagesLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : messages && messages.length > 0 ? (
-          [...messages]
-            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-            .map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col max-w-[85%] ${msg.authorUserId === user?.id ? "ml-auto items-end" : "mr-auto items-start"}`}
-            >
-              {msg.authorUserId !== user?.id && (
-                <p className="text-xs text-muted-foreground mb-0.5">{authorName(msg)}</p>
-              )}
-              <div
-                className={`rounded-2xl px-4 py-2 ${
-                  msg.authorUserId === user?.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                }`}
-              >
-                {msg.imageUrl && (
-                  <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
-                    <img src={msg.imageUrl} alt="" className="max-w-full rounded max-h-48 object-contain" />
-                  </a>
-                )}
-                {msg.content && <p className="whitespace-pre-wrap break-words">{msg.content}</p>}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(msg.createdAt)}</p>
+      <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 pt-20 pb-32">
+        <div ref={messagesContentRef} className="space-y-3">
+          {messagesLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ))
-        ) : (
-          <p className="text-center text-muted-foreground py-8">{t.noMessages}</p>
-        )}
-        <div ref={messagesEndRef} />
+          ) : messages && messages.length > 0 ? (
+            [...messages]
+              .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+              .map((msg) => {
+                const isOwn = msg.authorUserId === user?.id;
+                return (
+              <div
+                key={msg.id}
+                className={`flex w-full ${isOwn ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border pl-2 pr-1.5 pt-1 pb-3.5 ${
+                    isOwn
+                      ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
+                      : "border-transparent bg-muted"
+                  }`}
+                >
+                  {!isOwn && showMessageAuthorName && (
+                    <p className="text-[10px] leading-tight text-muted-foreground mb-0.5 pr-8">
+                      {authorName(msg)}
+                    </p>
+                  )}
+                  {msg.imageUrl && (
+                    <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-0.5">
+                      <img src={msg.imageUrl} alt="" className="max-w-full rounded max-h-48 object-contain" />
+                    </a>
+                  )}
+                  {msg.content && (
+                    <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
+                      {msg.content}
+                    </p>
+                  )}
+                  <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                    {formatBubbleTime(msg.createdAt)}
+                  </span>
+                </div>
+              </div>
+            );
+            })
+          ) : (
+            <p className="text-center text-muted-foreground py-8">{t.noMessages}</p>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       <ChatInputBar

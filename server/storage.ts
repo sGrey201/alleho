@@ -39,8 +39,9 @@ import {
   type InsertConversationMessage,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ne, or, ilike, sql, inArray, and, desc, count } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
+import { previewFromConversationMessageParts } from "./utils/conversationPreview";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 export type MessengerPersonalContact = {
@@ -48,8 +49,10 @@ export type MessengerPersonalContact = {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
+  profileImageUrl?: string | null;
   conversationId?: string;
   lastMessageAt?: Date | null;
+  lastMessagePreview?: string | null;
   lastVisitedAt?: Date | null;
 };
 export type MessengerChannelListItem = {
@@ -60,6 +63,7 @@ export type MessengerChannelListItem = {
   participantCount: number;
   createdAt: Date | null;
   lastPostAt: Date | null;
+  lastMessagePreview: string | null;
   myRole?: string;
 };
 
@@ -120,7 +124,11 @@ export interface IStorage {
   getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
   getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]>;
   createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
-  getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }>;
+  getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{
+    unreadCount: number;
+    lastMessageAt: Date | null;
+    lastMessagePreview: string | null;
+  }>;
 
   // Health wall doctors operations
   getHealthWallDoctors(patientUserId: string): Promise<{ doctor: HealthWallDoctor; user: User }[]>;
@@ -702,31 +710,44 @@ export class DatabaseStorage implements IStorage {
       .insert(healthWallMessages)
       .values(message)
       .returning();
+    const preview = previewFromConversationMessageParts(created.content, created.imageUrl);
+    const at = created.createdAt ?? new Date();
+    await db
+      .update(users)
+      .set({
+        healthWallLastMessageAt: at,
+        healthWallLastMessagePreview: preview,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, created.patientUserId));
     return created;
   }
 
-  async getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{ unreadCount: number; lastMessageAt: Date | null }> {
-    const messages = await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.patientUserId, patientUserId))
-      .orderBy(desc(healthWallMessages.createdAt));
-
-    if (messages.length === 0) {
-      return { unreadCount: 0, lastMessageAt: null };
-    }
-
-    const lastMessageAt = messages[0].createdAt;
+  async getPatientHealthWallStats(
+    patientUserId: string,
+    doctorUserId: string
+  ): Promise<{ unreadCount: number; lastMessageAt: Date | null; lastMessagePreview: string | null }> {
     const doctorLastVisit = await this.getDoctorLastVisit(patientUserId, doctorUserId);
-    const doctorLastVisitTs = doctorLastVisit ? new Date(doctorLastVisit).getTime() : null;
-    const unreadCount = messages.filter((m) => {
-      if (m.authorUserId !== patientUserId) return false;
-      if (doctorLastVisitTs == null) return true;
-      if (!m.createdAt) return false;
-      return new Date(m.createdAt).getTime() > doctorLastVisitTs;
-    }).length;
 
-    return { unreadCount, lastMessageAt };
+    const unreadConditions = [
+      eq(healthWallMessages.patientUserId, patientUserId),
+      eq(healthWallMessages.authorUserId, patientUserId),
+    ];
+    if (doctorLastVisit != null) {
+      unreadConditions.push(gt(healthWallMessages.createdAt, doctorLastVisit));
+    }
+    const [unreadRow] = await db
+      .select({ c: count() })
+      .from(healthWallMessages)
+      .where(and(...unreadConditions));
+    const unreadCount = Number(unreadRow?.c ?? 0);
+
+    const patient = await this.getUser(patientUserId);
+    return {
+      unreadCount,
+      lastMessageAt: patient?.healthWallLastMessageAt ?? null,
+      lastMessagePreview: patient?.healthWallLastMessagePreview ?? null,
+    };
   }
 
   // Health wall doctors operations
@@ -1066,6 +1087,16 @@ export class DatabaseStorage implements IStorage {
 
   async createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage> {
     const [m] = await db.insert(conversationMessages).values(msg).returning();
+    const preview = previewFromConversationMessageParts(m.content, m.imageUrl);
+    const at = m.createdAt ?? new Date();
+    await db
+      .update(conversations)
+      .set({
+        lastMessageAt: at,
+        lastMessagePreview: preview,
+        updatedAt: new Date(),
+      })
+      .where(eq(conversations.id, m.conversationId));
     return m;
   }
 
@@ -1090,26 +1121,37 @@ export class DatabaseStorage implements IStorage {
 
   async getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]> {
     const adminUsers = await this.getAdminUsers(currentUserId);
-    const contacts = await Promise.all(
+    const rows = await Promise.all(
       adminUsers.map(async (user) => {
         const conversationId = await this.getDirectConversationBetween(currentUserId, user.id);
         const lastVisitedAt = await this.getDoctorLastVisit(currentUserId, user.id);
-        let lastMessageAt: Date | null = null;
-        if (conversationId) {
-          const lastMessage = await this.getLastConversationMessage(conversationId);
-          lastMessageAt = lastMessage?.createdAt ?? null;
-        }
-        return {
-          userId: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          conversationId,
-          lastMessageAt,
-          lastVisitedAt,
-        };
+        return { user, conversationId, lastVisitedAt };
       })
     );
+
+    const convIds = Array.from(
+      new Set(rows.map((r) => r.conversationId).filter((id): id is string => typeof id === "string" && id.length > 0))
+    );
+    let convById = new Map<string, Conversation>();
+    if (convIds.length > 0) {
+      const convRows = await db.select().from(conversations).where(inArray(conversations.id, convIds));
+      convById = new Map(convRows.map((c) => [c.id, c]));
+    }
+
+    const contacts: MessengerPersonalContact[] = rows.map(({ user, conversationId, lastVisitedAt }) => {
+      const conv = conversationId ? convById.get(conversationId) : undefined;
+      return {
+        userId: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        profileImageUrl: user.profileImageUrl ?? null,
+        conversationId,
+        lastMessageAt: conv?.lastMessageAt ?? null,
+        lastMessagePreview: conv?.lastMessagePreview ?? null,
+        lastVisitedAt,
+      };
+    });
 
     contacts.sort((a, b) => {
       const aHasConversation = !!a.conversationId && !!a.lastMessageAt;
@@ -1156,7 +1198,6 @@ export class DatabaseStorage implements IStorage {
           .select({ count: sql<number>`count(*)::int` })
           .from(conversationParticipants)
           .where(eq(conversationParticipants.conversationId, channel.id));
-        const lastPost = await this.getLastConversationMessage(channel.id);
         const myRole = myParticipationByConversation.get(channel.id);
         return {
           id: channel.id,
@@ -1166,7 +1207,8 @@ export class DatabaseStorage implements IStorage {
           isMember: !!myRole,
           myRole: myRole ?? undefined,
           createdAt: channel.createdAt ?? null,
-          lastPostAt: lastPost?.createdAt ?? null,
+          lastPostAt: channel.lastMessageAt ?? null,
+          lastMessagePreview: channel.lastMessagePreview ?? null,
         };
       })
     );
