@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, LogOut, Camera, MessageCircle, Search, User, ArrowLeft } from "lucide-react";
+import { Loader2, LogOut, Camera, ArrowLeft } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -430,8 +430,21 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   }
 
   return (
-    <div className="container max-w-2xl mx-auto py-8 px-4 pb-24">
+    <div className="container max-w-2xl mx-auto py-4 px-4 pb-8">
       <div className="space-y-6">
+        <div className="flex items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-ml-2 rounded-full"
+            onClick={() => window.history.back()}
+            aria-label="Назад"
+            data-testid="button-profile-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </div>
         <div className="flex flex-col items-center text-center">
           <button
             type="button"
@@ -575,31 +588,6 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           </Button>
         )}
       </div>
-
-      {user?.isAdmin && (
-        <nav className="fixed bottom-0 left-0 right-0 md:hidden z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-1">
-          <div className="rounded-2xl bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center justify-center gap-0 py-1">
-            <Link href="/profile" className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary">
-              <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
-                <User className="h-4 w-4" />
-              </span>
-              <span className="text-[9px] font-medium">{t.profile}</span>
-            </Link>
-            <Link href="/messenger" className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground">
-              <span className="relative flex items-center justify-center size-8 rounded-full">
-                <MessageCircle className="h-4 w-4" />
-              </span>
-              <span className="text-[9px] font-medium">{t.chatsTab}</span>
-            </Link>
-            <Link href="/messenger" className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground">
-              <span className="relative flex items-center justify-center size-8 rounded-full">
-                <Search className="h-4 w-4" />
-              </span>
-              <span className="text-[9px] font-medium">{t.search}</span>
-            </Link>
-          </div>
-        </nav>
-      )}
 
       <Dialog open={avatarPreviewOpen} onOpenChange={setAvatarPreviewOpen}>
         <DialogContent className="max-w-[100vw] w-screen h-screen p-0 border-none bg-black">

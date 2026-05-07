@@ -8,7 +8,6 @@ import {
   getRedisSubscriber,
   type HealthWallMessageWithAuthor,
   type ConversationMessageWithAuthor,
-  type ConversationSeenPayload,
 } from "./redis";
 
 const WS_PATH = "/ws";
@@ -110,8 +109,28 @@ export function setupWebSocket(
         const sockets = channelToSockets.get(channel);
         if (!sockets || sockets.size === 0) return;
         try {
-          const payload = JSON.parse(message) as HealthWallMessageWithAuthor;
-          const data = JSON.stringify({ type: "health_wall_message", payload });
+          const parsed = JSON.parse(message) as
+            | { type?: string; payload?: unknown }
+            | HealthWallMessageWithAuthor;
+          const knownTypes = new Set([
+            "health_wall_message",
+            "health_wall_message_edited",
+            "health_wall_message_deleted",
+            "health_wall_message_pinned",
+            "health_wall_message_unpinned",
+          ]);
+          const data =
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "type" in parsed &&
+            typeof (parsed as { type?: unknown }).type === "string" &&
+            knownTypes.has((parsed as { type: string }).type) &&
+            "payload" in parsed
+              ? JSON.stringify({
+                  type: (parsed as { type: string }).type,
+                  payload: (parsed as { payload: unknown }).payload,
+                })
+              : JSON.stringify({ type: "health_wall_message", payload: parsed });
           Array.from(sockets).forEach((ws) => {
             if (ws.readyState === 1) ws.send(data);
           });
@@ -123,26 +142,29 @@ export function setupWebSocket(
         if (!sockets || sockets.size === 0) return;
         try {
           const parsed = JSON.parse(message) as
-            | { type?: "conversation_message"; payload?: ConversationMessageWithAuthor }
-            | { type?: "conversation_seen"; payload?: ConversationSeenPayload }
+            | { type?: string; payload?: unknown }
             | ConversationMessageWithAuthor;
           let data: string | null = null;
+          const knownTypes = new Set([
+            "conversation_message",
+            "conversation_seen",
+            "conversation_message_edited",
+            "conversation_message_deleted",
+            "conversation_message_pinned",
+            "conversation_message_unpinned",
+          ]);
           if (
             typeof parsed === "object" &&
             parsed !== null &&
             "type" in parsed &&
-            parsed.type === "conversation_seen" &&
+            typeof (parsed as { type?: unknown }).type === "string" &&
+            knownTypes.has((parsed as { type: string }).type) &&
             "payload" in parsed
           ) {
-            data = JSON.stringify({ type: "conversation_seen", payload: parsed.payload });
-          } else if (
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "type" in parsed &&
-            parsed.type === "conversation_message" &&
-            "payload" in parsed
-          ) {
-            data = JSON.stringify({ type: "conversation_message", payload: parsed.payload });
+            data = JSON.stringify({
+              type: (parsed as { type: string }).type,
+              payload: (parsed as { payload: unknown }).payload,
+            });
           } else {
             // Backward compatibility with plain conversation message payload.
             data = JSON.stringify({ type: "conversation_message", payload: parsed });

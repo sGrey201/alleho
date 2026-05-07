@@ -1,6 +1,23 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 
+export interface ConversationMessageAuthor {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  isAdmin?: boolean | null;
+}
+
+export interface ConversationMessageReplyTo {
+  id: string;
+  authorUserId: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  deletedAt?: string | null;
+  author?: ConversationMessageAuthor | null;
+}
+
 export interface ConversationMessageWithAuthor {
   id: string;
   conversationId: string;
@@ -9,19 +26,47 @@ export interface ConversationMessageWithAuthor {
   content?: string | null;
   imageUrl?: string | null;
   createdAt: string;
-  author: {
-    id: string;
-    email?: string | null;
-    firstName?: string | null;
-    lastName?: string | null;
-    isAdmin?: boolean | null;
-  };
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  pinnedAt?: string | null;
+  pinnedByUserId?: string | null;
+  replyToMessageId?: string | null;
+  forwardedFromMessageId?: string | null;
+  forwardedFromUserId?: string | null;
+  replyTo?: ConversationMessageReplyTo | null;
+  forwardedFromAuthor?: ConversationMessageAuthor | null;
+  author: ConversationMessageAuthor;
 }
 
 type ConversationSeenPayload = {
   conversationId: string;
   userId: string;
   lastSeenAt: string;
+};
+
+type ConversationMessageEditedPayload = {
+  conversationId: string;
+  messageId: string;
+  content: string | null;
+  editedAt: string;
+};
+
+type ConversationMessageDeletedPayload = {
+  conversationId: string;
+  messageId: string;
+  deletedAt: string;
+};
+
+type ConversationMessagePinnedPayload = {
+  conversationId: string;
+  messageId: string;
+  pinnedAt: string;
+  pinnedByUserId: string;
+};
+
+type ConversationMessageUnpinnedPayload = {
+  conversationId: string;
+  messageId: string;
 };
 
 export function useConversationWs(conversationId: string | undefined, enabled: boolean) {
@@ -32,6 +77,19 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
 
   useEffect(() => {
     if (!enabled || !conversationId) return;
+
+    const messagesKey = () => ["/api/conversations", conversationIdRef.current, "messages"];
+
+    const updateMessages = (
+      updater: (
+        list: ConversationMessageWithAuthor[]
+      ) => ConversationMessageWithAuthor[]
+    ) => {
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(messagesKey(), (old) => {
+        if (!old) return old;
+        return updater(old);
+      });
+    };
 
     const connect = () => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -50,11 +108,10 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
             const payload = data.payload as ConversationMessageWithAuthor;
             if (payload.conversationId !== conversationIdRef.current) return;
             queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-              ["/api/conversations", conversationIdRef.current, "messages"],
+              messagesKey(),
               (old) => {
                 if (!old) return old;
-                const exists = old.some((m) => m.id === payload.id);
-                if (exists) return old;
+                if (old.some((m) => m.id === payload.id)) return old;
                 return [...old, payload];
               }
             );
@@ -76,6 +133,63 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
                   ),
                 };
               }
+            );
+          } else if (data.type === "conversation_message_edited" && data.payload) {
+            const payload = data.payload as ConversationMessageEditedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId
+                  ? { ...m, content: payload.content, editedAt: payload.editedAt }
+                  : {
+                      ...m,
+                      replyTo:
+                        m.replyTo && m.replyTo.id === payload.messageId
+                          ? { ...m.replyTo, content: payload.content }
+                          : m.replyTo,
+                    }
+              )
+            );
+          } else if (data.type === "conversation_message_deleted" && data.payload) {
+            const payload = data.payload as ConversationMessageDeletedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId
+                  ? {
+                      ...m,
+                      deletedAt: payload.deletedAt,
+                      content: null,
+                      imageUrl: null,
+                      pinnedAt: null,
+                      pinnedByUserId: null,
+                    }
+                  : {
+                      ...m,
+                      replyTo:
+                        m.replyTo && m.replyTo.id === payload.messageId
+                          ? { ...m.replyTo, deletedAt: payload.deletedAt, content: null, imageUrl: null }
+                          : m.replyTo,
+                    }
+              )
+            );
+          } else if (data.type === "conversation_message_pinned" && data.payload) {
+            const payload = data.payload as ConversationMessagePinnedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId
+                  ? { ...m, pinnedAt: payload.pinnedAt, pinnedByUserId: payload.pinnedByUserId }
+                  : m
+              )
+            );
+          } else if (data.type === "conversation_message_unpinned" && data.payload) {
+            const payload = data.payload as ConversationMessageUnpinnedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId ? { ...m, pinnedAt: null, pinnedByUserId: null } : m
+              )
             );
           }
         } catch {

@@ -8,6 +8,14 @@ const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
 const DOCTOR_EVENTS_CHANNEL_PREFIX = "doctor:events:";
 const RECENT_LIMIT = 100;
 
+export type MessageAuthor = {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  isAdmin?: boolean | null;
+};
+
 export type HealthWallMessageWithAuthor = {
   id: string;
   patientUserId: string;
@@ -16,13 +24,48 @@ export type HealthWallMessageWithAuthor = {
   content?: string | null;
   imageUrl?: string | null;
   createdAt: string;
-  author: {
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  pinnedAt?: string | null;
+  pinnedByUserId?: string | null;
+  replyToMessageId?: string | null;
+  forwardedFromMessageId?: string | null;
+  forwardedFromUserId?: string | null;
+  replyTo?: {
     id: string;
-    email?: string | null;
-    firstName?: string | null;
-    lastName?: string | null;
-    isAdmin?: boolean | null;
-  };
+    authorUserId: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    deletedAt?: string | null;
+    author?: MessageAuthor | null;
+  } | null;
+  forwardedFromAuthor?: MessageAuthor | null;
+  author: MessageAuthor;
+};
+
+export type HealthWallMessageEditedPayload = {
+  patientUserId: string;
+  messageId: string;
+  content: string | null;
+  editedAt: string;
+};
+
+export type HealthWallMessageDeletedPayload = {
+  patientUserId: string;
+  messageId: string;
+  deletedAt: string;
+};
+
+export type HealthWallMessagePinnedPayload = {
+  patientUserId: string;
+  messageId: string;
+  pinnedAt: string;
+  pinnedByUserId: string;
+};
+
+export type HealthWallMessageUnpinnedPayload = {
+  patientUserId: string;
+  messageId: string;
 };
 
 let client: Redis | null = null;
@@ -83,10 +126,58 @@ export async function publishHealthWallMessage(patientUserId: string, message: H
   if (!c) return;
   try {
     const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
-    await c.publish(channel, JSON.stringify(message));
+    await c.publish(channel, JSON.stringify({ type: "health_wall_message", payload: message }));
   } catch (err) {
     console.error("[Redis] publishHealthWallMessage error:", err);
   }
+}
+
+export async function invalidateHealthWallRecent(patientUserId: string): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.del(HEALTH_WALL_RECENT_PREFIX + patientUserId);
+  } catch (err) {
+    console.error("[Redis] invalidateHealthWallRecent error:", err);
+  }
+}
+
+async function publishHealthWallEvent(patientUserId: string, type: string, payload: unknown): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(HEALTH_WALL_CHANNEL_PREFIX + patientUserId, JSON.stringify({ type, payload }));
+  } catch (err) {
+    console.error(`[Redis] ${type} error:`, err);
+  }
+}
+
+export async function publishHealthWallMessageEdited(
+  patientUserId: string,
+  payload: HealthWallMessageEditedPayload
+): Promise<void> {
+  await publishHealthWallEvent(patientUserId, "health_wall_message_edited", payload);
+}
+
+export async function publishHealthWallMessageDeleted(
+  patientUserId: string,
+  payload: HealthWallMessageDeletedPayload
+): Promise<void> {
+  await publishHealthWallEvent(patientUserId, "health_wall_message_deleted", payload);
+}
+
+export async function publishHealthWallMessagePinned(
+  patientUserId: string,
+  payload: HealthWallMessagePinnedPayload
+): Promise<void> {
+  await publishHealthWallEvent(patientUserId, "health_wall_message_pinned", payload);
+}
+
+export async function publishHealthWallMessageUnpinned(
+  patientUserId: string,
+  payload: HealthWallMessageUnpinnedPayload
+): Promise<void> {
+  await publishHealthWallEvent(patientUserId, "health_wall_message_unpinned", payload);
 }
 
 export async function backfillHealthWallRecent(patientUserId: string, messages: HealthWallMessageWithAuthor[]): Promise<void> {
@@ -123,6 +214,14 @@ export async function publishDoctorChatsUpdated(doctorUserId: string): Promise<v
 }
 
 // Conversation messages (for doctor-to-doctor, groups, consiliums, channels)
+export type ConversationMessageAuthor = {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  isAdmin?: boolean | null;
+};
+
 export type ConversationMessageWithAuthor = {
   id: string;
   conversationId: string;
@@ -131,19 +230,54 @@ export type ConversationMessageWithAuthor = {
   content?: string | null;
   imageUrl?: string | null;
   createdAt: string;
-  author: {
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  pinnedAt?: string | null;
+  pinnedByUserId?: string | null;
+  replyToMessageId?: string | null;
+  forwardedFromMessageId?: string | null;
+  forwardedFromUserId?: string | null;
+  replyTo?: {
     id: string;
-    email?: string | null;
-    firstName?: string | null;
-    lastName?: string | null;
-    isAdmin?: boolean | null;
-  };
+    authorUserId: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    deletedAt?: string | null;
+    author?: ConversationMessageAuthor | null;
+  } | null;
+  forwardedFromAuthor?: ConversationMessageAuthor | null;
+  author: ConversationMessageAuthor;
 };
 
 export type ConversationSeenPayload = {
   conversationId: string;
   userId: string;
   lastSeenAt: string;
+};
+
+export type ConversationMessageEditedPayload = {
+  conversationId: string;
+  messageId: string;
+  content: string | null;
+  editedAt: string;
+};
+
+export type ConversationMessageDeletedPayload = {
+  conversationId: string;
+  messageId: string;
+  deletedAt: string;
+};
+
+export type ConversationMessagePinnedPayload = {
+  conversationId: string;
+  messageId: string;
+  pinnedAt: string;
+  pinnedByUserId: string;
+};
+
+export type ConversationMessageUnpinnedPayload = {
+  conversationId: string;
+  messageId: string;
 };
 
 export async function getConversationRecentMessages(conversationId: string): Promise<ConversationMessageWithAuthor[]> {
@@ -226,5 +360,79 @@ export async function backfillConversationRecent(
     if (toPush.length > 0) await c.rpush(key, ...toPush);
   } catch (err) {
     console.error("[Redis] backfillConversationRecent error:", err);
+  }
+}
+
+export async function invalidateConversationRecent(conversationId: string): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.del(CONVERSATION_RECENT_PREFIX + conversationId);
+  } catch (err) {
+    console.error("[Redis] invalidateConversationRecent error:", err);
+  }
+}
+
+export async function publishConversationMessageEdited(
+  conversationId: string,
+  payload: ConversationMessageEditedPayload
+): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_message_edited", payload })
+    );
+  } catch (err) {
+    console.error("[Redis] publishConversationMessageEdited error:", err);
+  }
+}
+
+export async function publishConversationMessageDeleted(
+  conversationId: string,
+  payload: ConversationMessageDeletedPayload
+): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_message_deleted", payload })
+    );
+  } catch (err) {
+    console.error("[Redis] publishConversationMessageDeleted error:", err);
+  }
+}
+
+export async function publishConversationMessagePinned(
+  conversationId: string,
+  payload: ConversationMessagePinnedPayload
+): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_message_pinned", payload })
+    );
+  } catch (err) {
+    console.error("[Redis] publishConversationMessagePinned error:", err);
+  }
+}
+
+export async function publishConversationMessageUnpinned(
+  conversationId: string,
+  payload: ConversationMessageUnpinnedPayload
+): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_message_unpinned", payload })
+    );
+  } catch (err) {
+    console.error("[Redis] publishConversationMessageUnpinned error:", err);
   }
 }

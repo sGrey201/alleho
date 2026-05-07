@@ -359,15 +359,27 @@ export const healthWallMessages = pgTable("health_wall_messages", {
   messageType: varchar("message_type", { length: 50 }).notNull().default('message'),
   content: text("content"),
   imageUrl: text("image_url"),
+  replyToMessageId: varchar("reply_to_message_id"),
+  forwardedFromMessageId: varchar("forwarded_from_message_id"),
+  forwardedFromUserId: varchar("forwarded_from_user_id"),
+  editedAt: timestamp("edited_at"),
+  deletedAt: timestamp("deleted_at"),
+  pinnedAt: timestamp("pinned_at"),
+  pinnedByUserId: varchar("pinned_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("health_wall_patient_idx").on(table.patientUserId),
   index("health_wall_created_idx").on(table.createdAt),
+  index("health_wall_messages_pinned_idx").on(table.patientUserId, table.pinnedAt),
 ]);
 
 export const insertHealthWallMessageSchema = createInsertSchema(healthWallMessages).omit({
   id: true,
   createdAt: true,
+  editedAt: true,
+  deletedAt: true,
+  pinnedAt: true,
+  pinnedByUserId: true,
 }).extend({
   messageType: healthWallMessageTypeEnum.default('message'),
 });
@@ -470,17 +482,29 @@ export const conversationMessages = pgTable(
     messageType: varchar("message_type", { length: 50 }).notNull().default("message"),
     content: text("content"),
     imageUrl: text("image_url"),
+    replyToMessageId: varchar("reply_to_message_id"),
+    forwardedFromMessageId: varchar("forwarded_from_message_id"),
+    forwardedFromUserId: varchar("forwarded_from_user_id"),
+    editedAt: timestamp("edited_at"),
+    deletedAt: timestamp("deleted_at"),
+    pinnedAt: timestamp("pinned_at"),
+    pinnedByUserId: varchar("pinned_by_user_id"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
     index("conversation_messages_conversation_idx").on(table.conversationId),
     index("conversation_messages_created_idx").on(table.createdAt),
+    index("conversation_messages_pinned_idx").on(table.conversationId, table.pinnedAt),
   ]
 );
 
 export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({
   id: true,
   createdAt: true,
+  editedAt: true,
+  deletedAt: true,
+  pinnedAt: true,
+  pinnedByUserId: true,
 }).extend({ messageType: healthWallMessageTypeEnum.default("message") });
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;

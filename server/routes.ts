@@ -18,18 +18,35 @@ import {
   insertConversationSchema,
   insertConversationMessageSchema,
   type QuestionnaireData as QData,
+  type User,
+  type ConversationMessage,
+  type HealthWallMessage,
 } from "@shared/schema";
 import {
   getHealthWallRecentMessages,
   pushHealthWallRecentMessage,
   publishHealthWallMessage,
+  publishHealthWallMessageEdited,
+  publishHealthWallMessageDeleted,
+  publishHealthWallMessagePinned,
+  publishHealthWallMessageUnpinned,
+  invalidateHealthWallRecent,
   publishDoctorChatsUpdated,
   backfillHealthWallRecent,
+  type HealthWallMessageWithAuthor,
+  type MessageAuthor,
   getConversationRecentMessages,
   pushConversationRecentMessage,
   publishConversationMessage,
   publishConversationSeen,
+  publishConversationMessageEdited,
+  publishConversationMessageDeleted,
+  publishConversationMessagePinned,
+  publishConversationMessageUnpinned,
+  invalidateConversationRecent,
   backfillConversationRecent,
+  type ConversationMessageWithAuthor,
+  type ConversationMessageAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
 
@@ -1275,6 +1292,92 @@ ${allUrls.map(url => `  <url>
     return isConnected;
   }
 
+  const HEALTH_WALL_EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+  function userToMessageAuthor(u: User | undefined | null): MessageAuthor {
+    return {
+      id: u?.id ?? "",
+      email: u?.email ?? null,
+      firstName: u?.firstName ?? null,
+      lastName: u?.lastName ?? null,
+      isAdmin: u?.isAdmin ?? null,
+    };
+  }
+
+  async function enrichHealthWallMessages(
+    messages: HealthWallMessage[]
+  ): Promise<HealthWallMessageWithAuthor[]> {
+    const userIds = new Set<string>();
+    messages.forEach((m) => {
+      userIds.add(m.authorUserId);
+      if (m.forwardedFromUserId) userIds.add(m.forwardedFromUserId);
+      if (m.pinnedByUserId) userIds.add(m.pinnedByUserId);
+    });
+
+    const replyIds = Array.from(
+      new Set(
+        messages
+          .map((m) => m.replyToMessageId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      )
+    );
+    const replyTargets =
+      replyIds.length > 0
+        ? await Promise.all(replyIds.map((rid) => storage.getHealthWallMessageById(rid)))
+        : [];
+    const replyMap = new Map<string, HealthWallMessage>();
+    replyTargets.forEach((reply) => {
+      if (reply) {
+        replyMap.set(reply.id, reply);
+        userIds.add(reply.authorUserId);
+      }
+    });
+
+    const users = userIds.size > 0 ? await Promise.all(Array.from(userIds).map((id) => storage.getUser(id))) : [];
+    const userMap = new Map<string, User>();
+    users.forEach((u) => {
+      if (u) userMap.set(u.id, u);
+    });
+
+    return messages.map((m) => {
+      const reply = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
+      return {
+        id: m.id,
+        patientUserId: m.patientUserId,
+        authorUserId: m.authorUserId,
+        messageType: m.messageType,
+        content: m.content ?? null,
+        imageUrl: m.imageUrl ?? null,
+        createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
+        editedAt: m.editedAt ? (m.editedAt instanceof Date ? m.editedAt.toISOString() : String(m.editedAt)) : null,
+        deletedAt: m.deletedAt ? (m.deletedAt instanceof Date ? m.deletedAt.toISOString() : String(m.deletedAt)) : null,
+        pinnedAt: m.pinnedAt ? (m.pinnedAt instanceof Date ? m.pinnedAt.toISOString() : String(m.pinnedAt)) : null,
+        pinnedByUserId: m.pinnedByUserId ?? null,
+        replyToMessageId: m.replyToMessageId ?? null,
+        forwardedFromMessageId: m.forwardedFromMessageId ?? null,
+        forwardedFromUserId: m.forwardedFromUserId ?? null,
+        replyTo: reply
+          ? {
+              id: reply.id,
+              authorUserId: reply.authorUserId,
+              content: reply.content ?? null,
+              imageUrl: reply.imageUrl ?? null,
+              deletedAt: reply.deletedAt
+                ? reply.deletedAt instanceof Date
+                  ? reply.deletedAt.toISOString()
+                  : String(reply.deletedAt)
+                : null,
+              author: userToMessageAuthor(userMap.get(reply.authorUserId) ?? null),
+            }
+          : null,
+        forwardedFromAuthor: m.forwardedFromUserId
+          ? userToMessageAuthor(userMap.get(m.forwardedFromUserId) ?? null)
+          : null,
+        author: userToMessageAuthor(userMap.get(m.authorUserId) ?? null),
+      };
+    });
+  }
+
   // Get health wall messages for a patient
   app.get('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
     try {
@@ -1303,20 +1406,7 @@ ${allUrls.map(url => `  <url>
       }
 
       const messages = await storage.getHealthWallMessagesRecent(patientUserId, 100);
-      const authorIds = Array.from(new Set(messages.map(m => m.authorUserId)));
-      const authors = await Promise.all(authorIds.map(id => storage.getUser(id)));
-      const authorMap = new Map(authors.filter(Boolean).map(u => [u!.id, u!]));
-      const messagesWithAuthors = messages.map(msg => ({
-        ...msg,
-        createdAt: msg.createdAt instanceof Date ? msg.createdAt.toISOString() : String(msg.createdAt),
-        author: {
-          id: msg.authorUserId,
-          email: authorMap.get(msg.authorUserId)?.email,
-          firstName: authorMap.get(msg.authorUserId)?.firstName,
-          lastName: authorMap.get(msg.authorUserId)?.lastName,
-          isAdmin: authorMap.get(msg.authorUserId)?.isAdmin,
-        },
-      }));
+      const messagesWithAuthors = await enrichHealthWallMessages(messages);
       res.json(messagesWithAuthors);
       backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
         console.error("Redis backfill error:", err)
@@ -1371,26 +1461,48 @@ ${allUrls.map(url => `  <url>
         return res.status(403).json({ message: "Only doctors can post prescriptions" });
       }
       
+      let content: string | null = req.body.content ?? null;
+      let imageUrl: string | null = req.body.imageUrl ?? null;
+      let forwardedFromMessageId: string | null = null;
+      let forwardedFromUserId: string | null = null;
+
+      if (req.body.forwardSource?.patientUserId && req.body.forwardSource?.messageId) {
+        const sourcePatientUserId = String(req.body.forwardSource.patientUserId);
+        if (!await canAccessHealthWall(req, sourcePatientUserId)) {
+          return res.status(403).json({ message: "Cannot forward from this chat" });
+        }
+        const source = await storage.getHealthWallMessageById(String(req.body.forwardSource.messageId));
+        if (!source || source.patientUserId !== sourcePatientUserId || source.deletedAt) {
+          return res.status(404).json({ message: "Source message not found" });
+        }
+        content = source.content ?? null;
+        imageUrl = source.imageUrl ?? null;
+        forwardedFromMessageId = source.id;
+        forwardedFromUserId = source.forwardedFromUserId ?? source.authorUserId;
+      }
+
+      let replyToMessageId: string | null = null;
+      if (req.body.replyToMessageId) {
+        const reply = await storage.getHealthWallMessageById(String(req.body.replyToMessageId));
+        if (!reply || reply.patientUserId !== patientUserId) {
+          return res.status(400).json({ message: "Invalid reply target" });
+        }
+        replyToMessageId = reply.id;
+      }
+
       const validatedData = insertHealthWallMessageSchema.parse({
         patientUserId,
         authorUserId: currentUserId,
         messageType,
-        content: req.body.content,
-        imageUrl: req.body.imageUrl,
+        content,
+        imageUrl,
+        replyToMessageId,
+        forwardedFromMessageId,
+        forwardedFromUserId,
       });
       
       const message = await storage.createHealthWallMessage(validatedData);
-      const messageWithAuthor = {
-        ...message,
-        createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : String(message.createdAt),
-        author: {
-          id: currentUserId,
-          email: currentUser?.email,
-          firstName: currentUser?.firstName,
-          lastName: currentUser?.lastName,
-          isAdmin: currentUser?.isAdmin,
-        },
-      };
+      const [messageWithAuthor] = await enrichHealthWallMessages([message]);
       await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
       await publishHealthWallMessage(patientUserId, messageWithAuthor);
       res.json(messageWithAuthor);
@@ -1400,6 +1512,133 @@ ${allUrls.map(url => `  <url>
         return res.status(400).json({ message: "Invalid message data" });
       }
       res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
+  app.patch('/api/health-wall/:patientUserId/messages/:messageId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const existing = await storage.getHealthWallMessageById(messageId);
+      if (!existing || existing.patientUserId !== patientUserId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.authorUserId !== currentUserId) {
+        return res.status(403).json({ message: "Only author can edit" });
+      }
+      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
+
+      const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
+      if (Date.now() - createdAt > HEALTH_WALL_EDIT_WINDOW_MS) {
+        return res.status(400).json({ message: "Edit window expired" });
+      }
+
+      const content = (req.body?.content ?? "").toString().trim();
+      if (!content) return res.status(400).json({ message: "Content required" });
+
+      const updated = await storage.editHealthWallMessage(messageId, content);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateHealthWallRecent(patientUserId);
+      await publishHealthWallMessageEdited(patientUserId, {
+        patientUserId,
+        messageId,
+        content: updated.content ?? null,
+        editedAt: (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString(),
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error editing health wall message:", error);
+      res.status(500).json({ message: "Failed to edit message" });
+    }
+  });
+
+  app.delete('/api/health-wall/:patientUserId/messages/:messageId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const existing = await storage.getHealthWallMessageById(messageId);
+      if (!existing || existing.patientUserId !== patientUserId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) return res.json({ ok: true });
+      if (existing.authorUserId !== currentUserId) {
+        return res.status(403).json({ message: "Only author can delete" });
+      }
+
+      const updated = await storage.softDeleteHealthWallMessage(messageId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateHealthWallRecent(patientUserId);
+      await publishHealthWallMessageDeleted(patientUserId, {
+        patientUserId,
+        messageId,
+        deletedAt: (updated.deletedAt instanceof Date ? updated.deletedAt : new Date()).toISOString(),
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting health wall message:", error);
+      res.status(500).json({ message: "Failed to delete message" });
+    }
+  });
+
+  app.post('/api/health-wall/:patientUserId/messages/:messageId/pin', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const existing = await storage.getHealthWallMessageById(messageId);
+      if (!existing || existing.patientUserId !== patientUserId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
+      const updated = await storage.pinHealthWallMessage(messageId, currentUserId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateHealthWallRecent(patientUserId);
+      await publishHealthWallMessagePinned(patientUserId, {
+        patientUserId,
+        messageId,
+        pinnedAt: (updated.pinnedAt instanceof Date ? updated.pinnedAt : new Date()).toISOString(),
+        pinnedByUserId: currentUserId,
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error pinning health wall message:", error);
+      res.status(500).json({ message: "Failed to pin message" });
+    }
+  });
+
+  app.post('/api/health-wall/:patientUserId/messages/:messageId/unpin', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const existing = await storage.getHealthWallMessageById(messageId);
+      if (!existing || existing.patientUserId !== patientUserId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      const updated = await storage.unpinHealthWallMessage(messageId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateHealthWallRecent(patientUserId);
+      await publishHealthWallMessageUnpinned(patientUserId, { patientUserId, messageId });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error unpinning health wall message:", error);
+      res.status(500).json({ message: "Failed to unpin message" });
     }
   });
 
@@ -1777,6 +2016,95 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Conversation message helpers
+  const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+  function userToConvAuthor(u: User | undefined | null): ConversationMessageAuthor {
+    return {
+      id: u?.id ?? "",
+      email: u?.email ?? null,
+      firstName: u?.firstName ?? null,
+      lastName: u?.lastName ?? null,
+      isAdmin: u?.isAdmin ?? null,
+    };
+  }
+
+  async function enrichConversationMessages(
+    messages: ConversationMessage[]
+  ): Promise<ConversationMessageWithAuthor[]> {
+    const userIds = new Set<string>();
+    messages.forEach((m) => {
+      userIds.add(m.authorUserId);
+      if (m.forwardedFromUserId) userIds.add(m.forwardedFromUserId);
+      if (m.pinnedByUserId) userIds.add(m.pinnedByUserId);
+    });
+    const replyIds = Array.from(
+      new Set(
+        messages
+          .map((m) => m.replyToMessageId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      )
+    );
+    const replyTargets =
+      replyIds.length > 0
+        ? await Promise.all(replyIds.map((rid) => storage.getConversationMessageById(rid)))
+        : [];
+    const replyMap = new Map<string, ConversationMessage>();
+    replyTargets.forEach((rm) => {
+      if (rm) {
+        replyMap.set(rm.id, rm);
+        userIds.add(rm.authorUserId);
+      }
+    });
+    const userIdsArr = Array.from(userIds);
+    const users = userIdsArr.length
+      ? await Promise.all(userIdsArr.map((uid) => storage.getUser(uid)))
+      : [];
+    const userMap = new Map<string, User>();
+    users.forEach((u) => {
+      if (u) userMap.set(u.id, u);
+    });
+
+    return messages.map((m) => {
+      const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
+      const replyAuthor = replyTarget ? userMap.get(replyTarget.authorUserId) : null;
+      return {
+        id: m.id,
+        conversationId: m.conversationId,
+        authorUserId: m.authorUserId,
+        messageType: m.messageType,
+        content: m.content ?? null,
+        imageUrl: m.imageUrl ?? null,
+        createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
+        editedAt: m.editedAt ? (m.editedAt instanceof Date ? m.editedAt.toISOString() : String(m.editedAt)) : null,
+        deletedAt: m.deletedAt ? (m.deletedAt instanceof Date ? m.deletedAt.toISOString() : String(m.deletedAt)) : null,
+        pinnedAt: m.pinnedAt ? (m.pinnedAt instanceof Date ? m.pinnedAt.toISOString() : String(m.pinnedAt)) : null,
+        pinnedByUserId: m.pinnedByUserId ?? null,
+        replyToMessageId: m.replyToMessageId ?? null,
+        forwardedFromMessageId: m.forwardedFromMessageId ?? null,
+        forwardedFromUserId: m.forwardedFromUserId ?? null,
+        replyTo: replyTarget
+          ? {
+              id: replyTarget.id,
+              authorUserId: replyTarget.authorUserId,
+              content: replyTarget.content ?? null,
+              imageUrl: replyTarget.imageUrl ?? null,
+              deletedAt: replyTarget.deletedAt
+                ? replyTarget.deletedAt instanceof Date
+                  ? replyTarget.deletedAt.toISOString()
+                  : String(replyTarget.deletedAt)
+                : null,
+              author: userToConvAuthor(replyAuthor ?? null),
+            }
+          : null,
+        forwardedFromAuthor: m.forwardedFromUserId
+          ? userToConvAuthor(userMap.get(m.forwardedFromUserId) ?? null)
+          : null,
+        author: userToConvAuthor(userMap.get(m.authorUserId) ?? null),
+      };
+    });
+  }
+
   // Get conversation messages (Redis first, then DB)
   app.get("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -1796,20 +2124,7 @@ ${allUrls.map(url => `  <url>
       const fromRedis = await getConversationRecentMessages(id);
       if (fromRedis.length > 0) return res.json(fromRedis);
       const messages = await storage.getConversationMessagesRecent(id, 100);
-      const authorIds = Array.from(new Set(messages.map((m) => m.authorUserId)));
-      const authors = await Promise.all(authorIds.map((uid) => storage.getUser(uid)));
-      const authorMap = new Map(authors.filter(Boolean).map((u) => [u!.id, u!]));
-      const withAuthors = messages.map((msg) => ({
-        ...msg,
-        createdAt: msg.createdAt instanceof Date ? msg.createdAt.toISOString() : String(msg.createdAt),
-        author: {
-          id: msg.authorUserId,
-          email: authorMap.get(msg.authorUserId)?.email,
-          firstName: authorMap.get(msg.authorUserId)?.firstName,
-          lastName: authorMap.get(msg.authorUserId)?.lastName,
-          isAdmin: authorMap.get(msg.authorUserId)?.isAdmin,
-        },
-      }));
+      const withAuthors = await enrichConversationMessages(messages);
       res.json(withAuthors);
       backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
     } catch (error) {
@@ -1818,7 +2133,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Post conversation message
+  // Post conversation message (supports reply + forward)
   app.post("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -1828,36 +2143,247 @@ ${allUrls.map(url => `  <url>
       if (!inConv) return res.status(403).json({ message: "Access denied" });
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
-      const body = req.body as { content?: string; imageUrl?: string; messageType?: string };
+      const body = req.body as {
+        content?: string;
+        imageUrl?: string;
+        messageType?: string;
+        replyToMessageId?: string;
+        forwardSource?: { conversationId?: string; patientUserId?: string; messageId: string };
+      };
+
+      let content: string | null = body.content ?? null;
+      let imageUrl: string | null = body.imageUrl ?? null;
+      let forwardedFromMessageId: string | null = null;
+      let forwardedFromUserId: string | null = null;
+      const resolveForwardedAuthorId = async (params: {
+        directForwardedFromUserId?: string | null;
+        directForwardedFromMessageId?: string | null;
+        fallbackAuthorUserId: string;
+        sourceKind: "conversation" | "health_wall";
+      }) => {
+        if (params.directForwardedFromUserId) return params.directForwardedFromUserId;
+        if (params.directForwardedFromMessageId) {
+          if (params.sourceKind === "conversation") {
+            const root = await storage.getConversationMessageById(params.directForwardedFromMessageId);
+            if (root) return root.forwardedFromUserId ?? root.authorUserId;
+          } else {
+            const root = await storage.getHealthWallMessageById(params.directForwardedFromMessageId);
+            if (root) return root.forwardedFromUserId ?? root.authorUserId;
+          }
+        }
+        return params.fallbackAuthorUserId;
+      };
+
+      if (body.forwardSource) {
+        if (body.forwardSource.conversationId) {
+          const inSource = await storage.isUserInConversation(
+            currentUserId,
+            body.forwardSource.conversationId
+          );
+          if (!inSource) return res.status(403).json({ message: "Cannot forward from this chat" });
+          const src = await storage.getConversationMessageById(body.forwardSource.messageId);
+          if (
+            !src ||
+            src.conversationId !== body.forwardSource.conversationId ||
+            src.deletedAt
+          ) {
+            return res.status(404).json({ message: "Source message not found" });
+          }
+          content = src.content ?? null;
+          imageUrl = src.imageUrl ?? null;
+          forwardedFromMessageId = src.id;
+          forwardedFromUserId = await resolveForwardedAuthorId({
+            directForwardedFromUserId: src.forwardedFromUserId,
+            directForwardedFromMessageId: src.forwardedFromMessageId,
+            fallbackAuthorUserId: src.authorUserId,
+            sourceKind: "conversation",
+          });
+        } else if (body.forwardSource.patientUserId) {
+          const sourcePatientUserId = String(body.forwardSource.patientUserId);
+          const canAccessSourceWall = await canAccessHealthWall(req, sourcePatientUserId);
+          if (!canAccessSourceWall) {
+            return res.status(403).json({ message: "Cannot forward from this health wall" });
+          }
+          const src = await storage.getHealthWallMessageById(body.forwardSource.messageId);
+          if (
+            !src ||
+            src.patientUserId !== sourcePatientUserId ||
+            src.deletedAt
+          ) {
+            return res.status(404).json({ message: "Source message not found" });
+          }
+          content = src.content ?? null;
+          imageUrl = src.imageUrl ?? null;
+          // Keep null here: conversation FK points to conversation_messages only.
+          // Health wall source ids are from another table and would violate FK.
+          forwardedFromMessageId = null;
+          forwardedFromUserId = await resolveForwardedAuthorId({
+            directForwardedFromUserId: src.forwardedFromUserId,
+            directForwardedFromMessageId: src.forwardedFromMessageId,
+            fallbackAuthorUserId: src.authorUserId,
+            sourceKind: "health_wall",
+          });
+        } else {
+          return res.status(400).json({ message: "Invalid forward source" });
+        }
+      }
+
+      let replyToMessageId: string | null = null;
+      if (body.replyToMessageId) {
+        const reply = await storage.getConversationMessageById(body.replyToMessageId);
+        if (!reply || reply.conversationId !== id) {
+          return res.status(400).json({ message: "Invalid reply target" });
+        }
+        replyToMessageId = reply.id;
+      }
+
       const validated = insertConversationMessageSchema.parse({
         conversationId: id,
         authorUserId: currentUserId,
         messageType: body.messageType ?? "message",
-        content: body.content ?? null,
-        imageUrl: body.imageUrl ?? null,
+        content,
+        imageUrl,
+        replyToMessageId,
+        forwardedFromMessageId,
+        forwardedFromUserId,
       });
       const message = await storage.createConversationMessage(validated);
-      const currentUser = await storage.getUser(currentUserId);
-      const messageWithAuthor = {
-        ...message,
-        createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : String(message.createdAt),
-        author: {
-          id: currentUserId,
-          email: currentUser?.email,
-          firstName: currentUser?.firstName,
-          lastName: currentUser?.lastName,
-          isAdmin: currentUser?.isAdmin,
-        },
-      };
-      await pushConversationRecentMessage(id, messageWithAuthor);
-      await publishConversationMessage(id, messageWithAuthor);
-      res.status(201).json(messageWithAuthor);
+      const [enriched] = await enrichConversationMessages([message]);
+      await pushConversationRecentMessage(id, enriched);
+      await publishConversationMessage(id, enriched);
+      res.status(201).json(enriched);
     } catch (error) {
       console.error("Error posting conversation message:", error);
       if (error instanceof Error && error.name === "ZodError") {
         return res.status(400).json({ message: "Invalid message data" });
       }
       res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
+  // Edit conversation message (author only, within 48h, not deleted)
+  app.patch("/api/conversations/:id/messages/:messageId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.authorUserId !== currentUserId) {
+        return res.status(403).json({ message: "Only author can edit" });
+      }
+      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
+      const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
+      if (Date.now() - createdAt > EDIT_WINDOW_MS) {
+        return res.status(400).json({ message: "Edit window expired" });
+      }
+      const content = (req.body?.content ?? "").toString().trim();
+      if (!content) return res.status(400).json({ message: "Content required" });
+      const updated = await storage.editConversationMessage(messageId, content);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateConversationRecent(id);
+      await publishConversationMessageEdited(id, {
+        conversationId: id,
+        messageId,
+        content: updated.content ?? null,
+        editedAt: (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString(),
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error editing conversation message:", error);
+      res.status(500).json({ message: "Failed to edit message" });
+    }
+  });
+
+  // Delete conversation message (author OR conversation owner). Soft delete.
+  app.delete("/api/conversations/:id/messages/:messageId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) {
+        return res.json({ ok: true });
+      }
+      const myRole = await storage.getParticipantRole(id, currentUserId);
+      const canDelete = existing.authorUserId === currentUserId || myRole === "owner";
+      if (!canDelete) return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.softDeleteConversationMessage(messageId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateConversationRecent(id);
+      await publishConversationMessageDeleted(id, {
+        conversationId: id,
+        messageId,
+        deletedAt: (updated.deletedAt instanceof Date ? updated.deletedAt : new Date()).toISOString(),
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting conversation message:", error);
+      res.status(500).json({ message: "Failed to delete message" });
+    }
+  });
+
+  // Pin conversation message
+  app.post("/api/conversations/:id/messages/:messageId/pin", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
+      const updated = await storage.pinConversationMessage(messageId, currentUserId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateConversationRecent(id);
+      await publishConversationMessagePinned(id, {
+        conversationId: id,
+        messageId,
+        pinnedAt: (updated.pinnedAt instanceof Date ? updated.pinnedAt : new Date()).toISOString(),
+        pinnedByUserId: currentUserId,
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error pinning conversation message:", error);
+      res.status(500).json({ message: "Failed to pin message" });
+    }
+  });
+
+  // Unpin conversation message
+  app.post("/api/conversations/:id/messages/:messageId/unpin", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      const updated = await storage.unpinConversationMessage(messageId);
+      if (!updated) return res.status(404).json({ message: "Message not found" });
+      await invalidateConversationRecent(id);
+      await publishConversationMessageUnpinned(id, {
+        conversationId: id,
+        messageId,
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error unpinning conversation message:", error);
+      res.status(500).json({ message: "Failed to unpin message" });
     }
   });
 

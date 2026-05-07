@@ -8,12 +8,44 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2, MessageCircle, Menu, Copy, Share2 } from "lucide-react";
+import {
+  Loader2,
+  Send,
+  FileText,
+  Image,
+  ArrowLeft,
+  Pill,
+  X,
+  GripVertical,
+  UserPlus,
+  Trash2,
+  MessageCircle,
+  Menu,
+  Copy,
+  Share2,
+  MoreVertical,
+  Reply,
+  Pencil,
+  Forward as ForwardIcon,
+  Pin,
+  PinOff,
+  Check,
+} from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -25,10 +57,19 @@ import { cn } from "@/lib/utils";
 
 interface Author {
   id: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  isAdmin?: boolean;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  isAdmin?: boolean | null;
+}
+
+interface HealthWallReplyTo {
+  id: string;
+  authorUserId: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  deletedAt?: string | null;
+  author?: Author | null;
 }
 
 interface HealthWallMessage {
@@ -36,9 +77,18 @@ interface HealthWallMessage {
   patientUserId: string;
   authorUserId: string;
   messageType: 'message' | 'prescription' | 'followup';
-  content?: string;
-  imageUrl?: string;
+  content?: string | null;
+  imageUrl?: string | null;
   createdAt: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  pinnedAt?: string | null;
+  pinnedByUserId?: string | null;
+  replyToMessageId?: string | null;
+  forwardedFromMessageId?: string | null;
+  forwardedFromUserId?: string | null;
+  replyTo?: HealthWallReplyTo | null;
+  forwardedFromAuthor?: Author | null;
   author: Author;
 }
 
@@ -73,6 +123,23 @@ interface MyPatientListItem {
   lastMessageAt?: string;
 }
 
+type MyChatItem = {
+  source: "conversation" | "health_wall";
+  folder: "personal" | "groups" | "channels";
+  type?: string;
+  conversationId?: string;
+  otherParticipantName?: string;
+  name?: string;
+  avatarUrl?: string | null;
+};
+
+type MyChatsPage = {
+  items: MyChatItem[];
+  hasMore: boolean;
+  nextOffset: number | null;
+  total: number;
+};
+
 const STORAGE_KEY_DIVIDER = 'healthwall-divider-position';
 const STORAGE_KEY_PANEL = 'healthwall-panel-open';
 const MIN_PANEL_PERCENT = 33;
@@ -98,10 +165,29 @@ function formatDoctorLastVisit(lastVisitedAt?: string): string {
 }
 const MAX_PANEL_PERCENT = 66;
 const DEFAULT_PANEL_PERCENT = 50;
+const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /** Thumbnail URL for chat list; full image loads only when user clicks to enlarge. */
 function getThumbUrl(url: string): string {
   return url + (url.includes("?") ? "&" : "?") + "size=thumb";
+}
+
+function getAuthorName(author: Author | null | undefined): string {
+  if (!author) return "User";
+  if (author.firstName && author.lastName) return `${author.firstName} ${author.lastName}`;
+  if (author.firstName) return author.firstName;
+  if (author.email) return author.email.split("@")[0];
+  return "User";
+}
+
+function getReplySnippet(reply: HealthWallReplyTo): string {
+  if (reply.deletedAt) return t.messageDeleted;
+  if (reply.content?.trim()) {
+    const text = reply.content.trim();
+    return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+  }
+  if (reply.imageUrl) return t.messagePhotoLabel;
+  return t.messageDeleted;
 }
 
 function QuestionnaireViewModeSegment({
@@ -159,9 +245,17 @@ export default function HealthWall() {
   const [messageMode, setMessageMode] = useState<'message' | 'prescription' | 'followup'>('message');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadQueue, setUploadQueue] = useState<File[]>([]);
+  const [replyTo, setReplyTo] = useState<HealthWallMessage | null>(null);
+  const [editing, setEditing] = useState<HealthWallMessage | null>(null);
+  const [editText, setEditText] = useState('');
+  const [forwarding, setForwarding] = useState<HealthWallMessage | null>(null);
+  const [forwardSearch, setForwardSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<HealthWallMessage | null>(null);
+  const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastHealthWallReadAtRef = useRef<number>(0);
   const lastMarkedMessageIdRef = useRef<string | null>(null);
   const markReadInFlightRef = useRef(false);
@@ -269,6 +363,57 @@ export default function HealthWall() {
     });
   }, [myPatients, patientSearchQuery]);
 
+  const { data: forwardChats, isLoading: forwardChatsLoading } = useQuery<MyChatItem[]>({
+    queryKey: ["/api/me/chats", "health-wall-forward-targets"],
+    enabled: !!forwarding,
+    queryFn: async () => {
+      const folders: Array<"personal" | "groups" | "channels"> = ["personal", "groups", "channels"];
+      const results = await Promise.all(
+        folders.map(async (folder) => {
+          const res = await fetch(`/api/me/chats?folder=${folder}&limit=50&offset=0`, {
+            credentials: "include",
+          });
+          if (!res.ok) return [] as MyChatItem[];
+          const json = (await res.json()) as MyChatsPage;
+          return json.items;
+        })
+      );
+      const merged = results.flat();
+      return merged.filter(
+        (item): item is MyChatItem & { conversationId: string } =>
+          item.source === "conversation" && typeof item.conversationId === "string" && item.conversationId.length > 0
+      );
+    },
+  });
+
+  const filteredForwardTargets = useMemo(() => {
+    if (!forwardChats) return [];
+    const q = forwardSearch.trim().toLowerCase();
+    if (!q) return forwardChats;
+    return forwardChats.filter((chat) => {
+      const chatTitle =
+        chat.name ||
+        chat.otherParticipantName ||
+        (chat.type === "channel" ? t.searchChannels : t.chatWithDoctor);
+      return chatTitle.toLowerCase().includes(q);
+    });
+  }, [forwardChats, forwardSearch]);
+
+  const setMessageRef = (id: string) => (el: HTMLDivElement | null) => {
+    if (el) messageRefs.current.set(id, el);
+    else messageRefs.current.delete(id);
+  };
+
+  const scrollToMessage = (id: string) => {
+    const el = messageRefs.current.get(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary/60");
+    window.setTimeout(() => {
+      el.classList.remove("ring-2", "ring-primary/60");
+    }, 1500);
+  };
+
   const createPatientInviteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/invites', { inviteType: 'patient' });
@@ -323,15 +468,27 @@ export default function HealthWall() {
   };
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content?: string; imageUrl?: string; messageType: string }) => {
+    mutationFn: async (data: {
+      content?: string;
+      imageUrl?: string;
+      messageType: string;
+      replyToMessageId?: string;
+      forwardSource?: { patientUserId: string; messageId: string };
+    }) => {
       if (!patientUserId) throw new Error("No patient");
-      return apiRequest('POST', `/api/health-wall/${patientUserId}`, data);
+      const res = await apiRequest('POST', `/api/health-wall/${patientUserId}`, data);
+      return res.json() as Promise<HealthWallMessage>;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/health-wall', patientUserId] });
+    onSuccess: (newMessage, variables) => {
+      queryClient.setQueryData<HealthWallMessage[]>(['/api/health-wall', patientUserId], (old) => {
+        if (!old) return [newMessage];
+        if (old.some((m) => m.id === newMessage.id)) return old;
+        return [...old, newMessage];
+      });
       if (!variables.imageUrl) {
         setMessage('');
         setMessageMode('message');
+        setReplyTo(null);
         setTimeout(() => messageTextareaRef.current?.focus(), 0);
       } else {
         focusMessageInput();
@@ -343,6 +500,132 @@ export default function HealthWall() {
         description: t.somethingWrong,
         variant: "destructive",
       });
+    },
+  });
+
+  const editMessageMutation = useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
+      if (!patientUserId) throw new Error("No patient");
+      const res = await apiRequest('PATCH', `/api/health-wall/${patientUserId}/messages/${messageId}`, { content });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<HealthWallMessage[]>(['/api/health-wall', patientUserId], (old) =>
+        old?.map((m) =>
+          m.id === variables.messageId
+            ? { ...m, content: variables.content, editedAt: new Date().toISOString() }
+            : m
+        )
+      );
+      setEditing(null);
+      setEditText('');
+    },
+    onError: (error: Error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!patientUserId) throw new Error("No patient");
+      await apiRequest('DELETE', `/api/health-wall/${patientUserId}/messages/${messageId}`);
+    },
+    onSuccess: (_data, messageId) => {
+      queryClient.setQueryData<HealthWallMessage[]>(['/api/health-wall', patientUserId], (old) =>
+        old?.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                deletedAt: new Date().toISOString(),
+                content: null,
+                imageUrl: null,
+                pinnedAt: null,
+                pinnedByUserId: null,
+              }
+            : m
+        )
+      );
+      setPendingDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const pinMessageMutation = useMutation({
+    mutationFn: async ({ messageId, pin }: { messageId: string; pin: boolean }) => {
+      if (!patientUserId) throw new Error("No patient");
+      await apiRequest('POST', `/api/health-wall/${patientUserId}/messages/${messageId}/${pin ? 'pin' : 'unpin'}`, {});
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData<HealthWallMessage[]>(['/api/health-wall', patientUserId], (old) =>
+        old?.map((m) =>
+          m.id === variables.messageId
+            ? {
+                ...m,
+                pinnedAt: variables.pin ? new Date().toISOString() : null,
+                pinnedByUserId: variables.pin ? user?.id ?? null : null,
+              }
+            : m
+        )
+      );
+    },
+    onError: (error: Error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const forwardMessageMutation = useMutation({
+    mutationFn: async ({
+      targetConversationId,
+      sourceMessageId,
+      targetTitle,
+      targetType,
+    }: {
+      targetConversationId: string;
+      sourceMessageId: string;
+      targetTitle: string;
+      targetType: "direct" | "group" | "channel";
+    }) => {
+      if (!patientUserId) throw new Error("No patient");
+      const res = await apiRequest("POST", `/api/conversations/${targetConversationId}/messages`, {
+        forwardSource: { patientUserId, messageId: sourceMessageId },
+      });
+      return {
+        targetConversationId,
+        targetTitle,
+        targetType,
+        newMessage: (await res.json()) as HealthWallMessage,
+      };
+    },
+    onSuccess: ({ targetConversationId, targetTitle, targetType }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/me/chats'] });
+      setForwarding(null);
+      setForwardSearch('');
+      const targetPath =
+        targetType === "group"
+          ? `/messenger/group/${targetConversationId}`
+          : targetType === "channel"
+            ? `/messenger/channel/${targetConversationId}`
+            : `/messenger/direct/${targetConversationId}`;
+      const forwardToast = toast({
+        title: (
+          <span>
+            Переслано{" "}
+            <button
+              type="button"
+              className="underline underline-offset-2"
+              onClick={() => setLocation(targetPath)}
+            >
+              {targetTitle}
+            </button>
+          </span>
+        ),
+      });
+      window.setTimeout(() => forwardToast.dismiss(), 3000);
+    },
+    onError: (error: Error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
     },
   });
 
@@ -361,6 +644,39 @@ export default function HealthWall() {
   const displayMessages: HealthWallMessage[] = useMemo(() => {
     return [...(messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [messages]);
+
+  const pinnedMessages = useMemo(
+    () => displayMessages.filter((msg) => msg.pinnedAt && !msg.deletedAt),
+    [displayMessages]
+  );
+  const activePinnedMessage =
+    activePinnedIndex >= 0 && activePinnedIndex < pinnedMessages.length
+      ? pinnedMessages[activePinnedIndex]
+      : null;
+
+  useEffect(() => {
+    if (pinnedMessages.length === 0) {
+      setActivePinnedIndex(-1);
+      return;
+    }
+    setActivePinnedIndex((prev) => {
+      if (prev < 0) return pinnedMessages.length - 1;
+      return Math.min(prev, pinnedMessages.length - 1);
+    });
+  }, [pinnedMessages]);
+
+  const handlePinnedBannerClick = useCallback(() => {
+    if (pinnedMessages.length === 0) return;
+    setActivePinnedIndex((prev) => {
+      const baseIndex = prev >= 0 ? prev : pinnedMessages.length - 1;
+      const nextIndex = (baseIndex + 1) % pinnedMessages.length;
+      const nextPinnedMessage = pinnedMessages[nextIndex];
+      if (nextPinnedMessage) {
+        scrollToMessage(nextPinnedMessage.id);
+      }
+      return nextIndex;
+    });
+  }, [pinnedMessages]);
 
   useEffect(() => {
     const root = messagesScrollRef.current;
@@ -473,10 +789,17 @@ export default function HealthWall() {
   }
 
   const handleSendMessage = () => {
+    if (editing) {
+      const text = editText.trim();
+      if (!text) return;
+      editMessageMutation.mutate({ messageId: editing.id, content: text });
+      return;
+    }
     if (!message.trim()) return;
     sendMessageMutation.mutate({
       content: message.trim(),
       messageType: messageMode,
+      replyToMessageId: replyTo?.id,
     });
   };
 
@@ -488,8 +811,39 @@ export default function HealthWall() {
   };
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
+    if (editing) setEditText(e.target.value);
+    else setMessage(e.target.value);
     syncChatTextareaHeight(e.target);
+  };
+
+  const startReply = (msg: HealthWallMessage) => {
+    setEditing(null);
+    setEditText('');
+    setReplyTo(msg);
+    setTimeout(() => messageTextareaRef.current?.focus(), 0);
+  };
+
+  const startEdit = (msg: HealthWallMessage) => {
+    setReplyTo(null);
+    setEditing(msg);
+    setEditText(msg.content ?? '');
+    setTimeout(() => messageTextareaRef.current?.focus(), 0);
+  };
+
+  const cancelComposerContext = () => {
+    setReplyTo(null);
+    setEditing(null);
+    setEditText('');
+  };
+
+  const copyMessageContent = async (msg: HealthWallMessage) => {
+    if (!msg.content) return;
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      toast({ title: "Скопировано" });
+    } catch {
+      // ignore clipboard failures
+    }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -522,6 +876,8 @@ export default function HealthWall() {
     followup: { label: t.followup, icon: FileText, activeClass: "bg-purple-600 hover:bg-purple-700 text-white" },
   };
   const selectedMode = messageTypeConfig[messageMode];
+  const composerValue = editing ? editText : message;
+  const isComposerPending = sendMessageMutation.isPending || editMessageMutation.isPending;
   const headerAvatarUrl = isOwnWall
     ? (user?.profileImageUrl ?? null)
     : (patientInfo?.profileImageUrl ?? null);
@@ -542,10 +898,149 @@ export default function HealthWall() {
     }
   };
 
+  const renderMessageActions = (msg: HealthWallMessage) => {
+    const isSupportedType =
+      msg.messageType === "message" ||
+      msg.messageType === "prescription" ||
+      msg.messageType === "followup";
+    if (msg.deletedAt || !isSupportedType) return null;
+    const isOwnMessage = msg.authorUserId === user?.id;
+    const hasTopTag = !!msg.replyTo || !!msg.forwardedFromMessageId || !!msg.forwardedFromUserId;
+    const canEdit =
+      isOwnMessage &&
+      !!msg.content &&
+      Date.now() - new Date(msg.createdAt).getTime() < EDIT_WINDOW_MS;
+    const isPinned = !!msg.pinnedAt;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Message actions"
+            className={`absolute right-1 z-10 flex h-6 w-6 items-center justify-center bg-transparent text-muted-foreground opacity-70 hover:opacity-100 ${
+              hasTopTag ? "top-8" : "top-2"
+            }`}
+            data-testid={`button-health-wall-message-actions-${msg.id}`}
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={isOwnMessage ? "end" : "start"} className="w-48">
+          <DropdownMenuItem onSelect={() => startReply(msg)}>
+            <Reply className="mr-2 h-4 w-4" />
+            {t.messageActionReply}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setForwarding(msg)}>
+            <ForwardIcon className="mr-2 h-4 w-4" />
+            {t.messageActionForward}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => pinMessageMutation.mutate({ messageId: msg.id, pin: !isPinned })}>
+            {isPinned ? (
+              <>
+                <PinOff className="mr-2 h-4 w-4" />
+                {t.messageActionUnpin}
+              </>
+            ) : (
+              <>
+                <Pin className="mr-2 h-4 w-4" />
+                {t.messageActionPin}
+              </>
+            )}
+          </DropdownMenuItem>
+          {msg.content && (
+            <DropdownMenuItem onSelect={() => copyMessageContent(msg)}>
+              <Copy className="mr-2 h-4 w-4" />
+              {t.messageActionCopy}
+            </DropdownMenuItem>
+          )}
+          {isOwnMessage && <DropdownMenuSeparator />}
+          {canEdit && (
+            <DropdownMenuItem onSelect={() => startEdit(msg)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              {t.messageActionEdit}
+            </DropdownMenuItem>
+          )}
+          {isOwnMessage && (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setPendingDelete(msg)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {t.messageActionDelete}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  const renderReplyPreview = (reply: HealthWallReplyTo, isOwnMessage: boolean) => (
+    <button
+      type="button"
+      onClick={() => scrollToMessage(reply.id)}
+      className={`mb-1 block w-full rounded-lg border-l-2 px-2 py-1 pr-8 text-left text-[11px] leading-tight ${
+        isOwnMessage
+          ? "border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40"
+          : "border-primary/70 bg-background/60"
+      }`}
+    >
+      <span className="block truncate text-[10px] font-semibold text-muted-foreground">
+        {getAuthorName(reply.author)}
+      </span>
+      <span className="block truncate text-muted-foreground">{getReplySnippet(reply)}</span>
+    </button>
+  );
+
+  const renderForwardedHeader = (msg: HealthWallMessage) => {
+    if (!msg.forwardedFromMessageId && !msg.forwardedFromUserId) return null;
+    return (
+      <p className="mb-0.5 text-[10px] italic leading-tight text-muted-foreground">
+        ↪ {t.messageForwardedFrom} {getAuthorName(msg.forwardedFromAuthor)}
+      </p>
+    );
+  };
+
   const inputArea = (
-    <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4">
+    <div className="absolute inset-x-0 bottom-0 z-20 space-y-2 bg-transparent px-4 py-4">
+        {(replyTo || editing) && (
+          <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
+            {editing ? (
+              <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            ) : (
+              <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-primary">
+                {editing ? t.messageEditingTitle : t.messageReplyingTo}
+                {!editing && replyTo && (
+                  <span className="ml-1 text-muted-foreground">{getAuthorName(replyTo.author)}</span>
+                )}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {editing
+                  ? editing.content ?? ''
+                  : replyTo?.content
+                    ? replyTo.content
+                    : replyTo?.imageUrl
+                      ? t.messagePhotoLabel
+                      : ''}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={cancelComposerContext}
+              data-testid="button-cancel-composer-context"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
-          {!message.trim() && (
+          {!composerValue.trim() && !editing && (
             <Button
               variant="outline"
               size="icon"
@@ -573,11 +1068,12 @@ export default function HealthWall() {
             <Textarea
               ref={messageTextareaRef}
               placeholder={
-                messageMode === 'prescription' ? t.prescriptionPlaceholder : 
-                messageMode === 'followup' ? t.followupPlaceholder : 
+                editing ? t.messageEditingTitle :
+                messageMode === 'prescription' ? t.prescriptionPlaceholder :
+                messageMode === 'followup' ? t.followupPlaceholder :
                 t.writeMessage
               }
-              value={message}
+              value={composerValue}
               onChange={handleTextareaInput}
               onKeyDown={handleKeyDown}
               rows={1}
@@ -585,11 +1081,11 @@ export default function HealthWall() {
                 messageMode === 'prescription' ? 'border-green-300 dark:border-green-700' : 
                 messageMode === 'followup' ? 'border-purple-300 dark:border-purple-700' : 
                 ''
-              } ${canSelectMessageType ? 'pr-14' : ''}`}
+              } ${canSelectMessageType && !editing ? 'pr-14' : ''}`}
               style={{ maxHeight: '144px' }}
               data-testid="input-message"
             />
-            {canSelectMessageType && (
+            {canSelectMessageType && !editing && (
               <div className="absolute inset-y-1.5 right-1.5 flex items-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -623,12 +1119,12 @@ export default function HealthWall() {
           </div>
           <Button
             onClick={handleSendMessage}
-            disabled={!message.trim() || sendMessageMutation.isPending}
+            disabled={!composerValue.trim() || isComposerPending}
             size="icon"
             className="rounded-full shrink-0 h-10 w-10"
             data-testid="button-send-message"
           >
-            {sendMessageMutation.isPending ? (
+            {isComposerPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Send className="h-4 w-4" />
@@ -981,9 +1477,37 @@ export default function HealthWall() {
                 </div>
               </div>
             ) : (
+              <>
+              {activePinnedMessage && (
+                <button
+                  type="button"
+                  onClick={handlePinnedBannerClick}
+                  className="absolute inset-x-0 top-[68px] z-20 mx-3 flex items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
+                  data-testid="banner-health-wall-pinned-message"
+                >
+                  <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold text-primary">
+                      {t.messagePinnedTitle}
+                      {pinnedMessages.length > 1 && (
+                        <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-foreground/80">
+                      {activePinnedMessage.content
+                        ? activePinnedMessage.content
+                        : activePinnedMessage.imageUrl
+                          ? t.messagePhotoLabel
+                          : t.messageDeleted}
+                    </p>
+                  </div>
+                </button>
+              )}
               <div
                 ref={messagesScrollRef}
-                className={`h-full overflow-y-auto px-4 pb-32 ${showQuestionnaire ? "pt-4" : "pt-20"}`}
+                className={`h-full overflow-y-auto px-4 pb-32 ${
+                  showQuestionnaire ? "pt-4" : activePinnedMessage ? "pt-32" : "pt-20"
+                }`}
               >
                 <div ref={messagesContentRef} className="space-y-3">
                 {displayMessages.length > 0 ? (
@@ -995,7 +1519,14 @@ export default function HealthWall() {
                       const groupedMessages: Array<{ messages: HealthWallMessage[], isImageGroup: boolean }> = [];
                       
                       filteredMessages.forEach((msg, index) => {
-                        const isImageOnly = msg.imageUrl && !msg.content && msg.messageType === 'message';
+                        const isImageOnly =
+                          msg.imageUrl &&
+                          !msg.content &&
+                          !msg.deletedAt &&
+                          !msg.replyTo &&
+                          !msg.forwardedFromMessageId &&
+                          !msg.pinnedAt &&
+                          msg.messageType === 'message';
                         const prevGroup = groupedMessages[groupedMessages.length - 1];
                         
                         if (isImageOnly && prevGroup?.isImageGroup) {
@@ -1020,11 +1551,13 @@ export default function HealthWall() {
                           return (
                             <div
                               key={`group-${groupIndex}`}
+                              ref={setMessageRef(lastMsg.id)}
                               className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                               data-testid={`message-group-${groupIndex}`}
                             >
                               <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
                                 <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
+                                  {renderMessageActions(lastMsg)}
                                   <div className={`grid gap-1 ${
                                     group.messages.length === 1 ? 'grid-cols-1' :
                                     group.messages.length === 2 ? 'grid-cols-2' :
@@ -1053,16 +1586,20 @@ export default function HealthWall() {
                         const msg = group.messages[0];
                         const isPrescription = msg.messageType === 'prescription';
                         const isFollowup = msg.messageType === 'followup';
+                        const isDeleted = !!msg.deletedAt;
                         
                         return (
                           <div
                             key={msg.id}
+                            ref={setMessageRef(msg.id)}
                             className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                             data-testid={`message-${msg.id}`}
                           >
                             <Card 
                               className={`max-w-[85%] min-w-28 ${
-                                isPrescription 
+                                isDeleted
+                                  ? 'border-dashed border-border/60 bg-muted/40 text-muted-foreground italic'
+                                  : isPrescription
                                   ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' 
                                   : isFollowup
                                     ? 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800'
@@ -1072,23 +1609,26 @@ export default function HealthWall() {
                               }`}
                             >
                               <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
-                                {isPrescription && (
-                                  <div className="mb-0.5">
+                                {!isDeleted && renderMessageActions(msg)}
+                                {isPrescription && !isDeleted && (
+                                  <div className="mb-0.5 pr-8">
                                     <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
                                       <Pill className="h-3 w-3 mr-1" />
                                       {t.prescription}
                                     </Badge>
                                   </div>
                                 )}
-                                {isFollowup && (
-                                  <div className="mb-0.5">
+                                {isFollowup && !isDeleted && (
+                                  <div className="mb-0.5 pr-8">
                                     <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
                                       <FileText className="h-3 w-3 mr-1" />
                                       {t.followup}
                                     </Badge>
                                   </div>
                                 )}
-                                {msg.imageUrl && (
+                                {!isDeleted && msg.replyTo && renderReplyPreview(msg.replyTo, isOwnMessage)}
+                                {!isDeleted && renderForwardedHeader(msg)}
+                                {!isDeleted && msg.imageUrl && (
                                   <img 
                                     src={getThumbUrl(msg.imageUrl)} 
                                     alt="Uploaded" 
@@ -1097,12 +1637,22 @@ export default function HealthWall() {
                                     onClick={() => setSelectedImage(msg.imageUrl!)}
                                   />
                                 )}
-                                {msg.content && (
+                                {isDeleted ? (
+                                  <p className="text-sm whitespace-pre-wrap leading-snug pr-7 pb-0.5">
+                                    {t.messageDeleted}
+                                  </p>
+                                ) : msg.content && (
                                   <p className="text-sm whitespace-pre-wrap leading-snug pr-7 pb-0.5">
                                     {msg.content}
                                   </p>
                                 )}
+                                {!isDeleted && msg.pinnedAt && (
+                                  <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />
+                                )}
                                 <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                                  {!isDeleted && msg.editedAt && (
+                                    <span className="mr-1 italic">{t.messageEdited}</span>
+                                  )}
                                   {formatMessageBubbleTime(msg.createdAt)}
                                 </span>
                               </CardContent>
@@ -1121,6 +1671,7 @@ export default function HealthWall() {
                 )}
                 </div>
               </div>
+              </>
             )}
           </div>
           {inputArea}
@@ -1148,6 +1699,106 @@ export default function HealthWall() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!forwarding}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForwarding(null);
+            setForwardSearch('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.messageForwardTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t.messageForwardSelectChat}</p>
+            <Input
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+              placeholder="Поиск чата"
+            />
+            <div className="max-h-72 overflow-y-auto space-y-1">
+              {forwardChatsLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              ) : filteredForwardTargets.length === 0 ? (
+                <p className="py-3 text-center text-sm text-muted-foreground">{t.messageForwardEmpty}</p>
+              ) : (
+                filteredForwardTargets.map((chat) => {
+                  if (!chat.conversationId) return null;
+                  const chatTitle =
+                    chat.name ||
+                    chat.otherParticipantName ||
+                    (chat.type === "channel" ? t.searchChannels : t.chatWithDoctor);
+                  const targetType: "direct" | "group" | "channel" =
+                    chat.type === "group" || chat.type === "channel" ? chat.type : "direct";
+                  return (
+                    <button
+                      key={chat.conversationId}
+                      type="button"
+                      onClick={() =>
+                        forwarding &&
+                        forwardMessageMutation.mutate({
+                          sourceMessageId: forwarding.id,
+                          targetConversationId: chat.conversationId,
+                          targetTitle: chatTitle,
+                          targetType,
+                        })
+                      }
+                      disabled={forwardMessageMutation.isPending}
+                      className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left hover:bg-muted/40 disabled:opacity-60"
+                      data-testid={`button-health-wall-forward-target-${chat.conversationId}`}
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={chat.avatarUrl ?? undefined} />
+                        <AvatarFallback className="text-xs">
+                          {chatTitle.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{chatTitle}</p>
+                      </div>
+                      {forwardMessageMutation.isPending && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.messageDeleteConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.messageDeleteConfirmDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => pendingDelete && deleteMessageMutation.mutate(pendingDelete.id)}
+              disabled={deleteMessageMutation.isPending}
+            >
+              {deleteMessageMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              {t.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={showDoctorsDialog} onOpenChange={setShowDoctorsDialog}>
         <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md">

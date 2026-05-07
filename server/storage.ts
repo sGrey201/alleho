@@ -123,7 +123,12 @@ export interface IStorage {
   // Health wall operations
   getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
   getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]>;
+  getHealthWallMessageById(messageId: string): Promise<HealthWallMessage | undefined>;
   createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
+  editHealthWallMessage(messageId: string, content: string): Promise<HealthWallMessage | undefined>;
+  softDeleteHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
+  pinHealthWallMessage(messageId: string, userId: string): Promise<HealthWallMessage | undefined>;
+  unpinHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
   getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{
     unreadCount: number;
     lastMessageAt: Date | null;
@@ -162,7 +167,13 @@ export interface IStorage {
   markConversationSeen(conversationId: string, userId: string): Promise<Date | null>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
+  getConversationMessageById(messageId: string): Promise<ConversationMessage | undefined>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
+  editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined>;
+  softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
+  pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined>;
+  unpinConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
+  getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
@@ -706,6 +717,14 @@ export class DatabaseStorage implements IStorage {
     return rows.reverse();
   }
 
+  async getHealthWallMessageById(messageId: string): Promise<HealthWallMessage | undefined> {
+    const [message] = await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.id, messageId));
+    return message;
+  }
+
   async createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage> {
     const [created] = await db
       .insert(healthWallMessages)
@@ -722,6 +741,81 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(users.id, created.patientUserId));
     return created;
+  }
+
+  async editHealthWallMessage(messageId: string, content: string): Promise<HealthWallMessage | undefined> {
+    const [updated] = await db
+      .update(healthWallMessages)
+      .set({ content, editedAt: new Date() })
+      .where(eq(healthWallMessages.id, messageId))
+      .returning();
+    if (!updated) return undefined;
+
+    const [last] = await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.patientUserId, updated.patientUserId))
+      .orderBy(desc(healthWallMessages.createdAt))
+      .limit(1);
+    if (last?.id === updated.id) {
+      await db
+        .update(users)
+        .set({
+          healthWallLastMessagePreview: previewFromConversationMessageParts(updated.content, updated.imageUrl),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, updated.patientUserId));
+    }
+
+    return updated;
+  }
+
+  async softDeleteHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined> {
+    const [updated] = await db
+      .update(healthWallMessages)
+      .set({
+        deletedAt: new Date(),
+        content: null,
+        imageUrl: null,
+        pinnedAt: null,
+        pinnedByUserId: null,
+      })
+      .where(eq(healthWallMessages.id, messageId))
+      .returning();
+    if (!updated) return undefined;
+
+    const [last] = await db
+      .select()
+      .from(healthWallMessages)
+      .where(eq(healthWallMessages.patientUserId, updated.patientUserId))
+      .orderBy(desc(healthWallMessages.createdAt))
+      .limit(1);
+    if (last?.id === updated.id) {
+      await db
+        .update(users)
+        .set({ healthWallLastMessagePreview: null, updatedAt: new Date() })
+        .where(eq(users.id, updated.patientUserId));
+    }
+
+    return updated;
+  }
+
+  async pinHealthWallMessage(messageId: string, userId: string): Promise<HealthWallMessage | undefined> {
+    const [updated] = await db
+      .update(healthWallMessages)
+      .set({ pinnedAt: new Date(), pinnedByUserId: userId })
+      .where(eq(healthWallMessages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async unpinHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined> {
+    const [updated] = await db
+      .update(healthWallMessages)
+      .set({ pinnedAt: null, pinnedByUserId: null })
+      .where(eq(healthWallMessages.id, messageId))
+      .returning();
+    return updated;
   }
 
   async getPatientHealthWallStats(
@@ -1135,6 +1229,89 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(conversations.id, m.conversationId));
     return m;
+  }
+
+  async getConversationMessageById(messageId: string): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.id, messageId));
+    return m;
+  }
+
+  async editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({ content, editedAt: new Date() })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
+    if (!m) return undefined;
+    // Refresh conversation preview if this was the last message.
+    const last = await this.getLastConversationMessage(m.conversationId);
+    if (last && last.id === m.id) {
+      const preview = previewFromConversationMessageParts(m.content, m.imageUrl);
+      await db
+        .update(conversations)
+        .set({ lastMessagePreview: preview, updatedAt: new Date() })
+        .where(eq(conversations.id, m.conversationId));
+    }
+    return m;
+  }
+
+  async softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({
+        deletedAt: new Date(),
+        content: null,
+        imageUrl: null,
+        pinnedAt: null,
+        pinnedByUserId: null,
+      })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
+    if (!m) return undefined;
+    const last = await this.getLastConversationMessage(m.conversationId);
+    if (last && last.id === m.id) {
+      await db
+        .update(conversations)
+        .set({ lastMessagePreview: null, updatedAt: new Date() })
+        .where(eq(conversations.id, m.conversationId));
+    }
+    return m;
+  }
+
+  async pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({ pinnedAt: new Date(), pinnedByUserId: userId })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
+    return m;
+  }
+
+  async unpinConversationMessage(messageId: string): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({ pinnedAt: null, pinnedByUserId: null })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
+    return m;
+  }
+
+  async getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]> {
+    const rows = await db
+      .select()
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          sql`${conversationMessages.pinnedAt} IS NOT NULL`,
+          sql`${conversationMessages.deletedAt} IS NULL`
+        )
+      )
+      .orderBy(desc(conversationMessages.pinnedAt));
+    return rows;
   }
 
   async getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null> {
