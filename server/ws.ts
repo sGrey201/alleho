@@ -8,6 +8,7 @@ import {
   getRedisSubscriber,
   type HealthWallMessageWithAuthor,
   type ConversationMessageWithAuthor,
+  type ConversationSeenPayload,
 } from "./redis";
 
 const WS_PATH = "/ws";
@@ -121,8 +122,32 @@ export function setupWebSocket(
         const sockets = conversationChannelToSockets.get(channel);
         if (!sockets || sockets.size === 0) return;
         try {
-          const payload = JSON.parse(message) as ConversationMessageWithAuthor;
-          const data = JSON.stringify({ type: "conversation_message", payload });
+          const parsed = JSON.parse(message) as
+            | { type?: "conversation_message"; payload?: ConversationMessageWithAuthor }
+            | { type?: "conversation_seen"; payload?: ConversationSeenPayload }
+            | ConversationMessageWithAuthor;
+          let data: string | null = null;
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "type" in parsed &&
+            parsed.type === "conversation_seen" &&
+            "payload" in parsed
+          ) {
+            data = JSON.stringify({ type: "conversation_seen", payload: parsed.payload });
+          } else if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "type" in parsed &&
+            parsed.type === "conversation_message" &&
+            "payload" in parsed
+          ) {
+            data = JSON.stringify({ type: "conversation_message", payload: parsed.payload });
+          } else {
+            // Backward compatibility with plain conversation message payload.
+            data = JSON.stringify({ type: "conversation_message", payload: parsed });
+          }
+          if (!data) return;
           Array.from(sockets).forEach((ws) => {
             if (ws.readyState === 1) ws.send(data);
           });

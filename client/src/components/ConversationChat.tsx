@@ -32,12 +32,12 @@ interface ConversationInfo {
   participants?: Array<{
     userId: string;
     role: string;
+    lastSeenAt?: string | null;
     user?: {
       firstName?: string | null;
       lastName?: string | null;
       email?: string | null;
       profileImageUrl?: string | null;
-      lastVisitedAt?: string | null;
     };
   }>;
 }
@@ -269,7 +269,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           >
             <p className="text-sm font-semibold truncate">{directDisplayName}</p>
             {conv.type === "direct" && (
-              <p className="text-xs text-muted-foreground truncate">{formatLastSeen(peerParticipant?.user?.lastVisitedAt)}</p>
+              <p className="text-xs text-muted-foreground truncate">{formatLastSeen(peerParticipant?.lastSeenAt)}</p>
             )}
           </button>
           <button

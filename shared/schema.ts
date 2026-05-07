@@ -442,6 +442,7 @@ export const conversationParticipants = pgTable(
     conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"),
+    lastSeenAt: timestamp("last_seen_at"),
     joinedAt: timestamp("joined_at").defaultNow(),
   },
   (table) => [
@@ -453,6 +454,7 @@ export const conversationParticipants = pgTable(
 
 export const insertConversationParticipantSchema = createInsertSchema(conversationParticipants).omit({
   id: true,
+  lastSeenAt: true,
   joinedAt: true,
 }).extend({ role: participantRoleEnum.default("member") });
 

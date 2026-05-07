@@ -18,6 +18,12 @@ export interface ConversationMessageWithAuthor {
   };
 }
 
+type ConversationSeenPayload = {
+  conversationId: string;
+  userId: string;
+  lastSeenAt: string;
+};
+
 export function useConversationWs(conversationId: string | undefined, enabled: boolean) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -50,6 +56,25 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
                 const exists = old.some((m) => m.id === payload.id);
                 if (exists) return old;
                 return [...old, payload];
+              }
+            );
+          } else if (data.type === "conversation_seen" && data.payload) {
+            const payload = data.payload as ConversationSeenPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            queryClient.setQueryData(
+              ["/api/conversations", conversationIdRef.current],
+              (old: unknown) => {
+                if (!old || typeof old !== "object" || old === null) return old;
+                const conv = old as { participants?: Array<{ userId: string; lastSeenAt?: string | null }> };
+                if (!Array.isArray(conv.participants)) return old;
+                return {
+                  ...conv,
+                  participants: conv.participants.map((participant) =>
+                    participant.userId === payload.userId
+                      ? { ...participant, lastSeenAt: payload.lastSeenAt }
+                      : participant
+                  ),
+                };
               }
             );
           }

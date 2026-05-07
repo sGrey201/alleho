@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2, MessageCircle } from "lucide-react";
+import { Loader2, Send, FileText, Image, ArrowLeft, Pill, X, GripVertical, UserPlus, Trash2, MessageCircle, Menu, Copy, Share2 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -61,6 +61,16 @@ interface ConnectedDoctor {
   lastName?: string;
   createdAt: string;
   lastVisitedAt?: string;
+}
+
+interface MyPatientListItem {
+  id: string;
+  patientUserId: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  unreadCount?: number;
+  lastMessageAt?: string;
 }
 
 const STORAGE_KEY_DIVIDER = 'healthwall-divider-position';
@@ -170,7 +180,7 @@ export default function HealthWall() {
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [, patientParams] = useRoute("/health-wall/:patientUserId");
-  const patientUserId = patientParams?.patientUserId || user?.id;
+  const patientUserId = patientParams?.patientUserId ?? (isAdmin ? undefined : user?.id);
   const isOwnWall = !!patientUserId && patientUserId === user?.id;
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -235,11 +245,48 @@ export default function HealthWall() {
   // Connected doctors for own health wall
   const [showDoctorsDialog, setShowDoctorsDialog] = useState(false);
   const [newDoctorEmail, setNewDoctorEmail] = useState('');
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [inviteLinkData, setInviteLinkData] = useState<{
+    open: boolean;
+    inviteUrl: string;
+  }>({ open: false, inviteUrl: '' });
 
   const { data: connectedDoctors } = useQuery<ConnectedDoctor[]>({
     queryKey: ['/api/health-wall/my/doctors'],
     enabled: isAuthenticated && isOwnWall,
   });
+  const { data: myPatients } = useQuery<MyPatientListItem[]>({
+    queryKey: ['/api/health-wall/my/patients'],
+    enabled: isAuthenticated && isAdmin,
+  });
+  const filteredMyPatients = useMemo(() => {
+    const q = patientSearchQuery.trim().toLowerCase();
+    if (!q) return myPatients ?? [];
+    return (myPatients ?? []).filter((patient) => {
+      const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').toLowerCase();
+      const email = (patient.email ?? '').toLowerCase();
+      return fullName.includes(q) || email.includes(q);
+    });
+  }, [myPatients, patientSearchQuery]);
+
+  const createPatientInviteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/invites', { inviteType: 'patient' });
+      return res.json() as Promise<{ inviteUrl: string }>;
+    },
+    onSuccess: ({ inviteUrl }) => {
+      setInviteLinkData({ open: true, inviteUrl });
+    },
+    onError: () => {
+      toast({ title: t.inviteError, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin || isMobile) return;
+    if (patientUserId || !(myPatients && myPatients.length > 0)) return;
+    setLocation(`/health-wall/${myPatients[0].patientUserId}`);
+  }, [isAuthenticated, isAdmin, isMobile, patientUserId, myPatients, setLocation]);
 
   const addDoctorMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -488,6 +535,8 @@ export default function HealthWall() {
   const handleBackClick = () => {
     if (isOwnWall) {
       setLocation('/');
+    } else if (isAdmin && isMobile) {
+      setLocation('/health-wall');
     } else {
       setLocation('/messenger');
     }
@@ -589,8 +638,178 @@ export default function HealthWall() {
       </div>
   );
 
+  if (isAdmin && isMobile && !patientUserId) {
+    return (
+      <div className="flex h-full flex-col bg-background pb-20">
+        <div className="shrink-0 border-b border-border/60 bg-background px-3 py-2">
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  aria-label={t.menu}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    createPatientInviteMutation.mutate();
+                  }}
+                >
+                  {t.messengerInvitePatient}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="relative flex-1">
+              <Input
+                value={patientSearchQuery}
+                onChange={(e) => setPatientSearchQuery(e.target.value)}
+                placeholder="Поиск пациентов"
+                className="h-9"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {filteredMyPatients.map((patient) => {
+            const patientName =
+              [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() ||
+              patient.email ||
+              t.patient;
+            return (
+              <button
+                key={patient.patientUserId}
+                type="button"
+                onClick={() => setLocation(`/health-wall/${patient.patientUserId}`)}
+                className="w-full px-3 py-2.5 border-b border-border/50 text-left hover:bg-muted/50 flex items-center gap-2 bg-background"
+              >
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarFallback>{(patientName[0] || "?").toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{patientName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{patient.email || ""}</p>
+                </div>
+                {(patient.unreadCount ?? 0) > 0 && (
+                  <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    {patient.unreadCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+          <div className="border-t border-border/60 bg-background px-0 py-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="button-to-communities-mobile"
+              onClick={() => setLocation("/messenger")}
+            >
+              В сообщества
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative flex flex-col h-full" ref={containerRef}>
+    <div className="flex h-full flex-col md:flex-row">
+      {!isOwnWall && isAdmin && (
+        <aside className="hidden md:flex w-80 shrink-0 border-r border-border/60 bg-background flex-col">
+          <div className="shrink-0 border-b border-border/60 bg-background px-3 py-2">
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    aria-label={t.menu}
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      createPatientInviteMutation.mutate();
+                    }}
+                  >
+                    {t.messengerInvitePatient}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="relative flex-1">
+                <Input
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  placeholder="Поиск пациентов"
+                  className="h-9"
+                />
+              </div>
+            </div>
+            <div className="mt-2 rounded-xl bg-muted/60 px-3 py-2">
+              <p className="text-sm font-semibold">{t.patient}</p>
+              <p className="text-xs text-muted-foreground">Стена здоровья</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {filteredMyPatients.map((patient) => {
+              const patientName =
+                [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() ||
+                patient.email ||
+                t.patient;
+              const isActive = patient.patientUserId === patientUserId;
+              return (
+                <button
+                  key={patient.patientUserId}
+                  type="button"
+                  onClick={() => setLocation(`/health-wall/${patient.patientUserId}`)}
+                  className={cn(
+                    "w-full px-3 py-2.5 border-b border-border/50 text-left hover:bg-muted/50 flex items-center gap-2",
+                    isActive ? "bg-muted/70" : "bg-background"
+                  )}
+                >
+                  <Avatar className="h-9 w-9 shrink-0">
+                    <AvatarFallback>{(patientName[0] || "?").toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{patientName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{patient.email || ""}</p>
+                  </div>
+                  {(patient.unreadCount ?? 0) > 0 && (
+                    <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                      {patient.unreadCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="shrink-0 border-t border-border/60 bg-background px-3 py-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="button-to-communities-desktop"
+              onClick={() => setLocation("/messenger")}
+            >
+              В сообщества
+            </Button>
+          </div>
+        </aside>
+      )}
+      <div className="relative flex flex-col h-full flex-1" ref={containerRef}>
       {!showQuestionnaire && (
       <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
         <div className="flex items-center gap-2 pointer-events-auto">
@@ -997,6 +1216,59 @@ export default function HealthWall() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.messengerInvitePatient}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="text-xs text-muted-foreground mb-1">Ссылка-приглашение</p>
+              <p className="break-all text-sm">{inviteLinkData.inviteUrl}</p>
+            </div>
+            <p className="text-sm text-muted-foreground">Ссылка действительна 24 часа.</p>
+            <DialogFooter className="flex flex-row justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!inviteLinkData.inviteUrl) return;
+                  await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                  toast({ title: "Ссылка скопирована" });
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Скопировать
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!inviteLinkData.inviteUrl) return;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: "Приглашение в Alleho",
+                        text: "Присоединяйтесь по ссылке:",
+                        url: inviteLinkData.inviteUrl,
+                      });
+                    } catch {
+                      // ignore user cancel
+                    }
+                  } else {
+                    await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                    toast({ title: "Ссылка скопирована" });
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Поделиться
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
-import { Loader2, User, Users, MessageCircle, Radio, Search, Plus, Copy, Share2 } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import { apiRequest } from "@/lib/queryClient";
@@ -83,6 +83,9 @@ export type MessengerSearchResults = {
   groups: MessengerSearchGroup[];
   channels: MessengerSearchChannel[];
 };
+type MyPatientListItem = {
+  patientUserId: string;
+};
 
 function chatInitial(label: string): string {
   return (label || "?").trim().charAt(0).toUpperCase() || "?";
@@ -116,17 +119,19 @@ export default function Messenger() {
 
   const isChatSelected = (chat: ChatItem) =>
     chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
-  const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const { toast } = useToast();
   const qc = useQueryClient();
 
   useEffect(() => {
-    if (!showSearchBar) return;
-    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 280);
-    return () => clearTimeout(t);
-  }, [showSearchBar, searchQuery]);
+    if (!searchQuery.trim()) {
+      setDebouncedSearchQuery("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 280);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -137,7 +142,10 @@ export default function Messenger() {
     return () => mediaQuery.removeEventListener("change", onChange);
   }, []);
 
-  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("patients");
+  const isSearching = searchQuery.trim().length > 0;
+
+  const [folder, setFolder] = useState<"doctors" | "groups" | "channels">("doctors");
+  const [searchScope, setSearchScope] = useState<"all" | "doctors" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteLinkData, setInviteLinkData] = useState<{
@@ -149,8 +157,9 @@ export default function Messenger() {
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const apiFolder = folder === "doctors" || folder === "patients" ? "personal" : folder;
+  const apiFolder = folder === "doctors" ? "personal" : folder;
 
   const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
     queryKey: ["/api/me/chats", apiFolder, folder],
@@ -167,14 +176,29 @@ export default function Messenger() {
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
+  const { data: myPatientsData } = useQuery<MyPatientListItem[]>({
+    queryKey: ["/api/health-wall/my/patients"],
+    enabled: isAuthenticated && isAdmin,
+  });
 
   const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
+  const firstPatientId = myPatientsData?.[0]?.patientUserId;
+  const homeopathCabinetHref = isMobileView ? "/health-wall" : (firstPatientId ? `/health-wall/${firstPatientId}` : "/health-wall");
+  const unreadPatientsCount = useMemo(
+    () => chats.filter((chat) => chat.source === "health_wall" && (chat.unreadCount ?? 0) > 0).length,
+    [chats]
+  );
+  const unreadChatsByFolder = useMemo(() => {
+    const hasUnread = (chat: ChatItem) => (chat.unreadCount ?? 0) > 0;
+    return {
+      doctors: chats.filter((chat) => chat.source === "conversation" && chat.type === "direct" && hasUnread(chat)).length,
+      groups: chats.filter((chat) => chat.source === "conversation" && chat.type === "group" && hasUnread(chat)).length,
+      channels: chats.filter((chat) => chat.source === "conversation" && chat.type === "channel" && hasUnread(chat)).length,
+    };
+  }, [chats]);
   const chatsByFolder = useMemo(() => {
     if (folder === "doctors") {
       return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
-    }
-    if (folder === "patients") {
-      return chats.filter((chat) => chat.source === "health_wall");
     }
     return chats;
   }, [chats, folder]);
@@ -187,7 +211,7 @@ export default function Messenger() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: isAuthenticated && isAdmin && showSearchBar,
+    enabled: isAuthenticated && isAdmin && searchQuery.trim().length > 0,
   });
 
   useEffect(() => {
@@ -227,15 +251,42 @@ export default function Messenger() {
     });
   }
 
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchScope("all");
+    }
+  }, [isSearching]);
+
+  const activeSearchScope = isSearching ? searchScope : folder;
+  const searchChatsSource = activeSearchScope === "all" ? chats.filter((chat) => chat.source !== "health_wall") : chatsByFolder;
   const searchFiltered =
-    showSearchBar && searchQuery.trim()
-      ? filterChatsBySearch(chatsByFolder, searchQuery)
+    isSearching && searchQuery.trim()
+      ? filterChatsBySearch(searchChatsSource, searchQuery)
       : [];
+  const doctorSearchResults =
+    activeSearchScope === "all" || activeSearchScope === "doctors" ? (searchResults?.doctors ?? []) : [];
+  const groupSearchResults =
+    activeSearchScope === "all" || activeSearchScope === "groups" ? (searchResults?.groups ?? []) : [];
+  const channelSearchResults =
+    activeSearchScope === "all" || activeSearchScope === "channels" ? (searchResults?.channels ?? []) : [];
+  const hasSearchResults =
+    searchFiltered.length > 0 ||
+    doctorSearchResults.length > 0 ||
+    groupSearchResults.length > 0 ||
+    channelSearchResults.length > 0;
+  const noResultsByFolder =
+    activeSearchScope === "all"
+      ? t.noResults
+      : activeSearchScope === "doctors"
+        ? "Врачи не найдены"
+        : activeSearchScope === "groups"
+          ? "Группы не найдены"
+          : "Каналы не найдены";
   const listToShow =
-    showSearchBar && searchQuery.trim() ? searchFiltered : chatsByFolder;
+    isSearching && searchQuery.trim() ? searchFiltered : chatsByFolder;
 
   useEffect(() => {
-    if (showSearchBar || !hasNextPage || isFetchingNextPage) return;
+    if (isSearching || !hasNextPage || isFetchingNextPage) return;
     const root = listScrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
     const target = loadMoreRef.current;
     if (!root || !target) return;
@@ -250,7 +301,7 @@ export default function Messenger() {
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [showSearchBar, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
+  }, [isSearching, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
 
   const openDirectChat = async (params: { userId?: string; conversationId?: string }) => {
     let targetConversationId = params.conversationId;
@@ -273,7 +324,6 @@ export default function Messenger() {
     }
 
     setLocation(`/messenger/direct/${targetConversationId}`);
-    setShowSearchBar(false);
     setSearchQuery("");
   };
 
@@ -294,7 +344,6 @@ export default function Messenger() {
   };
 
   const handleSelectDoctor = (doctor: MessengerSearchDoctor) => {
-    setShowSearchBar(false);
     setSearchQuery("");
     void openDirectChat({ userId: doctor.userId, conversationId: doctor.conversationId });
   };
@@ -381,63 +430,39 @@ export default function Messenger() {
   }
 
   return (
-    <div className={`flex h-full flex-col md:flex-row ${isMobileConversationOpen ? "pb-0" : "pb-14"} md:pb-0`}>
+    <div className="flex h-full flex-col md:flex-row">
       {!isMobileConversationOpen && (
-      <div className={`w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background ${showSearchBar ? "min-h-[50vh] md:min-h-0" : ""}`}>
-        <Tabs value={folder} onValueChange={(v) => setFolder(v as typeof folder)} className="flex-1 flex flex-col min-h-0 bg-gray-50">
-          {/* Floating top panel on mobile — Telegram-style */}
-          <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center gap-1.5 shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
-            <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className="grid grid-cols-4 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
-                <TabsTrigger
-                  value="patients"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-                >
-                  <User className="h-4 w-4 mr-1" />
-                  Пациенты
-                </TabsTrigger>
-                <TabsTrigger
-                  value="doctors"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-                >
-                  <User className="h-4 w-4 mr-1" />
-                  {t.searchDoctors}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="groups"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-                >
-                  <Users className="h-4 w-4 mr-1" />
-                  {t.folderGroups}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="channels"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-background data-[state=active]:shadow-none py-1.5 md:py-1"
-                >
-                  <Radio className="h-4 w-4 mr-1" />
-                  {t.folderChannels}
-                </TabsTrigger>
-              </TabsList>
-            </div>
+      <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background pb-20 md:pb-0">
+        <Tabs
+          value={isSearching && searchScope === "all" ? "" : folder}
+          onValueChange={(v) => {
+            const nextFolder = v as typeof folder;
+            setFolder(nextFolder);
+            if (isSearching) {
+              setSearchScope(nextFolder);
+            }
+          }}
+          className="flex-1 flex flex-col min-h-0 bg-gray-50"
+        >
+          <div className="flex items-center gap-2 shrink-0 border-b border-border/60 bg-background px-3 py-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  className="h-9 w-9 shrink-0 rounded-full shadow-md md:shadow-none border-border"
-                  aria-label={t.newChat}
+                  className="h-9 w-9 shrink-0"
+                  aria-label={t.menu}
                 >
-                  <Plus className="h-5 w-5" />
+                  <Menu className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onSelect={() => {
-                    createInviteLinkMutation.mutate("patient");
-                  }}
-                >
-                  {t.messengerInvitePatient}
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="cursor-pointer flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    {t.profile}
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
@@ -464,32 +489,71 @@ export default function Messenger() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-          {showSearchBar ? (
-            <div className="hidden md:flex mx-0 px-3 py-2 gap-2 items-center border-b border-border/60 bg-background shrink-0">
+            <div className="relative flex-1">
               <Input
+                ref={searchInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.searchMessengerPlaceholder}
-                className="flex-1"
-                autoFocus
+                className="h-9 pr-9"
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0"
-                onClick={() => {
-                  setShowSearchBar(false);
-                  setSearchQuery("");
-                }}
-              >
-                {t.cancel}
-              </Button>
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  aria-label={t.clear}
+                  onClick={() => {
+                    setSearchQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-          ) : null}
-          <TabsContent value={folder} className="flex-1 m-0 min-h-0 overflow-hidden bg-background">
-            {showSearchBar ? (
+          </div>
+          {/* Floating top panel on mobile — Telegram-style */}
+          <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
+            <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
+              <TabsList className="grid grid-cols-3 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
+                <TabsTrigger
+                  value="doctors"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <span>Личка</span>
+                  {unreadChatsByFolder.doctors > 0 && (
+                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                      {unreadChatsByFolder.doctors}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="groups"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <span>{t.folderGroups}</span>
+                  {unreadChatsByFolder.groups > 0 && (
+                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                      {unreadChatsByFolder.groups}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="channels"
+                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                >
+                  <span>{t.folderChannels}</span>
+                  {unreadChatsByFolder.channels > 0 && (
+                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                      {unreadChatsByFolder.channels}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
+          <TabsContent value={isSearching && searchScope === "all" ? "" : folder} className="flex-1 m-0 min-h-0 overflow-hidden bg-background">
+            {isSearching ? (
               searchLoading && !searchResults ? (
                 <div className="flex items-center justify-center p-4 min-h-[200px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -589,12 +653,12 @@ export default function Messenger() {
                         })}
                       </section>
                     )}
-                    {searchResults && searchResults.doctors.length > 0 && (
+                    {doctorSearchResults.length > 0 && (
                       <section className="mb-2">
                         <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchDoctors}
                         </p>
-                        {searchResults.doctors.map((doctor) => {
+                        {doctorSearchResults.map((doctor) => {
                           const name = [doctor.firstName, doctor.lastName].filter(Boolean).join(" ") || doctor.email || t.chatWithDoctor;
                           return (
                             <button
@@ -617,12 +681,12 @@ export default function Messenger() {
                         })}
                       </section>
                     )}
-                    {searchResults && searchResults.groups.length > 0 && (
+                    {groupSearchResults.length > 0 && (
                       <section className="mb-2">
                         <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchGroups}
                         </p>
-                        {searchResults.groups.map((group) => (
+                        {groupSearchResults.map((group) => (
                           <button
                             key={group.id}
                             type="button"
@@ -643,12 +707,12 @@ export default function Messenger() {
                         ))}
                       </section>
                     )}
-                    {searchResults && searchResults.channels.length > 0 && (
+                    {channelSearchResults.length > 0 && (
                       <section className="mb-2">
                         <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.searchChannels}
                         </p>
-                        {searchResults.channels.map((channel) => (
+                        {channelSearchResults.map((channel) => (
                           <button
                             key={channel.id}
                             type="button"
@@ -669,9 +733,9 @@ export default function Messenger() {
                         ))}
                       </section>
                     )}
-                    {showSearchBar && !searchLoading && searchResults && searchFiltered.length === 0 && searchResults.doctors.length === 0 && searchResults.groups.length === 0 && searchResults.channels.length === 0 && (
+                    {isSearching && !searchLoading && searchResults && !hasSearchResults && (
                       <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                        {debouncedSearchQuery.trim() ? t.noResults : t.searchEmptyHint}
+                        {debouncedSearchQuery.trim() ? noResultsByFolder : t.searchEmptyHint}
                       </p>
                     )}
                   </div>
@@ -772,8 +836,8 @@ export default function Messenger() {
                       </button>
                     );
                   })}
-                  {!showSearchBar && hasNextPage && <div ref={loadMoreRef} className="h-4" />}
-                  {!showSearchBar && isFetchingNextPage && (
+                  {!isSearching && hasNextPage && <div ref={loadMoreRef} className="h-4" />}
+                  {!isSearching && isFetchingNextPage && (
                     <div className="flex items-center justify-center py-3">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     </div>
@@ -783,63 +847,42 @@ export default function Messenger() {
             )}
           </TabsContent>
         </Tabs>
-        {!isMobileConversationOpen && (
-          <nav className="hidden md:block shrink-0 border-t border-border/60 bg-background/95 backdrop-blur-md px-3 py-2">
-            {showSearchBar ? (
-              <div className="flex items-center gap-2 py-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t.searchMessengerPlaceholder}
-                  className="flex-1 min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSearchBar(false);
-                    setSearchQuery("");
-                  }}
-                  className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
-                >
-                  {t.cancel}
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-0 py-1">
-                <Link
-                  href="/profile"
-                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
-                >
-                  <span className="relative flex items-center justify-center size-8 rounded-full">
-                    <User className="h-4 w-4" />
+        <div className="hidden md:block shrink-0 border-t border-border/60 bg-background px-3 py-2">
+          <Button
+            asChild
+            variant="outline"
+            className="relative h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+            data-testid="button-homeopath-cabinet"
+          >
+            <Link href={homeopathCabinetHref}>
+              <span>{t.homeopathCabinet}</span>
+              {unreadPatientsCount > 0 && (
+                <span className="absolute right-3 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                  {unreadPatientsCount}
+                </span>
+              )}
+            </Link>
+          </Button>
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 md:hidden z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+          <div className="border-t border-border/60 bg-background px-0 py-2">
+            <Button
+              asChild
+              variant="outline"
+              className="relative h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="button-homeopath-cabinet"
+            >
+              <Link href={homeopathCabinetHref}>
+                <span>{t.homeopathCabinet}</span>
+                {unreadPatientsCount > 0 && (
+                  <span className="absolute right-3 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    {unreadPatientsCount}
                   </span>
-                  <span className="text-[10px] font-medium">{t.profile}</span>
-                </Link>
-                <Link
-                  href="/messenger"
-                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary"
-                >
-                  <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
-                    <MessageCircle className="h-4 w-4" />
-                  </span>
-                  <span className="text-[10px] font-medium">{t.chatsTab}</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setShowSearchBar(true)}
-                  className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
-                >
-                  <span className="relative flex items-center justify-center size-8 rounded-full">
-                    <Search className="h-4 w-4" />
-                  </span>
-                  <span className="text-[10px] font-medium">{t.search}</span>
-                </button>
-              </div>
-            )}
-          </nav>
-        )}
+                )}
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
       )}
 
@@ -998,61 +1041,6 @@ export default function Messenger() {
         </DialogContent>
       </Dialog>
 
-      {/* Floating bottom nav or search bar (mobile only) */}
-      {!isMobileConversationOpen && (
-      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-20 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-1">
-        {showSearchBar ? (
-          <div className="rounded-full bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center gap-2 py-2 px-3">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t.searchMessengerPlaceholder}
-              className="flex-1 min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={() => { setShowSearchBar(false); setSearchQuery(""); }}
-              className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
-            >
-              {t.cancel}
-            </button>
-          </div>
-        ) : (
-        <div className="rounded-full bg-background/95 backdrop-blur-md shadow-lg border border-border/50 flex items-center justify-center gap-0 py-1">
-          <Link
-            href="/profile"
-            className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
-          >
-            <span className="relative flex items-center justify-center size-8 rounded-full">
-              <User className="h-4 w-4" />
-            </span>
-            <span className="text-[9px] font-medium">{t.profile}</span>
-          </Link>
-          <Link
-            href="/messenger"
-            className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-primary"
-          >
-            <span className="relative flex items-center justify-center size-8 rounded-full bg-primary/10">
-              <MessageCircle className="h-4 w-4" />
-            </span>
-            <span className="text-[9px] font-medium">{t.chatsTab}</span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => setShowSearchBar(true)}
-            className="flex-1 flex flex-col items-center justify-center gap-0 py-1 text-muted-foreground"
-          >
-            <span className="relative flex items-center justify-center size-8 rounded-full">
-              <Search className="h-4 w-4" />
-            </span>
-            <span className="text-[9px] font-medium">{t.search}</span>
-          </button>
-        </div>
-        )}
-      </nav>
-      )}
     </div>
   );
 }

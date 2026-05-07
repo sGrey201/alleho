@@ -159,6 +159,7 @@ export interface IStorage {
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
+  markConversationSeen(conversationId: string, userId: string): Promise<Date | null>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
@@ -1063,6 +1064,42 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return p?.role;
+  }
+
+  async markConversationSeen(conversationId: string, userId: string): Promise<Date | null> {
+    const [existing] = await db
+      .select({ lastSeenAt: conversationParticipants.lastSeenAt })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+
+    const now = new Date();
+    const lastSeenAt = existing?.lastSeenAt ?? null;
+    if (
+      lastSeenAt &&
+      lastSeenAt.getUTCFullYear() === now.getUTCFullYear() &&
+      lastSeenAt.getUTCMonth() === now.getUTCMonth() &&
+      lastSeenAt.getUTCDate() === now.getUTCDate() &&
+      lastSeenAt.getUTCHours() === now.getUTCHours() &&
+      lastSeenAt.getUTCMinutes() === now.getUTCMinutes()
+    ) {
+      return null;
+    }
+
+    await db
+      .update(conversationParticipants)
+      .set({ lastSeenAt: now })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return now;
   }
 
   async getConversationMessages(conversationId: string, limit: number = 100): Promise<ConversationMessage[]> {

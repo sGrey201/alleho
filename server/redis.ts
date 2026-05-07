@@ -140,6 +140,12 @@ export type ConversationMessageWithAuthor = {
   };
 };
 
+export type ConversationSeenPayload = {
+  conversationId: string;
+  userId: string;
+  lastSeenAt: string;
+};
+
 export async function getConversationRecentMessages(conversationId: string): Promise<ConversationMessageWithAuthor[]> {
   const c = getClient();
   if (!c) return [];
@@ -182,9 +188,28 @@ export async function publishConversationMessage(
   const c = getClient();
   if (!c) return;
   try {
-    await c.publish(CONVERSATION_CHANNEL_PREFIX + conversationId, JSON.stringify(message));
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_message", payload: message })
+    );
   } catch (err) {
     console.error("[Redis] publishConversationMessage error:", err);
+  }
+}
+
+export async function publishConversationSeen(
+  conversationId: string,
+  payload: ConversationSeenPayload
+): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type: "conversation_seen", payload })
+    );
+  } catch (err) {
+    console.error("[Redis] publishConversationSeen error:", err);
   }
 }
 

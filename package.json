@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/boot.ts",
+    "dev": "concurrently -k -n app,ngrok -c cyan,magenta \"NODE_ENV=development tsx server/boot.ts\" \"ngrok http --domain=splendid-lively-chicken.ngrok-free.app 8000\"",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:../vite.config",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
@@ -131,6 +131,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "esbuild": "^0.25.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",

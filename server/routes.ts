@@ -28,6 +28,7 @@ import {
   getConversationRecentMessages,
   pushConversationRecentMessage,
   publishConversationMessage,
+  publishConversationSeen,
   backfillConversationRecent,
 } from "./redis";
 import { setupWebSocket } from "./ws";
@@ -1535,7 +1536,8 @@ ${allUrls.map(url => `  <url>
       if (partnerUserId === currentUserId) return res.status(400).json({ message: "Cannot open direct chat with yourself" });
       const partner = await storage.getUser(partnerUserId);
       if (!partner) return res.status(404).json({ message: "User not found" });
-      if (!partner.isAdmin) return res.status(404).json({ message: "User not found" });
+      const isConnectedPatient = await storage.isHealthWallDoctorConnected(partnerUserId, currentUserId);
+      if (!partner.isAdmin && !isConnectedPatient) return res.status(404).json({ message: "User not found" });
       let conversationId = await storage.getDirectConversationBetween(currentUserId, partnerUserId);
       if (!conversationId) {
         const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: null });
@@ -1649,6 +1651,14 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
       if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
+      if (lastSeenAt) {
+        await publishConversationSeen(id, {
+          conversationId: id,
+          userId: currentUserId,
+          lastSeenAt: lastSeenAt.toISOString(),
+        });
+      }
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
       const participants = await storage.getConversationParticipants(id);
@@ -1775,6 +1785,14 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
       if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
+      if (lastSeenAt) {
+        await publishConversationSeen(id, {
+          conversationId: id,
+          userId: currentUserId,
+          lastSeenAt: lastSeenAt.toISOString(),
+        });
+      }
       const fromRedis = await getConversationRecentMessages(id);
       if (fromRedis.length > 0) return res.json(fromRedis);
       const messages = await storage.getConversationMessagesRecent(id, 100);
