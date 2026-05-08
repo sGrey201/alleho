@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, LogOut, Camera, ArrowLeft } from "lucide-react";
-import { Link, useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -212,6 +212,7 @@ const COUNTRIES_RU = [
 
 export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const { user, isLoading: authLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [, profileParams] = useRoute("/profile/:userId");
   const targetUserId = profileParams?.userId;
   const isOwnProfile = !targetUserId || targetUserId === user?.id;
@@ -384,6 +385,26 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const isSaving = updateProfileMutation.isPending;
   const initials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`.trim() || "U";
   const displayName = [lastName, firstName].filter(Boolean).join(" ").trim() || profileUser.email || "Профиль";
+  const locationLabel =
+    country && city ? `${country}, ${city}` : country || city || "Не указано";
+  const inviterName =
+    [inviteSummary?.inviter?.firstName, inviteSummary?.inviter?.lastName].filter(Boolean).join(" ") ||
+    inviteSummary?.inviter?.email ||
+    "Нет данных";
+
+  const openInviterChat = async () => {
+    const inviterId = inviteSummary?.inviter?.id;
+    if (!inviterId) return;
+    try {
+      const res = await fetch(`/api/messenger/direct/${inviterId}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { conversationId?: string };
+      if (!data.conversationId) throw new Error("Нет id чата");
+      setLocation(`/messenger/direct/${data.conversationId}`);
+    } catch {
+      toast({ title: t.error, description: "Не удалось открыть чат", variant: "destructive" });
+    }
+  };
 
   if (!isOwnProfile) {
     return (
@@ -417,12 +438,28 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
 
         <div className="p-4 space-y-3">
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-1">Город</p>
-            <p className="text-base text-foreground">{city || "Не указан"}</p>
+            <p className="text-xs text-muted-foreground mb-1">Страна, город</p>
+            <p className="text-base text-foreground">{locationLabel}</p>
           </div>
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-1">Страна</p>
-            <p className="text-base text-foreground">{country || "Не указана"}</p>
+            <p className="text-xs text-muted-foreground mb-1">Приглашен</p>
+            <p className="text-base text-foreground">
+              {inviteSummary?.inviter ? (
+                inviteSummary.inviter.id ? (
+                  <button
+                    type="button"
+                    onClick={() => void openInviterChat()}
+                    className="text-primary hover:underline"
+                  >
+                    {inviterName}
+                  </button>
+                ) : (
+                  inviterName
+                )
+              ) : (
+                "Нет данных"
+              )}
+            </p>
           </div>
         </div>
       </div>

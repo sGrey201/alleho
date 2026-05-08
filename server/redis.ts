@@ -16,6 +16,12 @@ export type MessageAuthor = {
   isAdmin?: boolean | null;
 };
 
+export type MessageReactionSummary = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
 export type HealthWallMessageWithAuthor = {
   id: string;
   patientUserId: string;
@@ -40,6 +46,7 @@ export type HealthWallMessageWithAuthor = {
     author?: MessageAuthor | null;
   } | null;
   forwardedFromAuthor?: MessageAuthor | null;
+  reactions?: MessageReactionSummary[];
   author: MessageAuthor;
 };
 
@@ -246,6 +253,7 @@ export type ConversationMessageWithAuthor = {
     author?: ConversationMessageAuthor | null;
   } | null;
   forwardedFromAuthor?: ConversationMessageAuthor | null;
+  reactions?: MessageReactionSummary[];
   author: ConversationMessageAuthor;
 };
 

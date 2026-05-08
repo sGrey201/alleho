@@ -12,6 +12,8 @@ import {
   conversations,
   conversationParticipants,
   conversationMessages,
+  healthWallMessageReactions,
+  conversationMessageReactions,
   type User,
   type UpsertUser,
   type Article,
@@ -66,6 +68,18 @@ export type MessengerChannelListItem = {
   lastMessagePreview: string | null;
   myRole?: string;
 };
+
+export type MessageReactionSummary = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const pgError = error as { code?: string };
+  return pgError.code === "42P01";
+}
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -129,6 +143,11 @@ export interface IStorage {
   softDeleteHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
   pinHealthWallMessage(messageId: string, userId: string): Promise<HealthWallMessage | undefined>;
   unpinHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
+  toggleHealthWallMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
+  getHealthWallMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>>;
   getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{
     unreadCount: number;
     lastMessageAt: Date | null;
@@ -173,6 +192,11 @@ export interface IStorage {
   softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
   pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined>;
   unpinConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
+  toggleConversationMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
+  getConversationMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>>;
   getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
@@ -818,6 +842,72 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async toggleHealthWallMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    try {
+      const [existing] = await db
+        .select({ id: healthWallMessageReactions.id })
+        .from(healthWallMessageReactions)
+        .where(
+          and(
+            eq(healthWallMessageReactions.messageId, messageId),
+            eq(healthWallMessageReactions.userId, userId),
+            eq(healthWallMessageReactions.emoji, emoji)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        await db.delete(healthWallMessageReactions).where(eq(healthWallMessageReactions.id, existing.id));
+        return;
+      }
+      await db.insert(healthWallMessageReactions).values({ messageId, userId, emoji });
+    } catch (error) {
+      if (isMissingRelationError(error)) return;
+      throw error;
+    }
+  }
+
+  async getHealthWallMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>> {
+    if (messageIds.length === 0) return new Map();
+    let rows: Array<{ messageId: string; userId: string; emoji: string }> = [];
+    try {
+      rows = (await db
+        .select()
+        .from(healthWallMessageReactions)
+        .where(inArray(healthWallMessageReactions.messageId, messageIds))) as Array<{
+        messageId: string;
+        userId: string;
+        emoji: string;
+      }>;
+    } catch (error) {
+      if (isMissingRelationError(error)) return new Map();
+      throw error;
+    }
+    const byMessage = new Map<string, Map<string, MessageReactionSummary>>();
+    rows.forEach((row) => {
+      if (!byMessage.has(row.messageId)) byMessage.set(row.messageId, new Map());
+      const msgMap = byMessage.get(row.messageId)!;
+      const existing = msgMap.get(row.emoji);
+      if (existing) {
+        existing.count += 1;
+        if (row.userId === currentUserId) existing.reactedByMe = true;
+      } else {
+        msgMap.set(row.emoji, {
+          emoji: row.emoji,
+          count: 1,
+          reactedByMe: row.userId === currentUserId,
+        });
+      }
+    });
+    const result = new Map<string, MessageReactionSummary[]>();
+    byMessage.forEach((emojiMap, messageId) => {
+      result.set(messageId, Array.from(emojiMap.values()));
+    });
+    return result;
+  }
+
   async getPatientHealthWallStats(
     patientUserId: string,
     doctorUserId: string
@@ -1297,6 +1387,72 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversationMessages.id, messageId))
       .returning();
     return m;
+  }
+
+  async toggleConversationMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    try {
+      const [existing] = await db
+        .select({ id: conversationMessageReactions.id })
+        .from(conversationMessageReactions)
+        .where(
+          and(
+            eq(conversationMessageReactions.messageId, messageId),
+            eq(conversationMessageReactions.userId, userId),
+            eq(conversationMessageReactions.emoji, emoji)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        await db.delete(conversationMessageReactions).where(eq(conversationMessageReactions.id, existing.id));
+        return;
+      }
+      await db.insert(conversationMessageReactions).values({ messageId, userId, emoji });
+    } catch (error) {
+      if (isMissingRelationError(error)) return;
+      throw error;
+    }
+  }
+
+  async getConversationMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>> {
+    if (messageIds.length === 0) return new Map();
+    let rows: Array<{ messageId: string; userId: string; emoji: string }> = [];
+    try {
+      rows = (await db
+        .select()
+        .from(conversationMessageReactions)
+        .where(inArray(conversationMessageReactions.messageId, messageIds))) as Array<{
+        messageId: string;
+        userId: string;
+        emoji: string;
+      }>;
+    } catch (error) {
+      if (isMissingRelationError(error)) return new Map();
+      throw error;
+    }
+    const byMessage = new Map<string, Map<string, MessageReactionSummary>>();
+    rows.forEach((row) => {
+      if (!byMessage.has(row.messageId)) byMessage.set(row.messageId, new Map());
+      const msgMap = byMessage.get(row.messageId)!;
+      const existing = msgMap.get(row.emoji);
+      if (existing) {
+        existing.count += 1;
+        if (row.userId === currentUserId) existing.reactedByMe = true;
+      } else {
+        msgMap.set(row.emoji, {
+          emoji: row.emoji,
+          count: 1,
+          reactedByMe: row.userId === currentUserId,
+        });
+      }
+    });
+    const result = new Map<string, MessageReactionSummary[]>();
+    byMessage.forEach((emojiMap, messageId) => {
+      result.set(messageId, Array.from(emojiMap.values()));
+    });
+    return result;
   }
 
   async getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]> {

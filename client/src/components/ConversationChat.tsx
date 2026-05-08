@@ -11,7 +11,6 @@ import {
   Loader2,
   ArrowLeft,
   Users,
-  MoreVertical,
   Reply,
   Pencil,
   Trash2,
@@ -41,13 +40,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar from "@/components/ChatInputBar";
@@ -99,6 +91,7 @@ type MyChatsPage = {
 };
 
 const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
 
 interface ConversationChatProps {
   conversationId: string;
@@ -138,11 +131,17 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [forwarding, setForwarding] = useState<ConversationMessageWithAuthor | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ConversationMessageWithAuthor | null>(null);
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
+  const [messageLayer, setMessageLayer] = useState<{
+    message: ConversationMessageWithAuthor;
+    rect: { top: number; left: number; width: number; height: number };
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const setMessageRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -360,9 +359,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             ? `/messenger/channel/${targetConversationId}`
             : `/messenger/direct/${targetConversationId}`;
       const forwardToast = toast({
-        title: (
+        title: "Переслано",
+        description: (
           <span>
-            Переслано{" "}
             <button
               type="button"
               className="underline underline-offset-2"
@@ -377,6 +376,45 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const reactionMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/messages/${messageId}/reactions`,
+        { emoji }
+      );
+      return (await res.json()) as { messageId: string; reactions: ConversationMessageWithAuthor["reactions"] };
+    },
+    onMutate: async ({ messageId, emoji }) => {
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+        ["/api/conversations", conversationId, "messages"],
+        (old) =>
+          old?.map((m) => {
+            if (m.id !== messageId) return m;
+            const prev = m.reactions ?? [];
+            const existing = prev.find((r) => r.emoji === emoji);
+            let next = prev;
+            if (existing?.reactedByMe) {
+              next = prev
+                .map((r) => (r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1), reactedByMe: false } : r))
+                .filter((r) => r.count > 0);
+            } else if (existing) {
+              next = prev.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, reactedByMe: true } : r));
+            } else {
+              next = [...prev, { emoji, count: 1, reactedByMe: true }];
+            }
+            return { ...m, reactions: next };
+          })
+      );
+    },
+    onSuccess: ({ messageId, reactions }) => {
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+        ["/api/conversations", conversationId, "messages"],
+        (old) => old?.map((m) => (m.id === messageId ? { ...m, reactions: reactions ?? [] } : m))
+      );
     },
   });
 
@@ -606,40 +644,76 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     }
   };
 
-  const renderMessageActions = (msg: ConversationMessageWithAuthor) => {
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressStartRef.current = null;
+  };
+
+  const openMessageLayer = (msg: ConversationMessageWithAuthor, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    setMessageLayer({
+      message: msg,
+      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+    });
+  };
+
+  const handleBubbleContextMenu = (
+    e: React.MouseEvent<HTMLElement>,
+    msg: ConversationMessageWithAuthor
+  ) => {
+    if (msg.deletedAt) return;
+    e.preventDefault();
+    openMessageLayer(msg, e.currentTarget);
+  };
+
+  const handleBubblePointerDown = (
+    e: React.PointerEvent<HTMLElement>,
+    msg: ConversationMessageWithAuthor
+  ) => {
+    if (msg.deletedAt || e.pointerType === "mouse") return;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    longPressStartRef.current = { x: e.clientX, y: e.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageLayer(msg, e.currentTarget);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!longPressStartRef.current) return;
+    const dx = Math.abs(e.clientX - longPressStartRef.current.x);
+    const dy = Math.abs(e.clientY - longPressStartRef.current.y);
+    if (dx > 8 || dy > 8) clearLongPress();
+  };
+
+  const renderMessageActionItems = (msg: ConversationMessageWithAuthor, onDone?: () => void) => {
     if (msg.deletedAt) return null;
     const isOwn = msg.authorUserId === user?.id;
-    const hasTopTag = !!msg.replyTo || !!msg.forwardedFromMessageId || !!msg.forwardedFromUserId;
     const createdAt = new Date(msg.createdAt).getTime();
     const canEdit = isOwn && !!msg.content && Date.now() - createdAt < EDIT_WINDOW_MS;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Message actions"
-            data-testid={`button-message-actions-${msg.id}`}
-            className={`absolute right-1 z-10 flex h-6 w-6 items-center justify-center bg-transparent text-muted-foreground opacity-70 hover:opacity-100 ${
-              hasTopTag ? "top-8" : "top-2"
-            }`}
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align={isOwn ? "end" : "start"} className="w-48">
-          <DropdownMenuItem onSelect={() => startReply(msg)}>
+      <>
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startReply(msg); onDone?.(); }}>
             <Reply className="mr-2 h-4 w-4" />
             {t.messageActionReply}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setForwarding(msg)}>
+          </button>
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { setForwarding(msg); onDone?.(); }}>
             <ForwardIcon className="mr-2 h-4 w-4" />
             {t.messageActionForward}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => pinMutation.mutate({ messageId: msg.id, pin: !isPinned })}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+            onClick={() => {
+              pinMutation.mutate({ messageId: msg.id, pin: !isPinned });
+              onDone?.();
+            }}
           >
             {isPinned ? (
               <>
@@ -652,31 +726,30 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 {t.messageActionPin}
               </>
             )}
-          </DropdownMenuItem>
+          </button>
           {msg.content && (
-            <DropdownMenuItem onSelect={() => copyMessageContent(msg)}>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); onDone?.(); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
-            </DropdownMenuItem>
+            </button>
           )}
-          {(canEdit || canDelete) && <DropdownMenuSeparator />}
+          {(canEdit || canDelete) && <div className="my-1 h-px bg-border" />}
           {canEdit && (
-            <DropdownMenuItem onSelect={() => startEdit(msg)}>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startEdit(msg); onDone?.(); }}>
               <Pencil className="mr-2 h-4 w-4" />
               {t.messageActionEdit}
-            </DropdownMenuItem>
+            </button>
           )}
           {canDelete && (
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => setPendingDelete(msg)}
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive hover:bg-muted"
+              onClick={() => { setPendingDelete(msg); onDone?.(); }}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               {t.messageActionDelete}
-            </DropdownMenuItem>
+            </button>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      </>
     );
   };
 
@@ -711,6 +784,51 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       </p>
     );
   };
+
+  const renderReactionPills = (msg: ConversationMessageWithAuthor, isOwn: boolean) => {
+    if (!msg.reactions || msg.reactions.length === 0) return null;
+    return (
+      <div className={`mb-1 flex flex-wrap gap-1 ${isOwn ? "justify-end" : "justify-start"}`}>
+        {msg.reactions.map((reaction) => (
+          <button
+            key={reaction.emoji}
+            type="button"
+            onClick={() => reactionMutation.mutate({ messageId: msg.id, emoji: reaction.emoji })}
+            className={`px-1.5 py-0 text-sm leading-none ${
+              reaction.reactedByMe ? "font-semibold" : ""
+            }`}
+          >
+            {reaction.emoji} {reaction.count}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const renderMessageBody = (msg: ConversationMessageWithAuthor, isOwn: boolean) => (
+    <>
+      {!isOwn && showMessageAuthorName && (
+        <p className="mb-0.5 pr-8 text-[10px] leading-tight text-muted-foreground">
+          {getMessageDisplayName(msg.author)}
+        </p>
+      )}
+      {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
+      {renderForwardedHeader(msg)}
+      {msg.imageUrl && (
+        <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
+          <img src={msg.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
+        </a>
+      )}
+      {msg.content ? (
+        <p className="whitespace-pre-wrap break-words pb-0.5 pr-7 text-sm leading-snug">{msg.content}</p>
+      ) : null}
+      {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
+      <span className="pointer-events-none absolute bottom-0.5 right-1.5 select-none tabular-nums text-[10px] leading-none text-muted-foreground">
+        {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+        {formatBubbleTime(msg.createdAt)}
+      </span>
+    </>
+  );
 
   const isComposerInEditMode = !!editing;
   const composerValue = isComposerInEditMode ? editText : message;
@@ -804,56 +922,33 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                     isOwn ? "justify-end" : "justify-start"
                   }`}
                 >
-                  <div
-                    className={`relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border pl-2 pr-1.5 pt-1 pb-3.5 ${
-                      isDeleted
-                        ? "border-dashed border-border/60 bg-muted/40 text-muted-foreground italic"
-                        : isOwn
-                        ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                        : "border-transparent bg-muted"
-                    }`}
-                  >
-                    {!isDeleted && renderMessageActions(msg)}
-                    {!isOwn && !isDeleted && showMessageAuthorName && (
-                      <p className="text-[10px] leading-tight text-muted-foreground mb-0.5 pr-8">
-                        {getMessageDisplayName(msg.author)}
-                      </p>
-                    )}
-                    {!isDeleted && msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
-                    {!isDeleted && renderForwardedHeader(msg)}
-                    {!isDeleted && msg.imageUrl && (
-                      <a
-                        href={msg.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block mb-0.5"
-                      >
-                        <img
-                          src={msg.imageUrl}
-                          alt=""
-                          className="max-w-full rounded max-h-48 object-contain"
-                        />
-                      </a>
-                    )}
-                    {isDeleted ? (
+                  {renderReactionPills(msg, isOwn)}
+                  {!isDeleted ? (
+                    <div
+                      onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
+                      onPointerDown={(e) => handleBubblePointerDown(e, msg)}
+                      onPointerMove={handleBubblePointerMove}
+                      onPointerUp={clearLongPress}
+                      onPointerCancel={clearLongPress}
+                      onPointerLeave={clearLongPress}
+                      className={`relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border pl-2 pr-1.5 pt-1 pb-3.5 ${
+                        isOwn
+                          ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
+                          : "border-transparent bg-muted"
+                      }`}
+                    >
+                      {renderMessageBody(msg, isOwn)}
+                    </div>
+                  ) : (
+                    <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border border-dashed border-border/60 bg-muted/40 pl-2 pr-1.5 pt-1 pb-3.5 text-muted-foreground italic">
                       <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
                         {t.messageDeleted}
                       </p>
-                    ) : msg.content ? (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
-                        {msg.content}
-                      </p>
-                    ) : null}
-                    {!isDeleted && msg.pinnedAt && (
-                      <Pin className="absolute -top-1 -left-1 h-3.5 w-3.5 text-primary" />
-                    )}
-                    <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
-                      {!isDeleted && msg.editedAt && (
-                        <span className="mr-1 italic">{t.messageEdited}</span>
-                      )}
-                      {formatBubbleTime(msg.createdAt)}
-                    </span>
-                  </div>
+                      <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                        {formatBubbleTime(msg.createdAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -863,6 +958,85 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
+        <DialogContent
+          hideCloseButton
+          className="!left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
+        >
+          {messageLayer && (
+            <>
+              <button
+                type="button"
+                className="animate-in fade-in duration-200 absolute inset-0 bg-[rgba(245,232,210,0.45)]"
+                onClick={() => setMessageLayer(null)}
+                aria-label="Close message actions"
+              />
+              {(() => {
+                const vw = typeof window !== "undefined" ? window.innerWidth : 0;
+                const vh = typeof window !== "undefined" ? window.innerHeight : 0;
+                const menuWidth = 280;
+                const menuHeight = 280;
+                const bubbleToMenuGap = 8;
+                const reactionsBarMinWidth = QUICK_REACTIONS.length * 40 + 24;
+                const bubbleWidth = Math.min(Math.max(messageLayer.rect.width, reactionsBarMinWidth), vw - 24);
+                const left = Math.max(12, Math.min(messageLayer.rect.left, vw - bubbleWidth - 12));
+                const bubbleHeight = messageLayer.rect.height;
+                let bubbleTop = messageLayer.rect.top;
+                let menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                if (menuTop + menuHeight > vh - 12) {
+                  const overflow = menuTop + menuHeight - (vh - 12);
+                  bubbleTop = Math.max(54, bubbleTop - overflow);
+                  menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                }
+                return (
+                  <>
+                    <div
+                      className="absolute animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: Math.max(12, bubbleTop - 42), left, width: bubbleWidth }}
+                    >
+                      <div className="mb-2 flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 py-1 shadow-lg">
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="rounded-full px-1.5 py-0.5 text-xl hover:bg-muted"
+                            onClick={() => {
+                              reactionMutation.mutate({ messageId: messageLayer.message.id, emoji });
+                              setMessageLayer(null);
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div
+                      className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: bubbleTop, left, width: bubbleWidth }}
+                    >
+                      {renderReactionPills(
+                        messageLayer.message,
+                        messageLayer.message.authorUserId === user?.id
+                      )}
+                      {renderMessageBody(
+                        messageLayer.message,
+                        messageLayer.message.authorUserId === user?.id
+                      )}
+                    </div>
+                    <div
+                      className="absolute w-[280px] rounded-xl border border-border bg-background p-2 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200"
+                      style={{ top: menuTop, left: Math.max(12, Math.min(left, vw - menuWidth - 12)) }}
+                    >
+                      {renderMessageActionItems(messageLayer.message, () => setMessageLayer(null))}
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4 space-y-2">
         {(replyTo || editing) && (

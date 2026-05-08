@@ -35,6 +35,7 @@ export interface ConversationMessageWithAuthor {
   forwardedFromUserId?: string | null;
   replyTo?: ConversationMessageReplyTo | null;
   forwardedFromAuthor?: ConversationMessageAuthor | null;
+  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
   author: ConversationMessageAuthor;
 }
 

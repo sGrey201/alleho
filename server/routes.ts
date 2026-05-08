@@ -1305,7 +1305,8 @@ ${allUrls.map(url => `  <url>
   }
 
   async function enrichHealthWallMessages(
-    messages: HealthWallMessage[]
+    messages: HealthWallMessage[],
+    currentUserId: string
   ): Promise<HealthWallMessageWithAuthor[]> {
     const userIds = new Set<string>();
     messages.forEach((m) => {
@@ -1338,6 +1339,10 @@ ${allUrls.map(url => `  <url>
     users.forEach((u) => {
       if (u) userMap.set(u.id, u);
     });
+    const reactionMap = await storage.getHealthWallMessageReactionSummaries(
+      messages.map((m) => m.id),
+      currentUserId
+    );
 
     return messages.map((m) => {
       const reply = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
@@ -1373,9 +1378,22 @@ ${allUrls.map(url => `  <url>
         forwardedFromAuthor: m.forwardedFromUserId
           ? userToMessageAuthor(userMap.get(m.forwardedFromUserId) ?? null)
           : null,
+        reactions: reactionMap.get(m.id) ?? [],
         author: userToMessageAuthor(userMap.get(m.authorUserId) ?? null),
       };
     });
+  }
+
+  async function withHealthWallReactions(
+    messages: HealthWallMessageWithAuthor[],
+    currentUserId: string
+  ): Promise<HealthWallMessageWithAuthor[]> {
+    if (messages.length === 0) return messages;
+    const reactionMap = await storage.getHealthWallMessageReactionSummaries(
+      messages.map((m) => m.id),
+      currentUserId
+    );
+    return messages.map((m) => ({ ...m, reactions: reactionMap.get(m.id) ?? [] }));
   }
 
   // Get health wall messages for a patient
@@ -1402,11 +1420,12 @@ ${allUrls.map(url => `  <url>
 
       const fromRedis = await getHealthWallRecentMessages(patientUserId);
       if (fromRedis.length > 0) {
-        return res.json(fromRedis);
+        const withReactions = await withHealthWallReactions(fromRedis, currentUserId ?? "");
+        return res.json(withReactions);
       }
 
       const messages = await storage.getHealthWallMessagesRecent(patientUserId, 100);
-      const messagesWithAuthors = await enrichHealthWallMessages(messages);
+      const messagesWithAuthors = await enrichHealthWallMessages(messages, currentUserId ?? "");
       res.json(messagesWithAuthors);
       backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
         console.error("Redis backfill error:", err)
@@ -1502,7 +1521,7 @@ ${allUrls.map(url => `  <url>
       });
       
       const message = await storage.createHealthWallMessage(validatedData);
-      const [messageWithAuthor] = await enrichHealthWallMessages([message]);
+      const [messageWithAuthor] = await enrichHealthWallMessages([message], currentUserId);
       await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
       await publishHealthWallMessage(patientUserId, messageWithAuthor);
       res.json(messageWithAuthor);
@@ -1639,6 +1658,36 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error unpinning health wall message:", error);
       res.status(500).json({ message: "Failed to unpin message" });
+    }
+  });
+
+  app.post('/api/health-wall/:patientUserId/messages/:messageId/reactions', isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!await canAccessHealthWall(req, patientUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const existing = await storage.getHealthWallMessageById(messageId);
+      if (!existing || existing.patientUserId !== patientUserId) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) {
+        return res.status(400).json({ message: "Message deleted" });
+      }
+      const emoji = String(req.body?.emoji ?? "").trim();
+      const allowed = new Set(["👍", "❤️", "🔥", "😂", "🙏", "😢"]);
+      if (!allowed.has(emoji)) {
+        return res.status(400).json({ message: "Unsupported reaction" });
+      }
+      await storage.toggleHealthWallMessageReaction(messageId, currentUserId, emoji);
+      const reactions = (await storage.getHealthWallMessageReactionSummaries([messageId], currentUserId)).get(messageId) ?? [];
+      await invalidateHealthWallRecent(patientUserId);
+      res.json({ messageId, reactions });
+    } catch (error) {
+      console.error("Error toggling health wall reaction:", error);
+      res.status(500).json({ message: "Failed to toggle reaction" });
     }
   });
 
@@ -2030,7 +2079,8 @@ ${allUrls.map(url => `  <url>
   }
 
   async function enrichConversationMessages(
-    messages: ConversationMessage[]
+    messages: ConversationMessage[],
+    currentUserId: string
   ): Promise<ConversationMessageWithAuthor[]> {
     const userIds = new Set<string>();
     messages.forEach((m) => {
@@ -2064,6 +2114,10 @@ ${allUrls.map(url => `  <url>
     users.forEach((u) => {
       if (u) userMap.set(u.id, u);
     });
+    const reactionMap = await storage.getConversationMessageReactionSummaries(
+      messages.map((m) => m.id),
+      currentUserId
+    );
 
     return messages.map((m) => {
       const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
@@ -2100,9 +2154,22 @@ ${allUrls.map(url => `  <url>
         forwardedFromAuthor: m.forwardedFromUserId
           ? userToConvAuthor(userMap.get(m.forwardedFromUserId) ?? null)
           : null,
+        reactions: reactionMap.get(m.id) ?? [],
         author: userToConvAuthor(userMap.get(m.authorUserId) ?? null),
       };
     });
+  }
+
+  async function withConversationReactions(
+    messages: ConversationMessageWithAuthor[],
+    currentUserId: string
+  ): Promise<ConversationMessageWithAuthor[]> {
+    if (messages.length === 0) return messages;
+    const reactionMap = await storage.getConversationMessageReactionSummaries(
+      messages.map((m) => m.id),
+      currentUserId
+    );
+    return messages.map((m) => ({ ...m, reactions: reactionMap.get(m.id) ?? [] }));
   }
 
   // Get conversation messages (Redis first, then DB)
@@ -2122,9 +2189,12 @@ ${allUrls.map(url => `  <url>
         });
       }
       const fromRedis = await getConversationRecentMessages(id);
-      if (fromRedis.length > 0) return res.json(fromRedis);
+      if (fromRedis.length > 0) {
+        const withReactions = await withConversationReactions(fromRedis, currentUserId);
+        return res.json(withReactions);
+      }
       const messages = await storage.getConversationMessagesRecent(id, 100);
-      const withAuthors = await enrichConversationMessages(messages);
+      const withAuthors = await enrichConversationMessages(messages, currentUserId);
       res.json(withAuthors);
       backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
     } catch (error) {
@@ -2248,7 +2318,7 @@ ${allUrls.map(url => `  <url>
         forwardedFromUserId,
       });
       const message = await storage.createConversationMessage(validated);
-      const [enriched] = await enrichConversationMessages([message]);
+      const [enriched] = await enrichConversationMessages([message], currentUserId);
       await pushConversationRecentMessage(id, enriched);
       await publishConversationMessage(id, enriched);
       res.status(201).json(enriched);
@@ -2384,6 +2454,35 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error unpinning conversation message:", error);
       res.status(500).json({ message: "Failed to unpin message" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages/:messageId/reactions", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.deletedAt) {
+        return res.status(400).json({ message: "Message deleted" });
+      }
+      const emoji = String(req.body?.emoji ?? "").trim();
+      const allowed = new Set(["👍", "❤️", "🔥", "😂", "🙏", "😢"]);
+      if (!allowed.has(emoji)) {
+        return res.status(400).json({ message: "Unsupported reaction" });
+      }
+      await storage.toggleConversationMessageReaction(messageId, currentUserId, emoji);
+      const reactions = (await storage.getConversationMessageReactionSummaries([messageId], currentUserId)).get(messageId) ?? [];
+      await invalidateConversationRecent(id);
+      res.json({ messageId, reactions });
+    } catch (error) {
+      console.error("Error toggling conversation reaction:", error);
+      res.status(500).json({ message: "Failed to toggle reaction" });
     }
   });
 

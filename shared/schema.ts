@@ -387,6 +387,26 @@ export const insertHealthWallMessageSchema = createInsertSchema(healthWallMessag
 export type InsertHealthWallMessage = z.infer<typeof insertHealthWallMessageSchema>;
 export type HealthWallMessage = typeof healthWallMessages.$inferSelect;
 
+export const healthWallMessageReactions = pgTable("health_wall_message_reactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull().references(() => healthWallMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: varchar("emoji", { length: 16 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("health_wall_message_reactions_message_idx").on(table.messageId),
+  index("health_wall_message_reactions_user_idx").on(table.userId),
+  sql`CONSTRAINT health_wall_message_reactions_unique UNIQUE (message_id, user_id, emoji)`,
+]);
+
+export const insertHealthWallMessageReactionSchema = createInsertSchema(healthWallMessageReactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type HealthWallMessageReaction = typeof healthWallMessageReactions.$inferSelect;
+export type InsertHealthWallMessageReaction = z.infer<typeof insertHealthWallMessageReactionSchema>;
+
 // Health wall doctors table (doctors connected to patient's health wall)
 export const healthWallDoctors = pgTable("health_wall_doctors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -509,3 +529,23 @@ export const insertConversationMessageSchema = createInsertSchema(conversationMe
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+
+export const conversationMessageReactions = pgTable("conversation_message_reactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").notNull().references(() => conversationMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: varchar("emoji", { length: 16 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("conversation_message_reactions_message_idx").on(table.messageId),
+  index("conversation_message_reactions_user_idx").on(table.userId),
+  sql`CONSTRAINT conversation_message_reactions_unique UNIQUE (message_id, user_id, emoji)`,
+]);
+
+export const insertConversationMessageReactionSchema = createInsertSchema(conversationMessageReactions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ConversationMessageReaction = typeof conversationMessageReactions.$inferSelect;
+export type InsertConversationMessageReaction = z.infer<typeof insertConversationMessageReactionSchema>;

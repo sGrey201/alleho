@@ -38,7 +38,6 @@ import {
   Menu,
   Copy,
   Share2,
-  MoreVertical,
   Reply,
   Pencil,
   Forward as ForwardIcon,
@@ -89,6 +88,7 @@ interface HealthWallMessage {
   forwardedFromUserId?: string | null;
   replyTo?: HealthWallReplyTo | null;
   forwardedFromAuthor?: Author | null;
+  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
   author: Author;
 }
 
@@ -166,6 +166,7 @@ function formatDoctorLastVisit(lastVisitedAt?: string): string {
 const MAX_PANEL_PERCENT = 66;
 const DEFAULT_PANEL_PERCENT = 50;
 const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
 
 /** Thumbnail URL for chat list; full image loads only when user clicks to enlarge. */
 function getThumbUrl(url: string): string {
@@ -252,10 +253,16 @@ export default function HealthWall() {
   const [forwardSearch, setForwardSearch] = useState('');
   const [pendingDelete, setPendingDelete] = useState<HealthWallMessage | null>(null);
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
+  const [messageLayer, setMessageLayer] = useState<{
+    message: HealthWallMessage;
+    rect: { top: number; left: number; width: number; height: number };
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastHealthWallReadAtRef = useRef<number>(0);
   const lastMarkedMessageIdRef = useRef<string | null>(null);
   const markReadInFlightRef = useRef(false);
@@ -609,9 +616,9 @@ export default function HealthWall() {
             ? `/messenger/channel/${targetConversationId}`
             : `/messenger/direct/${targetConversationId}`;
       const forwardToast = toast({
-        title: (
+        title: "Переслано",
+        description: (
           <span>
-            Переслано{" "}
             <button
               type="button"
               className="underline underline-offset-2"
@@ -626,6 +633,43 @@ export default function HealthWall() {
     },
     onError: (error: Error) => {
       toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const reactionMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      if (!patientUserId) throw new Error("No patient");
+      const res = await apiRequest(
+        "POST",
+        `/api/health-wall/${patientUserId}/messages/${messageId}/reactions`,
+        { emoji }
+      );
+      return (await res.json()) as { messageId: string; reactions: HealthWallMessage["reactions"] };
+    },
+    onMutate: async ({ messageId, emoji }) => {
+      queryClient.setQueryData<HealthWallMessage[]>(["/api/health-wall", patientUserId], (old) =>
+        old?.map((m) => {
+          if (m.id !== messageId) return m;
+          const prev = m.reactions ?? [];
+          const existing = prev.find((r) => r.emoji === emoji);
+          let next = prev;
+          if (existing?.reactedByMe) {
+            next = prev
+              .map((r) => (r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1), reactedByMe: false } : r))
+              .filter((r) => r.count > 0);
+          } else if (existing) {
+            next = prev.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, reactedByMe: true } : r));
+          } else {
+            next = [...prev, { emoji, count: 1, reactedByMe: true }];
+          }
+          return { ...m, reactions: next };
+        })
+      );
+    },
+    onSuccess: ({ messageId, reactions }) => {
+      queryClient.setQueryData<HealthWallMessage[]>(["/api/health-wall", patientUserId], (old) =>
+        old?.map((m) => (m.id === messageId ? { ...m, reactions: reactions ?? [] } : m))
+      );
     },
   });
 
@@ -905,7 +949,6 @@ export default function HealthWall() {
       msg.messageType === "followup";
     if (msg.deletedAt || !isSupportedType) return null;
     const isOwnMessage = msg.authorUserId === user?.id;
-    const hasTopTag = !!msg.replyTo || !!msg.forwardedFromMessageId || !!msg.forwardedFromUserId;
     const canEdit =
       isOwnMessage &&
       !!msg.content &&
@@ -913,29 +956,16 @@ export default function HealthWall() {
     const isPinned = !!msg.pinnedAt;
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Message actions"
-            className={`absolute right-1 z-10 flex h-6 w-6 items-center justify-center bg-transparent text-muted-foreground opacity-70 hover:opacity-100 ${
-              hasTopTag ? "top-8" : "top-2"
-            }`}
-            data-testid={`button-health-wall-message-actions-${msg.id}`}
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align={isOwnMessage ? "end" : "start"} className="w-48">
-          <DropdownMenuItem onSelect={() => startReply(msg)}>
+      <>
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startReply(msg); setMessageLayer(null); }}>
             <Reply className="mr-2 h-4 w-4" />
             {t.messageActionReply}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setForwarding(msg)}>
+          </button>
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { setForwarding(msg); setMessageLayer(null); }}>
             <ForwardIcon className="mr-2 h-4 w-4" />
             {t.messageActionForward}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => pinMessageMutation.mutate({ messageId: msg.id, pin: !isPinned })}>
+          </button>
+          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { pinMessageMutation.mutate({ messageId: msg.id, pin: !isPinned }); setMessageLayer(null); }}>
             {isPinned ? (
               <>
                 <PinOff className="mr-2 h-4 w-4" />
@@ -947,32 +977,68 @@ export default function HealthWall() {
                 {t.messageActionPin}
               </>
             )}
-          </DropdownMenuItem>
+          </button>
           {msg.content && (
-            <DropdownMenuItem onSelect={() => copyMessageContent(msg)}>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); setMessageLayer(null); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
-            </DropdownMenuItem>
+            </button>
           )}
-          {isOwnMessage && <DropdownMenuSeparator />}
+          {isOwnMessage && <div className="my-1 h-px bg-border" />}
           {canEdit && (
-            <DropdownMenuItem onSelect={() => startEdit(msg)}>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startEdit(msg); setMessageLayer(null); }}>
               <Pencil className="mr-2 h-4 w-4" />
               {t.messageActionEdit}
-            </DropdownMenuItem>
+            </button>
           )}
           {isOwnMessage && (
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => setPendingDelete(msg)}
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive hover:bg-muted"
+              onClick={() => { setPendingDelete(msg); setMessageLayer(null); }}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               {t.messageActionDelete}
-            </DropdownMenuItem>
+            </button>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      </>
     );
+  };
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressStartRef.current = null;
+  };
+
+  const openMessageLayer = (msg: HealthWallMessage, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    setMessageLayer({ message: msg, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
+  };
+
+  const handleBubbleContextMenu = (e: React.MouseEvent<HTMLElement>, msg: HealthWallMessage) => {
+    if (msg.deletedAt) return;
+    e.preventDefault();
+    openMessageLayer(msg, e.currentTarget);
+  };
+
+  const handleBubblePointerDown = (e: React.PointerEvent<HTMLElement>, msg: HealthWallMessage) => {
+    if (msg.deletedAt || e.pointerType === "mouse") return;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    longPressStartRef.current = { x: e.clientX, y: e.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageLayer(msg, e.currentTarget);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!longPressStartRef.current) return;
+    const dx = Math.abs(e.clientX - longPressStartRef.current.x);
+    const dy = Math.abs(e.clientY - longPressStartRef.current.y);
+    if (dx > 8 || dy > 8) clearLongPress();
   };
 
   const renderReplyPreview = (reply: HealthWallReplyTo, isOwnMessage: boolean) => (
@@ -998,6 +1064,68 @@ export default function HealthWall() {
       <p className="mb-0.5 text-[10px] italic leading-tight text-muted-foreground">
         ↪ {t.messageForwardedFrom} {getAuthorName(msg.forwardedFromAuthor)}
       </p>
+    );
+  };
+
+  const renderReactionPills = (msg: HealthWallMessage, isOwnMessage: boolean) => {
+    if (!msg.reactions || msg.reactions.length === 0) return null;
+    return (
+      <div className={`flex flex-col items-start gap-1 ${isOwnMessage ? "items-end" : "items-start"}`}>
+        {msg.reactions.map((reaction) => (
+          <button
+            key={reaction.emoji}
+            type="button"
+            onClick={() => reactionMutation.mutate({ messageId: msg.id, emoji: reaction.emoji })}
+            className={`px-1.5 py-0 text-sm leading-none ${
+              reaction.reactedByMe ? "font-semibold" : ""
+            }`}
+          >
+            {reaction.emoji} {reaction.count}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const renderMessageBubbleContent = (msg: HealthWallMessage, isOwnMessage: boolean) => {
+    const isPrescription = msg.messageType === "prescription";
+    const isFollowup = msg.messageType === "followup";
+    return (
+      <>
+        {isPrescription && (
+          <div className="mb-0.5 pr-8">
+            <Badge variant="secondary" className="bg-green-100 text-xs text-green-800 dark:bg-green-900 dark:text-green-200">
+              <Pill className="mr-1 h-3 w-3" />
+              {t.prescription}
+            </Badge>
+          </div>
+        )}
+        {isFollowup && (
+          <div className="mb-0.5 pr-8">
+            <Badge variant="secondary" className="bg-purple-100 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+              <FileText className="mr-1 h-3 w-3" />
+              {t.followup}
+            </Badge>
+          </div>
+        )}
+        {msg.replyTo && renderReplyPreview(msg.replyTo, isOwnMessage)}
+        {renderForwardedHeader(msg)}
+        {msg.imageUrl && (
+          <img
+            src={getThumbUrl(msg.imageUrl)}
+            alt="Uploaded"
+            className="mb-0.5 max-h-64 cursor-pointer rounded-md transition-opacity hover:opacity-90"
+            data-testid={`image-${msg.id}`}
+            onClick={() => setSelectedImage(msg.imageUrl!)}
+          />
+        )}
+        {msg.content && <p className="whitespace-pre-wrap pb-0.5 pr-7 text-sm leading-snug">{msg.content}</p>}
+        {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
+        <span className="pointer-events-none absolute bottom-0.5 right-1.5 select-none tabular-nums text-[10px] leading-none text-muted-foreground">
+          {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+          {formatMessageBubbleTime(msg.createdAt)}
+        </span>
+      </>
     );
   };
 
@@ -1556,28 +1684,35 @@ export default function HealthWall() {
                               data-testid={`message-group-${groupIndex}`}
                             >
                               <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
-                                <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
-                                  {renderMessageActions(lastMsg)}
-                                  <div className={`grid gap-1 ${
-                                    group.messages.length === 1 ? 'grid-cols-1' :
-                                    group.messages.length === 2 ? 'grid-cols-2' :
-                                    'grid-cols-3'
-                                  }`}>
-                                    {group.messages.map((msg) => (
-                                      <img 
-                                        key={msg.id}
-                                        src={getThumbUrl(msg.imageUrl!)} 
-                                        alt="Uploaded" 
-                                        className="rounded-md w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                        data-testid={`image-${msg.id}`}
-                                        onClick={() => setSelectedImage(msg.imageUrl!)}
-                                      />
-                                    ))}
-                                  </div>
-                                  <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
-                                    {formatMessageBubbleTime(lastMsg.createdAt)}
-                                  </span>
-                                </CardContent>
+                                    <CardContent
+                                      className="relative min-h-[2.75rem] p-2 pb-3.5"
+                                      onContextMenu={(e) => handleBubbleContextMenu(e, lastMsg)}
+                                      onPointerDown={(e) => handleBubblePointerDown(e, lastMsg)}
+                                      onPointerMove={handleBubblePointerMove}
+                                      onPointerUp={clearLongPress}
+                                      onPointerCancel={clearLongPress}
+                                      onPointerLeave={clearLongPress}
+                                    >
+                                      <div className={`grid gap-1 ${
+                                        group.messages.length === 1 ? 'grid-cols-1' :
+                                        group.messages.length === 2 ? 'grid-cols-2' :
+                                        'grid-cols-3'
+                                      }`}>
+                                        {group.messages.map((msg) => (
+                                          <img 
+                                            key={msg.id}
+                                            src={getThumbUrl(msg.imageUrl!)} 
+                                            alt="Uploaded" 
+                                            className="rounded-md w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                            data-testid={`image-${msg.id}`}
+                                            onClick={() => setSelectedImage(msg.imageUrl!)}
+                                          />
+                                        ))}
+                                      </div>
+                                      <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                                        {formatMessageBubbleTime(lastMsg.createdAt)}
+                                      </span>
+                                    </CardContent>
                               </Card>
                             </div>
                           );
@@ -1595,6 +1730,12 @@ export default function HealthWall() {
                             className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                             data-testid={`message-${msg.id}`}
                           >
+                            <div className={`flex items-end gap-1 ${isOwnMessage ? "flex-row-reverse" : "flex-row"}`}>
+                            {!!msg.reactions?.length && (
+                              <div className="shrink-0 pb-1">
+                                {renderReactionPills(msg, isOwnMessage)}
+                              </div>
+                            )}
                             <Card 
                               className={`max-w-[85%] min-w-28 ${
                                 isDeleted
@@ -1608,55 +1749,30 @@ export default function HealthWall() {
                                       : ''
                               }`}
                             >
-                              <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
-                                {!isDeleted && renderMessageActions(msg)}
-                                {isPrescription && !isDeleted && (
-                                  <div className="mb-0.5 pr-8">
-                                    <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs">
-                                      <Pill className="h-3 w-3 mr-1" />
-                                      {t.prescription}
-                                    </Badge>
-                                  </div>
-                                )}
-                                {isFollowup && !isDeleted && (
-                                  <div className="mb-0.5 pr-8">
-                                    <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs">
-                                      <FileText className="h-3 w-3 mr-1" />
-                                      {t.followup}
-                                    </Badge>
-                                  </div>
-                                )}
-                                {!isDeleted && msg.replyTo && renderReplyPreview(msg.replyTo, isOwnMessage)}
-                                {!isDeleted && renderForwardedHeader(msg)}
-                                {!isDeleted && msg.imageUrl && (
-                                  <img 
-                                    src={getThumbUrl(msg.imageUrl)} 
-                                    alt="Uploaded" 
-                                    className="rounded-md max-h-64 mb-0.5 cursor-pointer hover:opacity-90 transition-opacity"
-                                    data-testid={`image-${msg.id}`}
-                                    onClick={() => setSelectedImage(msg.imageUrl!)}
-                                  />
-                                )}
-                                {isDeleted ? (
+                              {!isDeleted ? (
+                                    <CardContent
+                                      className="relative min-h-[2.75rem] p-2 pb-3.5"
+                                      onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
+                                      onPointerDown={(e) => handleBubblePointerDown(e, msg)}
+                                      onPointerMove={handleBubblePointerMove}
+                                      onPointerUp={clearLongPress}
+                                      onPointerCancel={clearLongPress}
+                                      onPointerLeave={clearLongPress}
+                                    >
+                                      {renderMessageBubbleContent(msg, isOwnMessage)}
+                                    </CardContent>
+                              ) : (
+                                <CardContent className="relative min-h-[2.75rem] p-2 pb-3.5">
                                   <p className="text-sm whitespace-pre-wrap leading-snug pr-7 pb-0.5">
                                     {t.messageDeleted}
                                   </p>
-                                ) : msg.content && (
-                                  <p className="text-sm whitespace-pre-wrap leading-snug pr-7 pb-0.5">
-                                    {msg.content}
-                                  </p>
-                                )}
-                                {!isDeleted && msg.pinnedAt && (
-                                  <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />
-                                )}
-                                <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
-                                  {!isDeleted && msg.editedAt && (
-                                    <span className="mr-1 italic">{t.messageEdited}</span>
-                                  )}
-                                  {formatMessageBubbleTime(msg.createdAt)}
-                                </span>
-                              </CardContent>
+                                  <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
+                                    {formatMessageBubbleTime(msg.createdAt)}
+                                  </span>
+                                </CardContent>
+                              )}
                             </Card>
+                            </div>
                           </div>
                         );
                       });
@@ -1700,6 +1816,85 @@ export default function HealthWall() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
+        <DialogContent
+          hideCloseButton
+          className="!left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
+        >
+          {messageLayer && (
+            <>
+              <button
+                type="button"
+                className="absolute inset-0 animate-in fade-in bg-[rgba(245,232,210,0.45)] duration-200"
+                onClick={() => setMessageLayer(null)}
+                aria-label="Close message actions"
+              />
+              {(() => {
+                const vw = typeof window !== "undefined" ? window.innerWidth : 0;
+                const vh = typeof window !== "undefined" ? window.innerHeight : 0;
+                const menuWidth = 280;
+                const menuHeight = 280;
+                const bubbleToMenuGap = 8;
+                const reactionsBarMinWidth = QUICK_REACTIONS.length * 40 + 24;
+                const bubbleWidth = Math.min(Math.max(messageLayer.rect.width, reactionsBarMinWidth), vw - 24);
+                const left = Math.max(12, Math.min(messageLayer.rect.left, vw - bubbleWidth - 12));
+                const bubbleHeight = messageLayer.rect.height;
+                let bubbleTop = messageLayer.rect.top;
+                let menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                if (menuTop + menuHeight > vh - 12) {
+                  const overflow = menuTop + menuHeight - (vh - 12);
+                  bubbleTop = Math.max(54, bubbleTop - overflow);
+                  menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                }
+                return (
+                  <>
+                    <div
+                      className="absolute animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: Math.max(12, bubbleTop - 42), left, width: bubbleWidth }}
+                    >
+                      <div className="mb-2 flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 py-1 shadow-lg">
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="rounded-full px-1.5 py-0.5 text-xl hover:bg-muted"
+                            onClick={() => {
+                              reactionMutation.mutate({ messageId: messageLayer.message.id, emoji });
+                              setMessageLayer(null);
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div
+                      className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: bubbleTop, left, width: bubbleWidth }}
+                    >
+                      {renderReactionPills(
+                        messageLayer.message,
+                        messageLayer.message.authorUserId === user?.id
+                      )}
+                      {renderMessageBubbleContent(
+                        messageLayer.message,
+                        messageLayer.message.authorUserId === user?.id
+                      )}
+                    </div>
+                    <div
+                      className="absolute w-[280px] rounded-xl border border-border bg-background p-2 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200"
+                      style={{ top: menuTop, left: Math.max(12, Math.min(left, vw - menuWidth - 12)) }}
+                    >
+                      {renderMessageActions(messageLayer.message)}
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={!!forwarding}
         onOpenChange={(open) => {
@@ -1729,7 +1924,8 @@ export default function HealthWall() {
                 <p className="py-3 text-center text-sm text-muted-foreground">{t.messageForwardEmpty}</p>
               ) : (
                 filteredForwardTargets.map((chat) => {
-                  if (!chat.conversationId) return null;
+                  const targetConversationId = chat.conversationId;
+                  if (!targetConversationId) return null;
                   const chatTitle =
                     chat.name ||
                     chat.otherParticipantName ||
@@ -1738,20 +1934,20 @@ export default function HealthWall() {
                     chat.type === "group" || chat.type === "channel" ? chat.type : "direct";
                   return (
                     <button
-                      key={chat.conversationId}
+                      key={targetConversationId}
                       type="button"
                       onClick={() =>
                         forwarding &&
                         forwardMessageMutation.mutate({
                           sourceMessageId: forwarding.id,
-                          targetConversationId: chat.conversationId,
+                          targetConversationId,
                           targetTitle: chatTitle,
                           targetType,
                         })
                       }
                       disabled={forwardMessageMutation.isPending}
                       className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left hover:bg-muted/40 disabled:opacity-60"
-                      data-testid={`button-health-wall-forward-target-${chat.conversationId}`}
+                      data-testid={`button-health-wall-forward-target-${targetConversationId}`}
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={chat.avatarUrl ?? undefined} />

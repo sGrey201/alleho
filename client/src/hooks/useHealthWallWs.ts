@@ -35,6 +35,7 @@ export interface HealthWallMessageWithAuthor {
   forwardedFromUserId?: string | null;
   replyTo?: HealthWallMessageReplyTo | null;
   forwardedFromAuthor?: HealthWallMessageAuthor | null;
+  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
   author: HealthWallMessageAuthor;
 }
 
