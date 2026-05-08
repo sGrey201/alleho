@@ -36,7 +36,25 @@ export interface ConversationMessageWithAuthor {
   replyTo?: ConversationMessageReplyTo | null;
   forwardedFromAuthor?: ConversationMessageAuthor | null;
   reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
+  commentsCount?: number;
   author: ConversationMessageAuthor;
+}
+
+export interface ConversationCommentWithAuthor {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  authorUserId: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  replyToCommentId?: string | null;
+  createdAt: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
+  commentsCount?: number;
+  author: ConversationMessageAuthor;
+  replyTo?: ConversationMessageReplyTo | null;
 }
 
 type ConversationSeenPayload = {
@@ -70,6 +88,28 @@ type ConversationMessageUnpinnedPayload = {
   messageId: string;
 };
 
+type ConversationCommentEditedPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  content: string | null;
+  editedAt: string;
+};
+
+type ConversationCommentDeletedPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  deletedAt: string;
+};
+
+type ConversationCommentReactionPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  reactions: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
+};
+
 export function useConversationWs(conversationId: string | undefined, enabled: boolean) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,6 +120,13 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
     if (!enabled || !conversationId) return;
 
     const messagesKey = () => ["/api/conversations", conversationIdRef.current, "messages"];
+    const commentsKey = (messageId: string) => [
+      "/api/conversations",
+      conversationIdRef.current,
+      "messages",
+      messageId,
+      "comments",
+    ];
 
     const updateMessages = (
       updater: (
@@ -190,6 +237,56 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
             updateMessages((list) =>
               list.map((m) =>
                 m.id === payload.messageId ? { ...m, pinnedAt: null, pinnedByUserId: null } : m
+              )
+            );
+          } else if (data.type === "conversation_comment" && data.payload) {
+            const payload = data.payload as ConversationCommentWithAuthor;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsKey(payload.messageId), (old) => {
+              if (!old) return [payload];
+              if (old.some((comment) => comment.id === payload.id)) return old;
+              return [...old, payload];
+            });
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId
+                  ? { ...m, commentsCount: payload.commentsCount ?? Math.max(m.commentsCount ?? 0, 0) + 1 }
+                  : m
+              )
+            );
+          } else if (data.type === "conversation_comment_edited" && data.payload) {
+            const payload = data.payload as ConversationCommentEditedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsKey(payload.messageId), (old) =>
+              old?.map((comment) =>
+                comment.id === payload.commentId
+                  ? { ...comment, content: payload.content, editedAt: payload.editedAt }
+                  : comment
+              )
+            );
+          } else if (data.type === "conversation_comment_deleted" && data.payload) {
+            const payload = data.payload as ConversationCommentDeletedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsKey(payload.messageId), (old) =>
+              old?.map((comment) =>
+                comment.id === payload.commentId
+                  ? { ...comment, deletedAt: payload.deletedAt, content: null, imageUrl: null }
+                  : comment
+              )
+            );
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId
+                  ? { ...m, commentsCount: Math.max((m.commentsCount ?? 0) - 1, 0) }
+                  : m
+              )
+            );
+          } else if (data.type === "conversation_comment_reaction" && data.payload) {
+            const payload = data.payload as ConversationCommentReactionPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsKey(payload.messageId), (old) =>
+              old?.map((comment) =>
+                comment.id === payload.commentId ? { ...comment, reactions: payload.reactions } : comment
               )
             );
           }

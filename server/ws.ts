@@ -152,6 +152,10 @@ export function setupWebSocket(
             "conversation_message_deleted",
             "conversation_message_pinned",
             "conversation_message_unpinned",
+            "conversation_comment",
+            "conversation_comment_edited",
+            "conversation_comment_deleted",
+            "conversation_comment_reaction",
           ]);
           if (
             typeof parsed === "object" &&

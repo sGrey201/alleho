@@ -1,0 +1,823 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2 } from "lucide-react";
+import { format, isToday, isYesterday } from "date-fns";
+import { ru } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import ChatInputBar from "@/components/ChatInputBar";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useUpload } from "@/hooks/use-upload";
+import { useToast } from "@/hooks/use-toast";
+import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+
+type PostCommentsThreadProps = {
+  conversationId: string;
+  messageId: string;
+  currentUserId?: string;
+  onBack: () => void;
+};
+
+const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
+
+function getAuthorName(author: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined): string {
+  if (!author) return "User";
+  if (author.firstName && author.lastName) return `${author.firstName} ${author.lastName}`;
+  if (author.firstName) return author.firstName;
+  if (author.email) return author.email.split("@")[0];
+  return "User";
+}
+
+function formatBubbleTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isToday(d)) return format(d, "HH:mm", { locale: ru });
+  if (isYesterday(d)) return `вч. ${format(d, "HH:mm", { locale: ru })}`;
+  return format(d, "dd.MM. HH:mm", { locale: ru });
+}
+
+export default function PostCommentsThread({
+  conversationId,
+  messageId,
+  currentUserId,
+  onBack,
+}: PostCommentsThreadProps) {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [message, setMessage] = useState("");
+  const [replyTo, setReplyTo] = useState<ConversationCommentWithAuthor | null>(null);
+  const [editing, setEditing] = useState<ConversationCommentWithAuthor | null>(null);
+  const [forwarding, setForwarding] = useState<ConversationCommentWithAuthor | null>(null);
+  const [forwardSearch, setForwardSearch] = useState("");
+  const [messageLayer, setMessageLayer] = useState<{
+    comment: ConversationCommentWithAuthor;
+    rect: { top: number; left: number; width: number; height: number };
+  } | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const deepLinkHandledRef = useRef<string | null>(null);
+
+  useConversationWs(conversationId, true);
+
+  const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
+    queryKey: ["/api/conversations", conversationId, "messages"],
+    enabled: !!conversationId,
+  });
+
+  const anchorPost = useMemo(
+    () => conversationMessages.find((item) => item.id === messageId) ?? null,
+    [conversationMessages, messageId]
+  );
+
+  const commentsQueryKey = useMemo(
+    () => ["/api/conversations", conversationId, "messages", messageId, "comments"],
+    [conversationId, messageId]
+  );
+
+  const { data: comments = [], isLoading } = useQuery<ConversationCommentWithAuthor[]>({
+    queryKey: commentsQueryKey,
+    enabled: !!conversationId && !!messageId,
+  });
+
+  const sortedComments = useMemo(
+    () => [...comments].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [comments]
+  );
+
+  const setCommentRef = (id: string) => (el: HTMLDivElement | null) => {
+    if (el) commentRefs.current.set(id, el);
+    else commentRefs.current.delete(id);
+  };
+
+  const blinkCommentBubble = (el: HTMLDivElement) => {
+    let blinkCount = 0;
+    const tick = () => {
+      if (blinkCount >= 6) return;
+      if (blinkCount % 2 === 0) el.classList.add("opacity-60");
+      else el.classList.remove("opacity-60");
+      blinkCount += 1;
+      window.setTimeout(tick, 320);
+    };
+    tick();
+  };
+
+  type MyChatItem = {
+    source: "conversation" | "health_wall";
+    folder: "personal" | "groups" | "channels";
+    type?: string;
+    conversationId?: string;
+    otherParticipantName?: string;
+    name?: string;
+    avatarUrl?: string | null;
+  };
+  type MyChatsPage = {
+    items: MyChatItem[];
+    hasMore: boolean;
+    nextOffset: number | null;
+    total: number;
+  };
+
+  const { data: forwardChats = [], isLoading: forwardChatsLoading } = useQuery<MyChatItem[]>({
+    queryKey: ["/api/me/chats", "forward-targets", "comments-thread"],
+    enabled: !!forwarding,
+    queryFn: async () => {
+      const folders: Array<"personal" | "groups" | "channels"> = ["personal", "groups", "channels"];
+      const results = await Promise.all(
+        folders.map(async (folder) => {
+          const res = await fetch(`/api/me/chats?folder=${folder}&limit=50&offset=0`, {
+            credentials: "include",
+          });
+          if (!res.ok) return [] as MyChatItem[];
+          const json = (await res.json()) as MyChatsPage;
+          return json.items;
+        })
+      );
+      const merged = results.flat();
+      return merged.filter(
+        (item): item is MyChatItem & { conversationId: string } =>
+          item.source === "conversation" && typeof item.conversationId === "string" && item.conversationId.length > 0
+      );
+    },
+  });
+
+  const filteredForwardChats = useMemo(() => {
+    const q = forwardSearch.trim().toLowerCase();
+    if (!q) return forwardChats;
+    return forwardChats.filter((chat) => {
+      const chatTitle = chat.name || chat.otherParticipantName || "Чат";
+      return chatTitle.toLowerCase().includes(q);
+    });
+  }, [forwardChats, forwardSearch]);
+
+  const createCommentMutation = useMutation({
+    mutationFn: async (data: { content?: string; imageUrl?: string; replyToCommentId?: string }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/messages/${messageId}/comments`,
+        data
+      );
+      return (await res.json()) as ConversationCommentWithAuthor;
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsQueryKey, (old) => {
+        if (!old) return [created];
+        if (old.some((comment) => comment.id === created.id)) return old;
+        return [...old, created];
+      });
+      setMessage("");
+      setReplyTo(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const editCommentMutation = useMutation({
+    mutationFn: async ({ commentId, content }: { commentId: string; content: string }) => {
+      await apiRequest(
+        "PATCH",
+        `/api/conversations/${conversationId}/messages/${messageId}/comments/${commentId}`,
+        { content }
+      );
+      return { commentId, content };
+    },
+    onSuccess: ({ commentId, content }) => {
+      queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsQueryKey, (old) =>
+        old?.map((comment) =>
+          comment.id === commentId ? { ...comment, content, editedAt: new Date().toISOString() } : comment
+        )
+      );
+      setEditing(null);
+      setMessage("");
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: string) => {
+      await apiRequest(
+        "DELETE",
+        `/api/conversations/${conversationId}/messages/${messageId}/comments/${commentId}`
+      );
+      return commentId;
+    },
+    onSuccess: (commentId) => {
+      queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsQueryKey, (old) =>
+        old?.map((comment) =>
+          comment.id === commentId
+            ? { ...comment, deletedAt: new Date().toISOString(), content: null, imageUrl: null }
+            : comment
+        )
+      );
+    },
+  });
+
+  const reactionMutation = useMutation({
+    mutationFn: async ({ commentId, emoji }: { commentId: string; emoji: string }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/messages/${messageId}/comments/${commentId}/reactions`,
+        { emoji }
+      );
+      return (await res.json()) as { commentId: string; reactions: ConversationCommentWithAuthor["reactions"] };
+    },
+    onSuccess: ({ commentId, reactions }) => {
+      queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsQueryKey, (old) =>
+        old?.map((comment) => (comment.id === commentId ? { ...comment, reactions: reactions ?? [] } : comment))
+      );
+    },
+  });
+
+  const forwardMutation = useMutation({
+    mutationFn: async ({
+      targetConversationId,
+      sourceComment,
+      targetTitle,
+      targetType,
+    }: {
+      targetConversationId: string;
+      sourceComment: ConversationCommentWithAuthor;
+      targetTitle: string;
+      targetType: "direct" | "group" | "channel";
+    }) => {
+      await apiRequest("POST", `/api/conversations/${targetConversationId}/messages`, {
+        content: sourceComment.content ?? "",
+        imageUrl: sourceComment.imageUrl ?? undefined,
+        messageType: "message",
+      });
+      return { targetTitle, targetConversationId, targetType };
+    },
+    onSuccess: ({ targetTitle, targetConversationId, targetType }) => {
+      const targetPath =
+        targetType === "group"
+          ? `/messenger/group/${targetConversationId}`
+          : targetType === "channel"
+          ? `/messenger/channel/${targetConversationId}`
+          : `/messenger/direct/${targetConversationId}`;
+      const forwardToast = toast({
+        title: "Переслано",
+        description: (
+          <span>
+            <button
+              type="button"
+              className="underline underline-offset-2"
+              onClick={() => setLocation(targetPath)}
+            >
+              {targetTitle}
+            </button>
+          </span>
+        ),
+      });
+      window.setTimeout(() => forwardToast.dismiss(), 3000);
+      setForwarding(null);
+      setForwardSearch("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const { uploadFile, isUploading } = useUpload({
+    onSuccess: async (response) => {
+      await createCommentMutation.mutateAsync({
+        content: "",
+        imageUrl: response.objectPath,
+        replyToCommentId: replyTo?.id,
+      });
+    },
+    onError: (error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const deepLinkedCommentId = query.get("commentId");
+    const deepLinkKey = deepLinkedCommentId ? `${conversationId}:${messageId}:${deepLinkedCommentId}` : null;
+    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    scrollChatPaneToBottom(root);
+  }, [comments.length, anchorPost?.id]);
+
+  useEffect(() => {
+    if (sortedComments.length === 0) return;
+    const query = new URLSearchParams(window.location.search);
+    const commentId = query.get("commentId");
+    if (!commentId) return;
+    const key = `${conversationId}:${messageId}:${commentId}`;
+    if (deepLinkHandledRef.current === key) return;
+    const el = commentRefs.current.get(commentId);
+    if (!el) return;
+    deepLinkHandledRef.current = key;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    blinkCommentBubble(el);
+  }, [conversationId, messageId, sortedComments.length]);
+
+  const composerValue = editing ? message : message;
+  const canSend = !!composerValue.trim() && !createCommentMutation.isPending && !editCommentMutation.isPending;
+
+  const handleSend = () => {
+    const content = composerValue.trim();
+    if (!content) return;
+    if (editing) {
+      editCommentMutation.mutate({ commentId: editing.id, content });
+      return;
+    }
+    createCommentMutation.mutate({
+      content,
+      replyToCommentId: replyTo?.id,
+    });
+  };
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressStartRef.current = null;
+  };
+
+  const openCommentLayer = (comment: ConversationCommentWithAuthor, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    setMessageLayer({
+      comment,
+      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+    });
+  };
+
+  const handleBubbleContextMenu = (
+    e: React.MouseEvent<HTMLElement>,
+    comment: ConversationCommentWithAuthor
+  ) => {
+    if (comment.deletedAt) return;
+    e.preventDefault();
+    openCommentLayer(comment, e.currentTarget);
+  };
+
+  const handleBubblePointerDown = (
+    e: React.PointerEvent<HTMLElement>,
+    comment: ConversationCommentWithAuthor
+  ) => {
+    if (comment.deletedAt || e.pointerType !== "mouse") return;
+    const targetEl = e.currentTarget;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    clearLongPress();
+    longPressStartRef.current = { x: e.clientX, y: e.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openCommentLayer(comment, targetEl);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubbleTouchStart = (
+    e: React.TouchEvent<HTMLElement>,
+    comment: ConversationCommentWithAuthor
+  ) => {
+    if (comment.deletedAt) return;
+    const targetEl = e.currentTarget;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    clearLongPress();
+    longPressStartRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openCommentLayer(comment, targetEl);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    const start = longPressStartRef.current;
+    if (!start) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    if (Math.abs(touch.clientX - start.x) > 8 || Math.abs(touch.clientY - start.y) > 8) {
+      clearLongPress();
+    }
+  };
+
+  const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const start = longPressStartRef.current;
+    if (!start) return;
+    if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) {
+      clearLongPress();
+    }
+  };
+
+  const renderReactionPills = (comment: ConversationCommentWithAuthor) => {
+    if (!comment.reactions || comment.reactions.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1">
+        {comment.reactions.map((reaction) => (
+          <button
+            key={reaction.emoji}
+            type="button"
+            onClick={() => reactionMutation.mutate({ commentId: comment.id, emoji: reaction.emoji })}
+            className={`px-1.5 py-0 text-sm leading-none ${reaction.reactedByMe ? "font-semibold" : ""}`}
+          >
+            {reaction.emoji} {reaction.count}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const renderCommentActionItems = (comment: ConversationCommentWithAuthor, onDone?: () => void) => {
+    const isOwn = comment.authorUserId === currentUserId;
+    const commentLink =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/messenger/channel/${conversationId}/post/${messageId}/comments?commentId=${comment.id}`
+        : "";
+    return (
+      <>
+        <button
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+          onClick={() => {
+            setForwarding(comment);
+            onDone?.();
+          }}
+        >
+          <ForwardIcon className="mr-2 h-4 w-4" />
+          Переслать
+        </button>
+        <button
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+          onClick={() => {
+            setReplyTo(comment);
+            setEditing(null);
+            onDone?.();
+          }}
+        >
+          <Reply className="mr-2 h-4 w-4" />
+          Ответить
+        </button>
+        {!!comment.content && (
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+            onClick={async () => {
+              await navigator.clipboard.writeText(comment.content ?? "");
+              onDone?.();
+            }}
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Копировать
+          </button>
+        )}
+        <button
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+          onClick={async () => {
+            if (!commentLink) return;
+            await navigator.clipboard.writeText(commentLink);
+            onDone?.();
+          }}
+        >
+          <Link2 className="mr-2 h-4 w-4" />
+          Копировать ссылку
+        </button>
+        {isOwn && (
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+            onClick={() => {
+              setEditing(comment);
+              setReplyTo(null);
+              setMessage(comment.content ?? "");
+              onDone?.();
+            }}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            Изменить
+          </button>
+        )}
+        {isOwn && (
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive hover:bg-muted"
+            onClick={() => {
+              deleteCommentMutation.mutate(comment.id);
+              onDone?.();
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Удалить
+          </button>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div className="relative flex h-full flex-col">
+      <div className="absolute inset-x-0 top-0 z-30 px-3 py-3">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={onBack}
+            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 backdrop-blur-md">
+            <p className="text-sm font-semibold truncate">Комментарии</p>
+          </div>
+        </div>
+      </div>
+
+      <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 pt-20 pb-32">
+        <div className="space-y-3">
+          {anchorPost && (
+            <div className="flex w-full justify-start">
+              <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border bg-background px-2 pt-1 pb-1.5">
+                <p className="mb-0.5 text-[10px] text-muted-foreground">Публикация</p>
+                {anchorPost.imageUrl && (
+                  <a href={anchorPost.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
+                    <img src={anchorPost.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
+                  </a>
+                )}
+                {anchorPost.content ? (
+                  <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{anchorPost.content}</p>
+                ) : null}
+                <span className="mt-1 block text-right text-[10px] leading-none text-muted-foreground">
+                  {formatBubbleTime(anchorPost.createdAt)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : sortedComments.length > 0 ? (
+            sortedComments.map((comment) => {
+              const isOwn = comment.authorUserId === currentUserId;
+              const isDeleted = !!comment.deletedAt;
+              return (
+                <div key={comment.id} className={`group flex w-full ${isOwn ? "justify-end" : "justify-start"}`}>
+                  <div
+                    ref={setCommentRef(comment.id)}
+                    onContextMenu={(e) => handleBubbleContextMenu(e, comment)}
+                    onPointerDown={(e) => handleBubblePointerDown(e, comment)}
+                    onPointerMove={handleBubblePointerMove}
+                    onPointerUp={clearLongPress}
+                    onPointerCancel={clearLongPress}
+                    onPointerLeave={clearLongPress}
+                    onTouchStart={(e) => handleBubbleTouchStart(e, comment)}
+                    onTouchMove={handleBubbleTouchMove}
+                    onTouchEnd={clearLongPress}
+                    onTouchCancel={clearLongPress}
+                    className={`message relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
+                      isOwn
+                        ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
+                        : "border-transparent bg-muted"
+                    }`}
+                    style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
+                  >
+                    {!isOwn && (
+                      <p className="mb-0.5 pr-8 text-[10px] leading-tight text-muted-foreground">
+                        {getAuthorName(comment.author)}
+                      </p>
+                    )}
+                    {comment.replyTo && (
+                      <div className="mb-1 rounded-lg border-l-2 border-primary/70 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground">
+                        <span className="font-semibold">{getAuthorName(comment.replyTo.author)}</span>{" "}
+                        {comment.replyTo.content || "Сообщение"}
+                      </div>
+                    )}
+                    {isDeleted ? (
+                      <p className="whitespace-pre-wrap break-words pb-0.5 text-sm italic leading-snug text-muted-foreground">
+                        Комментарий удалён
+                      </p>
+                    ) : (
+                      <>
+                        {comment.imageUrl && (
+                          <a href={comment.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
+                            <img src={comment.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
+                          </a>
+                        )}
+                        {comment.content ? (
+                          <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{comment.content}</p>
+                        ) : null}
+                      </>
+                    )}
+
+                    {!isDeleted ? (
+                      <div className="mt-1 flex items-end justify-between gap-2">
+                        <div className="min-w-0">{renderReactionPills(comment)}</div>
+                        <span className="shrink-0 text-right text-[10px] leading-none text-muted-foreground">
+                          {comment.editedAt && <span className="mr-1 italic">изм.</span>}
+                          {formatBubbleTime(comment.createdAt)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="mt-1 block text-right text-[10px] leading-none text-muted-foreground">
+                        {comment.editedAt && <span className="mr-1 italic">изм.</span>}
+                        {formatBubbleTime(comment.createdAt)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-center text-muted-foreground py-8">Пока нет комментариев</p>
+          )}
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4 space-y-2">
+        {(replyTo || editing) && (
+          <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
+            {editing ? <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-primary">
+                {editing ? "Редактирование" : "Ответ"}
+                {!editing && replyTo && <span className="ml-1 text-muted-foreground">{getAuthorName(replyTo.author)}</span>}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {editing
+                  ? editing.content ?? ""
+                  : replyTo?.content
+                  ? replyTo.content
+                  : replyTo?.imageUrl
+                  ? "Изображение"
+                  : ""}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={() => {
+                setReplyTo(null);
+                setEditing(null);
+                setMessage("");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        <ChatInputBar
+          value={composerValue}
+          placeholder={editing ? "Редактирование комментария" : "Написать комментарий"}
+          onChange={setMessage}
+          onSend={handleSend}
+          isSending={createCommentMutation.isPending || editCommentMutation.isPending}
+          onUploadImages={editing ? undefined : async (files: File[]) => {
+            for (const file of files) {
+              await uploadFile(file);
+            }
+          }}
+          isUploadingImages={isUploading}
+          wrapperClassName=""
+        />
+      </div>
+
+      <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
+        <DialogContent
+          hideCloseButton
+          className="!left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
+        >
+          {messageLayer && (
+            <>
+              <button
+                type="button"
+                className="animate-in fade-in duration-200 absolute inset-0 bg-[rgba(245,232,210,0.45)]"
+                onClick={() => setMessageLayer(null)}
+                aria-label="Close comment actions"
+              />
+              {(() => {
+                const vw = typeof window !== "undefined" ? window.innerWidth : 0;
+                const vh = typeof window !== "undefined" ? window.innerHeight : 0;
+                const menuWidth = 280;
+                const menuHeight = 220;
+                const bubbleToMenuGap = 8;
+                const reactionsBarMinWidth = QUICK_REACTIONS.length * 40 + 24;
+                const bubbleWidth = Math.min(Math.max(messageLayer.rect.width, reactionsBarMinWidth), vw - 24);
+                const left = Math.max(12, Math.min(messageLayer.rect.left, vw - bubbleWidth - 12));
+                const bubbleHeight = messageLayer.rect.height;
+                let bubbleTop = messageLayer.rect.top;
+                let menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                if (menuTop + menuHeight > vh - 12) {
+                  const overflow = menuTop + menuHeight - (vh - 12);
+                  bubbleTop = Math.max(54, bubbleTop - overflow);
+                  menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
+                }
+                const isOwn = messageLayer.comment.authorUserId === currentUserId;
+                return (
+                  <>
+                    <div
+                      className="absolute animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: Math.max(12, bubbleTop - 42), left, width: bubbleWidth }}
+                    >
+                      <div className="mb-2 flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 py-1 shadow-lg">
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="rounded-full px-1.5 py-0.5 text-xl hover:bg-muted"
+                            onClick={() => {
+                              reactionMutation.mutate({ commentId: messageLayer.comment.id, emoji });
+                              setMessageLayer(null);
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div
+                      className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+                      style={{ top: bubbleTop, left, width: bubbleWidth }}
+                    >
+                      {renderReactionPills(messageLayer.comment)}
+                      <p className="whitespace-pre-wrap break-words text-sm leading-snug">
+                        {messageLayer.comment.deletedAt ? "Комментарий удалён" : messageLayer.comment.content}
+                      </p>
+                    </div>
+                    <div
+                      className="absolute w-[280px] rounded-xl border border-border bg-background p-2 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200"
+                      style={{ top: menuTop, left: Math.max(12, Math.min(left, vw - menuWidth - 12)) }}
+                    >
+                      {renderCommentActionItems(messageLayer.comment, () => setMessageLayer(null))}
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!forwarding}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForwarding(null);
+            setForwardSearch("");
+          }
+        }}
+      >
+        <DialogContent>
+          <div className="space-y-3">
+            <p className="text-lg font-semibold">Переслать комментарий</p>
+            <Input
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+              placeholder="Поиск чата"
+            />
+            <div className="max-h-72 overflow-y-auto space-y-1">
+              {forwardChatsLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                </div>
+              ) : filteredForwardChats.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3 text-center">Нет подходящих чатов</p>
+              ) : (
+                filteredForwardChats.map((chat) => {
+                  if (!chat.conversationId || !forwarding) return null;
+                  const chatTitle = chat.name || chat.otherParticipantName || "Чат";
+                  const targetType: "direct" | "group" | "channel" =
+                    chat.type === "group" || chat.type === "channel" ? chat.type : "direct";
+                  return (
+                    <button
+                      key={chat.conversationId}
+                      type="button"
+                      onClick={() =>
+                        forwardMutation.mutate({
+                          targetConversationId: chat.conversationId!,
+                          sourceComment: forwarding,
+                          targetTitle: chatTitle,
+                          targetType,
+                        })
+                      }
+                      disabled={forwardMutation.isPending}
+                      className="w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 disabled:opacity-60"
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={chat.avatarUrl ?? undefined} />
+                        <AvatarFallback className="text-xs">{chatTitle.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{chatTitle}</p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

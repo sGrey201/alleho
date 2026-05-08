@@ -9,6 +9,7 @@ import { t } from "@/lib/i18n";
 import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
+import PostCommentsThread from "@/components/PostCommentsThread";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -99,17 +100,21 @@ export default function Messenger() {
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
   const [, channelParams] = useRoute("/messenger/channel/:conversationId");
   const [, directParams] = useRoute("/messenger/direct/:conversationId");
+  const [, commentThreadParams] = useRoute("/messenger/channel/:conversationId/post/:messageId/comments");
   const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
   const conversationId =
+    commentThreadParams?.conversationId ||
     groupParams?.conversationId ||
     channelParams?.conversationId ||
     directParams?.conversationId ||
     groupSettingsParams?.conversationId ||
     channelSettingsParams?.conversationId;
+  const threadMessageId = commentThreadParams?.messageId;
   const isGroupChat = !!groupParams?.conversationId;
   const isChannelChat = !!channelParams?.conversationId;
   const isDirectChat = !!directParams?.conversationId;
+  const isCommentThread = !!commentThreadParams?.conversationId && !!commentThreadParams?.messageId;
   const isGroupSettings = !!groupSettingsParams?.conversationId;
   const isChannelSettings = !!channelSettingsParams?.conversationId;
   const [isMobileView, setIsMobileView] = useState(() =>
@@ -894,6 +899,23 @@ export default function Messenger() {
               mode={isGroupSettings ? "group" : "channel"}
               currentUserId={user?.id}
               onBack={() => setLocation(isGroupSettings ? `/messenger/group/${conversationId}` : `/messenger/channel/${conversationId}`)}
+            />
+          </div>
+        ) : isCommentThread && conversationId && threadMessageId ? (
+          <div
+            className="flex-1 flex flex-col min-h-0"
+            style={{
+              backgroundImage: "url(/chat_bg_pattern.png)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            <PostCommentsThread
+              conversationId={conversationId}
+              messageId={threadMessageId}
+              currentUserId={user?.id}
+              onBack={() => setLocation(`/messenger/channel/${conversationId}`)}
             />
           </div>
         ) : conversationId ? (

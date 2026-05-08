@@ -549,3 +549,72 @@ export const insertConversationMessageReactionSchema = createInsertSchema(conver
 
 export type ConversationMessageReaction = typeof conversationMessageReactions.$inferSelect;
 export type InsertConversationMessageReaction = z.infer<typeof insertConversationMessageReactionSchema>;
+
+export const conversationMessageComments = pgTable(
+  "conversation_message_comments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: varchar("message_id")
+      .notNull()
+      .references(() => conversationMessages.id, { onDelete: "cascade" }),
+    authorUserId: varchar("author_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content"),
+    imageUrl: text("image_url"),
+    replyToCommentId: varchar("reply_to_comment_id"),
+    editedAt: timestamp("edited_at"),
+    deletedAt: timestamp("deleted_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_message_comments_message_idx").on(table.messageId),
+    index("conversation_message_comments_author_idx").on(table.authorUserId),
+    index("conversation_message_comments_created_idx").on(table.createdAt),
+  ]
+);
+
+export const insertConversationMessageCommentSchema = createInsertSchema(conversationMessageComments).omit({
+  id: true,
+  editedAt: true,
+  deletedAt: true,
+  createdAt: true,
+});
+
+export type ConversationMessageComment = typeof conversationMessageComments.$inferSelect;
+export type InsertConversationMessageComment = z.infer<typeof insertConversationMessageCommentSchema>;
+
+export const conversationMessageCommentReactions = pgTable(
+  "conversation_message_comment_reactions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    commentId: varchar("comment_id")
+      .notNull()
+      .references(() => conversationMessageComments.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: varchar("emoji", { length: 16 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_message_comment_reactions_comment_idx").on(table.commentId),
+    index("conversation_message_comment_reactions_user_idx").on(table.userId),
+    sql`CONSTRAINT conversation_message_comment_reactions_unique UNIQUE (comment_id, user_id, emoji)`,
+  ]
+);
+
+export const insertConversationMessageCommentReactionSchema = createInsertSchema(
+  conversationMessageCommentReactions
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ConversationMessageCommentReaction = typeof conversationMessageCommentReactions.$inferSelect;
+export type InsertConversationMessageCommentReaction = z.infer<
+  typeof insertConversationMessageCommentReactionSchema
+>;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, LogOut, Camera, ArrowLeft } from "lucide-react";
-import { useLocation, useRoute } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -540,6 +540,17 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
               data-testid="input-last-name"
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            value={profileUser.email ?? ""}
+            readOnly
+            disabled
+            data-testid="input-email"
+          />
         </div>
 
         <div className="space-y-2">

@@ -14,6 +14,8 @@ import {
   conversationMessages,
   healthWallMessageReactions,
   conversationMessageReactions,
+  conversationMessageComments,
+  conversationMessageCommentReactions,
   type User,
   type UpsertUser,
   type Article,
@@ -39,6 +41,8 @@ import {
   type InsertConversationParticipant,
   type ConversationMessage,
   type InsertConversationMessage,
+  type ConversationMessageComment,
+  type InsertConversationMessageComment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
@@ -73,6 +77,41 @@ export type MessageReactionSummary = {
   emoji: string;
   count: number;
   reactedByMe: boolean;
+};
+
+export type ConversationCommentWithAuthor = {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  authorUserId: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  replyToCommentId?: string | null;
+  createdAt: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  reactions?: MessageReactionSummary[];
+  author: {
+    id: string;
+    email?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    isAdmin?: boolean | null;
+  };
+  replyTo?: {
+    id: string;
+    authorUserId: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    deletedAt?: string | null;
+    author?: {
+      id: string;
+      email?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      isAdmin?: boolean | null;
+    } | null;
+  } | null;
 };
 
 function isMissingRelationError(error: unknown): boolean {
@@ -187,6 +226,21 @@ export interface IStorage {
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
   getConversationMessageById(messageId: string): Promise<ConversationMessage | undefined>;
+  getConversationMessageComments(
+    conversationId: string,
+    messageId: string,
+    currentUserId: string
+  ): Promise<ConversationCommentWithAuthor[]>;
+  getConversationMessageCommentById(commentId: string): Promise<ConversationMessageComment | undefined>;
+  createConversationMessageComment(comment: InsertConversationMessageComment): Promise<ConversationMessageComment>;
+  editConversationMessageComment(commentId: string, content: string): Promise<ConversationMessageComment | undefined>;
+  softDeleteConversationMessageComment(commentId: string): Promise<ConversationMessageComment | undefined>;
+  toggleConversationMessageCommentReaction(commentId: string, userId: string, emoji: string): Promise<void>;
+  getConversationMessageCommentReactionSummaries(
+    commentIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>>;
+  getConversationMessageCommentCounts(messageIds: string[]): Promise<Map<string, number>>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
   editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined>;
   softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
@@ -1329,6 +1383,231 @@ export class DatabaseStorage implements IStorage {
     return m;
   }
 
+  async getConversationMessageComments(
+    conversationId: string,
+    messageId: string,
+    currentUserId: string
+  ): Promise<ConversationCommentWithAuthor[]> {
+    const comments = await db
+      .select()
+      .from(conversationMessageComments)
+      .where(
+        and(
+          eq(conversationMessageComments.conversationId, conversationId),
+          eq(conversationMessageComments.messageId, messageId)
+        )
+      )
+      .orderBy(conversationMessageComments.createdAt);
+    if (comments.length === 0) return [];
+
+    const userIds = new Set<string>();
+    const replyIds = new Set<string>();
+    comments.forEach((comment) => {
+      userIds.add(comment.authorUserId);
+      if (comment.replyToCommentId) replyIds.add(comment.replyToCommentId);
+    });
+
+    const replyTargets = replyIds.size
+      ? await db
+          .select()
+          .from(conversationMessageComments)
+          .where(inArray(conversationMessageComments.id, Array.from(replyIds)))
+      : [];
+    const replyMap = new Map(replyTargets.map((item) => [item.id, item]));
+    replyTargets.forEach((item) => userIds.add(item.authorUserId));
+
+    const usersList = userIds.size
+      ? await db.select().from(users).where(inArray(users.id, Array.from(userIds)))
+      : [];
+    const userMap = new Map(usersList.map((user) => [user.id, user]));
+
+    const reactionMap = await this.getConversationMessageCommentReactionSummaries(
+      comments.map((comment) => comment.id),
+      currentUserId
+    );
+
+    const toIso = (value: Date | string | null | undefined): string | null => {
+      if (!value) return null;
+      return value instanceof Date ? value.toISOString() : String(value);
+    };
+
+    return comments.map((comment) => {
+      const author = userMap.get(comment.authorUserId);
+      const replyTo = comment.replyToCommentId ? replyMap.get(comment.replyToCommentId) : null;
+      const replyAuthor = replyTo ? userMap.get(replyTo.authorUserId) : null;
+      return {
+        id: comment.id,
+        conversationId: comment.conversationId,
+        messageId: comment.messageId,
+        authorUserId: comment.authorUserId,
+        content: comment.content ?? null,
+        imageUrl: comment.imageUrl ?? null,
+        replyToCommentId: comment.replyToCommentId ?? null,
+        createdAt: toIso(comment.createdAt) ?? new Date().toISOString(),
+        editedAt: toIso(comment.editedAt),
+        deletedAt: toIso(comment.deletedAt),
+        reactions: reactionMap.get(comment.id) ?? [],
+        author: {
+          id: author?.id ?? "",
+          email: author?.email ?? null,
+          firstName: author?.firstName ?? null,
+          lastName: author?.lastName ?? null,
+          isAdmin: author?.isAdmin ?? null,
+        },
+        replyTo: replyTo
+          ? {
+              id: replyTo.id,
+              authorUserId: replyTo.authorUserId,
+              content: replyTo.content ?? null,
+              imageUrl: replyTo.imageUrl ?? null,
+              deletedAt: toIso(replyTo.deletedAt),
+              author: replyAuthor
+                ? {
+                    id: replyAuthor.id,
+                    email: replyAuthor.email ?? null,
+                    firstName: replyAuthor.firstName ?? null,
+                    lastName: replyAuthor.lastName ?? null,
+                    isAdmin: replyAuthor.isAdmin ?? null,
+                  }
+                : null,
+            }
+          : null,
+      };
+    });
+  }
+
+  async getConversationMessageCommentById(commentId: string): Promise<ConversationMessageComment | undefined> {
+    const [comment] = await db
+      .select()
+      .from(conversationMessageComments)
+      .where(eq(conversationMessageComments.id, commentId));
+    return comment;
+  }
+
+  async createConversationMessageComment(
+    comment: InsertConversationMessageComment
+  ): Promise<ConversationMessageComment> {
+    const [created] = await db.insert(conversationMessageComments).values(comment).returning();
+    return created;
+  }
+
+  async editConversationMessageComment(
+    commentId: string,
+    content: string
+  ): Promise<ConversationMessageComment | undefined> {
+    const [comment] = await db
+      .update(conversationMessageComments)
+      .set({ content, editedAt: new Date() })
+      .where(eq(conversationMessageComments.id, commentId))
+      .returning();
+    return comment;
+  }
+
+  async softDeleteConversationMessageComment(
+    commentId: string
+  ): Promise<ConversationMessageComment | undefined> {
+    const [comment] = await db
+      .update(conversationMessageComments)
+      .set({
+        deletedAt: new Date(),
+        content: null,
+        imageUrl: null,
+      })
+      .where(eq(conversationMessageComments.id, commentId))
+      .returning();
+    return comment;
+  }
+
+  async toggleConversationMessageCommentReaction(commentId: string, userId: string, emoji: string): Promise<void> {
+    try {
+      const [existing] = await db
+        .select({ id: conversationMessageCommentReactions.id })
+        .from(conversationMessageCommentReactions)
+        .where(
+          and(
+            eq(conversationMessageCommentReactions.commentId, commentId),
+            eq(conversationMessageCommentReactions.userId, userId),
+            eq(conversationMessageCommentReactions.emoji, emoji)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        await db
+          .delete(conversationMessageCommentReactions)
+          .where(eq(conversationMessageCommentReactions.id, existing.id));
+        return;
+      }
+      await db.insert(conversationMessageCommentReactions).values({ commentId, userId, emoji });
+    } catch (error) {
+      if (isMissingRelationError(error)) return;
+      throw error;
+    }
+  }
+
+  async getConversationMessageCommentReactionSummaries(
+    commentIds: string[],
+    currentUserId: string
+  ): Promise<Map<string, MessageReactionSummary[]>> {
+    if (commentIds.length === 0) return new Map();
+    let rows: Array<{ commentId: string; userId: string; emoji: string }> = [];
+    try {
+      rows = (await db
+        .select()
+        .from(conversationMessageCommentReactions)
+        .where(inArray(conversationMessageCommentReactions.commentId, commentIds))) as Array<{
+        commentId: string;
+        userId: string;
+        emoji: string;
+      }>;
+    } catch (error) {
+      if (isMissingRelationError(error)) return new Map();
+      throw error;
+    }
+    const byComment = new Map<string, Map<string, MessageReactionSummary>>();
+    rows.forEach((row) => {
+      if (!byComment.has(row.commentId)) byComment.set(row.commentId, new Map());
+      const reactionMap = byComment.get(row.commentId)!;
+      const existing = reactionMap.get(row.emoji);
+      if (existing) {
+        existing.count += 1;
+        if (row.userId === currentUserId) existing.reactedByMe = true;
+      } else {
+        reactionMap.set(row.emoji, {
+          emoji: row.emoji,
+          count: 1,
+          reactedByMe: row.userId === currentUserId,
+        });
+      }
+    });
+    const result = new Map<string, MessageReactionSummary[]>();
+    byComment.forEach((reactionMap, commentId) => {
+      result.set(commentId, Array.from(reactionMap.values()));
+    });
+    return result;
+  }
+
+  async getConversationMessageCommentCounts(messageIds: string[]): Promise<Map<string, number>> {
+    if (messageIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        messageId: conversationMessageComments.messageId,
+        value: count(),
+      })
+      .from(conversationMessageComments)
+      .where(
+        and(
+          inArray(conversationMessageComments.messageId, messageIds),
+          sql`${conversationMessageComments.deletedAt} IS NULL`
+        )
+      )
+      .groupBy(conversationMessageComments.messageId);
+    const result = new Map<string, number>();
+    rows.forEach((row) => {
+      result.set(row.messageId, Number(row.value ?? 0));
+    });
+    return result;
+  }
+
   async editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined> {
     const [m] = await db
       .update(conversationMessages)
@@ -1547,50 +1826,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]> {
-    const allChannels = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.type, "channel"))
-      .orderBy(desc(conversations.createdAt));
-
-    const myParticipation = await db
+    const myChannels = await db
       .select({
-        conversationId: conversationParticipants.conversationId,
-        role: conversationParticipants.role,
+        id: conversations.id,
+        name: conversations.name,
+        avatarUrl: conversations.avatarUrl,
+        createdAt: conversations.createdAt,
+        lastPostAt: conversations.lastMessageAt,
+        lastMessagePreview: conversations.lastMessagePreview,
+        myRole: conversationParticipants.role,
       })
       .from(conversationParticipants)
-      .where(eq(conversationParticipants.userId, currentUserId));
-    const myParticipationByConversation = new Map(myParticipation.map((row) => [row.conversationId, row.role]));
+      .innerJoin(conversations, eq(conversationParticipants.conversationId, conversations.id))
+      .where(
+        and(
+          eq(conversationParticipants.userId, currentUserId),
+          eq(conversations.type, "channel")
+        )
+      )
+      .orderBy(desc(conversations.createdAt));
 
     const channels = await Promise.all(
-      allChannels.map(async (channel) => {
+      myChannels.map(async (channel) => {
         const [participantCountRow] = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(conversationParticipants)
           .where(eq(conversationParticipants.conversationId, channel.id));
-        const myRole = myParticipationByConversation.get(channel.id);
         return {
           id: channel.id,
           name: channel.name,
           avatarUrl: channel.avatarUrl ?? null,
           participantCount: Number(participantCountRow?.count ?? 0),
-          isMember: !!myRole,
-          myRole: myRole ?? undefined,
+          isMember: true,
+          myRole: channel.myRole ?? undefined,
           createdAt: channel.createdAt ?? null,
-          lastPostAt: channel.lastMessageAt ?? null,
+          lastPostAt: channel.lastPostAt ?? null,
           lastMessagePreview: channel.lastMessagePreview ?? null,
         };
       })
     );
 
     channels.sort((a, b) => {
-      if (a.isMember !== b.isMember) return a.isMember ? -1 : 1;
-
-      if (a.isMember && b.isMember) {
-        const aLastPostTime = a.lastPostAt ? new Date(a.lastPostAt).getTime() : 0;
-        const bLastPostTime = b.lastPostAt ? new Date(b.lastPostAt).getTime() : 0;
-        if (aLastPostTime !== bLastPostTime) return bLastPostTime - aLastPostTime;
-      }
+      const aLastPostTime = a.lastPostAt ? new Date(a.lastPostAt).getTime() : 0;
+      const bLastPostTime = b.lastPostAt ? new Date(b.lastPostAt).getTime() : 0;
+      if (aLastPostTime !== bLastPostTime) return bLastPostTime - aLastPostTime;
 
       const aCreatedAt = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bCreatedAt = b.createdAt ? new Date(b.createdAt).getTime() : 0;

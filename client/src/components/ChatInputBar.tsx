@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Loader2, Send, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +16,11 @@ type ChatInputBarProps = {
   isUploadingImages?: boolean;
 };
 
-export default function ChatInputBar({
+export type ChatInputBarHandle = {
+  focusInput: () => void;
+};
+
+const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function ChatInputBar({
   value,
   placeholder,
   onChange,
@@ -26,9 +30,19 @@ export default function ChatInputBar({
   wrapperClassName = "border-t px-4 py-3 shrink-0",
   onUploadImages,
   isUploadingImages = false,
-}: ChatInputBarProps) {
+}, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSendDisabled = disabled || !value.trim() || isSending;
+
+  useImperativeHandle(ref, () => ({
+    focusInput: () => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    },
+  }));
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -117,4 +131,6 @@ export default function ChatInputBar({
       </div>
     </div>
   );
-}
+});
+
+export default ChatInputBar;

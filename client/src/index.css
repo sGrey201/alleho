@@ -315,3 +315,8 @@
 .animate-hint-pulse {
   animation: hint-pulse 1s ease-in-out 1;
 }
+
+.message {
+  -webkit-touch-callout: none;
+  user-select: none;
+}

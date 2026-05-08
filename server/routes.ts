@@ -17,6 +17,7 @@ import {
   insertHealthWallMessageSchema,
   insertConversationSchema,
   insertConversationMessageSchema,
+  insertConversationMessageCommentSchema,
   type QuestionnaireData as QData,
   type User,
   type ConversationMessage,
@@ -43,10 +44,15 @@ import {
   publishConversationMessageDeleted,
   publishConversationMessagePinned,
   publishConversationMessageUnpinned,
+  publishConversationComment,
+  publishConversationCommentEdited,
+  publishConversationCommentDeleted,
+  publishConversationCommentReaction,
   invalidateConversationRecent,
   backfillConversationRecent,
   type ConversationMessageWithAuthor,
   type ConversationMessageAuthor,
+  type ConversationCommentWithAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
 
@@ -1937,18 +1943,21 @@ ${allUrls.map(url => `  <url>
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      const inConv = await storage.isUserInConversation(currentUserId, id);
-      if (!inConv) return res.status(403).json({ message: "Access denied" });
-      const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
-      if (lastSeenAt) {
-        await publishConversationSeen(id, {
-          conversationId: id,
-          userId: currentUserId,
-          lastSeenAt: lastSeenAt.toISOString(),
-        });
-      }
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      const canReadConversation = inConv || conv.type === "channel";
+      if (!canReadConversation) return res.status(403).json({ message: "Access denied" });
+      if (inConv) {
+        const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
+        if (lastSeenAt) {
+          await publishConversationSeen(id, {
+            conversationId: id,
+            userId: currentUserId,
+            lastSeenAt: lastSeenAt.toISOString(),
+          });
+        }
+      }
       const participants = await storage.getConversationParticipants(id);
       res.json({ ...conv, participants });
     } catch (error) {
@@ -2118,6 +2127,7 @@ ${allUrls.map(url => `  <url>
       messages.map((m) => m.id),
       currentUserId
     );
+    const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
 
     return messages.map((m) => {
       const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
@@ -2155,6 +2165,7 @@ ${allUrls.map(url => `  <url>
           ? userToConvAuthor(userMap.get(m.forwardedFromUserId) ?? null)
           : null,
         reactions: reactionMap.get(m.id) ?? [],
+        commentsCount: commentCountMap.get(m.id) ?? 0,
         author: userToConvAuthor(userMap.get(m.authorUserId) ?? null),
       };
     });
@@ -2169,7 +2180,12 @@ ${allUrls.map(url => `  <url>
       messages.map((m) => m.id),
       currentUserId
     );
-    return messages.map((m) => ({ ...m, reactions: reactionMap.get(m.id) ?? [] }));
+    const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
+    return messages.map((m) => ({
+      ...m,
+      reactions: reactionMap.get(m.id) ?? [],
+      commentsCount: commentCountMap.get(m.id) ?? m.commentsCount ?? 0,
+    }));
   }
 
   // Get conversation messages (Redis first, then DB)
@@ -2178,15 +2194,20 @@ ${allUrls.map(url => `  <url>
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
-      if (!inConv) return res.status(403).json({ message: "Access denied" });
-      const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
-      if (lastSeenAt) {
-        await publishConversationSeen(id, {
-          conversationId: id,
-          userId: currentUserId,
-          lastSeenAt: lastSeenAt.toISOString(),
-        });
+      const canReadMessages = inConv || conv.type === "channel";
+      if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
+      if (inConv) {
+        const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
+        if (lastSeenAt) {
+          await publishConversationSeen(id, {
+            conversationId: id,
+            userId: currentUserId,
+            lastSeenAt: lastSeenAt.toISOString(),
+          });
+        }
       }
       const fromRedis = await getConversationRecentMessages(id);
       if (fromRedis.length > 0) {
@@ -2213,6 +2234,13 @@ ${allUrls.map(url => `  <url>
       if (!inConv) return res.status(403).json({ message: "Access denied" });
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type === "channel") {
+        const role = await storage.getParticipantRole(id, currentUserId);
+        const canPostToChannel = role === "owner" || role === "admin";
+        if (!canPostToChannel) {
+          return res.status(403).json({ message: "only_owner_or_admin_can_post_to_channel" });
+        }
+      }
       const body = req.body as {
         content?: string;
         imageUrl?: string;
@@ -2485,6 +2513,193 @@ ${allUrls.map(url => `  <url>
       res.status(500).json({ message: "Failed to toggle reaction" });
     }
   });
+
+  app.get("/api/conversations/:id/messages/:messageId/comments", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const message = await storage.getConversationMessageById(messageId);
+      if (!message || message.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      const comments = await storage.getConversationMessageComments(id, messageId, currentUserId);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching conversation comments:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages/:messageId/comments", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const message = await storage.getConversationMessageById(messageId);
+      if (!message || message.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (message.deletedAt) {
+        return res.status(400).json({ message: "Message deleted" });
+      }
+
+      const body = req.body as {
+        content?: string;
+        imageUrl?: string;
+        replyToCommentId?: string;
+      };
+      let replyToCommentId: string | null = null;
+      if (body.replyToCommentId) {
+        const replyTo = await storage.getConversationMessageCommentById(body.replyToCommentId);
+        if (!replyTo || replyTo.conversationId !== id || replyTo.messageId !== messageId) {
+          return res.status(400).json({ message: "Invalid reply target" });
+        }
+        replyToCommentId = replyTo.id;
+      }
+      const validated = insertConversationMessageCommentSchema.parse({
+        conversationId: id,
+        messageId,
+        authorUserId: currentUserId,
+        content: body.content ?? null,
+        imageUrl: body.imageUrl ?? null,
+        replyToCommentId,
+      });
+      if (!validated.content && !validated.imageUrl) {
+        return res.status(400).json({ message: "Comment cannot be empty" });
+      }
+
+      const created = await storage.createConversationMessageComment(validated);
+      const list = await storage.getConversationMessageComments(id, messageId, currentUserId);
+      const enriched = list.find((comment) => comment.id === created.id);
+      if (!enriched) return res.status(500).json({ message: "Failed to load created comment" });
+      const commentsCount = (await storage.getConversationMessageCommentCounts([messageId])).get(messageId) ?? 0;
+      const payload: ConversationCommentWithAuthor = { ...enriched, messageId, commentsCount };
+      await publishConversationComment(id, payload);
+      await invalidateConversationRecent(id);
+      res.status(201).json(payload);
+    } catch (error) {
+      console.error("Error creating conversation comment:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid comment data" });
+      }
+      res.status(500).json({ message: "Failed to create comment" });
+    }
+  });
+
+  app.patch(
+    "/api/conversations/:id/messages/:messageId/comments/:commentId",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, messageId, commentId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const inConv = await storage.isUserInConversation(currentUserId, id);
+        if (!inConv) return res.status(403).json({ message: "Access denied" });
+        const comment = await storage.getConversationMessageCommentById(commentId);
+        if (!comment || comment.conversationId !== id || comment.messageId !== messageId) {
+          return res.status(404).json({ message: "Comment not found" });
+        }
+        if (comment.authorUserId !== currentUserId) {
+          return res.status(403).json({ message: "Only author can edit" });
+        }
+        if (comment.deletedAt) return res.status(400).json({ message: "Comment deleted" });
+        const content = String(req.body?.content ?? "").trim();
+        if (!content) return res.status(400).json({ message: "Content required" });
+        const updated = await storage.editConversationMessageComment(commentId, content);
+        if (!updated) return res.status(404).json({ message: "Comment not found" });
+        await publishConversationCommentEdited(id, {
+          conversationId: id,
+          messageId,
+          commentId,
+          content: updated.content ?? null,
+          editedAt: (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString(),
+        });
+        res.json({ ok: true });
+      } catch (error) {
+        console.error("Error editing conversation comment:", error);
+        res.status(500).json({ message: "Failed to edit comment" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/conversations/:id/messages/:messageId/comments/:commentId",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, messageId, commentId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const inConv = await storage.isUserInConversation(currentUserId, id);
+        if (!inConv) return res.status(403).json({ message: "Access denied" });
+        const comment = await storage.getConversationMessageCommentById(commentId);
+        if (!comment || comment.conversationId !== id || comment.messageId !== messageId) {
+          return res.status(404).json({ message: "Comment not found" });
+        }
+        if (comment.deletedAt) return res.json({ ok: true });
+        const myRole = await storage.getParticipantRole(id, currentUserId);
+        const canDelete = comment.authorUserId === currentUserId || myRole === "owner";
+        if (!canDelete) return res.status(403).json({ message: "Forbidden" });
+        const updated = await storage.softDeleteConversationMessageComment(commentId);
+        if (!updated) return res.status(404).json({ message: "Comment not found" });
+        await publishConversationCommentDeleted(id, {
+          conversationId: id,
+          messageId,
+          commentId,
+          deletedAt: (updated.deletedAt instanceof Date ? updated.deletedAt : new Date()).toISOString(),
+        });
+        await invalidateConversationRecent(id);
+        res.json({ ok: true });
+      } catch (error) {
+        console.error("Error deleting conversation comment:", error);
+        res.status(500).json({ message: "Failed to delete comment" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/conversations/:id/messages/:messageId/comments/:commentId/reactions",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, messageId, commentId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const inConv = await storage.isUserInConversation(currentUserId, id);
+        if (!inConv) return res.status(403).json({ message: "Access denied" });
+        const comment = await storage.getConversationMessageCommentById(commentId);
+        if (!comment || comment.conversationId !== id || comment.messageId !== messageId) {
+          return res.status(404).json({ message: "Comment not found" });
+        }
+        if (comment.deletedAt) {
+          return res.status(400).json({ message: "Comment deleted" });
+        }
+        const emoji = String(req.body?.emoji ?? "").trim();
+        const allowed = new Set(["👍", "❤️", "🔥", "😂", "🙏", "😢"]);
+        if (!allowed.has(emoji)) {
+          return res.status(400).json({ message: "Unsupported reaction" });
+        }
+        await storage.toggleConversationMessageCommentReaction(commentId, currentUserId, emoji);
+        const reactions =
+          (await storage.getConversationMessageCommentReactionSummaries([commentId], currentUserId)).get(commentId) ??
+          [];
+        await publishConversationCommentReaction(id, { conversationId: id, messageId, commentId, reactions });
+        res.json({ commentId, reactions });
+      } catch (error) {
+        console.error("Error toggling conversation comment reaction:", error);
+        res.status(500).json({ message: "Failed to toggle comment reaction" });
+      }
+    }
+  );
 
   // Get patient info for health wall header
   app.get('/api/health-wall/:patientUserId/info', isAuthenticated, async (req: any, res) => {

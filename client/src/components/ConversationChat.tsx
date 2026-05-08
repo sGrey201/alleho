@@ -20,6 +20,7 @@ import {
   X,
   Check,
   Copy,
+  Link2,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -42,7 +43,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import ChatInputBar from "@/components/ChatInputBar";
+import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 
 interface ConversationInfo {
@@ -78,6 +79,7 @@ type MyChatItem = {
   folder: "personal" | "groups" | "channels";
   type?: string;
   conversationId?: string;
+  myRole?: "owner" | "admin" | "member";
   otherParticipantName?: string;
   name?: string;
   avatarUrl?: string | null;
@@ -129,6 +131,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [editing, setEditing] = useState<ConversationMessageWithAuthor | null>(null);
   const [editText, setEditText] = useState("");
   const [forwarding, setForwarding] = useState<ConversationMessageWithAuthor | null>(null);
+  const [hideSubscribeButton, setHideSubscribeButton] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ConversationMessageWithAuthor | null>(null);
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
   const [messageLayer, setMessageLayer] = useState<{
@@ -142,6 +145,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const longPressTimerRef = useRef<number | null>(null);
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const deepLinkHandledRef = useRef<string | null>(null);
+  const chatInputRef = useRef<ChatInputBarHandle | null>(null);
 
   const setMessageRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -151,14 +156,26 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     }
   };
 
+  const blinkMessageBubble = (el: HTMLDivElement) => {
+    let blinkCount = 0;
+    const tick = () => {
+      if (blinkCount >= 6) return;
+      if (blinkCount % 2 === 0) {
+        el.classList.add("opacity-60");
+      } else {
+        el.classList.remove("opacity-60");
+      }
+      blinkCount += 1;
+      window.setTimeout(tick, 320);
+    };
+    tick();
+  };
+
   const scrollToMessage = (id: string) => {
     const el = messageRefs.current.get(id);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ring-2", "ring-primary/60");
-    window.setTimeout(() => {
-      el.classList.remove("ring-2", "ring-primary/60");
-    }, 1500);
+    blinkMessageBubble(el);
   };
 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
@@ -170,6 +187,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     queryKey: ["/api/conversations", conversationId, "messages"],
     enabled: !!conversationId,
   });
+
+  const myChannelRole = conv?.participants?.find((p) => p.userId === user?.id)?.role;
+  const canPostToChannel =
+    conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
+  const canReplyToChannel =
+    conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
+  const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
 
   useConversationWs(conversationId, !!conversationId);
 
@@ -314,6 +338,21 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
   });
 
+  const subscribeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/conversations/${conversationId}/subscribe`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({ title: "Вы подписались на канал" });
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
   const forwardMutation = useMutation({
     mutationFn: async ({
       sourceMessageId,
@@ -421,8 +460,15 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const filteredForwardChats = useMemo(() => {
     if (!forwardChats) return [];
     const q = forwardSearch.trim().toLowerCase();
-    if (!q) return forwardChats;
-    return forwardChats.filter((chat) => {
+    const allowedChats = forwardChats.filter((chat) => {
+      if (chat.type === "channel") {
+        return chat.myRole === "owner" || chat.myRole === "admin";
+      }
+      if (chat.type === "group") return true;
+      return chat.type === "direct";
+    });
+    if (!q) return allowedChats;
+    return allowedChats.filter((chat) => {
       const chatTitle =
         chat.name ||
         chat.otherParticipantName ||
@@ -471,6 +517,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   });
 
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const deepLinkedMessageId = query.get("messageId");
+    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
+    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+
     const root = messagesScrollRef.current;
     if (!root) return;
     const scroll = () => scrollChatPaneToBottom(root);
@@ -494,9 +545,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       clearTimeout(t2);
       ro?.disconnect();
     };
-  }, [messages, conversationId]);
+  }, [messages?.length, conversationId]);
+
+  useEffect(() => {
+    setHideSubscribeButton(false);
+  }, [conversationId]);
 
   const handleSend = () => {
+    if (!canPostToChannel) return;
     if (editing) {
       const text = editText.trim();
       if (!text) return;
@@ -512,6 +568,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
 
   const handleUploadImages = async (files: File[]) => {
+    if (!canPostToChannel) return;
     for (const file of files) {
       await uploadFile(file);
     }
@@ -540,6 +597,19 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [messages]);
+
+  useEffect(() => {
+    if (sortedMessages.length === 0) return;
+    const query = new URLSearchParams(window.location.search);
+    const messageId = query.get("messageId");
+    if (!messageId) return;
+    const key = `${conversationId}:${messageId}`;
+    if (deepLinkHandledRef.current === key) return;
+    const exists = sortedMessages.some((msg) => msg.id === messageId);
+    if (!exists) return;
+    deepLinkHandledRef.current = key;
+    window.setTimeout(() => scrollToMessage(messageId), 80);
+  }, [conversationId, sortedMessages.length]);
 
   const pinnedMessages = useMemo(
     () =>
@@ -612,17 +682,22 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     .join("") || "?";
 
   const showMessageAuthorName = conv.type !== "direct";
-  const myRole = conv.participants?.find((p) => p.userId === user?.id)?.role;
+  const myRole = myChannelRole;
   const isOwner = myRole === "owner";
+  const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
+  const isChannelReadOnly = conv.type === "channel" && !myRole;
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
 
   const startReply = (msg: ConversationMessageWithAuthor) => {
+    if (!canReplyToChannel) return;
     setEditing(null);
     setReplyTo(msg);
+    chatInputRef.current?.focusInput();
   };
 
   const startEdit = (msg: ConversationMessageWithAuthor) => {
+    if (!canInteractWithChannel) return;
     setReplyTo(null);
     setEditing(msg);
     setEditText(msg.content ?? "");
@@ -638,7 +713,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (!msg.content) return;
     try {
       await navigator.clipboard.writeText(msg.content);
-      toast({ title: "Скопировано" });
     } catch {
       // ignore
     }
@@ -664,7 +738,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     e: React.MouseEvent<HTMLElement>,
     msg: ConversationMessageWithAuthor
   ) => {
-    if (msg.deletedAt) return;
+    if (msg.deletedAt || !canInteractWithChannel) return;
     e.preventDefault();
     openMessageLayer(msg, e.currentTarget);
   };
@@ -673,14 +747,43 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     e: React.PointerEvent<HTMLElement>,
     msg: ConversationMessageWithAuthor
   ) => {
-    if (msg.deletedAt || e.pointerType === "mouse") return;
+    if (msg.deletedAt || e.pointerType !== "mouse" || !canInteractWithChannel) return;
+    const targetEl = e.currentTarget;
     const target = e.target as HTMLElement;
     if (target.closest("a,button,input,textarea")) return;
+    clearLongPress();
     longPressStartRef.current = { x: e.clientX, y: e.clientY };
     longPressTimerRef.current = window.setTimeout(() => {
-      openMessageLayer(msg, e.currentTarget);
+      openMessageLayer(msg, targetEl);
       clearLongPress();
     }, 450);
+  };
+
+  const handleBubbleTouchStart = (
+    e: React.TouchEvent<HTMLElement>,
+    msg: ConversationMessageWithAuthor
+  ) => {
+    if (msg.deletedAt || !canInteractWithChannel) return;
+    const targetEl = e.currentTarget;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    clearLongPress();
+    longPressStartRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageLayer(msg, targetEl);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (!longPressStartRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - longPressStartRef.current.x);
+    const dy = Math.abs(touch.clientY - longPressStartRef.current.y);
+    if (dx > 8 || dy > 8) clearLongPress();
   };
 
   const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -691,19 +794,26 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
 
   const renderMessageActionItems = (msg: ConversationMessageWithAuthor, onDone?: () => void) => {
-    if (msg.deletedAt) return null;
+    if (msg.deletedAt || !canInteractWithChannel) return null;
     const isOwn = msg.authorUserId === user?.id;
     const createdAt = new Date(msg.createdAt).getTime();
     const canEdit = isOwn && !!msg.content && Date.now() - createdAt < EDIT_WINDOW_MS;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
+    const routeType = conv.type === "group" || conv.type === "channel" ? conv.type : "direct";
+    const messageLink =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/messenger/${routeType}/${conversationId}?messageId=${msg.id}`
+        : "";
 
     return (
       <>
-          <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startReply(msg); onDone?.(); }}>
-            <Reply className="mr-2 h-4 w-4" />
-            {t.messageActionReply}
-          </button>
+          {canReplyToChannel && (
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startReply(msg); onDone?.(); }}>
+              <Reply className="mr-2 h-4 w-4" />
+              {t.messageActionReply}
+            </button>
+          )}
           <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { setForwarding(msg); onDone?.(); }}>
             <ForwardIcon className="mr-2 h-4 w-4" />
             {t.messageActionForward}
@@ -731,6 +841,19 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); onDone?.(); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
+            </button>
+          )}
+          {conv.type !== "direct" && (
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+              onClick={async () => {
+                if (!messageLink) return;
+                await navigator.clipboard.writeText(messageLink);
+                onDone?.();
+              }}
+            >
+              <Link2 className="mr-2 h-4 w-4" />
+              Копировать ссылку
             </button>
           )}
           {(canEdit || canDelete) && <div className="my-1 h-px bg-border" />}
@@ -785,15 +908,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     );
   };
 
-  const renderReactionPills = (msg: ConversationMessageWithAuthor, isOwn: boolean) => {
+  const renderReactionPills = (msg: ConversationMessageWithAuthor) => {
     if (!msg.reactions || msg.reactions.length === 0) return null;
     return (
-      <div className={`mb-1 flex flex-wrap gap-1 ${isOwn ? "justify-end" : "justify-start"}`}>
+      <div className="flex flex-wrap gap-1">
         {msg.reactions.map((reaction) => (
           <button
             key={reaction.emoji}
             type="button"
-            onClick={() => reactionMutation.mutate({ messageId: msg.id, emoji: reaction.emoji })}
+            onClick={() => {
+              if (!canInteractWithChannel) return;
+              reactionMutation.mutate({ messageId: msg.id, emoji: reaction.emoji });
+            }}
             className={`px-1.5 py-0 text-sm leading-none ${
               reaction.reactedByMe ? "font-semibold" : ""
             }`}
@@ -819,14 +945,15 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           <img src={msg.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
         </a>
       )}
-      {msg.content ? (
-        <p className="whitespace-pre-wrap break-words pb-0.5 pr-7 text-sm leading-snug">{msg.content}</p>
-      ) : null}
+      {msg.content ? <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p> : null}
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
-      <span className="pointer-events-none absolute bottom-0.5 right-1.5 select-none tabular-nums text-[10px] leading-none text-muted-foreground">
-        {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
-        {formatBubbleTime(msg.createdAt)}
-      </span>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <div className="min-w-0">{renderReactionPills(msg)}</div>
+        <span className="shrink-0 select-none text-right tabular-nums text-[10px] leading-none text-muted-foreground">
+          {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+          {formatBubbleTime(msg.createdAt)}
+        </span>
+      </div>
     </>
   );
 
@@ -922,25 +1049,53 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                     isOwn ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {renderReactionPills(msg, isOwn)}
                   {!isDeleted ? (
-                    <div
-                      onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
-                      onPointerDown={(e) => handleBubblePointerDown(e, msg)}
-                      onPointerMove={handleBubblePointerMove}
-                      onPointerUp={clearLongPress}
-                      onPointerCancel={clearLongPress}
-                      onPointerLeave={clearLongPress}
-                      className={`relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border pl-2 pr-1.5 pt-1 pb-3.5 ${
-                        isOwn
-                          ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                          : "border-transparent bg-muted"
-                      }`}
-                    >
-                      {renderMessageBody(msg, isOwn)}
+                    <div className="max-w-[85%]">
+                      <div
+                        onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
+                        onPointerDown={(e) => handleBubblePointerDown(e, msg)}
+                        onPointerMove={handleBubblePointerMove}
+                        onPointerUp={clearLongPress}
+                        onPointerCancel={clearLongPress}
+                        onPointerLeave={clearLongPress}
+                        onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
+                        onTouchMove={handleBubbleTouchMove}
+                        onTouchEnd={clearLongPress}
+                        onTouchCancel={clearLongPress}
+                        className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
+                          isOwn
+                            ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
+                            : "border-transparent bg-muted"
+                        }`}
+                        style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
+                      >
+                        {renderMessageBody(msg, isOwn)}
+                        {conv.type === "channel" && (
+                          <div className="mt-0.5 pt-0.5">
+                            <div className="my-0.5 h-px w-full bg-foreground/35" />
+                            <button
+                              type="button"
+                              className={`text-xs text-muted-foreground hover:text-foreground ${
+                                isOwn ? "ml-auto block text-right" : ""
+                              }`}
+                              onClick={() => {
+                                if (!canInteractWithChannel) return;
+                                setLocation(`/messenger/channel/${conversationId}/post/${msg.id}/comments`);
+                              }}
+                            >
+                              {msg.commentsCount && msg.commentsCount > 0
+                                ? `${msg.commentsCount} комментариев`
+                                : "Комментировать"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border border-dashed border-border/60 bg-muted/40 pl-2 pr-1.5 pt-1 pb-3.5 text-muted-foreground italic">
+                    <div
+                      className="message relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border border-dashed border-border/60 bg-muted/40 pl-2 pr-1.5 pt-1 pb-3.5 text-muted-foreground italic select-none"
+                      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
+                    >
                       <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
                         {t.messageDeleted}
                       </p>
@@ -1002,6 +1157,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                             type="button"
                             className="rounded-full px-1.5 py-0.5 text-xl hover:bg-muted"
                             onClick={() => {
+                              if (!canInteractWithChannel) return;
                               reactionMutation.mutate({ messageId: messageLayer.message.id, emoji });
                               setMessageLayer(null);
                             }}
@@ -1015,10 +1171,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                       className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
                       style={{ top: bubbleTop, left, width: bubbleWidth }}
                     >
-                      {renderReactionPills(
-                        messageLayer.message,
-                        messageLayer.message.authorUserId === user?.id
-                      )}
                       {renderMessageBody(
                         messageLayer.message,
                         messageLayer.message.authorUserId === user?.id
@@ -1038,57 +1190,77 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </DialogContent>
       </Dialog>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4 space-y-2">
-        {(replyTo || editing) && (
-          <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
-            {editing ? (
-              <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            ) : (
-              <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold text-primary">
-                {editing ? t.messageEditingTitle : t.messageReplyingTo}
-                {!editing && replyTo && (
-                  <span className="ml-1 text-muted-foreground">
-                    {getMessageDisplayName(replyTo.author)}
-                  </span>
-                )}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {editing
-                  ? editing.content ?? ""
-                  : replyTo?.content
-                  ? replyTo.content
-                  : replyTo?.imageUrl
-                  ? t.messagePhotoLabel
-                  : ""}
-              </p>
+      {!isChannelMemberReadOnly && (
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 py-4 space-y-2">
+          {!isChannelReadOnly && (replyTo || editing) && (
+            <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
+              {editing ? (
+                <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              ) : (
+                <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold text-primary">
+                  {editing ? t.messageEditingTitle : t.messageReplyingTo}
+                  {!editing && replyTo && (
+                    <span className="ml-1 text-muted-foreground">
+                      {getMessageDisplayName(replyTo.author)}
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {editing
+                    ? editing.content ?? ""
+                    : replyTo?.content
+                    ? replyTo.content
+                    : replyTo?.imageUrl
+                    ? t.messagePhotoLabel
+                    : ""}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={cancelComposerContext}
+                data-testid="button-cancel-composer-context"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={cancelComposerContext}
-              data-testid="button-cancel-composer-context"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+          )}
 
-        <ChatInputBar
-          value={composerValue}
-          placeholder={editing ? t.messageEditingTitle : t.writeMessage}
-          onChange={handleComposerChange}
-          onSend={handleSend}
-          isSending={isComposerSending}
-          onUploadImages={editing ? undefined : handleUploadImages}
-          isUploadingImages={isUploadingPhoto}
-          wrapperClassName=""
-        />
-      </div>
+          {isChannelReadOnly ? (
+            !hideSubscribeButton ? (
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => {
+                  setHideSubscribeButton(true);
+                  subscribeMutation.mutate();
+                }}
+                disabled={subscribeMutation.isPending}
+              >
+                Подписаться на канал
+              </Button>
+            ) : null
+          ) : (
+            <ChatInputBar
+            ref={chatInputRef}
+              value={composerValue}
+              placeholder={editing ? t.messageEditingTitle : t.writeMessage}
+              onChange={handleComposerChange}
+              onSend={handleSend}
+              isSending={isComposerSending}
+              disabled={!canPostToChannel}
+              onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
+              isUploadingImages={isUploadingPhoto}
+              wrapperClassName=""
+            />
+          )}
+        </div>
+      )}
 
       <Dialog open={addMembersOpen} onOpenChange={setAddMembersOpen}>
         <DialogContent>
@@ -1242,6 +1414,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

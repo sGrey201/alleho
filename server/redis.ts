@@ -254,7 +254,32 @@ export type ConversationMessageWithAuthor = {
   } | null;
   forwardedFromAuthor?: ConversationMessageAuthor | null;
   reactions?: MessageReactionSummary[];
+  commentsCount?: number;
   author: ConversationMessageAuthor;
+};
+
+export type ConversationCommentWithAuthor = {
+  id: string;
+  conversationId: string;
+  messageId: string;
+  authorUserId: string;
+  content?: string | null;
+  imageUrl?: string | null;
+  replyToCommentId?: string | null;
+  createdAt: string;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  commentsCount?: number;
+  reactions?: MessageReactionSummary[];
+  author: ConversationMessageAuthor;
+  replyTo?: {
+    id: string;
+    authorUserId: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    deletedAt?: string | null;
+    author?: ConversationMessageAuthor | null;
+  } | null;
 };
 
 export type ConversationSeenPayload = {
@@ -286,6 +311,28 @@ export type ConversationMessagePinnedPayload = {
 export type ConversationMessageUnpinnedPayload = {
   conversationId: string;
   messageId: string;
+};
+
+export type ConversationCommentEditedPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  content: string | null;
+  editedAt: string;
+};
+
+export type ConversationCommentDeletedPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  deletedAt: string;
+};
+
+export type ConversationCommentReactionPayload = {
+  conversationId: string;
+  messageId: string;
+  commentId: string;
+  reactions: MessageReactionSummary[];
 };
 
 export async function getConversationRecentMessages(conversationId: string): Promise<ConversationMessageWithAuthor[]> {
@@ -443,4 +490,45 @@ export async function publishConversationMessageUnpinned(
   } catch (err) {
     console.error("[Redis] publishConversationMessageUnpinned error:", err);
   }
+}
+
+async function publishConversationEvent(conversationId: string, type: string, payload: unknown): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+  try {
+    await c.publish(
+      CONVERSATION_CHANNEL_PREFIX + conversationId,
+      JSON.stringify({ type, payload })
+    );
+  } catch (err) {
+    console.error(`[Redis] ${type} error:`, err);
+  }
+}
+
+export async function publishConversationComment(
+  conversationId: string,
+  payload: ConversationCommentWithAuthor
+): Promise<void> {
+  await publishConversationEvent(conversationId, "conversation_comment", payload);
+}
+
+export async function publishConversationCommentEdited(
+  conversationId: string,
+  payload: ConversationCommentEditedPayload
+): Promise<void> {
+  await publishConversationEvent(conversationId, "conversation_comment_edited", payload);
+}
+
+export async function publishConversationCommentDeleted(
+  conversationId: string,
+  payload: ConversationCommentDeletedPayload
+): Promise<void> {
+  await publishConversationEvent(conversationId, "conversation_comment_deleted", payload);
+}
+
+export async function publishConversationCommentReaction(
+  conversationId: string,
+  payload: ConversationCommentReactionPayload
+): Promise<void> {
+  await publishConversationEvent(conversationId, "conversation_comment_reaction", payload);
 }

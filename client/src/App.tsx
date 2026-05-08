@@ -68,6 +68,7 @@ function Router() {
       <Route path="/messenger/direct/:conversationId" component={Messenger} />
       <Route path="/messenger/group/:conversationId" component={Messenger} />
       <Route path="/messenger/channel/:conversationId" component={Messenger} />
+      <Route path="/messenger/channel/:conversationId/post/:messageId/comments" component={Messenger} />
       <Route path="/messenger/group/:conversationId/settings" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/settings" component={Messenger} />
       <Route path="/profile/:userId">{() => <Profile />}</Route>

@@ -1025,13 +1025,39 @@ export default function HealthWall() {
 
   const handleBubblePointerDown = (e: React.PointerEvent<HTMLElement>, msg: HealthWallMessage) => {
     if (msg.deletedAt || e.pointerType === "mouse") return;
+    const targetEl = e.currentTarget;
     const target = e.target as HTMLElement;
     if (target.closest("a,button,input,textarea")) return;
+    clearLongPress();
     longPressStartRef.current = { x: e.clientX, y: e.clientY };
     longPressTimerRef.current = window.setTimeout(() => {
-      openMessageLayer(msg, e.currentTarget);
+      openMessageLayer(msg, targetEl);
       clearLongPress();
     }, 450);
+  };
+
+  const handleBubbleTouchStart = (e: React.TouchEvent<HTMLElement>, msg: HealthWallMessage) => {
+    if (msg.deletedAt) return;
+    const targetEl = e.currentTarget;
+    const target = e.target as HTMLElement;
+    if (target.closest("a,button,input,textarea")) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    clearLongPress();
+    longPressStartRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageLayer(msg, targetEl);
+      clearLongPress();
+    }, 450);
+  };
+
+  const handleBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (!longPressStartRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - longPressStartRef.current.x);
+    const dy = Math.abs(touch.clientY - longPressStartRef.current.y);
+    if (dx > 8 || dy > 8) clearLongPress();
   };
 
   const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -1685,13 +1711,18 @@ export default function HealthWall() {
                             >
                               <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
                                     <CardContent
-                                      className="relative min-h-[2.75rem] p-2 pb-3.5"
+                                      className="message relative min-h-[2.75rem] p-2 pb-3.5 select-none"
                                       onContextMenu={(e) => handleBubbleContextMenu(e, lastMsg)}
                                       onPointerDown={(e) => handleBubblePointerDown(e, lastMsg)}
                                       onPointerMove={handleBubblePointerMove}
                                       onPointerUp={clearLongPress}
                                       onPointerCancel={clearLongPress}
                                       onPointerLeave={clearLongPress}
+                                      onTouchStart={(e) => handleBubbleTouchStart(e, lastMsg)}
+                                      onTouchMove={handleBubbleTouchMove}
+                                      onTouchEnd={clearLongPress}
+                                      onTouchCancel={clearLongPress}
+                                      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                                     >
                                       <div className={`grid gap-1 ${
                                         group.messages.length === 1 ? 'grid-cols-1' :
@@ -1751,13 +1782,18 @@ export default function HealthWall() {
                             >
                               {!isDeleted ? (
                                     <CardContent
-                                      className="relative min-h-[2.75rem] p-2 pb-3.5"
+                                      className="message relative min-h-[2.75rem] p-2 pb-3.5 select-none"
                                       onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
                                       onPointerDown={(e) => handleBubblePointerDown(e, msg)}
                                       onPointerMove={handleBubblePointerMove}
                                       onPointerUp={clearLongPress}
                                       onPointerCancel={clearLongPress}
                                       onPointerLeave={clearLongPress}
+                                      onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
+                                      onTouchMove={handleBubbleTouchMove}
+                                      onTouchEnd={clearLongPress}
+                                      onTouchCancel={clearLongPress}
+                                      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                                     >
                                       {renderMessageBubbleContent(msg, isOwnMessage)}
                                     </CardContent>
