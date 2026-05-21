@@ -1780,7 +1780,7 @@ export const t = {
   healthWall: 'Стена здоровья',
   healthWallDescription: 'История лечения и общение с врачом',
   sendMessage: 'Отправить',
-  writeMessage: 'Напишите сообщение...',
+  writeMessage: 'Сообщение...',
   prescription: 'Назначение',
   prescriptionPlaceholder: 'Введите назначение...',
   sendPrescription: 'Добавить назначение',
