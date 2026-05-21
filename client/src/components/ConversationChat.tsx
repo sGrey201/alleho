@@ -21,6 +21,7 @@ import {
   Check,
   Copy,
   Link2,
+  ListChecks,
 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -45,6 +46,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import { pollPayloadSchema } from "@shared/schema";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface ConversationInfo {
   id: string;
@@ -109,14 +113,130 @@ function getMessageDisplayName(author: ConversationMessageWithAuthor["author"] |
   return "User";
 }
 
+function parsePollPayload(
+  content: string | null | undefined
+): { question: string; options: string[]; allowMultiple: boolean } | null {
+  if (!content?.trim()) return null;
+  try {
+    return pollPayloadSchema.parse(JSON.parse(content));
+  } catch {
+    return null;
+  }
+}
+
 function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["replyTo"]>): string {
   if (reply.deletedAt) return t.messageDeleted;
+  const poll = parsePollPayload(reply.content ?? undefined);
+  if (poll) {
+    const q = poll.question.trim();
+    return q.length > 80 ? `${q.slice(0, 80)}…` : q;
+  }
   if (reply.content && reply.content.trim().length > 0) {
     const text = reply.content.trim();
     return text.length > 80 ? `${text.slice(0, 80)}…` : text;
   }
   if (reply.imageUrl) return t.messagePhotoLabel;
   return t.messageDeleted;
+}
+
+function PollMessageBlock({
+  msg,
+  disabled,
+  onVote,
+  isSubmitting,
+}: {
+  msg: ConversationMessageWithAuthor;
+  disabled: boolean;
+  onVote: (indices: number[]) => void;
+  isSubmitting: boolean;
+}) {
+  const parsed = parsePollPayload(msg.content);
+  const pollResults = msg.pollResults;
+  const [draftMulti, setDraftMulti] = useState<number[]>(() => pollResults?.selectedOptionIndices ?? []);
+
+  useEffect(() => {
+    setDraftMulti(pollResults?.selectedOptionIndices ?? []);
+  }, [msg.id, (pollResults?.selectedOptionIndices ?? []).join(",")]);
+
+  if (!parsed) {
+    return <p className="text-sm text-muted-foreground">{t.pollLabel}</p>;
+  }
+
+  const counts =
+    pollResults?.voteCounts?.length === parsed.options.length
+      ? pollResults.voteCounts
+      : parsed.options.map((_, i) => pollResults?.voteCounts?.[i] ?? 0);
+  const total = pollResults?.totalVotes ?? counts.reduce((a, b) => a + b, 0);
+  const pct = (i: number) => (total > 0 ? Math.round(((counts[i] ?? 0) / total) * 100) : 0);
+
+  return (
+    <div className="space-y-2 pb-0.5 min-w-[200px] max-w-full">
+      <p className="text-sm font-medium whitespace-pre-wrap break-words">{parsed.question}</p>
+      {parsed.options.map((label, i) => {
+        const selectedSingle = !parsed.allowMultiple && pollResults?.selectedOptionIndices?.includes(i);
+        const selectedMulti = parsed.allowMultiple && draftMulti.includes(i);
+        return (
+          <div key={i} className="space-y-0.5">
+            <button
+              type="button"
+              disabled={disabled || isSubmitting}
+              onClick={() => {
+                if (parsed.allowMultiple) {
+                  setDraftMulti((prev) =>
+                    prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort((a, b) => a - b)
+                  );
+                } else {
+                  const cur = pollResults?.selectedOptionIndices?.[0];
+                  if (cur === i) onVote([]);
+                  else onVote([i]);
+                }
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-sm transition-colors ${
+                selectedSingle || selectedMulti
+                  ? "border-primary bg-primary/10"
+                  : "border-border/60 bg-background/50 hover:bg-muted/50"
+              }`}
+            >
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                {parsed.allowMultiple ? (
+                  selectedMulti ? (
+                    <Check className="h-4 w-4 text-primary" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded border border-muted-foreground/50" />
+                  )
+                ) : selectedSingle ? (
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                ) : (
+                  <span className="h-3.5 w-3.5 rounded-full border border-muted-foreground/50" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 break-words">{label}</span>
+            </button>
+            <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary/80 transition-all" style={{ width: `${pct(i)}%` }} />
+            </div>
+            <p className="text-[10px] text-muted-foreground tabular-nums">
+              {pct(i)}% · {counts[i] ?? 0}
+            </p>
+          </div>
+        );
+      })}
+      {parsed.allowMultiple && (
+        <Button
+          type="button"
+          size="sm"
+          className="mt-1"
+          disabled={disabled || isSubmitting}
+          onClick={() => onVote(draftMulti)}
+        >
+          {t.pollVote}
+        </Button>
+      )}
+      <p className="text-[10px] text-muted-foreground">
+        {total} {t.pollVotes}
+      </p>
+    </div>
+  );
 }
 
 export default function ConversationChat({ conversationId, onBack, onTitleClick }: ConversationChatProps) {
@@ -138,6 +258,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     message: ConversationMessageWithAuthor;
     rect: { top: number; left: number; width: number; height: number };
   } | null>(null);
+  const [pollDialogOpen, setPollDialogOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -237,8 +361,22 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       imageUrl?: string;
       messageType?: string;
       replyToMessageId?: string;
+      poll?: { question: string; options: string[]; allowMultiple: boolean };
     }) => {
-      const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, data);
+      const body =
+        data.poll != null
+          ? {
+              messageType: "poll" as const,
+              poll: data.poll,
+              replyToMessageId: data.replyToMessageId,
+            }
+          : {
+              content: data.content,
+              imageUrl: data.imageUrl,
+              messageType: data.messageType ?? "message",
+              replyToMessageId: data.replyToMessageId,
+            };
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, body);
       return res.json();
     },
     onSuccess: (newMessage: ConversationMessageWithAuthor) => {
@@ -252,6 +390,41 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       );
       setMessage("");
       setReplyTo(null);
+      setPollDialogOpen(false);
+      setPollQuestion("");
+      setPollOptions(["", ""]);
+      setPollAllowMultiple(false);
+    },
+  });
+
+  const pollVoteMutation = useMutation({
+    mutationFn: async ({
+      messageId,
+      selectedOptionIndices,
+    }: {
+      messageId: string;
+      selectedOptionIndices: number[];
+    }) => {
+      const res = await apiRequest(
+        "PUT",
+        `/api/conversations/${conversationId}/messages/${messageId}/poll-vote`,
+        { selectedOptionIndices }
+      );
+      return res.json() as Promise<{
+        pollResults: ConversationMessageWithAuthor["pollResults"];
+      }>;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+        ["/api/conversations", conversationId, "messages"],
+        (old) =>
+          old?.map((m) =>
+            m.id === variables.messageId ? { ...m, pollResults: data.pollResults ?? m.pollResults } : m
+          )
+      );
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
     },
   });
 
@@ -710,9 +883,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
 
   const copyMessageContent = async (msg: ConversationMessageWithAuthor) => {
-    if (!msg.content) return;
+    const poll = msg.messageType === "poll" ? parsePollPayload(msg.content) : null;
+    const text = poll?.question ?? msg.content;
+    if (!text?.trim()) return;
     try {
-      await navigator.clipboard.writeText(msg.content);
+      await navigator.clipboard.writeText(text.trim());
     } catch {
       // ignore
     }
@@ -797,7 +972,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (msg.deletedAt || !canInteractWithChannel) return null;
     const isOwn = msg.authorUserId === user?.id;
     const createdAt = new Date(msg.createdAt).getTime();
-    const canEdit = isOwn && !!msg.content && Date.now() - createdAt < EDIT_WINDOW_MS;
+    const canEdit =
+      isOwn &&
+      !!msg.content &&
+      msg.messageType !== "poll" &&
+      Date.now() - createdAt < EDIT_WINDOW_MS;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
     const routeType = conv.type === "group" || conv.type === "channel" ? conv.type : "direct";
@@ -837,7 +1016,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </>
             )}
           </button>
-          {msg.content && (
+          {(msg.content || msg.messageType === "poll") && (
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); onDone?.(); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
@@ -945,7 +1124,20 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           <img src={msg.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
         </a>
       )}
-      {msg.content ? <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p> : null}
+      {msg.messageType === "poll" ? (
+        <PollMessageBlock
+          msg={msg}
+          disabled={!!msg.deletedAt || !canInteractWithChannel}
+          onVote={(indices) =>
+            pollVoteMutation.mutate({ messageId: msg.id, selectedOptionIndices: indices })
+          }
+          isSubmitting={
+            pollVoteMutation.isPending && pollVoteMutation.variables?.messageId === msg.id
+          }
+        />
+      ) : msg.content ? (
+        <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p>
+      ) : null}
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="min-w-0">{renderReactionPills(msg)}</div>
@@ -1018,11 +1210,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               )}
             </p>
             <p className="truncate text-xs text-foreground/80">
-              {activePinnedMessage.content
-                ? activePinnedMessage.content
-                : activePinnedMessage.imageUrl
-                ? t.messagePhotoLabel
-                : t.messageDeleted}
+              {activePinnedMessage.messageType === "poll"
+                ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
+                : activePinnedMessage.content
+                  ? activePinnedMessage.content
+                  : activePinnedMessage.imageUrl
+                    ? t.messagePhotoLabel
+                    : t.messageDeleted}
             </p>
           </div>
         </button>
@@ -1208,14 +1402,20 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                     </span>
                   )}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {editing
-                    ? editing.content ?? ""
-                    : replyTo?.content
-                    ? replyTo.content
-                    : replyTo?.imageUrl
-                    ? t.messagePhotoLabel
-                    : ""}
+            <p className="truncate text-xs text-muted-foreground">
+              {editing
+                    ? editing.messageType === "poll"
+                      ? parsePollPayload(editing.content)?.question ?? t.pollLabel
+                      : editing.content ?? ""
+                    : replyTo
+                      ? replyTo.messageType === "poll"
+                        ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
+                        : replyTo.content
+                          ? replyTo.content
+                          : replyTo.imageUrl
+                            ? t.messagePhotoLabel
+                            : ""
+                      : ""}
                 </p>
               </div>
               <Button
@@ -1246,21 +1446,118 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </Button>
             ) : null
           ) : (
-            <ChatInputBar
-            ref={chatInputRef}
-              value={composerValue}
-              placeholder={editing ? t.messageEditingTitle : t.writeMessage}
-              onChange={handleComposerChange}
-              onSend={handleSend}
-              isSending={isComposerSending}
-              disabled={!canPostToChannel}
-              onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
-              isUploadingImages={isUploadingPhoto}
-              wrapperClassName=""
-            />
+            <div className="flex items-end gap-2 px-4 pt-3 pb-3">
+              {!editing && canPostToChannel && !composerValue.trim() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full bg-[#e8ecf1] text-[#28292c]"
+                  onClick={() => setPollDialogOpen(true)}
+                  title={t.pollCreate}
+                >
+                  <ListChecks className="h-4 w-4" />
+                </Button>
+              )}
+              <div className="min-w-0 flex-1">
+                <ChatInputBar
+                  ref={chatInputRef}
+                  value={composerValue}
+                  placeholder={editing ? t.messageEditingTitle : t.writeMessage}
+                  onChange={handleComposerChange}
+                  onSend={handleSend}
+                  isSending={isComposerSending}
+                  disabled={!canPostToChannel}
+                  onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
+                  isUploadingImages={isUploadingPhoto}
+                  wrapperClassName="border-0 px-0 py-0"
+                />
+              </div>
+            </div>
           )}
         </div>
       )}
+
+      <Dialog open={pollDialogOpen} onOpenChange={setPollDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t.pollCreateTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="poll-q">{t.pollQuestionLabel}</Label>
+              <Input
+                id="poll-q"
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                placeholder={t.pollQuestionLabel}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t.pollOptionsLabel}</Label>
+              {pollOptions.map((opt, i) => (
+                <Input
+                  key={i}
+                  value={opt}
+                  onChange={(e) => {
+                    const next = [...pollOptions];
+                    next[i] = e.target.value;
+                    setPollOptions(next);
+                  }}
+                  placeholder={`${t.pollOptionsLabel} ${i + 1}`}
+                />
+              ))}
+              {pollOptions.length < 10 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPollOptions([...pollOptions, ""])}
+                >
+                  {t.pollAddOption}
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="poll-multi"
+                checked={pollAllowMultiple}
+                onCheckedChange={setPollAllowMultiple}
+              />
+              <Label htmlFor="poll-multi" className="cursor-pointer">
+                {t.pollAllowMultiple}
+              </Label>
+            </div>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={sendMutation.isPending}
+              onClick={() => {
+                const opts = pollOptions.map((o) => o.trim()).filter(Boolean);
+                const parsed = pollPayloadSchema.safeParse({
+                  question: pollQuestion,
+                  options: opts,
+                  allowMultiple: pollAllowMultiple,
+                });
+                if (!parsed.success) {
+                  toast({
+                    title: t.error,
+                    description: "Укажите вопрос и минимум два варианта.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                sendMutation.mutate({
+                  poll: parsed.data,
+                  replyToMessageId: replyTo?.id,
+                });
+              }}
+            >
+              {t.pollSend}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addMembersOpen} onOpenChange={setAddMembersOpen}>
         <DialogContent>

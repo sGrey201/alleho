@@ -37,6 +37,11 @@ export interface ConversationMessageWithAuthor {
   forwardedFromAuthor?: ConversationMessageAuthor | null;
   reactions?: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
   commentsCount?: number;
+  pollResults?: {
+    voteCounts: number[];
+    totalVotes: number;
+    selectedOptionIndices: number[];
+  };
   author: ConversationMessageAuthor;
 }
 
@@ -108,6 +113,13 @@ type ConversationCommentReactionPayload = {
   messageId: string;
   commentId: string;
   reactions: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
+};
+
+type ConversationPollUpdatedPayload = {
+  conversationId: string;
+  messageId: string;
+  voteCounts: number[];
+  totalVotes: number;
 };
 
 export function useConversationWs(conversationId: string | undefined, enabled: boolean) {
@@ -287,6 +299,23 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
             queryClient.setQueryData<ConversationCommentWithAuthor[]>(commentsKey(payload.messageId), (old) =>
               old?.map((comment) =>
                 comment.id === payload.commentId ? { ...comment, reactions: payload.reactions } : comment
+              )
+            );
+          } else if (data.type === "conversation_poll_updated" && data.payload) {
+            const payload = data.payload as ConversationPollUpdatedPayload;
+            if (payload.conversationId !== conversationIdRef.current) return;
+            updateMessages((list) =>
+              list.map((m) =>
+                m.id === payload.messageId && m.messageType === "poll"
+                  ? {
+                      ...m,
+                      pollResults: {
+                        voteCounts: payload.voteCounts,
+                        totalVotes: payload.totalVotes,
+                        selectedOptionIndices: m.pollResults?.selectedOptionIndices ?? [],
+                      },
+                    }
+                  : m
               )
             );
           }

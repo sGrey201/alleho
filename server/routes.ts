@@ -18,6 +18,7 @@ import {
   insertConversationSchema,
   insertConversationMessageSchema,
   insertConversationMessageCommentSchema,
+  pollPayloadSchema,
   type QuestionnaireData as QData,
   type User,
   type ConversationMessage,
@@ -48,6 +49,7 @@ import {
   publishConversationCommentEdited,
   publishConversationCommentDeleted,
   publishConversationCommentReaction,
+  publishConversationPollUpdated,
   invalidateConversationRecent,
   backfillConversationRecent,
   type ConversationMessageWithAuthor,
@@ -2087,6 +2089,29 @@ ${allUrls.map(url => `  <url>
     };
   }
 
+  async function mergeConversationPollResults(
+    messages: ConversationMessageWithAuthor[],
+    currentUserId: string
+  ): Promise<ConversationMessageWithAuthor[]> {
+    const pollEntries: Array<{ messageId: string; optionCount: number }> = [];
+    for (const m of messages) {
+      if (m.messageType !== "poll" || !m.content) continue;
+      try {
+        const p = pollPayloadSchema.parse(JSON.parse(m.content));
+        pollEntries.push({ messageId: m.id, optionCount: p.options.length });
+      } catch {
+        continue;
+      }
+    }
+    if (pollEntries.length === 0) return messages;
+    const states = await storage.getConversationPollStates(pollEntries, currentUserId);
+    return messages.map((m) => {
+      const st = states.get(m.id);
+      if (!st || m.messageType !== "poll") return m;
+      return { ...m, pollResults: st };
+    });
+  }
+
   async function enrichConversationMessages(
     messages: ConversationMessage[],
     currentUserId: string
@@ -2129,7 +2154,7 @@ ${allUrls.map(url => `  <url>
     );
     const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
 
-    return messages.map((m) => {
+    const base = messages.map((m) => {
       const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
       const replyAuthor = replyTarget ? userMap.get(replyTarget.authorUserId) : null;
       return {
@@ -2169,6 +2194,7 @@ ${allUrls.map(url => `  <url>
         author: userToConvAuthor(userMap.get(m.authorUserId) ?? null),
       };
     });
+    return mergeConversationPollResults(base, currentUserId);
   }
 
   async function withConversationReactions(
@@ -2181,11 +2207,12 @@ ${allUrls.map(url => `  <url>
       currentUserId
     );
     const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
-    return messages.map((m) => ({
+    const withReactions = messages.map((m) => ({
       ...m,
       reactions: reactionMap.get(m.id) ?? [],
       commentsCount: commentCountMap.get(m.id) ?? m.commentsCount ?? 0,
     }));
+    return mergeConversationPollResults(withReactions, currentUserId);
   }
 
   // Get conversation messages (Redis first, then DB)
@@ -2246,11 +2273,13 @@ ${allUrls.map(url => `  <url>
         imageUrl?: string;
         messageType?: string;
         replyToMessageId?: string;
+        poll?: unknown;
         forwardSource?: { conversationId?: string; patientUserId?: string; messageId: string };
       };
 
       let content: string | null = body.content ?? null;
       let imageUrl: string | null = body.imageUrl ?? null;
+      let messageType: string = body.messageType ?? "message";
       let forwardedFromMessageId: string | null = null;
       let forwardedFromUserId: string | null = null;
       const resolveForwardedAuthorId = async (params: {
@@ -2296,6 +2325,14 @@ ${allUrls.map(url => `  <url>
             fallbackAuthorUserId: src.authorUserId,
             sourceKind: "conversation",
           });
+          messageType = src.messageType;
+          if (messageType === "poll" && content) {
+            try {
+              pollPayloadSchema.parse(JSON.parse(content));
+            } catch {
+              return res.status(400).json({ message: "Invalid poll data" });
+            }
+          }
         } else if (body.forwardSource.patientUserId) {
           const sourcePatientUserId = String(body.forwardSource.patientUserId);
           const canAccessSourceWall = await canAccessHealthWall(req, sourcePatientUserId);
@@ -2321,8 +2358,23 @@ ${allUrls.map(url => `  <url>
             fallbackAuthorUserId: src.authorUserId,
             sourceKind: "health_wall",
           });
+          messageType = src.messageType;
         } else {
           return res.status(400).json({ message: "Invalid forward source" });
+        }
+      } else {
+        if (body.poll !== undefined && body.poll !== null) {
+          const parsed = pollPayloadSchema.parse(body.poll);
+          messageType = "poll";
+          content = JSON.stringify(parsed);
+          imageUrl = null;
+        } else if (messageType === "poll") {
+          if (!content?.trim()) {
+            return res.status(400).json({ message: "Poll content required" });
+          }
+          const parsed = pollPayloadSchema.parse(JSON.parse(content));
+          content = JSON.stringify(parsed);
+          imageUrl = null;
         }
       }
 
@@ -2335,10 +2387,14 @@ ${allUrls.map(url => `  <url>
         replyToMessageId = reply.id;
       }
 
+      if (messageType === "poll" && imageUrl) {
+        return res.status(400).json({ message: "Poll cannot have image" });
+      }
+
       const validated = insertConversationMessageSchema.parse({
         conversationId: id,
         authorUserId: currentUserId,
-        messageType: body.messageType ?? "message",
+        messageType,
         content,
         imageUrl,
         replyToMessageId,
@@ -2373,6 +2429,9 @@ ${allUrls.map(url => `  <url>
       }
       if (existing.authorUserId !== currentUserId) {
         return res.status(403).json({ message: "Only author can edit" });
+      }
+      if (existing.messageType === "poll") {
+        return res.status(400).json({ message: "Cannot edit poll" });
       }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
@@ -2482,6 +2541,60 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error unpinning conversation message:", error);
       res.status(500).json({ message: "Failed to unpin message" });
+    }
+  });
+
+  app.put("/api/conversations/:id/messages/:messageId/poll-vote", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const existing = await storage.getConversationMessageById(messageId);
+      if (!existing || existing.conversationId !== id) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+      if (existing.messageType !== "poll" || existing.deletedAt) {
+        return res.status(400).json({ message: "Not a poll" });
+      }
+      let poll;
+      try {
+        poll = pollPayloadSchema.parse(JSON.parse(existing.content ?? ""));
+      } catch {
+        return res.status(400).json({ message: "Invalid poll data" });
+      }
+      const optionCount = poll.options.length;
+      const raw = req.body?.selectedOptionIndices;
+      if (!Array.isArray(raw)) {
+        return res.status(400).json({ message: "selectedOptionIndices required" });
+      }
+      const indices = raw
+        .map((x: unknown) => Number(x))
+        .filter((n: number) => Number.isInteger(n));
+      const unique = Array.from(new Set(indices))
+        .filter((i) => i >= 0 && i < optionCount)
+        .sort((a, b) => a - b);
+      if (!poll.allowMultiple && unique.length > 1) {
+        return res.status(400).json({ message: "Single choice only" });
+      }
+      await storage.setConversationPollVotes(messageId, currentUserId, unique, optionCount);
+      const states = await storage.getConversationPollStates(
+        [{ messageId, optionCount }],
+        currentUserId
+      );
+      const state = states.get(messageId);
+      if (!state) return res.status(500).json({ message: "Failed to load poll state" });
+      await publishConversationPollUpdated(id, {
+        conversationId: id,
+        messageId,
+        voteCounts: state.voteCounts,
+        totalVotes: state.totalVotes,
+      });
+      res.json({ messageId, pollResults: state });
+    } catch (error) {
+      console.error("Error voting on poll:", error);
+      res.status(500).json({ message: "Failed to vote" });
     }
   });
 

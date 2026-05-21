@@ -16,6 +16,7 @@ import {
   conversationMessageReactions,
   conversationMessageComments,
   conversationMessageCommentReactions,
+  conversationPollVotes,
   type User,
   type UpsertUser,
   type Article,
@@ -77,6 +78,12 @@ export type MessageReactionSummary = {
   emoji: string;
   count: number;
   reactedByMe: boolean;
+};
+
+export type ConversationPollResults = {
+  voteCounts: number[];
+  totalVotes: number;
+  selectedOptionIndices: number[];
 };
 
 export type ConversationCommentWithAuthor = {
@@ -251,6 +258,16 @@ export interface IStorage {
     messageIds: string[],
     currentUserId: string
   ): Promise<Map<string, MessageReactionSummary[]>>;
+  setConversationPollVotes(
+    messageId: string,
+    userId: string,
+    selectedOptionIndices: number[],
+    optionCount: number
+  ): Promise<void>;
+  getConversationPollStates(
+    entries: Array<{ messageId: string; optionCount: number }>,
+    currentUserId: string
+  ): Promise<Map<string, ConversationPollResults>>;
   getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
@@ -1362,7 +1379,7 @@ export class DatabaseStorage implements IStorage {
 
   async createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage> {
     const [m] = await db.insert(conversationMessages).values(msg).returning();
-    const preview = previewFromConversationMessageParts(m.content, m.imageUrl);
+    const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);
     const at = m.createdAt ?? new Date();
     await db
       .update(conversations)
@@ -1618,7 +1635,7 @@ export class DatabaseStorage implements IStorage {
     // Refresh conversation preview if this was the last message.
     const last = await this.getLastConversationMessage(m.conversationId);
     if (last && last.id === m.id) {
-      const preview = previewFromConversationMessageParts(m.content, m.imageUrl);
+      const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);
       await db
         .update(conversations)
         .set({ lastMessagePreview: preview, updatedAt: new Date() })
@@ -1730,6 +1747,90 @@ export class DatabaseStorage implements IStorage {
     const result = new Map<string, MessageReactionSummary[]>();
     byMessage.forEach((emojiMap, messageId) => {
       result.set(messageId, Array.from(emojiMap.values()));
+    });
+    return result;
+  }
+
+  async setConversationPollVotes(
+    messageId: string,
+    userId: string,
+    selectedOptionIndices: number[],
+    optionCount: number
+  ): Promise<void> {
+    const unique = Array.from(new Set(selectedOptionIndices))
+      .filter((i) => Number.isInteger(i) && i >= 0 && i < optionCount)
+      .sort((a, b) => a - b);
+    try {
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(conversationPollVotes)
+          .where(and(eq(conversationPollVotes.messageId, messageId), eq(conversationPollVotes.userId, userId)));
+        for (const idx of unique) {
+          await tx.insert(conversationPollVotes).values({ messageId, userId, optionIndex: idx });
+        }
+      });
+    } catch (error) {
+      if (isMissingRelationError(error)) return;
+      throw error;
+    }
+  }
+
+  async getConversationPollStates(
+    entries: Array<{ messageId: string; optionCount: number }>,
+    currentUserId: string
+  ): Promise<Map<string, ConversationPollResults>> {
+    const result = new Map<string, ConversationPollResults>();
+    if (entries.length === 0) return result;
+
+    const zeroCounts = (n: number) => Array.from({ length: n }, () => 0);
+    entries.forEach((e) => {
+      result.set(e.messageId, {
+        voteCounts: zeroCounts(e.optionCount),
+        totalVotes: 0,
+        selectedOptionIndices: [],
+      });
+    });
+
+    const ids = entries.map((e) => e.messageId);
+    let rows: Array<{ messageId: string; userId: string; optionIndex: number }> = [];
+    try {
+      rows = (await db
+        .select({
+          messageId: conversationPollVotes.messageId,
+          userId: conversationPollVotes.userId,
+          optionIndex: conversationPollVotes.optionIndex,
+        })
+        .from(conversationPollVotes)
+        .where(inArray(conversationPollVotes.messageId, ids))) as Array<{
+        messageId: string;
+        userId: string;
+        optionIndex: number;
+      }>;
+    } catch (error) {
+      if (isMissingRelationError(error)) return result;
+      throw error;
+    }
+    rows.forEach((row) => {
+      const state = result.get(row.messageId);
+      if (!state) return;
+      const idx = row.optionIndex;
+      if (idx >= 0 && idx < state.voteCounts.length) {
+        state.voteCounts[idx] += 1;
+      }
+    });
+    result.forEach((state) => {
+      state.totalVotes = state.voteCounts.reduce((a, b) => a + b, 0);
+    });
+    rows.forEach((row) => {
+      if (row.userId !== currentUserId) return;
+      const state = result.get(row.messageId);
+      if (!state) return;
+      if (!state.selectedOptionIndices.includes(row.optionIndex)) {
+        state.selectedOptionIndices.push(row.optionIndex);
+      }
+    });
+    result.forEach((state) => {
+      state.selectedOptionIndices.sort((a, b) => a - b);
     });
     return result;
   }

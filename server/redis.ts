@@ -255,7 +255,20 @@ export type ConversationMessageWithAuthor = {
   forwardedFromAuthor?: ConversationMessageAuthor | null;
   reactions?: MessageReactionSummary[];
   commentsCount?: number;
+  /** Present when messageType is `poll` (from REST enrich or after voting). */
+  pollResults?: {
+    voteCounts: number[];
+    totalVotes: number;
+    selectedOptionIndices: number[];
+  };
   author: ConversationMessageAuthor;
+};
+
+export type ConversationPollUpdatedPayload = {
+  conversationId: string;
+  messageId: string;
+  voteCounts: number[];
+  totalVotes: number;
 };
 
 export type ConversationCommentWithAuthor = {
@@ -531,4 +544,11 @@ export async function publishConversationCommentReaction(
   payload: ConversationCommentReactionPayload
 ): Promise<void> {
   await publishConversationEvent(conversationId, "conversation_comment_reaction", payload);
+}
+
+export async function publishConversationPollUpdated(
+  conversationId: string,
+  payload: ConversationPollUpdatedPayload
+): Promise<void> {
+  await publishConversationEvent(conversationId, "conversation_poll_updated", payload);
 }

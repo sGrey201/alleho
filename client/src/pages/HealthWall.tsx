@@ -434,6 +434,60 @@ export default function HealthWall() {
     },
   });
 
+  const invitePatientLinkDialog = (
+    <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t.messengerInvitePatient}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/40 p-3">
+            <p className="text-xs text-muted-foreground mb-1">Ссылка-приглашение</p>
+            <p className="break-all text-sm">{inviteLinkData.inviteUrl}</p>
+          </div>
+          <p className="text-sm text-muted-foreground">Ссылка действительна 24 часа.</p>
+          <DialogFooter className="flex flex-row justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                if (!inviteLinkData.inviteUrl) return;
+                await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                toast({ title: "Ссылка скопирована" });
+              }}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Скопировать
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                if (!inviteLinkData.inviteUrl) return;
+                if (navigator.share) {
+                  try {
+                    await navigator.share({
+                      title: "Приглашение в Alleho",
+                      text: "Присоединяйтесь по ссылке:",
+                      url: inviteLinkData.inviteUrl,
+                    });
+                  } catch {
+                    // ignore user cancel
+                  }
+                } else {
+                  await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
+                  toast({ title: "Ссылка скопирована" });
+                }
+              }}
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Поделиться
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   useEffect(() => {
     if (!isAuthenticated || !isAdmin || isMobile) return;
     if (patientUserId || !(myPatients && myPatients.length > 0)) return;
@@ -1290,6 +1344,7 @@ export default function HealthWall() {
 
   if (isAdmin && isMobile && !patientUserId) {
     return (
+      <>
       <div className="flex h-full flex-col bg-background pb-20">
         <div className="shrink-0 border-b border-border/60 bg-background px-3 py-2">
           <div className="flex items-center gap-2">
@@ -1368,6 +1423,8 @@ export default function HealthWall() {
           </div>
         </div>
       </div>
+      {invitePatientLinkDialog}
+      </>
     );
   }
 
@@ -2100,57 +2157,7 @@ export default function HealthWall() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t.messengerInvitePatient}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-md border bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground mb-1">Ссылка-приглашение</p>
-              <p className="break-all text-sm">{inviteLinkData.inviteUrl}</p>
-            </div>
-            <p className="text-sm text-muted-foreground">Ссылка действительна 24 часа.</p>
-            <DialogFooter className="flex flex-row justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={async () => {
-                  if (!inviteLinkData.inviteUrl) return;
-                  await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
-                  toast({ title: "Ссылка скопирована" });
-                }}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Скопировать
-              </Button>
-              <Button
-                type="button"
-                onClick={async () => {
-                  if (!inviteLinkData.inviteUrl) return;
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({
-                        title: "Приглашение в Alleho",
-                        text: "Присоединяйтесь по ссылке:",
-                        url: inviteLinkData.inviteUrl,
-                      });
-                    } catch {
-                      // ignore user cancel
-                    }
-                  } else {
-                    await navigator.clipboard.writeText(inviteLinkData.inviteUrl);
-                    toast({ title: "Ссылка скопирована" });
-                  }
-                }}
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Поделиться
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {invitePatientLinkDialog}
     </div>
     </div>
   );

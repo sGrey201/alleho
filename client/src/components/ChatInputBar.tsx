@@ -119,7 +119,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
           size="icon"
           onClick={onSend}
           disabled={isSendDisabled}
-          className={`rounded-full shrink-0 h-10 w-10 ${isSendDisabled ? "!opacity-20" : "!opacity-100"}`}
+          className="rounded-full shrink-0 h-10 w-10 disabled:!opacity-60"
           data-testid="button-send-message"
         >
           {isSending ? (

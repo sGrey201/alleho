@@ -156,6 +156,7 @@ export function setupWebSocket(
             "conversation_comment_edited",
             "conversation_comment_deleted",
             "conversation_comment_reaction",
+            "conversation_poll_updated",
           ]);
           if (
             typeof parsed === "object" &&

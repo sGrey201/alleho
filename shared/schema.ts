@@ -351,6 +351,23 @@ export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;
 export const healthWallMessageTypeEnum = z.enum(['message', 'prescription', 'followup']);
 export type HealthWallMessageType = z.infer<typeof healthWallMessageTypeEnum>;
 
+/** Messenger conversation messages — includes `poll`; health wall does not use `poll`. */
+export const conversationMessageTypeEnum = z.enum([
+  'message',
+  'prescription',
+  'followup',
+  'poll',
+]);
+export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
+
+/** JSON stored in conversation_messages.content when message_type is `poll`. */
+export const pollPayloadSchema = z.object({
+  question: z.string().trim().min(1).max(500),
+  options: z.array(z.string().trim().min(1).max(200)).min(2).max(10),
+  allowMultiple: z.boolean(),
+});
+export type PollPayload = z.infer<typeof pollPayloadSchema>;
+
 // Health wall messages table (chat between doctor and patient)
 export const healthWallMessages = pgTable("health_wall_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -525,10 +542,32 @@ export const insertConversationMessageSchema = createInsertSchema(conversationMe
   deletedAt: true,
   pinnedAt: true,
   pinnedByUserId: true,
-}).extend({ messageType: healthWallMessageTypeEnum.default("message") });
+}).extend({ messageType: conversationMessageTypeEnum.default("message") });
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+
+export const conversationPollVotes = pgTable(
+  "conversation_poll_votes",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    messageId: varchar("message_id")
+      .notNull()
+      .references(() => conversationMessages.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    optionIndex: integer("option_index").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_poll_votes_message_idx").on(table.messageId),
+    index("conversation_poll_votes_user_idx").on(table.userId),
+    sql`CONSTRAINT conversation_poll_votes_unique UNIQUE (message_id, user_id, option_index)`,
+  ]
+);
+
+export type ConversationPollVote = typeof conversationPollVotes.$inferSelect;
 
 export const conversationMessageReactions = pgTable("conversation_message_reactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
