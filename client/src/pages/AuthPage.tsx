@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { BRAND_TAGLINE } from "@shared/brand";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 
 const loginSchema = z.object({
@@ -81,7 +82,7 @@ export default function AuthPage() {
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">hovial — Be Jovial</CardTitle>
+          <CardTitle className="text-2xl">{BRAND_TAGLINE}</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
