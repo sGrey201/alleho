@@ -15,6 +15,8 @@ services:
       ROBOKASSA_PASSWORD2: ${ROBOKASSA_PASSWORD2}
       APP_URL: ${APP_URL}
       COOKIE_SECURE: ${COOKIE_SECURE}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
       REDIS_HOST: redis
     depends_on:
       - db
