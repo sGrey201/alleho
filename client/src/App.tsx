@@ -175,11 +175,11 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <ScrollToTop />
-      <Header />
+      {!isAuthPage && !isInviteAcceptPage && <Header />}
       <main className="flex-1">
         <Router />
       </main>
-      <Footer />
+      {!isAuthPage && !isInviteAcceptPage && <Footer />}
     </div>
   );
 }

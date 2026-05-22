@@ -4,14 +4,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { BRAND_TAGLINE } from "@shared/brand";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 
 const loginSchema = z.object({
@@ -81,8 +80,14 @@ export default function AuthPage() {
   return (
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{BRAND_TAGLINE}</CardTitle>
+        <CardHeader className="text-center pb-2">
+          <img
+            src="/auth-logo.png"
+            alt="hovial"
+            className="mx-auto h-auto w-full max-w-[280px] object-contain"
+            loading="eager"
+            decoding="async"
+          />
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -225,10 +230,6 @@ export default function AuthPage() {
           </Tabs>
         </CardContent>
       </Card>
-      <p className="mt-6 max-w-md text-center text-xs text-muted-foreground" data-testid="text-disclaimer">
-        Платформа hovial.com является программным обеспечением для хранения информации и обмена сообщениями между специалистами и их клиентами.
-        Платформа не является медицинской организацией и не оказывает медицинские услуги.
-      </p>
     </div>
   );
 }

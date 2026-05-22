@@ -80,9 +80,16 @@ export default function InviteAccept() {
     return (
       <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Недействительная ссылка</CardTitle>
-          </CardHeader>
+        <CardHeader className="text-center pb-2">
+          <img
+            src="/auth-logo.png"
+            alt="hovial"
+            className="mx-auto h-auto w-full max-w-[280px] object-contain"
+            loading="eager"
+            decoding="async"
+          />
+          <CardTitle className="text-2xl pt-4">Недействительная ссылка</CardTitle>
+        </CardHeader>
           <CardContent className="text-center text-sm text-muted-foreground">
             В ссылке отсутствует токен приглашения.
           </CardContent>
@@ -94,8 +101,15 @@ export default function InviteAccept() {
   return (
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Регистрация по приглашению</CardTitle>
+        <CardHeader className="text-center pb-2">
+          <img
+            src="/auth-logo.png"
+            alt="hovial"
+            className="mx-auto h-auto w-full max-w-[280px] object-contain"
+            loading="eager"
+            decoding="async"
+          />
+          <CardTitle className="text-2xl pt-4">Регистрация по приглашению</CardTitle>
           {invitePreview?.inviter?.name && (
             <p className="text-sm text-muted-foreground pt-2">
               Вас пригласил: <span className="font-medium text-foreground">{invitePreview.inviter.name}</span>
