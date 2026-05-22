@@ -902,15 +902,7 @@ export default function Messenger() {
             />
           </div>
         ) : isCommentThread && conversationId && threadMessageId ? (
-          <div
-            className="flex-1 flex flex-col min-h-0"
-            style={{
-              backgroundImage: "url(/chat_bg_pattern.png)",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-            }}
-          >
+          <div className="flex-1 flex flex-col min-h-0 chat-panel-bg">
             <PostCommentsThread
               conversationId={conversationId}
               messageId={threadMessageId}
@@ -919,15 +911,7 @@ export default function Messenger() {
             />
           </div>
         ) : conversationId ? (
-          <div
-            className="flex-1 flex flex-col min-h-0"
-            style={{
-              backgroundImage: "url(/chat_bg_pattern.png)",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-            }}
-          >
+          <div className="flex-1 flex flex-col min-h-0 chat-panel-bg">
             <ConversationChat
               conversationId={conversationId}
               onBack={() => setLocation("/messenger")}
@@ -975,7 +959,7 @@ export default function Messenger() {
                   if (navigator.share) {
                     try {
                       await navigator.share({
-                        title: "Приглашение в Alleho",
+                        title: "Приглашение в hovial",
                         text: "Присоединяйтесь по ссылке:",
                         url: inviteLinkData.inviteUrl,
                       });

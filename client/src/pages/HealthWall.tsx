@@ -36,6 +36,7 @@ import {
   Trash2,
   MessageCircle,
   Menu,
+  ArrowUp,
   Copy,
   Share2,
   Reply,
@@ -466,7 +467,7 @@ export default function HealthWall() {
                 if (navigator.share) {
                   try {
                     await navigator.share({
-                      title: "Приглашение в Alleho",
+                      title: "Приглашение в hovial",
                       text: "Присоединяйтесь по ссылке:",
                       url: inviteLinkData.inviteUrl,
                     });
@@ -1128,7 +1129,7 @@ export default function HealthWall() {
       className={`mb-1 block w-full rounded-lg border-l-2 px-2 py-1 pr-8 text-left text-[11px] leading-tight ${
         isOwnMessage
           ? "border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40"
-          : "border-primary/70 bg-background/60"
+          : "border-primary/70 bg-white"
       }`}
     >
       <span className="block truncate text-[10px] font-semibold text-muted-foreground">
@@ -1418,7 +1419,7 @@ export default function HealthWall() {
               data-testid="button-to-communities-mobile"
               onClick={() => setLocation("/messenger")}
             >
-              В сообщества
+              Общение
             </Button>
           </div>
         </div>
@@ -1465,10 +1466,18 @@ export default function HealthWall() {
                 />
               </div>
             </div>
-            <div className="mt-2 rounded-xl bg-muted/60 px-3 py-2">
-              <p className="text-sm font-semibold">{t.patient}</p>
-              <p className="text-xs text-muted-foreground">Стена здоровья</p>
-            </div>
+            {myPatients !== undefined && myPatients.length === 0 && (
+              <div className="relative mt-2 rounded-xl bg-muted/60 px-3 py-2.5">
+                <ArrowUp
+                  className="absolute left-2 -top-3 h-5 w-5 text-primary"
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
+                <p className="pl-5 text-sm leading-snug text-foreground/90">
+                  Пригласите первого пациента
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto">
             {filteredMyPatients.map((patient) => {
@@ -1511,7 +1520,7 @@ export default function HealthWall() {
               data-testid="button-to-communities-desktop"
               onClick={() => setLocation("/messenger")}
             >
-              В сообщества
+              Общение
             </Button>
           </div>
         </aside>
@@ -1647,14 +1656,8 @@ export default function HealthWall() {
         )}
 
         <div
-          className={`relative flex flex-col ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`}
-          style={{
-            ...(showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : {}),
-            backgroundImage: "url(/chat_bg_pattern.png)",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-          }}
+          className={`relative flex flex-col chat-panel-bg ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`}
+          style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : undefined}
         >
           <div className="flex-1 relative min-h-0">
             {isMobile && showQuestionnaire ? (
@@ -1766,7 +1769,7 @@ export default function HealthWall() {
                               className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                               data-testid={`message-group-${groupIndex}`}
                             >
-                              <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : ''}`}>
+                              <Card className={`max-w-[85%] min-w-28 ${isOwnMessage ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' : 'bg-white border-border/50 shadow-sm'}`}>
                                     <CardContent
                                       className="message relative min-h-[2.75rem] p-2 pb-3.5 select-none"
                                       onContextMenu={(e) => handleBubbleContextMenu(e, lastMsg)}
@@ -1834,7 +1837,7 @@ export default function HealthWall() {
                                     ? 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800'
                                     : isOwnMessage 
                                       ? 'bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800' 
-                                      : ''
+                                      : 'bg-white border-border/50 shadow-sm'
                               }`}
                             >
                               {!isDeleted ? (

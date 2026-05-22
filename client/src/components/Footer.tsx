@@ -85,7 +85,7 @@ export function Footer() {
 
         <div className="mt-8 border-t pt-8">
           <p className="text-center text-sm text-muted-foreground">
-            © {currentYear} MateriaMedica. {t.allRightsReserved}
+            © {currentYear} hovial. {t.allRightsReserved}
           </p>
         </div>
       </div>

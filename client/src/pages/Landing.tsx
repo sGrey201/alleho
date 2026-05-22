@@ -31,11 +31,9 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 text-center max-w-2xl mx-auto">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">
-          Alle Homöopathen
-        </h1>
+        <img src="/logo.png" alt="hovial" className="h-16 w-auto object-contain mb-4" />
         <p className="text-muted-foreground text-lg mb-6">
-          Закрытое сообщество для гомеопатов
+          Be Jovial
         </p>
 
         <p className="text-muted-foreground mb-8 leading-relaxed">

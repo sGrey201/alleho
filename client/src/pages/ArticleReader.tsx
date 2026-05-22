@@ -75,7 +75,7 @@ export default function ArticleReader() {
         article={{
           publishedTime: article.createdAt ? new Date(article.createdAt).toISOString() : undefined,
           modifiedTime: article.updatedAt ? new Date(article.updatedAt).toISOString() : undefined,
-          author: 'Alleho - пространство для работы и общения гомеопатов',
+          author: 'hovial — Be Jovial',
           tags: tagNames,
         }}
         schema={articleSchema}

@@ -10,6 +10,7 @@ import { sql, eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin } from "./emailAuth";
 import { login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail, sendInviteEmail, sendInviteAccessEmail } from "./email";
+import { BASE_URL } from "@shared/brand";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
@@ -137,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sitemap.xml - dynamic generation
   app.get('/sitemap.xml', async (req, res) => {
     try {
-      const baseUrl = process.env.APP_URL || 'https://alleho.ru';
+      const baseUrl = process.env.APP_URL || BASE_URL;
       
       const articles = await storage.getAllArticles();
       
@@ -282,7 +283,7 @@ ${allUrls.map(url => `  <url>
         [inviter?.firstName, inviter?.lastName].filter(Boolean).join(" ") ||
         inviter?.email ||
         "Ваш гомеопат";
-      const baseUrl = process.env.APP_URL || "https://alleho.ru";
+      const baseUrl = process.env.APP_URL || BASE_URL;
       const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
       if (email) {
         const inviteUrlWithEmail = `${inviteUrl}&email=${encodeURIComponent(email)}`;
@@ -888,13 +889,13 @@ ${allUrls.map(url => `  <url>
       
       if (subscriptionType === 'initial') {
         amount = 2000 / adminDiscount;
-        description = 'Подписка MateriaMedica на 6 месяцев';
+        description = 'Подписка hovial на 6 месяцев';
       } else {
         // Renewal: 50% discount if subscription is still active
         amount = (hasActiveSubscription ? 1000 : 2000) / adminDiscount;
         description = hasActiveSubscription 
-          ? 'Продление подписки MateriaMedica на 6 месяцев (скидка 50%)'
-          : 'Продление подписки MateriaMedica на 6 месяцев';
+          ? 'Продление подписки hovial на 6 месяцев (скидка 50%)'
+          : 'Продление подписки hovial на 6 месяцев';
       }
 
       // Generate unique invoice ID (timestamp + random) as string
@@ -3015,7 +3016,7 @@ ${allUrls.map(url => `  <url>
 
       const doctor = await storage.getUser(userId);
       const doctorName = [doctor?.firstName, doctor?.lastName].filter(Boolean).join(' ') || doctor?.email || 'Ваш гомеопат';
-      const baseUrl = process.env.APP_URL || "https://alleho.ru";
+      const baseUrl = process.env.APP_URL || BASE_URL;
       const inviteUrl = `${baseUrl}/invite/accept?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
 
       try {

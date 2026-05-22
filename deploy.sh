@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.prod.yml"
 ENV_FILE="${SCRIPT_DIR}/.env.prod"
-APP_IMAGE=svorobyev201/alleho:latest
+APP_IMAGE=svorobyev201/hovial:latest
 
 echo "🚀 Старт деплоя приложения..."
 

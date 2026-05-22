@@ -1,6 +1,6 @@
 # Nginx: HTTP и HTTPS
 
-В репозитории по умолчанию **`default.conf`** уже настроен на HTTPS (редирект с 80 на 443). После деплоя сайт доступен по **https://alleho.ru**.
+В репозитории по умолчанию **`default.conf`** уже настроен на HTTPS (редирект с 80 на 443). После деплоя сайт доступен по **https://hovial.com**.
 
 ## Первая установка (ещё нет сертификатов)
 
@@ -20,23 +20,23 @@
    sudo apt update && sudo apt install certbot -y
    ```
 
-2. В каталоге с `docker-compose.prod.yml` (например `~/alleho`) создайте каталог для проверки домена:
+2. В каталоге с `docker-compose.prod.yml` создайте каталог для проверки домена:
    ```bash
    mkdir -p certbot-webroot
    ```
 
 3. Получите сертификат:
    ```bash
-   sudo certbot certonly --webroot -w $(pwd)/certbot-webroot -d alleho.ru -d www.alleho.ru
+   sudo certbot certonly --webroot -w $(pwd)/certbot-webroot -d hovial.com -d www.hovial.com
    ```
-   Файлы появятся в `/etc/letsencrypt/live/alleho.ru/`.
+   Файлы появятся в `/etc/letsencrypt/live/hovial.com/`.
 
 4. Убедитесь, что используется конфиг с HTTPS (в репо это уже `default.conf`). Перезапустите nginx:
    ```bash
    docker-compose -f docker-compose.prod.yml --env-file .env.prod restart nginx
    ```
 
-После этого **http://alleho.ru** перенаправляет на **https://alleho.ru**.
+После этого **http://hovial.com** перенаправляет на **https://hovial.com**.
 
 ## Обновление сертификата
 

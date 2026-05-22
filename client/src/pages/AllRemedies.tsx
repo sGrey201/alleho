@@ -32,7 +32,7 @@ export default function AllRemedies() {
     <>
       <SEO
         title="Все препараты"
-        description="Полный список гомеопатических препаратов на Alleho - пространство для работы и общения гомеопатов. Найдите статьи о препаратах для изучения гомеопатии."
+        description="Полный список гомеопатических препаратов на hovial — Be Jovial. Найдите статьи о препаратах для изучения гомеопатии."
         keywords={remedies.map(r => r.name).join(', ')}
         url="/remedies"
         schema={schema}

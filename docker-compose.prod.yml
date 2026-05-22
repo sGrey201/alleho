@@ -1,6 +1,6 @@
 services:
   app:
-    image: svorobyev201/alleho:latest
+    image: svorobyev201/hovial:latest
     restart: always
     environment:
       PORT: "8000"

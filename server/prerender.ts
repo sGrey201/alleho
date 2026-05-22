@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { storage } from './storage';
+import { BASE_URL, SITE_TITLE } from '@shared/brand';
 
 const BOT_USER_AGENTS = [
   'googlebot',
@@ -48,8 +49,7 @@ function formatArticleTitle(tags: { name: string; category: string }[]): string 
 }
 
 function generateArticleHtml(article: any, tags: any[]): string {
-  const BASE_URL = 'https://alleho.ru';
-  const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
+  const SITE_NAME = SITE_TITLE;
   
   const title = formatArticleTitle(tags);
   const fullTitle = `${title} | ${SITE_NAME}`;
@@ -140,8 +140,7 @@ function generateArticleHtml(article: any, tags: any[]): string {
 }
 
 function generateTagListHtml(tags: any[], category: 'remedy' | 'situation'): string {
-  const BASE_URL = 'https://alleho.ru';
-  const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
+  const SITE_NAME = SITE_TITLE;
   
   const isRemedy = category === 'remedy';
   const title = isRemedy ? 'Все препараты' : 'Все случаи';

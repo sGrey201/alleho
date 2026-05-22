@@ -77,15 +77,12 @@ export function Header() {
             onClick={() => window.dispatchEvent(new CustomEvent('resetFilters'))}
           >
             <img
-              src="/iconpack/icon-128x128.png"
-              alt="Alleho"
-              className="h-10 w-10 rounded-md object-cover"
+              src="/logo.png"
+              alt="hovial"
+              className="h-10 w-auto object-contain"
               loading="eager"
               decoding="async"
             />
-            <span className="text-lg font-bold text-foreground">
-              Alleho
-            </span>
           </Link>
         </div>
 

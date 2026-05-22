@@ -1065,7 +1065,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       className={`mb-1 block w-full rounded-lg border-l-2 px-2 py-1 pr-8 text-left text-[11px] leading-tight ${
         isOwn
           ? "border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40"
-          : "border-primary/70 bg-background/60"
+          : "border-primary/70 bg-white"
       }`}
     >
       <span className="block font-semibold text-[10px] text-muted-foreground truncate">
@@ -1259,7 +1259,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                         className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
                           isOwn
                             ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                            : "border-transparent bg-muted"
+                            : "border-border/50 bg-white text-foreground shadow-sm"
                         }`}
                         style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                       >

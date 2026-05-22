@@ -18,15 +18,15 @@
   --sidebar: 210 20% 95%;
   --sidebar-foreground: 215 25% 17%;
   --sidebar-border: 210 18% 92%;
-  --sidebar-primary: 211 63% 33%;
+  --sidebar-primary: 62 26% 35%;
   --sidebar-primary-foreground: 210 20% 98%;
   --sidebar-accent: 210 18% 91%;
   --sidebar-accent-foreground: 215 25% 17%;
-  --sidebar-ring: 211 63% 33%;
+  --sidebar-ring: 62 26% 35%;
   --popover: 0 0% 100%;
   --popover-foreground: 215 25% 17%;
   --popover-border: 210 18% 91%;
-  --primary: 211 63% 33%;
+  --primary: 62 26% 35%;
   --primary-foreground: 210 20% 98%;
   --secondary: 156 50% 40%;
   --secondary-foreground: 0 0% 100%;
@@ -39,8 +39,8 @@
   --success: 156 50% 53%;
   --success-foreground: 0 0% 100%;
   --input: 210 20% 50%;
-  --ring: 211 63% 33%;
-  --chart-1: 211 63% 33%;
+  --ring: 62 26% 35%;
+  --chart-1: 62 26% 35%;
   --chart-2: 156 50% 40%;
   --chart-3: 262 52% 47%;
   --chart-4: 211 45% 55%;
@@ -104,15 +104,15 @@
   --sidebar: 215 20% 14%;
   --sidebar-foreground: 210 20% 95%;
   --sidebar-border: 215 18% 17%;
-  --sidebar-primary: 211 63% 45%;
+  --sidebar-primary: 62 26% 45%;
   --sidebar-primary-foreground: 210 20% 98%;
   --sidebar-accent: 215 18% 17%;
   --sidebar-accent-foreground: 210 20% 95%;
-  --sidebar-ring: 211 63% 45%;
+  --sidebar-ring: 62 26% 45%;
   --popover: 215 20% 16%;
   --popover-foreground: 210 20% 95%;
   --popover-border: 215 18% 19%;
-  --primary: 211 63% 45%;
+  --primary: 62 26% 45%;
   --primary-foreground: 210 20% 98%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 98%;
@@ -125,8 +125,8 @@
   --success: 156 50% 53%;
   --success-foreground: 215 20% 10%;
   --input: 210 30% 65%;
-  --ring: 211 63% 45%;
-  --chart-1: 211 70% 60%;
+  --ring: 62 26% 45%;
+  --chart-1: 62 30% 55%;
   --chart-2: 156 55% 58%;
   --chart-3: 262 60% 68%;
   --chart-4: 211 50% 72%;
@@ -319,4 +319,48 @@
 .message {
   -webkit-touch-callout: none;
   user-select: none;
+}
+
+.chat-panel-bg {
+  --paper-base: #faf7f1;
+  --paper-light: #fffdf9;
+  --paper-warm: #f3efe8;
+  background-color: var(--paper-base);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(
+      93deg,
+      transparent 0,
+      transparent 11px,
+      rgba(160, 140, 100, 0.01) 11px,
+      rgba(160, 140, 100, 0.01) 12px
+    ),
+    radial-gradient(ellipse 130% 85% at 50% -8%, var(--paper-light) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 60% at 100% 40%, rgba(255, 255, 255, 0.55) 0%, transparent 48%),
+    radial-gradient(ellipse 80% 55% at 0% 85%, rgba(90, 70, 45, 0.025) 0%, transparent 52%),
+    linear-gradient(172deg, #fdfbf7 0%, var(--paper-base) 42%, var(--paper-warm) 100%);
+  background-size: 180px 180px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-blend-mode: soft-light, normal, normal, normal, normal, normal;
+}
+
+.dark .chat-panel-bg {
+  --paper-base: #36322c;
+  --paper-light: #444038;
+  --paper-warm: #2e2a24;
+  background-color: var(--paper-base);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(
+      93deg,
+      transparent 0,
+      transparent 11px,
+      rgba(255, 240, 210, 0.02) 11px,
+      rgba(255, 240, 210, 0.02) 12px
+    ),
+    radial-gradient(ellipse 130% 85% at 50% -8%, var(--paper-light) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 60% at 100% 40%, rgba(255, 255, 255, 0.04) 0%, transparent 48%),
+    radial-gradient(ellipse 80% 55% at 0% 85%, rgba(0, 0, 0, 0.1) 0%, transparent 52%),
+    linear-gradient(172deg, #3e3a34 0%, var(--paper-base) 42%, var(--paper-warm) 100%);
+  background-size: 180px 180px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-blend-mode: soft-light, normal, normal, normal, normal, normal;
 }

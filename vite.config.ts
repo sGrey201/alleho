@@ -12,10 +12,10 @@ export default defineConfig({
       registerType: "autoUpdate",
       strategies: "generateSW",
       manifest: {
-        name: "Alleho - пространство для работы и общения гомеопатов",
-        short_name: "Alleho",
+        name: "hovial — Be Jovial",
+        short_name: "hovial",
         description: "Живые портреты гомеопатических типажей",
-        theme_color: "#14532d",
+        theme_color: "#6B7042",
         background_color: "#ffffff",
         display: "standalone",
         orientation: "portrait",

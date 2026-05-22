@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async';
+import { BASE_URL, SITE_TITLE } from '@shared/brand';
 
 interface SEOProps {
   title?: string;
@@ -16,10 +17,9 @@ interface SEOProps {
   schema?: object;
 }
 
-const BASE_URL = 'https://alleho.ru';
 const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`;
-const SITE_NAME = 'Alleho - пространство для работы и общения гомеопатов';
-const DEFAULT_TITLE = 'Alleho - пространство для работы и общения гомеопатов';
+const SITE_NAME = SITE_TITLE;
+const DEFAULT_TITLE = SITE_TITLE;
 const DEFAULT_DESCRIPTION = 'Уникальная галерея живых гомеопатических портретов. Ресурс, динамично пополняющийся новыми зарисовками из жизни.';
 
 export function SEO({

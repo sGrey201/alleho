@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { BASE_URL, SITE_TITLE, THEME_COLOR } from '@shared/brand';
 
 let connectionSettings: any;
 
@@ -59,7 +60,7 @@ function getBaseUrl() {
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
       : process.env.REPLIT_DOMAINS
         ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-        : "http://localhost:5000";
+        : BASE_URL;
 }
 
 export async function sendPasswordResetEmail(to: string, resetToken: string) {
@@ -80,17 +81,17 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Восстановление пароля - Alleho',
+    subject: `Восстановление пароля - ${SITE_TITLE}`,
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2C5282; margin-bottom: 20px;">Восстановление пароля</h1>
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Восстановление пароля</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Вы запросили восстановление пароля для вашего аккаунта на Alleho.
+          Вы запросили восстановление пароля для вашего аккаунта на ${SITE_TITLE}.
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Нажмите на кнопку ниже, чтобы установить новый пароль:
         </p>
-        <a href="${resetUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+        <a href="${resetUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
           Установить новый пароль
         </a>
         <p style="font-size: 14px; color: #666; margin-top: 30px;">
@@ -101,7 +102,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Alleho - пространство для работы и общения гомеопатов
+          ${SITE_TITLE}
         </p>
       </div>
     `
@@ -119,17 +120,17 @@ export async function sendInviteEmail(
 
   const inviterLine =
     doctorEmail && doctorEmail.trim()
-      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`
-      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу Alleho для ведения вашей истории здоровья.`;
+      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу ${SITE_TITLE} для ведения вашей истории здоровья.`
+      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу ${SITE_TITLE} для ведения вашей истории здоровья.`;
   const inviteTitle = inviteType === "homeopath" ? "Приглашение в сообщество гомеопатов" : "Приглашение на Стену здоровья";
   
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Приглашение на Alleho',
+    subject: `Приглашение на ${SITE_TITLE}`,
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2C5282; margin-bottom: 20px;">${inviteTitle}</h1>
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">${inviteTitle}</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Здравствуйте!
         </p>
@@ -139,7 +140,7 @@ export async function sendInviteEmail(
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Перейдите по ссылке, чтобы завершить регистрацию. Ссылка действует 24 часа и может быть использована только один раз:
         </p>
-        <a href="${inviteUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+        <a href="${inviteUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
           Перейти к регистрации
         </a>
         <p style="font-size: 14px; color: #666; margin-top: 30px;">
@@ -147,7 +148,7 @@ export async function sendInviteEmail(
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Alleho - пространство для работы и общения гомеопатов
+          ${SITE_TITLE}
         </p>
       </div>
     `
@@ -161,10 +162,10 @@ export async function sendInviteAccessEmail(to: string, password: string) {
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: "Данные для входа в Alleho",
+    subject: `Данные для входа в ${SITE_TITLE}`,
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2C5282; margin-bottom: 20px;">Регистрация завершена</h1>
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Регистрация завершена</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Ваш аккаунт создан. Используйте эти данные для входа:
         </p>
@@ -172,8 +173,8 @@ export async function sendInviteAccessEmail(to: string, password: string) {
           <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>
           <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
         </div>
-        <a href="${loginUrl}" style="display: inline-block; background-color: #2C5282; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
-          Войти в Alleho
+        <a href="${loginUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Войти в ${SITE_TITLE}
         </a>
         <p style="font-size: 14px; color: #666; margin-top: 30px;">
           Рекомендуем сменить пароль после первого входа.
@@ -189,10 +190,10 @@ export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAm
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: 'Чек об оплате - Alleho',
+    subject: `Чек об оплате - ${SITE_TITLE}`,
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2C5282; margin-bottom: 20px;">Чек об оплате</h1>
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Чек об оплате</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
           Здравствуйте!
         </p>
@@ -210,7 +211,7 @@ export async function sendReceiptEmail(to: string, receiptUrl: string, paymentAm
         </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999;">
-          Alleho - пространство для работы и общения гомеопатов
+          ${SITE_TITLE}
         </p>
       </div>
     `
