@@ -824,8 +824,16 @@ export default function HealthWall() {
   }, [showQuestionnaire]);
 
   useEffect(() => {
-    if (!showQuestionnaire) setQuestionnaireViewMode("view");
-  }, [showQuestionnaire]);
+    if (showQuestionnaire && isOwnWall) {
+      setQuestionnaireViewMode("edit");
+    }
+  }, [showQuestionnaire, isOwnWall]);
+
+  useEffect(() => {
+    if (!showQuestionnaire) {
+      setQuestionnaireViewMode(isOwnWall ? "edit" : "view");
+    }
+  }, [showQuestionnaire, isOwnWall]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_DIVIDER, panelWidth.toString());
@@ -871,7 +879,10 @@ export default function HealthWall() {
     focusMessageInput();
   };
 
-  const openQuestionnaire = () => setShowQuestionnaire(true);
+  const openQuestionnaire = () => {
+    setShowQuestionnaire(true);
+    if (isOwnWall) setQuestionnaireViewMode("edit");
+  };
 
   const isLoadingMessages = messagesLoading;
 
@@ -1638,7 +1649,7 @@ export default function HealthWall() {
                 <QuestionnairePanel
                   patientUserId={patientUserId!}
                   isOwnQuestionnaire={isOwnWall}
-                  initialViewMode="view"
+                  initialViewMode={isOwnWall ? "edit" : "view"}
                   viewMode={questionnaireViewMode}
                   onViewModeChange={setQuestionnaireViewMode}
                   hideViewModeToggle
@@ -1683,7 +1694,7 @@ export default function HealthWall() {
                   <QuestionnairePanel
                     patientUserId={patientUserId!}
                     isOwnQuestionnaire={isOwnWall}
-                    initialViewMode="view"
+                    initialViewMode={isOwnWall ? "edit" : "view"}
                     viewMode={questionnaireViewMode}
                     onViewModeChange={setQuestionnaireViewMode}
                     hideViewModeToggle

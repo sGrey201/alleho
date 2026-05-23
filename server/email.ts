@@ -162,7 +162,7 @@ export async function sendInviteAccessEmail(to: string, password: string) {
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: `Данные для входа в ${SITE_TITLE}`,
+    subject: "Добро пожаловать в Hovial ✨",
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Регистрация завершена</h1>
@@ -174,7 +174,7 @@ export async function sendInviteAccessEmail(to: string, password: string) {
           <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
         </div>
         <a href="${loginUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
-          Войти в ${SITE_TITLE}
+          Войти в Hovial
         </a>
         <p style="font-size: 14px; color: #666; margin-top: 30px;">
           Рекомендуем сменить пароль после первого входа.
