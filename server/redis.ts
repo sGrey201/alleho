@@ -1,6 +1,8 @@
 import Redis from "ioredis";
 
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL =
+  process.env.REDIS_URL ??
+  (process.env.REDIS_HOST ? `redis://${process.env.REDIS_HOST}:6379` : undefined);
 const HEALTH_WALL_RECENT_PREFIX = "health-wall:recent:";
 const HEALTH_WALL_CHANNEL_PREFIX = "health-wall:channel:";
 const CONVERSATION_RECENT_PREFIX = "conversation:recent:";

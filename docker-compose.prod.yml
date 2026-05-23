@@ -18,6 +18,7 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
       REDIS_HOST: redis
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       - db
       - redis

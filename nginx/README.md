@@ -38,6 +38,14 @@
 
 После этого **http://hovial.com** перенаправляет на **https://hovial.com**.
 
+## WebSocket (`/ws`)
+
+Для real-time (стена здоровья, мессенджер) в конфиге есть `location /ws` с заголовками `Upgrade` и `Connection: upgrade`. Без них в логах app будут частые `GET /ws` каждые ~2 с, а сообщения не приходят в реальном времени.
+
+После изменения nginx-конфига: `docker compose ... restart nginx`.
+
+В контейнере `app` нужен `REDIS_URL` (в `docker-compose.prod.yml` по умолчанию `redis://redis:6379`) — через Redis идёт pub/sub для WebSocket.
+
 ## Обновление сертификата
 
 Let's Encrypt выдаёт сертификаты на 90 дней. Обновите так:
