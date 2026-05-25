@@ -29,6 +29,7 @@ import {
   FileText,
   Image,
   ArrowLeft,
+  LogOut,
   Pill,
   X,
   GripVertical,
@@ -51,6 +52,7 @@ import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
 import { useHealthWallWs } from "@/hooks/useHealthWallWs";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { cn, profileAvatarSrc } from "@/lib/utils";
@@ -288,8 +290,13 @@ export default function HealthWall() {
   const markReadInFlightRef = useRef(false);
   
   const [showQuestionnaire, setShowQuestionnaire] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (new URLSearchParams(window.location.search).get("questionnaire") === "1") {
+      return true;
+    }
+    if (window.innerWidth < 768) return false;
     const saved = localStorage.getItem(STORAGE_KEY_PANEL);
-    return saved === 'true';
+    return saved === "true";
   });
   const [questionnaireViewMode, setQuestionnaireViewMode] = useState<"edit" | "view">("view");
   const [panelWidth, setPanelWidth] = useState(() => {
@@ -307,13 +314,20 @@ export default function HealthWall() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("questionnaire") === "1") {
       setShowQuestionnaire(true);
       localStorage.setItem(STORAGE_KEY_PANEL, "true");
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOwnWall || isMobile) return;
+    if (localStorage.getItem(STORAGE_KEY_PANEL) === null) {
+      setShowQuestionnaire(true);
+    }
+  }, [isOwnWall, isMobile]);
 
   const { uploadFile, isUploading: uploadingPhoto } = useUpload({
     onSuccess: async (response) => {
@@ -788,6 +802,46 @@ export default function HealthWall() {
     return [...(messages ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [messages]);
 
+  const galleryImages = useMemo(() => {
+    const filtered = isOwnWall
+      ? displayMessages.filter((msg) => msg.messageType !== "followup")
+      : displayMessages;
+    return filtered
+      .filter((msg) => msg.imageUrl && !msg.deletedAt)
+      .map((msg) => msg.imageUrl!);
+  }, [displayMessages, isOwnWall]);
+
+  const goToPrevGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const prevIndex = index <= 0 ? galleryImages.length - 1 : index - 1;
+    setSelectedImage(galleryImages[prevIndex]);
+  }, [galleryImages, selectedImage]);
+
+  const goToNextGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const nextIndex = index < 0 || index >= galleryImages.length - 1 ? 0 : index + 1;
+    setSelectedImage(galleryImages[nextIndex]);
+  }, [galleryImages, selectedImage]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToPrevGalleryImage();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToNextGalleryImage();
+      } else if (e.key === "Escape") {
+        setSelectedImage(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedImage, goToPrevGalleryImage, goToNextGalleryImage]);
+
   const pinnedMessages = useMemo(
     () => displayMessages.filter((msg) => msg.pinnedAt && !msg.deletedAt),
     [displayMessages]
@@ -928,6 +982,14 @@ export default function HealthWall() {
     if (isOwnWall) setQuestionnaireViewMode("edit");
   };
 
+  const toggleQuestionnaire = () => {
+    if (showQuestionnaire) {
+      closeQuestionnaire();
+    } else {
+      openQuestionnaire();
+    }
+  };
+
   const isLoadingMessages = messagesLoading;
 
   if (authLoading || isLoadingMessages) {
@@ -1023,6 +1085,21 @@ export default function HealthWall() {
     ? t.healthWall
     : patientInfo?.patientName || patientInfo?.email?.split('@')[0] || t.patient;
   const profileTargetUserId = !isOwnWall ? patientUserId : null;
+
+  const handleBackClick = () => {
+    if (isAdmin && isMobile) {
+      setLocation("/health-wall");
+    } else {
+      setLocation("/messenger");
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    queryClient.clear();
+    window.location.href = "/";
+  };
+
   const canSelectMessageType = isAdmin && !isOwnWall;
   const messageTypeConfig: Record<'message' | 'prescription' | 'followup', { label: string; icon: typeof MessageCircle; activeClass: string }> = {
     message: { label: "Сообщение", icon: MessageCircle, activeClass: "" },
@@ -1600,20 +1677,21 @@ export default function HealthWall() {
               className="flex h-full min-h-0 flex-col border-r bg-white dark:bg-background"
               style={{ width: `${panelWidth}%` }}
             >
-              <div className="flex shrink-0 items-center gap-2 border-b border-border/50 bg-white px-3 py-3 dark:bg-background md:px-4">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-white px-3 py-3 dark:bg-background md:px-4">
+                <QuestionnaireViewModeSegment
+                  mode={questionnaireViewMode}
+                  onChange={setQuestionnaireViewMode}
+                />
                 <Button
                   variant="secondary"
                   size="icon"
                   onClick={closeQuestionnaire}
                   className="h-10 w-10 shrink-0 rounded-full border border-border/40 bg-white text-black dark:bg-background"
+                  aria-label="Закрыть анкету"
                   data-testid="button-questionnaire-back"
                 >
-                  <ArrowLeft className="h-5 w-5" />
+                  <X className="h-5 w-5" />
                 </Button>
-                <QuestionnaireViewModeSegment
-                  mode={questionnaireViewMode}
-                  onChange={setQuestionnaireViewMode}
-                />
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-6 dark:bg-background md:px-4">
                 <QuestionnairePanel
@@ -1642,8 +1720,31 @@ export default function HealthWall() {
           style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : undefined}
         >
           {(!showQuestionnaire || !isMobile) && (
-          <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
-            <div className="flex h-10 items-center gap-2 pointer-events-auto">
+          <div className="pointer-events-none z-30 flex shrink-0 flex-col gap-1.5 px-3 pt-3.5">
+            <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
+            {isOwnWall && (
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => void handleLogout()}
+                className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
+                aria-label={t.logout}
+                data-testid="button-health-wall-logout"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            )}
+            {isMobile && !isOwnWall && (
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={handleBackClick}
+                className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
+                data-testid="button-back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1651,7 +1752,7 @@ export default function HealthWall() {
                 if (profileId) setLocation(`/profile/${profileId}`);
               }}
               disabled={!profileTargetUserId && !isOwnWall}
-              className={`h-10 w-10 shrink-0 rounded-full border border-border bg-card p-0 shadow-sm ${
+              className={`h-12 w-12 shrink-0 rounded-full border border-border bg-card p-0 shadow-sm ${
                 profileTargetUserId || isOwnWall ? "cursor-pointer" : ""
               }`}
               data-testid="button-header-avatar"
@@ -1661,11 +1762,11 @@ export default function HealthWall() {
                   src={profileAvatarSrc(headerAvatarUrl)}
                   alt={displayName}
                 />
-                <AvatarFallback className="text-xs font-semibold">{headerInitials}</AvatarFallback>
+                <AvatarFallback className="text-sm font-semibold">{headerInitials}</AvatarFallback>
               </Avatar>
             </button>
             <div
-              className={`flex h-10 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${profileTargetUserId || isOwnWall ? "cursor-pointer" : ""}`}
+              className={`flex h-12 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${profileTargetUserId || isOwnWall ? "cursor-pointer" : ""}`}
               data-testid="header-pill"
               onClick={() => {
                 if (profileTargetUserId) {
@@ -1716,34 +1817,61 @@ export default function HealthWall() {
             <Button
               variant="secondary"
               size="icon"
-              onClick={openQuestionnaire}
-              className="h-10 w-10 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50 [&_svg]:text-foreground"
+              onClick={toggleQuestionnaire}
+              className={`h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50 [&_svg]:text-foreground ${showQuestionnaire ? "ring-2 ring-primary/40" : ""}`}
               data-testid="button-open-questionnaire"
+              aria-pressed={showQuestionnaire}
             >
-              <FileText className="h-4 w-4" />
+              <FileText className="h-5 w-5" />
             </Button>
             </div>
+            {activePinnedMessage && (
+              <button
+                type="button"
+                onClick={handlePinnedBannerClick}
+                className="pointer-events-auto flex w-full items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
+                data-testid="banner-health-wall-pinned-message"
+              >
+                <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-primary">
+                    {t.messagePinnedTitle}
+                    {pinnedMessages.length > 1 && (
+                      <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-foreground/80">
+                    {activePinnedMessage.content
+                      ? activePinnedMessage.content
+                      : activePinnedMessage.imageUrl
+                        ? t.messagePhotoLabel
+                        : t.messageDeleted}
+                  </p>
+                </div>
+              </button>
+            )}
           </div>
           )}
-          <div className="flex-1 relative min-h-0">
+          <div className="relative min-h-0 flex-1">
             {isMobile && showQuestionnaire ? (
               <div
                 className="absolute inset-0 z-10 flex flex-col overflow-hidden bg-white pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] dark:bg-background"
               >
-                <div className="flex shrink-0 items-center gap-2 border-b border-border/40 bg-white px-4 py-3 dark:bg-background">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/40 bg-white px-4 py-3 dark:bg-background">
+                  <QuestionnaireViewModeSegment
+                    mode={questionnaireViewMode}
+                    onChange={setQuestionnaireViewMode}
+                  />
                   <Button
                     variant="secondary"
                     size="icon"
                     onClick={closeQuestionnaire}
                     className="h-10 w-10 shrink-0 rounded-full border border-border/40 bg-white text-black dark:bg-background"
+                    aria-label="Закрыть анкету"
                     data-testid="button-questionnaire-back"
                   >
-                    <ArrowLeft className="h-5 w-5" />
+                    <X className="h-5 w-5" />
                   </Button>
-                  <QuestionnaireViewModeSegment
-                    mode={questionnaireViewMode}
-                    onChange={setQuestionnaireViewMode}
-                  />
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 dark:bg-background">
                   <QuestionnairePanel
@@ -1759,35 +1887,10 @@ export default function HealthWall() {
               </div>
             ) : (
               <>
-              {activePinnedMessage && (
-                <button
-                  type="button"
-                  onClick={handlePinnedBannerClick}
-                  className="absolute inset-x-0 top-[68px] z-20 mx-3 flex items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
-                  data-testid="banner-health-wall-pinned-message"
-                >
-                  <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-semibold text-primary">
-                      {t.messagePinnedTitle}
-                      {pinnedMessages.length > 1 && (
-                        <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
-                      )}
-                    </p>
-                    <p className="truncate text-xs text-foreground/80">
-                      {activePinnedMessage.content
-                        ? activePinnedMessage.content
-                        : activePinnedMessage.imageUrl
-                          ? t.messagePhotoLabel
-                          : t.messageDeleted}
-                    </p>
-                  </div>
-                </button>
-              )}
               <div
                 ref={messagesScrollRef}
                 className={`h-full overflow-y-auto px-4 pb-32 ${
-                  showQuestionnaire && isMobile ? "pt-4" : activePinnedMessage ? "pt-32" : "pt-20"
+                  showQuestionnaire && isMobile ? "pt-4" : "pt-2"
                 }`}
               >
                 <div ref={messagesContentRef} className="space-y-3">
@@ -1957,27 +2060,14 @@ export default function HealthWall() {
         </div>
       </div>
 
-      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 border-none bg-transparent">
-          <div className="relative flex items-center justify-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white z-10"
-              onClick={() => setSelectedImage(null)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-            {selectedImage && (
-              <img 
-                src={selectedImage} 
-                alt="Full size" 
-                className="max-w-full max-h-[90vh] object-contain rounded-lg"
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ImageViewerDialog
+        open={!!selectedImage}
+        imageUrl={selectedImage}
+        hasMultiple={galleryImages.length > 1}
+        onClose={() => setSelectedImage(null)}
+        onPrevious={goToPrevGalleryImage}
+        onNext={goToNextGalleryImage}
+      />
 
       <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
         <DialogContent

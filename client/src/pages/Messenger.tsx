@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, MessageCircle } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
@@ -521,36 +521,39 @@ export default function Messenger() {
           {/* Floating top panel on mobile — Telegram-style */}
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className="grid grid-cols-3 w-full rounded-none border-0 bg-transparent h-auto p-0 min-h-[36px] md:min-h-0">
+              <TabsList className="grid h-10 w-full grid-cols-3 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
                 <TabsTrigger
                   value="doctors"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
+                  <MessageCircle className="h-4 w-4 shrink-0" />
                   <span>Личка</span>
                   {unreadChatsByFolder.doctors > 0 && (
-                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                       {unreadChatsByFolder.doctors}
                     </span>
                   )}
                 </TabsTrigger>
                 <TabsTrigger
                   value="groups"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
+                  <Users className="h-4 w-4 shrink-0" />
                   <span>{t.folderGroups}</span>
                   {unreadChatsByFolder.groups > 0 && (
-                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                       {unreadChatsByFolder.groups}
                     </span>
                   )}
                 </TabsTrigger>
                 <TabsTrigger
                   value="channels"
-                  className="rounded-full data-[state=active]:bg-muted/60 md:data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none py-1.5 md:py-1"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
+                  <Radio className="h-4 w-4 shrink-0" />
                   <span>{t.folderChannels}</span>
                   {unreadChatsByFolder.channels > 0 && (
-                    <span className="ml-1 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                       {unreadChatsByFolder.channels}
                     </span>
                   )}

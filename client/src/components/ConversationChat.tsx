@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { pollPayloadSchema } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -78,6 +79,10 @@ type SearchDoctor = {
 };
 
 type SearchResponse = { doctors: SearchDoctor[]; groups: unknown[]; channels: unknown[] };
+
+function getThumbUrl(url: string): string {
+  return url + (url.includes("?") ? "&" : "?") + "size=thumb";
+}
 
 type MyChatItem = {
   source: "conversation" | "health_wall";
@@ -263,6 +268,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -794,6 +800,45 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     window.setTimeout(() => scrollToMessage(messageId), 80);
   }, [conversationId, sortedMessages.length]);
 
+  const galleryImages = useMemo(
+    () =>
+      sortedMessages
+        .filter((m) => m.imageUrl && !m.deletedAt)
+        .map((m) => m.imageUrl!),
+    [sortedMessages]
+  );
+
+  const goToPrevGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const prevIndex = index <= 0 ? galleryImages.length - 1 : index - 1;
+    setSelectedImage(galleryImages[prevIndex]);
+  }, [galleryImages, selectedImage]);
+
+  const goToNextGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const nextIndex = index < 0 || index >= galleryImages.length - 1 ? 0 : index + 1;
+    setSelectedImage(galleryImages[nextIndex]);
+  }, [galleryImages, selectedImage]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToPrevGalleryImage();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToNextGalleryImage();
+      } else if (e.key === "Escape") {
+        setSelectedImage(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedImage, goToPrevGalleryImage, goToNextGalleryImage]);
+
   const pinnedMessages = useMemo(
     () =>
       sortedMessages.filter(
@@ -1130,9 +1175,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
       {renderForwardedHeader(msg)}
       {msg.imageUrl && (
-        <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
-          <img src={msg.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
-        </a>
+        <img
+          src={getThumbUrl(msg.imageUrl)}
+          alt=""
+          className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+          data-testid={`image-${msg.id}`}
+          onClick={() => setSelectedImage(msg.imageUrl!)}
+        />
       )}
       {msg.messageType === "poll" ? (
         <PollMessageBlock
@@ -1169,13 +1218,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   return (
     <div className="relative flex flex-col h-full min-h-0">
-      <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
-        <div className="flex h-10 items-center gap-2 pointer-events-auto">
+      <div className="pointer-events-none z-30 flex shrink-0 flex-col gap-1.5 px-3 pt-3.5">
+        <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
             variant="secondary"
             size="icon"
             onClick={onBack}
-            className="h-10 w-10 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
+            className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50 md:hidden"
+            data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -1183,7 +1233,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             type="button"
             onClick={handleHeaderProfileClick}
             disabled={!canClickHeader}
-            className={`flex h-10 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${canClickHeader ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+            className={`flex h-12 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${canClickHeader ? "cursor-pointer" : ""}`}
+            data-testid="header-pill"
           >
             <p className="truncate text-sm font-semibold leading-tight">{directDisplayName}</p>
             {conv.type === "direct" && (
@@ -1196,47 +1247,47 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             type="button"
             onClick={handleHeaderProfileClick}
             disabled={!canClickHeader}
-            className={`h-10 w-10 shrink-0 rounded-full border border-border bg-card p-0 shadow-sm ${canClickHeader ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+            className={`h-12 w-12 shrink-0 rounded-full border border-border bg-card p-0 shadow-sm ${canClickHeader ? "cursor-pointer" : ""}`}
+            data-testid="button-header-avatar"
           >
             <Avatar className="h-full w-full">
               <AvatarImage src={profileAvatarSrc(headerAvatarUrl)} />
-              <AvatarFallback className="text-xs font-semibold">{headerInitials}</AvatarFallback>
+              <AvatarFallback className="text-sm font-semibold">{headerInitials}</AvatarFallback>
             </Avatar>
           </button>
         </div>
+        {activePinnedMessage && (
+          <button
+            type="button"
+            onClick={handlePinnedBannerClick}
+            className="pointer-events-auto flex w-full items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
+            data-testid="banner-pinned-message"
+          >
+            <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-primary">
+                {t.messagePinnedTitle}
+                {pinnedMessages.length > 1 && (
+                  <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
+                )}
+              </p>
+              <p className="truncate text-xs text-foreground/80">
+                {activePinnedMessage.messageType === "poll"
+                  ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
+                  : activePinnedMessage.content
+                    ? activePinnedMessage.content
+                    : activePinnedMessage.imageUrl
+                      ? t.messagePhotoLabel
+                      : t.messageDeleted}
+              </p>
+            </div>
+          </button>
+        )}
       </div>
-
-      {activePinnedMessage && (
-        <button
-          type="button"
-          onClick={handlePinnedBannerClick}
-          className="absolute inset-x-0 top-[68px] z-20 mx-3 flex items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
-          data-testid="banner-pinned-message"
-        >
-          <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-primary">
-              {t.messagePinnedTitle}
-              {pinnedMessages.length > 1 && (
-                <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
-              )}
-            </p>
-            <p className="truncate text-xs text-foreground/80">
-              {activePinnedMessage.messageType === "poll"
-                ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
-                : activePinnedMessage.content
-                  ? activePinnedMessage.content
-                  : activePinnedMessage.imageUrl
-                    ? t.messagePhotoLabel
-                    : t.messageDeleted}
-            </p>
-          </div>
-        </button>
-      )}
 
       <div
         ref={messagesScrollRef}
-        className={`flex-1 overflow-y-auto px-4 ${activePinnedMessage ? "pt-32" : "pt-20"} pb-32`}
+        className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-2"
       >
         <div ref={messagesContentRef} className="space-y-3">
           {messagesLoading ? (
@@ -1694,6 +1745,15 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           </div>
         </DialogContent>
       </Dialog>
+
+      <ImageViewerDialog
+        open={!!selectedImage}
+        imageUrl={selectedImage}
+        hasMultiple={galleryImages.length > 1}
+        onClose={() => setSelectedImage(null)}
+        onPrevious={goToPrevGalleryImage}
+        onNext={goToNextGalleryImage}
+      />
 
       <AlertDialog
         open={!!pendingDelete}

@@ -1823,7 +1823,7 @@ export const t = {
   messengerInviteSend: 'Отправить',
   inviteFromMessengerHint: 'Чтобы пригласить пациента, откройте Мессенджер и нажмите «+» → «Пригласить пациента».',
   messengerInviteHomeopath: 'Пригласить гомеопата',
-  homeopathCabinet: 'Кабинет гомеопата',
+  homeopathCabinet: 'Кабинет',
   addToGroup: 'Добавить',
   searchDoctorsToAdd: 'Найдите врача для добавления',
   participants: 'Участники',
