@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
+import { clearHealthWallUnread } from "@/lib/doctorChatsRealtime";
+import { bumpHealthWallPatientInList } from "@/lib/healthWallPatientList";
 
 export interface HealthWallMessageAuthor {
   id: string;
@@ -64,24 +66,68 @@ type HealthWallMessageUnpinnedPayload = {
   messageId: string;
 };
 
-export function useHealthWallWs(patientUserId: string | undefined, enabled: boolean) {
+type HealthWallSeenPayload = {
+  patientUserId: string;
+  userId: string;
+  lastVisitedAt: string;
+  role: "doctor" | "patient";
+};
+
+type PatientInfoCache = {
+  patientLastVisitedAt?: string;
+  [key: string]: unknown;
+};
+
+type ConnectedDoctorCache = {
+  doctorUserId: string;
+  lastVisitedAt?: string;
+  [key: string]: unknown;
+};
+
+export function useHealthWallWs(
+  patientUserId: string | undefined,
+  enabled: boolean,
+  currentUserId?: string
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patientUserIdRef = useRef(patientUserId);
+  const currentUserIdRef = useRef(currentUserId);
+  const markSeenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   patientUserIdRef.current = patientUserId;
+  currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
     if (!enabled || !patientUserId) return;
 
     const messagesKey = () => ["/api/health-wall", patientUserIdRef.current];
+
     const updateMessages = (
       updater: (list: HealthWallMessageWithAuthor[]) => HealthWallMessageWithAuthor[]
     ) => {
       queryClient.setQueryData<HealthWallMessageWithAuthor[]>(messagesKey(), (old) => {
-        if (!old) return old;
-        return updater(old);
+        const base = old ?? [];
+        const updated = updater(base);
+        return old === updated ? old : updated;
       });
+    };
+
+    const scheduleMarkSeen = () => {
+      const pid = patientUserIdRef.current;
+      if (!pid || !currentUserIdRef.current) return;
+      if (markSeenTimeoutRef.current) clearTimeout(markSeenTimeoutRef.current);
+      markSeenTimeoutRef.current = setTimeout(() => {
+        markSeenTimeoutRef.current = null;
+        void fetch(`/api/health-wall/${pid}/seen`, {
+          method: "POST",
+          credentials: "include",
+        })
+          .then((res) => {
+            if (res.ok) clearHealthWallUnread(queryClient, pid);
+          })
+          .catch(() => {});
+      }, 400);
     };
 
     const connect = () => {
@@ -92,6 +138,7 @@ export function useHealthWallWs(patientUserId: string | undefined, enabled: bool
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "subscribe", patientUserId }));
+        scheduleMarkSeen();
       };
 
       ws.onmessage = (event) => {
@@ -103,12 +150,55 @@ export function useHealthWallWs(patientUserId: string | undefined, enabled: bool
             queryClient.setQueryData<HealthWallMessageWithAuthor[]>(
               messagesKey(),
               (old) => {
-                if (!old) return old;
-                const exists = old.some((m) => m.id === payload.id);
-                if (exists) return old;
-                return [...old, payload];
+                const list = old ?? [];
+                if (list.some((m) => m.id === payload.id)) return old;
+                return [...list, payload];
               }
             );
+            queryClient.setQueryData<
+              Array<{ patientUserId: string; lastMessageAt?: string; unreadCount?: number }>
+            >(["/api/health-wall/my/patients"], (old) => {
+              if (!old?.length) return old;
+              const patch: { lastMessageAt: string; unreadCount?: number } = {
+                lastMessageAt: payload.createdAt,
+              };
+              if (
+                payload.authorUserId !== currentUserIdRef.current &&
+                payload.authorUserId === payload.patientUserId
+              ) {
+                const row = old.find((p) => p.patientUserId === payload.patientUserId);
+                patch.unreadCount = (row?.unreadCount ?? 0) + 1;
+              }
+              return bumpHealthWallPatientInList(old, payload.patientUserId, patch);
+            });
+            if (payload.authorUserId !== currentUserIdRef.current) {
+              scheduleMarkSeen();
+            }
+          } else if (data.type === "health_wall_seen" && data.payload) {
+            const payload = data.payload as HealthWallSeenPayload;
+            if (payload.patientUserId !== patientUserIdRef.current) return;
+            if (payload.role === "patient") {
+              if (payload.userId === currentUserIdRef.current) return;
+              queryClient.setQueryData<PatientInfoCache>(
+                ["/api/health-wall", patientUserIdRef.current, "info"],
+                (old) =>
+                  old ? { ...old, patientLastVisitedAt: payload.lastVisitedAt } : old
+              );
+            } else if (payload.role === "doctor") {
+              if (payload.userId === currentUserIdRef.current) {
+                clearHealthWallUnread(queryClient, payload.patientUserId);
+                return;
+              }
+              queryClient.setQueryData<ConnectedDoctorCache[]>(
+                ["/api/health-wall/my/doctors"],
+                (old) =>
+                  old?.map((d) =>
+                    d.doctorUserId === payload.userId
+                      ? { ...d, lastVisitedAt: payload.lastVisitedAt }
+                      : d
+                  ) ?? old
+              );
+            }
           } else if (data.type === "health_wall_message_edited" && data.payload) {
             const payload = data.payload as HealthWallMessageEditedPayload;
             if (payload.patientUserId !== patientUserIdRef.current) return;
@@ -185,7 +275,12 @@ export function useHealthWallWs(patientUserId: string | undefined, enabled: bool
     };
 
     connect();
+
     return () => {
+      if (markSeenTimeoutRef.current) {
+        clearTimeout(markSeenTimeoutRef.current);
+        markSeenTimeoutRef.current = null;
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -198,5 +293,5 @@ export function useHealthWallWs(patientUserId: string | undefined, enabled: bool
         wsRef.current = null;
       }
     };
-  }, [enabled, patientUserId]);
+  }, [enabled, patientUserId, currentUserId]);
 }

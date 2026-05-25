@@ -208,6 +208,7 @@ export interface IStorage {
   addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor>;
   removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean>;
   isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean>;
+  canAccessHealthWall(userId: string, patientUserId: string): Promise<boolean>;
 
   // Invite operations
   createInvite(invite: InsertInvite): Promise<Invite>;
@@ -1345,14 +1346,8 @@ export class DatabaseStorage implements IStorage {
 
     const now = new Date();
     const lastSeenAt = existing?.lastSeenAt ?? null;
-    if (
-      lastSeenAt &&
-      lastSeenAt.getUTCFullYear() === now.getUTCFullYear() &&
-      lastSeenAt.getUTCMonth() === now.getUTCMonth() &&
-      lastSeenAt.getUTCDate() === now.getUTCDate() &&
-      lastSeenAt.getUTCHours() === now.getUTCHours() &&
-      lastSeenAt.getUTCMinutes() === now.getUTCMinutes()
-    ) {
+    const SEEN_NOTIFY_INTERVAL_MS = 2000;
+    if (lastSeenAt && now.getTime() - lastSeenAt.getTime() < SEEN_NOTIFY_INTERVAL_MS) {
       return null;
     }
 
@@ -2038,6 +2033,11 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pushSubscriptions)
       .where(inArray(pushSubscriptions.userId, userIds));
+  }
+
+  async canAccessHealthWall(userId: string, patientUserId: string): Promise<boolean> {
+    if (userId === patientUserId) return true;
+    return this.isHealthWallDoctorConnected(patientUserId, userId);
   }
 }
 

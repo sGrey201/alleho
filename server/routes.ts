@@ -25,6 +25,7 @@ import {
   type ConversationMessage,
   type HealthWallMessage,
 } from "@shared/schema";
+import { notifyDoctorsHealthWallMessage } from "./doctorChatsNotify";
 import {
   pushHealthWallRecentMessage,
   publishHealthWallMessage,
@@ -38,7 +39,6 @@ import {
   type MessageAuthor,
   pushConversationRecentMessage,
   publishConversationMessage,
-  publishConversationSeen,
   publishConversationMessageEdited,
   publishConversationMessageDeleted,
   publishConversationMessagePinned,
@@ -54,6 +54,7 @@ import {
   type ConversationCommentWithAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
+import { notifyConversationSeen, notifyHealthWallSeen } from "./seenNotify";
 import {
   getVapidPublicKey,
   isPushConfigured,
@@ -1377,7 +1378,8 @@ ${allUrls.map(url => `  <url>
 
   async function enrichHealthWallMessages(
     messages: HealthWallMessage[],
-    currentUserId: string
+    currentUserId: string,
+    patientUserId: string
   ): Promise<HealthWallMessageWithAuthor[]> {
     const userIds = new Set<string>();
     messages.forEach((m) => {
@@ -1414,7 +1416,6 @@ ${allUrls.map(url => `  <url>
       messages.map((m) => m.id),
       currentUserId
     );
-
     return messages.map((m) => {
       const reply = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
       return {
@@ -1462,9 +1463,25 @@ ${allUrls.map(url => `  <url>
     currentUserId: string
   ): Promise<void> {
     const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
-    const enriched = await enrichHealthWallMessages(messages, currentUserId);
+    const enriched = await enrichHealthWallMessages(messages, currentUserId, patientUserId);
     await backfillHealthWallRecent(patientUserId, enriched);
   }
+
+  app.post("/api/health-wall/:patientUserId/seen", isAuthenticated, async (req: any, res) => {
+    try {
+      const { patientUserId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!(await canAccessHealthWall(req, patientUserId))) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      await notifyHealthWallSeen(patientUserId, currentUserId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error marking health wall seen:", error);
+      res.status(500).json({ message: "Failed to mark seen" });
+    }
+  });
 
   // Get health wall messages for a patient
   app.get('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
@@ -1476,20 +1493,16 @@ ${allUrls.map(url => `  <url>
         return res.status(403).json({ message: "Access denied" });
       }
       
-      // Track visits
       if (currentUserId) {
-        if (currentUserId === patientUserId) {
-          await storage.updatePatientLastVisit(patientUserId);
-        } else {
-          const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
-          if (isConnected) {
-            await storage.updateDoctorLastVisit(patientUserId, currentUserId);
-          }
-        }
+        await notifyHealthWallSeen(patientUserId, currentUserId);
       }
 
       const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
-      const messagesWithAuthors = await enrichHealthWallMessages(messages, currentUserId ?? "");
+      const messagesWithAuthors = await enrichHealthWallMessages(
+        messages,
+        currentUserId ?? "",
+        patientUserId
+      );
       res.json(messagesWithAuthors);
       backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
         console.error("Redis backfill error:", err)
@@ -1585,9 +1598,16 @@ ${allUrls.map(url => `  <url>
       });
       
       const message = await storage.createHealthWallMessage(validatedData);
-      const [messageWithAuthor] = await enrichHealthWallMessages([message], currentUserId);
+      const [messageWithAuthor] = await enrichHealthWallMessages(
+        [message],
+        currentUserId,
+        patientUserId
+      );
       await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
       await publishHealthWallMessage(patientUserId, messageWithAuthor);
+      void notifyDoctorsHealthWallMessage(patientUserId, messageWithAuthor, currentUserId).catch((err) =>
+        console.error("[DoctorChats] notify doctors error:", err)
+      );
       void notifyHealthWallNewMessage(patientUserId, currentUserId, messageWithAuthor).catch((err) =>
         console.error("[Push] health wall notify error:", err)
       );
@@ -2011,14 +2031,7 @@ ${allUrls.map(url => `  <url>
       const canReadConversation = inConv || conv.type === "channel";
       if (!canReadConversation) return res.status(403).json({ message: "Access denied" });
       if (inConv) {
-        const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
-        if (lastSeenAt) {
-          await publishConversationSeen(id, {
-            conversationId: id,
-            userId: currentUserId,
-            lastSeenAt: lastSeenAt.toISOString(),
-          });
-        }
+        await notifyConversationSeen(id, currentUserId);
       }
       const participants = await storage.getConversationParticipants(id);
       res.json({ ...conv, participants });
@@ -2213,7 +2226,6 @@ ${allUrls.map(url => `  <url>
       currentUserId
     );
     const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
-
     const base = messages.map((m) => {
       const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
       const replyAuthor = replyTarget ? userMap.get(replyTarget.authorUserId) : null;
@@ -2266,6 +2278,21 @@ ${allUrls.map(url => `  <url>
     await backfillConversationRecent(conversationId, enriched);
   }
 
+  app.post("/api/conversations/:id/seen", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      await notifyConversationSeen(id, currentUserId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error marking conversation seen:", error);
+      res.status(500).json({ message: "Failed to mark seen" });
+    }
+  });
+
   // Get conversation messages (Postgres; Redis write-through cache)
   app.get("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -2278,14 +2305,7 @@ ${allUrls.map(url => `  <url>
       const canReadMessages = inConv || conv.type === "channel";
       if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
       if (inConv) {
-        const lastSeenAt = await storage.markConversationSeen(id, currentUserId);
-        if (lastSeenAt) {
-          await publishConversationSeen(id, {
-            conversationId: id,
-            userId: currentUserId,
-            lastSeenAt: lastSeenAt.toISOString(),
-          });
-        }
+        await notifyConversationSeen(id, currentUserId);
       }
       const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
       const withAuthors = await enrichConversationMessages(messages, currentUserId);
@@ -3009,6 +3029,7 @@ ${allUrls.map(url => `  <url>
       // Get additional info for each patient
       const result = await Promise.all(patients.map(async (p) => {
         const stats = await storage.getPatientHealthWallStats(p.patient.id, userId);
+        const lastMessageAt = stats.lastMessageAt;
         return {
           id: p.connection.id,
           patientUserId: p.patient.id,
@@ -3020,9 +3041,20 @@ ${allUrls.map(url => `  <url>
           profileImageUrl: p.patient.profileImageUrl ?? null,
           createdAt: p.connection.createdAt,
           unreadCount: stats.unreadCount,
-          lastMessageAt: stats.lastMessageAt,
+          lastMessageAt: lastMessageAt instanceof Date ? lastMessageAt.toISOString() : lastMessageAt,
         };
       }));
+
+      result.sort((a, b) => {
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+        if (bTime !== aTime) return bTime - aTime;
+        const aName =
+          [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || a.email || "";
+        const bName =
+          [b.firstName, b.lastName].filter(Boolean).join(" ").trim() || b.email || "";
+        return aName.localeCompare(bName, "ru");
+      });
 
       res.json(result);
     } catch (error) {

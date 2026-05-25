@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { broadcastDoctorChatsUpdated } from "./wsBroadcast";
 
 const REDIS_URL =
   process.env.REDIS_URL ??
@@ -75,6 +76,13 @@ export type HealthWallMessagePinnedPayload = {
 export type HealthWallMessageUnpinnedPayload = {
   patientUserId: string;
   messageId: string;
+};
+
+export type HealthWallSeenPayload = {
+  patientUserId: string;
+  userId: string;
+  lastVisitedAt: string;
+  role: "doctor" | "patient";
 };
 
 let client: Redis | null = null;
@@ -189,6 +197,13 @@ export async function publishHealthWallMessageUnpinned(
   await publishHealthWallEvent(patientUserId, "health_wall_message_unpinned", payload);
 }
 
+export async function publishHealthWallSeen(
+  patientUserId: string,
+  payload: HealthWallSeenPayload
+): Promise<void> {
+  await publishHealthWallEvent(patientUserId, "health_wall_seen", payload);
+}
+
 export async function backfillHealthWallRecent(patientUserId: string, messages: HealthWallMessageWithAuthor[]): Promise<void> {
   const c = getClient();
   if (!c || messages.length === 0) return;
@@ -209,16 +224,41 @@ export function isRedisAvailable(): boolean {
   return !!REDIS_URL;
 }
 
-export async function publishDoctorChatsUpdated(doctorUserId: string): Promise<void> {
+export type DoctorHealthWallChatUpdate = {
+  patientUserId: string;
+  message: HealthWallMessageWithAuthor;
+  lastMessageAt: string;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+};
+
+export async function publishDoctorChatsUpdated(
+  doctorUserId: string,
+  healthWall?: DoctorHealthWallChatUpdate
+): Promise<void> {
+  const envelope = {
+    type: "doctor_chats_updated" as const,
+    doctorUserId,
+    timestamp: new Date().toISOString(),
+    healthWall: healthWall ?? undefined,
+  };
+  const serialized = JSON.stringify(envelope);
+  const clientWire = JSON.stringify({
+    type: "doctor_chats_updated",
+    payload: {
+      timestamp: envelope.timestamp,
+      healthWall: envelope.healthWall,
+    },
+  });
   const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      DOCTOR_EVENTS_CHANNEL_PREFIX + doctorUserId,
-      JSON.stringify({ type: "doctor_chats_updated", doctorUserId, timestamp: new Date().toISOString() })
-    );
-  } catch (err) {
-    console.error("[Redis] publishDoctorChatsUpdated error:", err);
+  if (c) {
+    try {
+      await c.publish(DOCTOR_EVENTS_CHANNEL_PREFIX + doctorUserId, serialized);
+    } catch (err) {
+      console.error("[Redis] publishDoctorChatsUpdated error:", err);
+    }
+  } else {
+    broadcastDoctorChatsUpdated(doctorUserId, clientWire);
   }
 }
 

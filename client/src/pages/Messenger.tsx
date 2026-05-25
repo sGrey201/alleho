@@ -13,6 +13,7 @@ import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -220,26 +221,7 @@ export default function Messenger() {
     enabled: isAuthenticated && isAdmin && searchQuery.trim().length > 0,
   });
 
-  useEffect(() => {
-    if (!isAuthenticated || !isAdmin) return;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data as string) as { type?: string };
-        if (data.type !== "doctor_chats_updated") return;
-        void qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
-      } catch {
-        // ignore malformed ws payloads
-      }
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [isAuthenticated, isAdmin, qc]);
+  useDoctorChatsWs(isAuthenticated && isAdmin);
 
   function filterChatsBySearch(items: ChatItem[], query: string): ChatItem[] {
     const q = query.trim().toLowerCase();

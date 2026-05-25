@@ -122,16 +122,24 @@ type ConversationPollUpdatedPayload = {
   totalVotes: number;
 };
 
-export function useConversationWs(conversationId: string | undefined, enabled: boolean) {
+export function useConversationWs(
+  conversationId: string | undefined,
+  enabled: boolean,
+  currentUserId?: string
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationIdRef = useRef(conversationId);
+  const currentUserIdRef = useRef(currentUserId);
+  const markSeenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   conversationIdRef.current = conversationId;
+  currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
     if (!enabled || !conversationId) return;
 
     const messagesKey = () => ["/api/conversations", conversationIdRef.current, "messages"];
+    const convKey = () => ["/api/conversations", conversationIdRef.current];
     const commentsKey = (messageId: string) => [
       "/api/conversations",
       conversationIdRef.current,
@@ -146,9 +154,23 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
       ) => ConversationMessageWithAuthor[]
     ) => {
       queryClient.setQueryData<ConversationMessageWithAuthor[]>(messagesKey(), (old) => {
-        if (!old) return old;
-        return updater(old);
+        const base = old ?? [];
+        const updated = updater(base);
+        return old === updated ? old : updated;
       });
+    };
+
+    const scheduleMarkSeen = () => {
+      const convId = conversationIdRef.current;
+      if (!convId || !currentUserIdRef.current) return;
+      if (markSeenTimeoutRef.current) clearTimeout(markSeenTimeoutRef.current);
+      markSeenTimeoutRef.current = setTimeout(() => {
+        markSeenTimeoutRef.current = null;
+        void fetch(`/api/conversations/${convId}/seen`, {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => {});
+      }, 400);
     };
 
     const connect = () => {
@@ -159,6 +181,7 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "subscribe_conversation", conversationId }));
+        scheduleMarkSeen();
       };
 
       ws.onmessage = (event) => {
@@ -170,18 +193,24 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
             queryClient.setQueryData<ConversationMessageWithAuthor[]>(
               messagesKey(),
               (old) => {
-                if (!old) return old;
-                if (old.some((m) => m.id === payload.id)) return old;
-                return [...old, payload];
+                const list = old ?? [];
+                if (list.some((m) => m.id === payload.id)) return old;
+                return [...list, payload];
               }
             );
+            if (payload.authorUserId !== currentUserIdRef.current) {
+              scheduleMarkSeen();
+            }
           } else if (data.type === "conversation_seen" && data.payload) {
             const payload = data.payload as ConversationSeenPayload;
             if (payload.conversationId !== conversationIdRef.current) return;
+            if (payload.userId === currentUserIdRef.current) return;
             queryClient.setQueryData(
-              ["/api/conversations", conversationIdRef.current],
+              convKey(),
               (old: unknown) => {
-                if (!old || typeof old !== "object" || old === null) return old;
+                if (!old || typeof old !== "object" || old === null) {
+                  return old;
+                }
                 const conv = old as { participants?: Array<{ userId: string; lastSeenAt?: string | null }> };
                 if (!Array.isArray(conv.participants)) return old;
                 return {
@@ -337,7 +366,12 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
     };
 
     connect();
+
     return () => {
+      if (markSeenTimeoutRef.current) {
+        clearTimeout(markSeenTimeoutRef.current);
+        markSeenTimeoutRef.current = null;
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
@@ -350,5 +384,5 @@ export function useConversationWs(conversationId: string | undefined, enabled: b
         wsRef.current = null;
       }
     };
-  }, [enabled, conversationId]);
+  }, [enabled, conversationId, currentUserId]);
 }

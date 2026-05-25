@@ -22,6 +22,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { clearHealthWallUnread } from "@/lib/doctorChatsRealtime";
+import { bumpHealthWallPatientInList, sortHealthWallPatients } from "@/lib/healthWallPatientList";
 import { t } from "@/lib/i18n";
 import {
   Loader2,
@@ -51,6 +53,9 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
 import { useHealthWallWs } from "@/hooks/useHealthWallWs";
+import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
+import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
+import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
@@ -361,9 +366,9 @@ export default function HealthWall() {
   const { data: messages, isLoading: messagesLoading } = useQuery<HealthWallMessage[]>({
     queryKey: ['/api/health-wall', patientUserId],
     enabled: isAuthenticated && !!patientUserId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
-
-  useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId);
 
   const isDoctorViewingPatientWall = isAuthenticated && isAdmin && !!patientUserId && !isOwnWall;
 
@@ -376,7 +381,7 @@ export default function HealthWall() {
     markReadInFlightRef.current = true;
     try {
       await apiRequest('POST', `/api/health-wall/${patientUserId}/read`);
-      queryClient.invalidateQueries({ queryKey: ['/api/me/chats'] });
+      clearHealthWallUnread(queryClient, patientUserId);
     } catch {
       // keep silent: mark-read failures should not interrupt chat UX
     } finally {
@@ -404,6 +409,27 @@ export default function HealthWall() {
     queryKey: ['/api/health-wall/my/doctors'],
     enabled: isAuthenticated && isOwnWall,
   });
+
+  useDoctorChatsWs(isAuthenticated && isAdmin);
+  useHealthWallWs(patientUserId, isAuthenticated && !!patientUserId, user?.id);
+
+  const peerLastReadAt = useMemo(() => {
+    if (isOwnWall) {
+      if (!connectedDoctors?.length) return null;
+      let maxTime = 0;
+      let latest: string | null = null;
+      for (const d of connectedDoctors) {
+        if (!d.lastVisitedAt) continue;
+        const t = new Date(d.lastVisitedAt).getTime();
+        if (!Number.isNaN(t) && t > maxTime) {
+          maxTime = t;
+          latest = d.lastVisitedAt;
+        }
+      }
+      return latest;
+    }
+    return patientInfo?.patientLastVisitedAt ?? null;
+  }, [isOwnWall, connectedDoctors, patientInfo?.patientLastVisitedAt]);
   const { data: myPatients } = useQuery<MyPatientListItem[]>({
     queryKey: ['/api/health-wall/my/patients'],
     enabled: isAuthenticated && isAdmin,
@@ -430,12 +456,15 @@ export default function HealthWall() {
   }, [patientUserId, patientInfo?.profileImageUrl]);
   const filteredMyPatients = useMemo(() => {
     const q = patientSearchQuery.trim().toLowerCase();
-    if (!q) return myPatients ?? [];
-    return (myPatients ?? []).filter((patient) => {
-      const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(' ').toLowerCase();
-      const email = (patient.email ?? '').toLowerCase();
-      return fullName.includes(q) || email.includes(q);
-    });
+    const base = myPatients ?? [];
+    const filtered = q
+      ? base.filter((patient) => {
+          const fullName = [patient.firstName, patient.lastName].filter(Boolean).join(" ").toLowerCase();
+          const email = (patient.email ?? "").toLowerCase();
+          return fullName.includes(q) || email.includes(q);
+        })
+      : base;
+    return sortHealthWallPatients(filtered);
   }, [myPatients, patientSearchQuery]);
 
   const { data: forwardChats, isLoading: forwardChatsLoading } = useQuery<MyChatItem[]>({
@@ -609,10 +638,17 @@ export default function HealthWall() {
       return res.json() as Promise<HealthWallMessage>;
     },
     onSuccess: (newMessage, variables) => {
+      if (!patientUserId) return;
       queryClient.setQueryData<HealthWallMessage[]>(['/api/health-wall', patientUserId], (old) => {
-        if (!old) return [newMessage];
-        if (old.some((m) => m.id === newMessage.id)) return old;
-        return [...old, newMessage];
+        const list = old ?? [];
+        if (list.some((m) => m.id === newMessage.id)) return old ?? list;
+        return [...list, newMessage];
+      });
+      queryClient.setQueryData<MyPatientListItem[]>(["/api/health-wall/my/patients"], (old) => {
+        if (!old?.length) return old;
+        return bumpHealthWallPatientInList(old, patientUserId, {
+          lastMessageAt: newMessage.createdAt,
+        });
       });
       if (!variables.imageUrl) {
         setMessage('');
@@ -623,10 +659,10 @@ export default function HealthWall() {
         focusMessageInput();
       }
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: t.error,
-        description: t.somethingWrong,
+        description: error.message || t.somethingWrong,
         variant: "destructive",
       });
     },
@@ -1324,9 +1360,19 @@ export default function HealthWall() {
         )}
         {msg.content && <p className="whitespace-pre-wrap pb-0.5 pr-7 text-sm leading-snug">{msg.content}</p>}
         {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
-        <span className="pointer-events-none absolute bottom-0.5 right-1.5 select-none tabular-nums text-[10px] leading-none text-muted-foreground">
-          {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
-          {formatMessageBubbleTime(msg.createdAt)}
+        <span className="pointer-events-none absolute bottom-0.5 right-1.5 flex items-center gap-0.5 select-none tabular-nums text-[10px] leading-none">
+          <span className="text-muted-foreground">
+            {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+            {formatMessageBubbleTime(msg.createdAt)}
+          </span>
+          {isOwnMessage && (
+            <MessageReceiptIcons
+              status={getMessageReceiptStatus({
+                createdAt: msg.createdAt,
+                peerLastReadAt,
+              })}
+            />
+          )}
         </span>
       </>
     );
@@ -1513,7 +1559,10 @@ export default function HealthWall() {
               <button
                 key={patient.patientUserId}
                 type="button"
-                onClick={() => setLocation(`/health-wall/${patient.patientUserId}`)}
+                onClick={() => {
+                  clearHealthWallUnread(queryClient, patient.patientUserId);
+                  setLocation(`/health-wall/${patient.patientUserId}`);
+                }}
                 className="w-full px-3 py-2.5 border-b border-border/50 text-left hover:bg-muted/50 flex items-center gap-2 bg-background"
               >
                 <Avatar className="h-9 w-9 shrink-0">
@@ -1619,7 +1668,10 @@ export default function HealthWall() {
                 <button
                   key={patient.patientUserId}
                   type="button"
-                  onClick={() => setLocation(`/health-wall/${patient.patientUserId}`)}
+                  onClick={() => {
+                    clearHealthWallUnread(queryClient, patient.patientUserId);
+                    setLocation(`/health-wall/${patient.patientUserId}`);
+                  }}
                   className={cn(
                     "w-full px-3 py-2.5 border-b border-border/50 text-left hover:bg-muted/50 flex items-center gap-2",
                     isActive ? "bg-muted/70" : "bg-background"

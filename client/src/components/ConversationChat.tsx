@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
+import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { t } from "@/lib/i18n";
 import {
   Loader2,
@@ -338,7 +340,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
   const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
 
-  useConversationWs(conversationId, !!conversationId);
+  useConversationWs(conversationId, !!conversationId, user?.id);
 
   const { data: doctorSearchData, isLoading: doctorSearchLoading } = useQuery<SearchResponse>({
     queryKey: ["/api/messenger/search", doctorSearch],
@@ -399,12 +401,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       return res.json();
     },
     onSuccess: (newMessage: ConversationMessageWithAuthor) => {
+      if (!conversationId) return;
       queryClient.setQueryData<ConversationMessageWithAuthor[]>(
         ["/api/conversations", conversationId, "messages"],
         (old) => {
-          if (!old) return [newMessage];
-          if (old.some((m) => m.id === newMessage.id)) return old;
-          return [...old, newMessage];
+          const list = old ?? [];
+          if (list.some((m) => m.id === newMessage.id)) return old ?? list;
+          return [...list, newMessage];
         }
       );
       setMessage("");
@@ -922,6 +925,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     .join("") || "?";
 
   const showMessageAuthorName = conv.type !== "direct";
+  const showReceiptIcons = conv.type === "direct";
+  const peerLastReadAt =
+    conv.type === "direct" ? (peerParticipant?.lastSeenAt ?? null) : null;
   const myRole = myChannelRole;
   const isOwner = myRole === "owner";
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
@@ -1192,9 +1198,19 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="min-w-0">{renderReactionPills(msg)}</div>
-        <span className="shrink-0 select-none text-right tabular-nums text-[10px] leading-none text-muted-foreground">
-          {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
-          {formatBubbleTime(msg.createdAt)}
+        <span className="flex shrink-0 items-center gap-0.5 select-none text-right tabular-nums text-[10px] leading-none">
+          <span className="text-muted-foreground">
+            {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+            {formatBubbleTime(msg.createdAt)}
+          </span>
+          {isOwn && showReceiptIcons && (
+            <MessageReceiptIcons
+              status={getMessageReceiptStatus({
+                createdAt: msg.createdAt,
+                peerLastReadAt,
+              })}
+            />
+          )}
         </span>
       </div>
     </>
@@ -1341,8 +1357,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                       <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
                         {t.messageDeleted}
                       </p>
-                      <span className="pointer-events-none absolute bottom-0.5 right-1.5 text-[10px] leading-none text-muted-foreground tabular-nums select-none">
-                        {formatBubbleTime(msg.createdAt)}
+                      <span className="pointer-events-none absolute bottom-0.5 right-1.5 flex items-center gap-0.5 text-[10px] leading-none tabular-nums select-none">
+                        <span className="text-muted-foreground">{formatBubbleTime(msg.createdAt)}</span>
+                        {isOwn && showReceiptIcons && (
+                          <MessageReceiptIcons
+                            status={getMessageReceiptStatus({
+                              createdAt: msg.createdAt,
+                              peerLastReadAt,
+                            })}
+                          />
+                        )}
                       </span>
                     </div>
                   )}

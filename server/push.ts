@@ -31,15 +31,16 @@ export function isPushConfigured(): boolean {
   return !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
 }
 
+/** User IDs that received at least one successful push for this payload. */
 export async function sendPushToUsers(
   userIds: string[],
   payload: PushPayload
-): Promise<void> {
-  if (!ensureVapid() || userIds.length === 0) return;
+): Promise<string[]> {
+  if (!ensureVapid() || userIds.length === 0) return [];
 
   const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
   const subscriptions = await storage.getPushSubscriptionsByUserIds(uniqueIds);
-  if (subscriptions.length === 0) return;
+  if (subscriptions.length === 0) return [];
 
   const body = JSON.stringify({
     title: payload.title,
@@ -47,6 +48,8 @@ export async function sendPushToUsers(
     url: payload.url,
     tag: payload.tag,
   });
+
+  const deliveredUserIds = new Set<string>();
 
   await Promise.all(
     subscriptions.map(async (sub) => {
@@ -58,6 +61,7 @@ export async function sendPushToUsers(
           },
           body
         );
+        deliveredUserIds.add(sub.userId);
       } catch (err: unknown) {
         const status = (err as { statusCode?: number })?.statusCode;
         if (status === 404 || status === 410) {
@@ -68,6 +72,8 @@ export async function sendPushToUsers(
       }
     })
   );
+
+  return Array.from(deliveredUserIds);
 }
 
 export function formatSenderName(user: {
@@ -102,7 +108,12 @@ type MessageAuthorLike = {
 export async function notifyHealthWallNewMessage(
   patientUserId: string,
   authorUserId: string,
-  message: { content?: string | null; imageUrl?: string | null; author: MessageAuthorLike }
+  message: {
+    id: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    author: MessageAuthorLike;
+  }
 ): Promise<void> {
   const recipientIds: string[] = [];
   if (authorUserId === patientUserId) {
@@ -126,7 +137,12 @@ export async function notifyHealthWallNewMessage(
 export async function notifyConversationNewMessage(
   conversationId: string,
   authorUserId: string,
-  message: { content?: string | null; imageUrl?: string | null; author: MessageAuthorLike }
+  message: {
+    id: string;
+    content?: string | null;
+    imageUrl?: string | null;
+    author: MessageAuthorLike;
+  }
 ): Promise<void> {
   const conv = await storage.getConversation(conversationId);
   if (!conv) return;
