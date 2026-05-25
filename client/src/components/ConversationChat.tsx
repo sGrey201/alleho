@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import { profileAvatarSrc } from "@/lib/utils";
 import { pollPayloadSchema } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -447,6 +448,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               : m
           )
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId, "messages"],
+      });
       setEditing(null);
       setEditText("");
     },
@@ -476,6 +480,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               : m
           )
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId, "messages"],
+      });
       setPendingDelete(null);
     },
     onError: (err: Error) => {
@@ -505,6 +512,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               : m
           )
       );
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId, "messages"],
+      });
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
@@ -1158,14 +1168,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const isComposerSending = sendMutation.isPending || editMutation.isPending;
 
   return (
-    <div className="relative flex flex-col h-full">
+    <div className="relative flex flex-col h-full min-h-0">
       <div className="absolute inset-x-0 top-0 z-30 px-3 py-3 pointer-events-none">
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex h-10 items-center gap-2 pointer-events-auto">
           <Button
             variant="secondary"
             size="icon"
             onClick={onBack}
-            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
+            className="h-10 w-10 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -1173,21 +1183,23 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             type="button"
             onClick={handleHeaderProfileClick}
             disabled={!canClickHeader}
-            className={`flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 text-left backdrop-blur-md ${canClickHeader ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+            className={`flex h-10 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${canClickHeader ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
           >
-            <p className="text-sm font-semibold truncate">{directDisplayName}</p>
+            <p className="truncate text-sm font-semibold leading-tight">{directDisplayName}</p>
             {conv.type === "direct" && (
-              <p className="text-xs text-muted-foreground truncate">{formatLastSeen(peerParticipant?.lastSeenAt)}</p>
+              <p className="truncate text-xs leading-tight text-muted-foreground">
+                {formatLastSeen(peerParticipant?.lastSeenAt)}
+              </p>
             )}
           </button>
           <button
             type="button"
             onClick={handleHeaderProfileClick}
             disabled={!canClickHeader}
-            className={`h-10 w-10 rounded-full border border-border/40 bg-background/55 p-0 backdrop-blur-md ${canClickHeader ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+            className={`h-10 w-10 shrink-0 rounded-full border border-border bg-card p-0 shadow-sm ${canClickHeader ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
           >
             <Avatar className="h-full w-full">
-              <AvatarImage src={headerAvatarUrl || undefined} />
+              <AvatarImage src={profileAvatarSrc(headerAvatarUrl)} />
               <AvatarFallback className="text-xs font-semibold">{headerInitials}</AvatarFallback>
             </Avatar>
           </button>

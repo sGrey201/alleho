@@ -32,6 +32,7 @@ import AllSituations from "@/pages/AllSituations";
 import HealthWall from "@/pages/HealthWall";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
+import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -152,6 +153,10 @@ function AppContent() {
     location.startsWith('/messenger') ||
     isProfilePage;
 
+  const pushPromptEnabled =
+    isAuthenticated &&
+    (location.startsWith("/health-wall") || location.startsWith("/messenger"));
+
   if (isFullscreenPage) {
     if (isProfilePage) {
       return (
@@ -168,6 +173,7 @@ function AppContent() {
       <div className="h-screen bg-background flex flex-col overflow-hidden">
         <ScrollToTop />
         <Router />
+        <PushNotificationPrompt enabled={pushPromptEnabled} />
       </div>
     );
   }

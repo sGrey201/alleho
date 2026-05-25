@@ -10,7 +10,9 @@ export default defineConfig({
     runtimeErrorOverlay(),
     VitePWA({
       registerType: "autoUpdate",
-      strategies: "generateSW",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       manifest: {
         name: "hovial — Be Jovial",
         short_name: "hovial",
@@ -44,9 +46,8 @@ export default defineConfig({
       devOptions: {
         enabled: false,
       },
-      workbox: {
-        globPatterns: [],
-        runtimeCaching: [],
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webmanifest}"],
       },
     }),
     ...(process.env.NODE_ENV !== "production" &&

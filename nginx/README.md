@@ -46,6 +46,16 @@
 
 В контейнере `app` нужен `REDIS_URL` (в `docker-compose.prod.yml` по умолчанию `redis://redis:6379`) — через Redis идёт pub/sub для WebSocket.
 
+## Web Push (уведомления о сообщениях)
+
+В `.env.prod` задайте ключи VAPID (сгенерировать: `npx web-push generate-vapid-keys`):
+
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT` (например `https://hovial.com` или `mailto:support@hovial.com`)
+
+После деплоя образа с поддержкой push и миграции `0014_push_subscriptions` пользователи смогут включить уведомления в мессенджере или на стене здоровья. На iOS нужна установка PWA на экран «Домой» (iOS 16.4+).
+
 ## Обновление сертификата
 
 Let's Encrypt выдаёт сертификаты на 90 дней. Обновите так:

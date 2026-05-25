@@ -26,19 +26,16 @@ import {
   type HealthWallMessage,
 } from "@shared/schema";
 import {
-  getHealthWallRecentMessages,
   pushHealthWallRecentMessage,
   publishHealthWallMessage,
   publishHealthWallMessageEdited,
   publishHealthWallMessageDeleted,
   publishHealthWallMessagePinned,
   publishHealthWallMessageUnpinned,
-  invalidateHealthWallRecent,
   publishDoctorChatsUpdated,
   backfillHealthWallRecent,
   type HealthWallMessageWithAuthor,
   type MessageAuthor,
-  getConversationRecentMessages,
   pushConversationRecentMessage,
   publishConversationMessage,
   publishConversationSeen,
@@ -51,13 +48,18 @@ import {
   publishConversationCommentDeleted,
   publishConversationCommentReaction,
   publishConversationPollUpdated,
-  invalidateConversationRecent,
   backfillConversationRecent,
   type ConversationMessageWithAuthor,
   type ConversationMessageAuthor,
   type ConversationCommentWithAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
+import {
+  getVapidPublicKey,
+  isPushConfigured,
+  notifyHealthWallNewMessage,
+  notifyConversationNewMessage,
+} from "./push";
 
 const PREVIEW_LENGTH = 500;
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
@@ -221,6 +223,51 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get("/api/push/vapid-public-key", (_req, res) => {
+    const publicKey = getVapidPublicKey();
+    if (!publicKey) {
+      return res.status(503).json({ message: "Push notifications are not configured" });
+    }
+    res.json({ publicKey });
+  });
+
+  app.post("/api/push/subscribe", isAuthenticated, async (req: any, res) => {
+    try {
+      if (!isPushConfigured()) {
+        return res.status(503).json({ message: "Push notifications are not configured" });
+      }
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint : "";
+      const p256dh = typeof req.body?.keys?.p256dh === "string" ? req.body.keys.p256dh : "";
+      const auth = typeof req.body?.keys?.auth === "string" ? req.body.keys.auth : "";
+      if (!endpoint || !p256dh || !auth) {
+        return res.status(400).json({ message: "Invalid subscription" });
+      }
+
+      await storage.upsertPushSubscription(userId, { endpoint, p256dh, auth });
+      res.status(201).json({ ok: true });
+    } catch (error) {
+      console.error("Error saving push subscription:", error);
+      res.status(500).json({ message: "Failed to save subscription" });
+    }
+  });
+
+  app.delete("/api/push/subscribe", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint : "";
+      if (!endpoint) return res.status(400).json({ message: "endpoint required" });
+      await storage.deletePushSubscription(userId, endpoint);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting push subscription:", error);
+      res.status(500).json({ message: "Failed to delete subscription" });
     }
   });
 
@@ -1067,6 +1114,19 @@ ${allUrls.map(url => `  <url>
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+
+      let profileImageUrlToSave: string | null =
+        typeof profileImageUrl === "string" && profileImageUrl.trim()
+          ? profileImageUrl.trim()
+          : null;
+      if (profileImageUrlToSave?.startsWith("https://") && profileImageUrlToSave.includes("storage.yandexcloud.net")) {
+        try {
+          const { ObjectStorageService } = await import("./replit_integrations/object_storage/objectStorage");
+          profileImageUrlToSave = new ObjectStorageService().normalizeObjectEntityPath(profileImageUrlToSave);
+        } catch (normalizeError) {
+          console.error("Profile image URL normalize skipped:", normalizeError);
+        }
+      }
       
       const updatedUser = await storage.updateUserProfile(userId, {
         firstName: firstName || null,
@@ -1078,7 +1138,7 @@ ${allUrls.map(url => `  <url>
         weight: weight || null,
         country: country || null,
         city: city || null,
-        profileImageUrl: profileImageUrl || null,
+        profileImageUrl: profileImageUrlToSave,
       });
       
       res.json(updatedUser);
@@ -1175,6 +1235,7 @@ ${allUrls.map(url => `  <url>
         height: patient?.height,
         weight: patient?.weight,
         city: patient?.city,
+        profileImageUrl: patient?.profileImageUrl ?? null,
       };
 
       if (!questionnaire) {
@@ -1266,6 +1327,7 @@ ${allUrls.map(url => `  <url>
           birthYear: patient.birthYear,
           gender: patient.gender,
           email: patient.email,
+          profileImageUrl: patient.profileImageUrl ?? null,
           updatedAt: questionnaire?.updatedAt || connection.createdAt,
           unreadCount: stats.unreadCount,
           lastMessageAt: stats.lastMessageAt,
@@ -1393,16 +1455,15 @@ ${allUrls.map(url => `  <url>
     });
   }
 
-  async function withHealthWallReactions(
-    messages: HealthWallMessageWithAuthor[],
+  const RECENT_MESSAGES_LIMIT = 100;
+
+  async function syncHealthWallRecentCache(
+    patientUserId: string,
     currentUserId: string
-  ): Promise<HealthWallMessageWithAuthor[]> {
-    if (messages.length === 0) return messages;
-    const reactionMap = await storage.getHealthWallMessageReactionSummaries(
-      messages.map((m) => m.id),
-      currentUserId
-    );
-    return messages.map((m) => ({ ...m, reactions: reactionMap.get(m.id) ?? [] }));
+  ): Promise<void> {
+    const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
+    const enriched = await enrichHealthWallMessages(messages, currentUserId);
+    await backfillHealthWallRecent(patientUserId, enriched);
   }
 
   // Get health wall messages for a patient
@@ -1427,13 +1488,7 @@ ${allUrls.map(url => `  <url>
         }
       }
 
-      const fromRedis = await getHealthWallRecentMessages(patientUserId);
-      if (fromRedis.length > 0) {
-        const withReactions = await withHealthWallReactions(fromRedis, currentUserId ?? "");
-        return res.json(withReactions);
-      }
-
-      const messages = await storage.getHealthWallMessagesRecent(patientUserId, 100);
+      const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
       const messagesWithAuthors = await enrichHealthWallMessages(messages, currentUserId ?? "");
       res.json(messagesWithAuthors);
       backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
@@ -1533,6 +1588,9 @@ ${allUrls.map(url => `  <url>
       const [messageWithAuthor] = await enrichHealthWallMessages([message], currentUserId);
       await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
       await publishHealthWallMessage(patientUserId, messageWithAuthor);
+      void notifyHealthWallNewMessage(patientUserId, currentUserId, messageWithAuthor).catch((err) =>
+        console.error("[Push] health wall notify error:", err)
+      );
       res.json(messageWithAuthor);
     } catch (error) {
       console.error("Error posting health wall message:", error);
@@ -1571,7 +1629,7 @@ ${allUrls.map(url => `  <url>
 
       const updated = await storage.editHealthWallMessage(messageId, content);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateHealthWallRecent(patientUserId);
+      await syncHealthWallRecentCache(patientUserId, currentUserId);
       await publishHealthWallMessageEdited(patientUserId, {
         patientUserId,
         messageId,
@@ -1605,7 +1663,7 @@ ${allUrls.map(url => `  <url>
 
       const updated = await storage.softDeleteHealthWallMessage(messageId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateHealthWallRecent(patientUserId);
+      await syncHealthWallRecentCache(patientUserId, currentUserId);
       await publishHealthWallMessageDeleted(patientUserId, {
         patientUserId,
         messageId,
@@ -1633,7 +1691,7 @@ ${allUrls.map(url => `  <url>
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const updated = await storage.pinHealthWallMessage(messageId, currentUserId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateHealthWallRecent(patientUserId);
+      await syncHealthWallRecentCache(patientUserId, currentUserId);
       await publishHealthWallMessagePinned(patientUserId, {
         patientUserId,
         messageId,
@@ -1661,7 +1719,7 @@ ${allUrls.map(url => `  <url>
       }
       const updated = await storage.unpinHealthWallMessage(messageId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateHealthWallRecent(patientUserId);
+      await syncHealthWallRecentCache(patientUserId, currentUserId);
       await publishHealthWallMessageUnpinned(patientUserId, { patientUserId, messageId });
       res.json({ ok: true });
     } catch (error) {
@@ -1692,7 +1750,7 @@ ${allUrls.map(url => `  <url>
       }
       await storage.toggleHealthWallMessageReaction(messageId, currentUserId, emoji);
       const reactions = (await storage.getHealthWallMessageReactionSummaries([messageId], currentUserId)).get(messageId) ?? [];
-      await invalidateHealthWallRecent(patientUserId);
+      await syncHealthWallRecentCache(patientUserId, currentUserId);
       res.json({ messageId, reactions });
     } catch (error) {
       console.error("Error toggling health wall reaction:", error);
@@ -1755,6 +1813,7 @@ ${allUrls.map(url => `  <url>
               patientUserId: patient.id,
               patientName,
               patientEmail: patient.email,
+              avatarUrl: patient.profileImageUrl ?? null,
               lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
               lastMessagePreview: stats.lastMessagePreview ?? null,
               unreadCount: stats.unreadCount,
@@ -2198,25 +2257,16 @@ ${allUrls.map(url => `  <url>
     return mergeConversationPollResults(base, currentUserId);
   }
 
-  async function withConversationReactions(
-    messages: ConversationMessageWithAuthor[],
+  async function syncConversationRecentCache(
+    conversationId: string,
     currentUserId: string
-  ): Promise<ConversationMessageWithAuthor[]> {
-    if (messages.length === 0) return messages;
-    const reactionMap = await storage.getConversationMessageReactionSummaries(
-      messages.map((m) => m.id),
-      currentUserId
-    );
-    const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
-    const withReactions = messages.map((m) => ({
-      ...m,
-      reactions: reactionMap.get(m.id) ?? [],
-      commentsCount: commentCountMap.get(m.id) ?? m.commentsCount ?? 0,
-    }));
-    return mergeConversationPollResults(withReactions, currentUserId);
+  ): Promise<void> {
+    const messages = await storage.getConversationMessagesRecent(conversationId, RECENT_MESSAGES_LIMIT);
+    const enriched = await enrichConversationMessages(messages, currentUserId);
+    await backfillConversationRecent(conversationId, enriched);
   }
 
-  // Get conversation messages (Redis first, then DB)
+  // Get conversation messages (Postgres; Redis write-through cache)
   app.get("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -2237,12 +2287,7 @@ ${allUrls.map(url => `  <url>
           });
         }
       }
-      const fromRedis = await getConversationRecentMessages(id);
-      if (fromRedis.length > 0) {
-        const withReactions = await withConversationReactions(fromRedis, currentUserId);
-        return res.json(withReactions);
-      }
-      const messages = await storage.getConversationMessagesRecent(id, 100);
+      const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
       const withAuthors = await enrichConversationMessages(messages, currentUserId);
       res.json(withAuthors);
       backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
@@ -2406,6 +2451,9 @@ ${allUrls.map(url => `  <url>
       const [enriched] = await enrichConversationMessages([message], currentUserId);
       await pushConversationRecentMessage(id, enriched);
       await publishConversationMessage(id, enriched);
+      void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
+        console.error("[Push] conversation notify error:", err)
+      );
       res.status(201).json(enriched);
     } catch (error) {
       console.error("Error posting conversation message:", error);
@@ -2443,7 +2491,7 @@ ${allUrls.map(url => `  <url>
       if (!content) return res.status(400).json({ message: "Content required" });
       const updated = await storage.editConversationMessage(messageId, content);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessageEdited(id, {
         conversationId: id,
         messageId,
@@ -2477,7 +2525,7 @@ ${allUrls.map(url => `  <url>
       if (!canDelete) return res.status(403).json({ message: "Forbidden" });
       const updated = await storage.softDeleteConversationMessage(messageId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessageDeleted(id, {
         conversationId: id,
         messageId,
@@ -2505,7 +2553,7 @@ ${allUrls.map(url => `  <url>
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const updated = await storage.pinConversationMessage(messageId, currentUserId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessagePinned(id, {
         conversationId: id,
         messageId,
@@ -2533,7 +2581,7 @@ ${allUrls.map(url => `  <url>
       }
       const updated = await storage.unpinConversationMessage(messageId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessageUnpinned(id, {
         conversationId: id,
         messageId,
@@ -2620,7 +2668,7 @@ ${allUrls.map(url => `  <url>
       }
       await storage.toggleConversationMessageReaction(messageId, currentUserId, emoji);
       const reactions = (await storage.getConversationMessageReactionSummaries([messageId], currentUserId)).get(messageId) ?? [];
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       res.json({ messageId, reactions });
     } catch (error) {
       console.error("Error toggling conversation reaction:", error);
@@ -2694,7 +2742,7 @@ ${allUrls.map(url => `  <url>
       const commentsCount = (await storage.getConversationMessageCommentCounts([messageId])).get(messageId) ?? 0;
       const payload: ConversationCommentWithAuthor = { ...enriched, messageId, commentsCount };
       await publishConversationComment(id, payload);
-      await invalidateConversationRecent(id);
+      await syncConversationRecentCache(id, currentUserId);
       res.status(201).json(payload);
     } catch (error) {
       console.error("Error creating conversation comment:", error);
@@ -2770,7 +2818,7 @@ ${allUrls.map(url => `  <url>
           commentId,
           deletedAt: (updated.deletedAt instanceof Date ? updated.deletedAt : new Date()).toISOString(),
         });
-        await invalidateConversationRecent(id);
+        await syncConversationRecentCache(id, currentUserId);
         res.json({ ok: true });
       } catch (error) {
         console.error("Error deleting conversation comment:", error);
@@ -2969,6 +3017,7 @@ ${allUrls.map(url => `  <url>
           lastName: p.patient.lastName,
           birthMonth: p.patient.birthMonth,
           birthYear: p.patient.birthYear,
+          profileImageUrl: p.patient.profileImageUrl ?? null,
           createdAt: p.connection.createdAt,
           unreadCount: stats.unreadCount,
           lastMessageAt: stats.lastMessageAt,

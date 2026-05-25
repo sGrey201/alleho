@@ -657,3 +657,25 @@ export type ConversationMessageCommentReaction = typeof conversationMessageComme
 export type InsertConversationMessageCommentReaction = z.infer<
   typeof insertConversationMessageCommentReactionSchema
 >;
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("push_subscriptions_user_idx").on(table.userId),
+    sql`CONSTRAINT push_subscriptions_endpoint_unique UNIQUE (endpoint)`,
+  ]
+);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;

@@ -10,9 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { profileAvatarSrc } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
-import { Loader2, Check, X, HelpCircle, Eye, Pencil } from "lucide-react";
+import { Loader2, Check, X, HelpCircle, Eye, Pencil, Camera } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useUpload } from "@/hooks/use-upload";
 import type { QuestionnaireData } from "@shared/schema";
 
 interface PatientQuestionnaireResponse {
@@ -28,6 +31,7 @@ interface PatientQuestionnaireResponse {
     height?: number;
     weight?: number;
     city?: string;
+    profileImageUrl?: string | null;
   } | null;
   updatedAt: string;
 }
@@ -35,6 +39,8 @@ interface PatientQuestionnaireResponse {
 interface QuestionnairePanelProps {
   patientUserId: string;
   isOwnQuestionnaire: boolean;
+  /** Fallback when questionnaire API has not returned profileImageUrl yet */
+  patientAvatarUrl?: string | null;
   initialViewMode?: 'edit' | 'view';
   /** When set with onViewModeChange, mode is controlled by the parent */
   viewMode?: 'edit' | 'view';
@@ -161,6 +167,7 @@ function TagSelector({ tags, selectedEntries, onToggleTag, onUpdateDescription, 
 export default function QuestionnairePanel({
   patientUserId,
   isOwnQuestionnaire,
+  patientAvatarUrl,
   initialViewMode = 'edit',
   viewMode: controlledViewMode,
   onViewModeChange,
@@ -209,12 +216,34 @@ export default function QuestionnairePanel({
   const [profileHeight, setProfileHeight] = useState('');
   const [profileWeight, setProfileWeight] = useState('');
   const [profileCity, setProfileCity] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState('');
   const profileSavedRef = useRef<Record<string, string>>({});
   const profileCurrentRef = useRef<Record<string, string>>({});
   const profileDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileInitializedRef = useRef(false);
 
   const isPatientView = !isOwnQuestionnaire;
+
+  const profileInitials =
+    `${profileFirstName?.[0] ?? ""}${profileLastName?.[0] ?? ""}`.toUpperCase() || "?";
+
+  const invalidateProfileAvatarQueries = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/health-wall/my/patients"] });
+    if (patientUserId) {
+      await queryClient.invalidateQueries({ queryKey: ["/api/health-wall", patientUserId, "info"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/patient", patientUserId, "questionnaire"] });
+    }
+  }, [patientUserId]);
+
+  const { uploadFile, isUploading: isAvatarUploading } = useUpload({
+    onError: (error) => {
+      toast({
+        title: error.message || "Не удалось загрузить аватар",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: savedDataResponse, isLoading } = useQuery<{ data: QuestionnaireData }>({
     queryKey: ['/api/questionnaire'],
@@ -374,51 +403,62 @@ export default function QuestionnairePanel({
   };
 
   useEffect(() => {
-    if (user && isOwnQuestionnaire && !profileInitializedRef.current) {
-      profileInitializedRef.current = true;
-      const vals: Record<string, string> = {
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        gender: user.gender || '',
-        birthMonth: user.birthMonth?.toString() || '',
-        birthYear: user.birthYear?.toString() || '',
-        height: user.height?.toString() || '',
-        weight: user.weight?.toString() || '',
-        city: user.city || '',
-      };
-      setProfileFirstName(vals.firstName);
-      setProfileLastName(vals.lastName);
-      setProfileGender(vals.gender);
-      setProfileBirthMonth(vals.birthMonth);
-      setProfileBirthYear(vals.birthYear);
-      setProfileHeight(vals.height);
-      setProfileWeight(vals.weight);
-      setProfileCity(vals.city);
-      profileSavedRef.current = vals;
-      profileCurrentRef.current = vals;
-    }
-  }, [user, isOwnQuestionnaire]);
+    if (!user || !isOwnQuestionnaire) return;
+    const nextAvatar = user.profileImageUrl || patientAvatarUrl || "";
+    setProfileImageUrl((prev) => (prev === nextAvatar ? prev : nextAvatar));
+    if (profileInitializedRef.current) return;
+    profileInitializedRef.current = true;
+    const vals: Record<string, string> = {
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      gender: user.gender || '',
+      birthMonth: user.birthMonth?.toString() || '',
+      birthYear: user.birthYear?.toString() || '',
+      height: user.height?.toString() || '',
+      weight: user.weight?.toString() || '',
+      city: user.city || '',
+    };
+    setProfileFirstName(vals.firstName);
+    setProfileLastName(vals.lastName);
+    setProfileGender(vals.gender);
+    setProfileBirthMonth(vals.birthMonth);
+    setProfileBirthYear(vals.birthYear);
+    setProfileHeight(vals.height);
+    setProfileWeight(vals.weight);
+    setProfileCity(vals.city);
+    profileSavedRef.current = vals;
+    profileCurrentRef.current = vals;
+  }, [user, isOwnQuestionnaire, patientAvatarUrl]);
+
+  const buildProfilePayload = useCallback(
+    (snapshot: Record<string, string>, imageUrl: string | null) => ({
+      firstName: snapshot.firstName || null,
+      lastName: snapshot.lastName || null,
+      gender: snapshot.gender || null,
+      birthMonth: snapshot.birthMonth ? parseInt(snapshot.birthMonth, 10) : null,
+      birthYear: snapshot.birthYear ? parseInt(snapshot.birthYear, 10) : null,
+      height: snapshot.height ? parseInt(snapshot.height, 10) : null,
+      weight: snapshot.weight ? parseInt(snapshot.weight, 10) : null,
+      city: snapshot.city || null,
+      profileImageUrl: imageUrl || null,
+    }),
+    []
+  );
 
   const doProfileSave = useCallback(() => {
     const snapshot = { ...profileCurrentRef.current };
     if (JSON.stringify(profileSavedRef.current) === JSON.stringify(snapshot)) return;
     profileSavedRef.current = snapshot;
     setStatusForKey('profile', 'saving');
-    apiRequest('PUT', '/api/user/profile', {
-      firstName: snapshot.firstName || null,
-      lastName: snapshot.lastName || null,
-      gender: snapshot.gender || null,
-      birthMonth: snapshot.birthMonth ? parseInt(snapshot.birthMonth) : null,
-      birthYear: snapshot.birthYear ? parseInt(snapshot.birthYear) : null,
-      height: snapshot.height ? parseInt(snapshot.height) : null,
-      weight: snapshot.weight ? parseInt(snapshot.weight) : null,
-      city: snapshot.city || null,
-    }).then(() => {
-      setStatusForKey('profile', 'saved');
-    }).catch(() => {
-      setStatusForKey('profile', 'error');
-    });
-  }, [setStatusForKey]);
+    apiRequest('PUT', '/api/user/profile', buildProfilePayload(snapshot, profileImageUrl || null))
+      .then(async () => {
+        setStatusForKey('profile', 'saved');
+        await invalidateProfileAvatarQueries();
+      })
+      .catch(() => {
+        setStatusForKey('profile', 'error');
+      });
+  }, [setStatusForKey, buildProfilePayload, profileImageUrl, invalidateProfileAvatarQueries]);
 
   const scheduleProfileSave = useCallback(() => {
     if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current);
@@ -461,21 +501,46 @@ export default function QuestionnairePanel({
   const retryProfileSave = useCallback(() => {
     setStatusForKey('profile', 'saving');
     const snapshot = { ...profileCurrentRef.current };
-    apiRequest('PUT', '/api/user/profile', {
-      firstName: snapshot.firstName || null,
-      lastName: snapshot.lastName || null,
-      gender: snapshot.gender || null,
-      birthMonth: snapshot.birthMonth ? parseInt(snapshot.birthMonth) : null,
-      birthYear: snapshot.birthYear ? parseInt(snapshot.birthYear) : null,
-      height: snapshot.height ? parseInt(snapshot.height) : null,
-      weight: snapshot.weight ? parseInt(snapshot.weight) : null,
-      city: snapshot.city || null,
-    }).then(() => {
-      setStatusForKey('profile', 'saved');
-    }).catch(() => {
-      setStatusForKey('profile', 'error');
-    });
-  }, [setStatusForKey]);
+    apiRequest('PUT', '/api/user/profile', buildProfilePayload(snapshot, profileImageUrl || null))
+      .then(async () => {
+        setStatusForKey('profile', 'saved');
+        await invalidateProfileAvatarQueries();
+      })
+      .catch(() => {
+        setStatusForKey('profile', 'error');
+      });
+  }, [setStatusForKey, buildProfilePayload, profileImageUrl, invalidateProfileAvatarQueries]);
+
+  const handleAvatarChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !isOwnQuestionnaire) return;
+      const uploadResponse = await uploadFile(file);
+      if (!uploadResponse?.objectPath) return;
+      const newAvatarPath = uploadResponse.objectPath;
+      setProfileImageUrl(newAvatarPath);
+      setStatusForKey('profile', 'saving');
+      const snapshot = { ...profileCurrentRef.current };
+      try {
+        await apiRequest('PUT', '/api/user/profile', buildProfilePayload(snapshot, newAvatarPath));
+        setStatusForKey('profile', 'saved');
+        await invalidateProfileAvatarQueries();
+        toast({ title: "Аватар сохранён" });
+      } catch {
+        setStatusForKey('profile', 'error');
+        toast({ title: "Не удалось сохранить аватар", variant: "destructive" });
+      }
+      e.target.value = "";
+    },
+    [
+      isOwnQuestionnaire,
+      uploadFile,
+      buildProfilePayload,
+      setStatusForKey,
+      invalidateProfileAvatarQueries,
+      toast,
+    ]
+  );
 
   const hasSubsectionData = useCallback((key: string): boolean => {
     const val = (formData as any)[key];
@@ -535,10 +600,32 @@ export default function QuestionnairePanel({
 
   const isExpanded = viewMode === 'view';
 
+  const patientViewInitials =
+    `${patientData?.patient?.firstName?.[0] ?? ""}${patientData?.patient?.lastName?.[0] ?? ""}`.toUpperCase() ||
+    "?";
+
+  const resolvedPatientAvatarUrl =
+    patientData?.patient?.profileImageUrl ?? patientAvatarUrl ?? null;
+  const resolvedOwnAvatarUrl =
+    profileImageUrl || user?.profileImageUrl || patientAvatarUrl || null;
+  const avatarSrc = profileAvatarSrc(
+    isPatientView ? resolvedPatientAvatarUrl : resolvedOwnAvatarUrl
+  );
+
   const profileContentBlock = (
     <div className="space-y-4 pt-2">
       {isPatientView ? (
         <>
+          <div className="flex flex-col items-center gap-2 pb-2">
+            <Avatar className="h-20 w-20">
+              <AvatarImage
+                key={avatarSrc ?? "patient-avatar-empty"}
+                src={avatarSrc}
+                alt="Аватар пациента"
+              />
+              <AvatarFallback className="text-lg font-semibold">{patientViewInitials}</AvatarFallback>
+            </Avatar>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{t.lastName}</Label>
@@ -596,6 +683,37 @@ export default function QuestionnairePanel({
         </>
       ) : (
         <>
+          <div className="flex flex-col items-center gap-2 pb-2">
+            <Avatar className="h-20 w-20">
+              <AvatarImage
+                key={avatarSrc ?? "own-avatar-empty"}
+                src={avatarSrc}
+                alt="Аватар"
+              />
+              <AvatarFallback className="text-lg font-semibold">{profileInitials}</AvatarFallback>
+            </Avatar>
+            <input
+              id="questionnaire-avatar-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void handleAvatarChange(e)}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center text-sm text-primary hover:underline disabled:opacity-50"
+              onClick={() => document.getElementById("questionnaire-avatar-upload")?.click()}
+              disabled={isAvatarUploading}
+              data-testid="button-questionnaire-avatar"
+            >
+              {isAvatarUploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Camera className="mr-2 h-4 w-4" />
+              )}
+              {isAvatarUploading ? t.loading : "Изменить фото"}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{t.lastName}</Label>

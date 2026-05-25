@@ -321,46 +321,40 @@
   user-select: none;
 }
 
+/* Chat wallpaper: apothecary pattern (tile fill) + green diagonal wash */
 .chat-panel-bg {
-  --paper-base: #faf7f1;
-  --paper-light: #fffdf9;
-  --paper-warm: #f3efe8;
-  background-color: var(--paper-base);
+  --chat-base: #a8c492;
+  background-color: var(--chat-base);
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E"),
-    repeating-linear-gradient(
-      93deg,
-      transparent 0,
-      transparent 11px,
-      rgba(160, 140, 100, 0.01) 11px,
-      rgba(160, 140, 100, 0.01) 12px
+    linear-gradient(
+      135deg,
+      rgba(118, 162, 88, 0.82) 0%,
+      rgba(138, 178, 98, 0.8) 30%,
+      rgba(152, 188, 106, 0.78) 55%,
+      rgba(162, 192, 112, 0.77) 80%,
+      rgba(168, 196, 116, 0.79) 100%
     ),
-    radial-gradient(ellipse 130% 85% at 50% -8%, var(--paper-light) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 60% at 100% 40%, rgba(255, 255, 255, 0.55) 0%, transparent 48%),
-    radial-gradient(ellipse 80% 55% at 0% 85%, rgba(90, 70, 45, 0.025) 0%, transparent 52%),
-    linear-gradient(172deg, #fdfbf7 0%, var(--paper-base) 42%, var(--paper-warm) 100%);
-  background-size: 180px 180px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
-  background-blend-mode: soft-light, normal, normal, normal, normal, normal;
+    url("/chat-wallpaper.png");
+  background-size: 100% 100%, 200px;
+  background-repeat: no-repeat, round;
+  background-position: center, center;
+  background-blend-mode: normal, multiply;
 }
 
 .dark .chat-panel-bg {
-  --paper-base: #36322c;
-  --paper-light: #444038;
-  --paper-warm: #2e2a24;
-  background-color: var(--paper-base);
+  --chat-base: #283322;
+  background-color: var(--chat-base);
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E"),
-    repeating-linear-gradient(
-      93deg,
-      transparent 0,
-      transparent 11px,
-      rgba(255, 240, 210, 0.02) 11px,
-      rgba(255, 240, 210, 0.02) 12px
+    linear-gradient(
+      135deg,
+      rgba(42, 64, 36, 0.9) 0%,
+      rgba(48, 72, 40, 0.88) 35%,
+      rgba(52, 76, 42, 0.86) 65%,
+      rgba(56, 78, 44, 0.87) 100%
     ),
-    radial-gradient(ellipse 130% 85% at 50% -8%, var(--paper-light) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 60% at 100% 40%, rgba(255, 255, 255, 0.04) 0%, transparent 48%),
-    radial-gradient(ellipse 80% 55% at 0% 85%, rgba(0, 0, 0, 0.1) 0%, transparent 52%),
-    linear-gradient(172deg, #3e3a34 0%, var(--paper-base) 42%, var(--paper-warm) 100%);
-  background-size: 180px 180px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
-  background-blend-mode: soft-light, normal, normal, normal, normal, normal;
+    url("/chat-wallpaper.png");
+  background-size: 100% 100%, 200px;
+  background-repeat: no-repeat, round;
+  background-position: center, center;
+  background-blend-mode: normal, soft-light;
 }

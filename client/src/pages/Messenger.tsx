@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
+import { profileAvatarSrc } from "@/lib/utils";
 import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
@@ -624,7 +625,7 @@ export default function Messenger() {
                             >
                               {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
                                 <Avatar className="shrink-0 size-11">
-                                  <AvatarImage src={chat.avatarUrl || undefined} />
+                                  <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} />
                                   <AvatarFallback>{chatInitial(label)}</AvatarFallback>
                                 </Avatar>
                               ) : (
@@ -699,7 +700,7 @@ export default function Messenger() {
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
-                              <AvatarImage src={group.avatarUrl || undefined} />
+                              <AvatarImage src={profileAvatarSrc(group.avatarUrl)} />
                               <AvatarFallback>{chatInitial(group.name || t.chatGroup)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -725,7 +726,7 @@ export default function Messenger() {
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
-                              <AvatarImage src={channel.avatarUrl || undefined} />
+                              <AvatarImage src={profileAvatarSrc(channel.avatarUrl)} />
                               <AvatarFallback>{chatInitial(channel.name || t.channelSub)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -799,7 +800,7 @@ export default function Messenger() {
                       >
                         {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
                           <Avatar className="shrink-0 size-11">
-                            <AvatarImage src={chat.avatarUrl || undefined} />
+                            <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} />
                             <AvatarFallback>{chatInitial(label)}</AvatarFallback>
                           </Avatar>
                         ) : (

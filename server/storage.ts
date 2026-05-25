@@ -17,6 +17,7 @@ import {
   conversationMessageComments,
   conversationMessageCommentReactions,
   conversationPollVotes,
+  pushSubscriptions,
   type User,
   type UpsertUser,
   type Article,
@@ -44,6 +45,7 @@ import {
   type InsertConversationMessage,
   type ConversationMessageComment,
   type InsertConversationMessageComment,
+  type PushSubscription,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
@@ -273,6 +275,15 @@ export interface IStorage {
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
+
+  // Web Push subscriptions
+  upsertPushSubscription(
+    userId: string,
+    data: { endpoint: string; p256dh: string; auth: string }
+  ): Promise<PushSubscription>;
+  deletePushSubscription(userId: string, endpoint: string): Promise<boolean>;
+  getPushSubscriptionsByUserIds(userIds: string[]): Promise<PushSubscription[]>;
+  deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1980,6 +1991,53 @@ export class DatabaseStorage implements IStorage {
     });
 
     return channels;
+  }
+
+  async upsertPushSubscription(
+    userId: string,
+    data: { endpoint: string; p256dh: string; auth: string }
+  ): Promise<PushSubscription> {
+    const [row] = await db
+      .insert(pushSubscriptions)
+      .values({
+        userId,
+        endpoint: data.endpoint,
+        p256dh: data.p256dh,
+        auth: data.auth,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: {
+          userId,
+          p256dh: data.p256dh,
+          auth: data.auth,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string): Promise<boolean> {
+    const rows = await db
+      .delete(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+      .returning();
+    return rows.length > 0;
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean> {
+    const rows = await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint)).returning();
+    return rows.length > 0;
+  }
+
+  async getPushSubscriptionsByUserIds(userIds: string[]): Promise<PushSubscription[]> {
+    if (userIds.length === 0) return [];
+    return db
+      .select()
+      .from(pushSubscriptions)
+      .where(inArray(pushSubscriptions.userId, userIds));
   }
 }
 
