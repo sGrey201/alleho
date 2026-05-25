@@ -915,7 +915,7 @@ export default function Messenger() {
             />
           </div>
         ) : conversationId ? (
-          <div className="flex-1 flex flex-col min-h-0 chat-panel-bg">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">
             <ConversationChat
               conversationId={conversationId}
               onBack={() => setLocation("/messenger")}

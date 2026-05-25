@@ -99,9 +99,25 @@ function ScrollToTop() {
   return null;
 }
 
+/** Locks document scroll and enables safe-area insets on notched phones (Health Wall, Messenger, Profile). */
+function useImmersiveViewport(enabled: boolean) {
+  useEffect(() => {
+    document.documentElement.classList.toggle("app-immersive", enabled);
+    return () => document.documentElement.classList.remove("app-immersive");
+  }, [enabled]);
+}
+
 function AppContent() {
   const { isAdmin, isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
+
+  const isProfilePage = location.startsWith("/profile");
+  const isFullscreenPage =
+    location.startsWith("/health-wall") ||
+    location.startsWith("/messenger") ||
+    isProfilePage;
+
+  useImmersiveViewport(isFullscreenPage);
 
   if (isLoading) {
     return (
@@ -147,12 +163,6 @@ function AppContent() {
     );
   }
 
-  const isProfilePage = location.startsWith('/profile');
-  const isFullscreenPage =
-    location.startsWith('/health-wall') ||
-    location.startsWith('/messenger') ||
-    isProfilePage;
-
   const pushPromptEnabled =
     isAuthenticated &&
     (location.startsWith("/health-wall") || location.startsWith("/messenger"));
@@ -160,9 +170,9 @@ function AppContent() {
   if (isFullscreenPage) {
     if (isProfilePage) {
       return (
-        <div className="h-screen bg-background flex flex-col">
+        <div className="app-viewport">
           <ScrollToTop />
-          <main className="flex-1 overflow-y-auto">
+          <main className="app-viewport-content overflow-y-auto">
             <Router />
           </main>
         </div>
@@ -170,10 +180,12 @@ function AppContent() {
     }
 
     return (
-      <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <div className="app-viewport">
         <ScrollToTop />
-        <Router />
-        <PushNotificationPrompt enabled={pushPromptEnabled} />
+        <div className="app-viewport-content">
+          <Router />
+          <PushNotificationPrompt enabled={pushPromptEnabled} />
+        </div>
       </div>
     );
   }

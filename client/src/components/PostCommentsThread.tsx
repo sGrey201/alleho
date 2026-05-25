@@ -14,6 +14,14 @@ import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import {
+  clearMessageLongPress,
+  handleMessagePointerDown,
+  handleMessagePointerMove,
+  handleMessageTouchMove,
+  handleMessageTouchStart,
+  type MessageLongPressRefs,
+} from "@/lib/messageLongPress";
 
 type PostCommentsThreadProps = {
   conversationId: string;
@@ -58,8 +66,11 @@ export default function PostCommentsThread({
   } | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressRefs = useRef<MessageLongPressRefs>({
+    timer: null,
+    guardTimer: null,
+    start: null,
+  });
   const deepLinkHandledRef = useRef<string | null>(null);
 
   useConversationWs(conversationId, true);
@@ -335,13 +346,7 @@ export default function PostCommentsThread({
     });
   };
 
-  const clearLongPress = () => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    longPressStartRef.current = null;
-  };
+  const clearLongPress = () => clearMessageLongPress(longPressRefs.current);
 
   const openCommentLayer = (comment: ConversationCommentWithAuthor, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -364,16 +369,14 @@ export default function PostCommentsThread({
     e: React.PointerEvent<HTMLElement>,
     comment: ConversationCommentWithAuthor
   ) => {
-    if (comment.deletedAt || e.pointerType !== "mouse") return;
+    if (comment.deletedAt) return;
     const targetEl = e.currentTarget;
-    const target = e.target as HTMLElement;
-    if (target.closest("a,button,input,textarea")) return;
-    clearLongPress();
-    longPressStartRef.current = { x: e.clientX, y: e.clientY };
-    longPressTimerRef.current = window.setTimeout(() => {
-      openCommentLayer(comment, targetEl);
-      clearLongPress();
-    }, 450);
+    handleMessagePointerDown(
+      e,
+      longPressRefs.current,
+      () => openCommentLayer(comment, targetEl),
+      true
+    );
   };
 
   const handleBubbleTouchStart = (
@@ -382,34 +385,20 @@ export default function PostCommentsThread({
   ) => {
     if (comment.deletedAt) return;
     const targetEl = e.currentTarget;
-    const target = e.target as HTMLElement;
-    if (target.closest("a,button,input,textarea")) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    clearLongPress();
-    longPressStartRef.current = { x: touch.clientX, y: touch.clientY };
-    longPressTimerRef.current = window.setTimeout(() => {
-      openCommentLayer(comment, targetEl);
-      clearLongPress();
-    }, 450);
+    handleMessageTouchStart(
+      e,
+      longPressRefs.current,
+      () => openCommentLayer(comment, targetEl),
+      true
+    );
   };
 
   const handleBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
-    const start = longPressStartRef.current;
-    if (!start) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    if (Math.abs(touch.clientX - start.x) > 8 || Math.abs(touch.clientY - start.y) > 8) {
-      clearLongPress();
-    }
+    handleMessageTouchMove(e, longPressRefs.current);
   };
 
   const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    const start = longPressStartRef.current;
-    if (!start) return;
-    if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) {
-      clearLongPress();
-    }
+    handleMessagePointerMove(e, longPressRefs.current);
   };
 
   const renderReactionPills = (comment: ConversationCommentWithAuthor) => {
@@ -685,7 +674,7 @@ export default function PostCommentsThread({
       <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
         <DialogContent
           hideCloseButton
-          className="!left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
+          className="message-action-layer !left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
         >
           {messageLayer && (
             <>

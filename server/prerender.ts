@@ -90,7 +90,7 @@ function generateArticleHtml(article: any, tags: any[]): string {
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>${fullTitle}</title>
   <meta name="description" content="${description}">
   <meta name="keywords" content="${tagNames.join(', ')}">
@@ -171,7 +171,7 @@ function generateTagListHtml(tags: any[], category: 'remedy' | 'situation'): str
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>${fullTitle}</title>
   <meta name="description" content="${description}">
   <link rel="canonical" href="${canonicalUrl}">

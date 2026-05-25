@@ -14,7 +14,7 @@ export function PushNotificationPrompt({ enabled }: PushNotificationPromptProps)
 
   return (
     <div
-      className="fixed bottom-20 left-3 right-3 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-lg md:bottom-6 md:left-auto md:right-6"
+      className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-3 right-3 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-lg md:bottom-6 md:left-auto md:right-6"
       role="dialog"
       aria-label="Включить уведомления"
     >

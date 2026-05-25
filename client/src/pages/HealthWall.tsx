@@ -53,9 +53,18 @@ import { useUpload } from "@/hooks/use-upload";
 import { useHealthWallWs } from "@/hooks/useHealthWallWs";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { cn, profileAvatarSrc } from "@/lib/utils";
+import {
+  clearMessageLongPress,
+  handleMessagePointerDown,
+  handleMessagePointerMove,
+  handleMessageTouchMove,
+  handleMessageTouchStart,
+  type MessageLongPressRefs,
+} from "@/lib/messageLongPress";
 
 interface Author {
   id: string;
@@ -283,8 +292,11 @@ export default function HealthWall() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressRefs = useRef<MessageLongPressRefs>({
+    timer: null,
+    guardTimer: null,
+    start: null,
+  });
   const lastHealthWallReadAtRef = useRef<number>(0);
   const lastMarkedMessageIdRef = useRef<string | null>(null);
   const markReadInFlightRef = useRef(false);
@@ -1189,13 +1201,7 @@ export default function HealthWall() {
     );
   };
 
-  const clearLongPress = () => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    longPressStartRef.current = null;
-  };
+  const clearLongPress = () => clearMessageLongPress(longPressRefs.current);
 
   const openMessageLayer = (msg: HealthWallMessage, el: HTMLElement) => {
     const rect = el.getBoundingClientRect();
@@ -1209,47 +1215,33 @@ export default function HealthWall() {
   };
 
   const handleBubblePointerDown = (e: React.PointerEvent<HTMLElement>, msg: HealthWallMessage) => {
-    if (msg.deletedAt || e.pointerType === "mouse") return;
+    if (msg.deletedAt) return;
     const targetEl = e.currentTarget;
-    const target = e.target as HTMLElement;
-    if (target.closest("a,button,input,textarea")) return;
-    clearLongPress();
-    longPressStartRef.current = { x: e.clientX, y: e.clientY };
-    longPressTimerRef.current = window.setTimeout(() => {
-      openMessageLayer(msg, targetEl);
-      clearLongPress();
-    }, 450);
+    handleMessagePointerDown(
+      e,
+      longPressRefs.current,
+      () => openMessageLayer(msg, targetEl),
+      true
+    );
   };
 
   const handleBubbleTouchStart = (e: React.TouchEvent<HTMLElement>, msg: HealthWallMessage) => {
     if (msg.deletedAt) return;
     const targetEl = e.currentTarget;
-    const target = e.target as HTMLElement;
-    if (target.closest("a,button,input,textarea")) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    clearLongPress();
-    longPressStartRef.current = { x: touch.clientX, y: touch.clientY };
-    longPressTimerRef.current = window.setTimeout(() => {
-      openMessageLayer(msg, targetEl);
-      clearLongPress();
-    }, 450);
+    handleMessageTouchStart(
+      e,
+      longPressRefs.current,
+      () => openMessageLayer(msg, targetEl),
+      true
+    );
   };
 
   const handleBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
-    if (!longPressStartRef.current) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = Math.abs(touch.clientX - longPressStartRef.current.x);
-    const dy = Math.abs(touch.clientY - longPressStartRef.current.y);
-    if (dx > 8 || dy > 8) clearLongPress();
+    handleMessageTouchMove(e, longPressRefs.current);
   };
 
   const handleBubblePointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    if (!longPressStartRef.current) return;
-    const dx = Math.abs(e.clientX - longPressStartRef.current.x);
-    const dy = Math.abs(e.clientY - longPressStartRef.current.y);
-    if (dx > 8 || dy > 8) clearLongPress();
+    handleMessagePointerMove(e, longPressRefs.current);
   };
 
   const renderReplyPreview = (reply: HealthWallReplyTo, isOwnMessage: boolean) => (
@@ -1716,11 +1708,11 @@ export default function HealthWall() {
         )}
 
         <div
-          className={`relative flex flex-col chat-panel-bg ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`}
+          className={`relative flex min-w-0 flex-col chat-panel-bg ${showQuestionnaire && !isMobile ? '' : 'flex-1'}`}
           style={showQuestionnaire && !isMobile ? { width: `${100 - panelWidth}%` } : undefined}
         >
           {(!showQuestionnaire || !isMobile) && (
-          <div className="pointer-events-none z-30 flex shrink-0 flex-col gap-1.5 px-3 pt-3.5">
+          <div className="pointer-events-none z-30 flex w-full min-w-0 max-w-full shrink-0 flex-col gap-1.5 overflow-hidden px-3 pt-3.5">
             <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
             {isOwnWall && (
               <Button
@@ -1826,29 +1818,22 @@ export default function HealthWall() {
             </Button>
             </div>
             {activePinnedMessage && (
-              <button
-                type="button"
-                onClick={handlePinnedBannerClick}
-                className="pointer-events-auto flex w-full items-start gap-2 rounded-xl border border-border/40 bg-background/85 px-3 py-2 text-left shadow-sm backdrop-blur-md"
-                data-testid="banner-health-wall-pinned-message"
-              >
-                <Pin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-semibold text-primary">
-                    {t.messagePinnedTitle}
-                    {pinnedMessages.length > 1 && (
-                      <span className="ml-1 text-muted-foreground">({pinnedMessages.length})</span>
-                    )}
-                  </p>
-                  <p className="truncate text-xs text-foreground/80">
-                    {activePinnedMessage.content
+              <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
+                <PinnedMessageBanner
+                  title={t.messagePinnedTitle}
+                  preview={
+                    activePinnedMessage.content
                       ? activePinnedMessage.content
                       : activePinnedMessage.imageUrl
                         ? t.messagePhotoLabel
-                        : t.messageDeleted}
-                  </p>
-                </div>
-              </button>
+                        : t.messageDeleted
+                  }
+                  activeIndex={activePinnedIndex}
+                  totalCount={pinnedMessages.length}
+                  onClick={handlePinnedBannerClick}
+                  testId="banner-health-wall-pinned-message"
+                />
+              </div>
             )}
           </div>
           )}
@@ -2072,7 +2057,7 @@ export default function HealthWall() {
       <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
         <DialogContent
           hideCloseButton
-          className="!left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
+          className="message-action-layer !left-0 !top-0 !z-[120] !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !border-none !bg-transparent !p-0 !shadow-none"
         >
           {messageLayer && (
             <>
