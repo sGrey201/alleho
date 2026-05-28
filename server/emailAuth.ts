@@ -113,6 +113,42 @@ export const requestPasswordReset: RequestHandler = async (req, res) => {
   }
 };
 
+export const changePassword: RequestHandler = async (req, res) => {
+  try {
+    const user = (req as any).dbUser;
+    const { currentPassword, password, confirmPassword } = req.body;
+
+    if (!currentPassword || !password || !confirmPassword) {
+      return res.status(400).json({ message: 'Все поля обязательны' });
+    }
+
+    if (!user?.passwordHash) {
+      return res.status(400).json({ message: 'Для этого аккаунта смена пароля недоступна' });
+    }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValidPassword) {
+      return res.status(400).json({ message: 'Неверный текущий пароль' });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Пароли не совпадают' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Пароль должен быть не менее 6 символов' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await storage.updateUserPassword(user.id, passwordHash);
+
+    res.json({ message: 'Пароль успешно изменен' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Ошибка смены пароля' });
+  }
+};
+
 export const resetPassword: RequestHandler = async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body;

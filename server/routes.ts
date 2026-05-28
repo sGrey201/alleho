@@ -8,7 +8,7 @@ import { db } from "./db";
 import { users, payments, articles } from "@shared/schema";
 import { sql, eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin } from "./emailAuth";
-import { login, requestPasswordReset, resetPassword, getEmailUser, logoutEmail } from "./emailAuth";
+import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail, sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
 import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
@@ -103,6 +103,27 @@ async function getCurrentUserId(req: any): Promise<string | null> {
   return null;
 }
 
+function toAuthUserResponse(user: any) {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    profileImageUrl: user.profileImageUrl,
+    gender: user.gender,
+    birthMonth: user.birthMonth,
+    birthYear: user.birthYear,
+    height: user.height,
+    weight: user.weight,
+    country: user.country,
+    city: user.city,
+    subscriptionExpiresAt: user.subscriptionExpiresAt,
+    isAdmin: user.isAdmin,
+    authType: "email",
+    hasPassword: !!user.passwordHash,
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("[routes] registerRoutes: begin");
   // Session middleware (required for email auth)
@@ -119,14 +140,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ttl: sessionTtl,
     tableName: "sessions",
   });
-  const useMemorySessionStore = process.env.NODE_ENV === "development";
-  const activeSessionStore = useMemorySessionStore
-    ? new session.MemoryStore()
-    : sessionStore;
   console.log("[routes] registerRoutes: session store configured");
   app.use(session({
     secret: process.env.SESSION_SECRET,
-    store: activeSessionStore,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -189,6 +206,7 @@ ${allUrls.map(url => `  <url>
   app.post('/api/auth/login', login);
   app.post('/api/auth/forgot-password', requestPasswordReset);
   app.post('/api/auth/reset-password', resetPassword);
+  app.post('/api/auth/change-password', isAuthenticated, changePassword);
   app.get('/api/auth/email-user', getEmailUser);
   app.post('/api/auth/logout', logoutEmail);
 
@@ -200,23 +218,7 @@ ${allUrls.map(url => `  <url>
       if (session?.userId && session?.authType === 'email') {
         const user = await storage.getUser(session.userId);
         if (user) {
-          return res.json({
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            profileImageUrl: user.profileImageUrl,
-            gender: user.gender,
-            birthMonth: user.birthMonth,
-            birthYear: user.birthYear,
-            height: user.height,
-            weight: user.weight,
-            country: user.country,
-            city: user.city,
-            subscriptionExpiresAt: user.subscriptionExpiresAt,
-            isAdmin: user.isAdmin,
-            authType: 'email',
-          });
+          return res.json(toAuthUserResponse(user));
         }
       }
       
@@ -397,7 +399,14 @@ ${allUrls.map(url => `  <url>
       }
 
       const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
+      const sessionUserId = await getCurrentUserId(req);
+      const sessionUser = sessionUserId ? await storage.getUser(sessionUserId) : null;
+      const canJoinAsExistingUser =
+        !!existingUser &&
+        !!sessionUser &&
+        sessionUser.email?.toLowerCase() === email &&
+        sessionUser.id === existingUser.id;
+      if (existingUser && !canJoinAsExistingUser) {
         return res.status(409).json({ message: "user_exists" });
       }
 
@@ -408,28 +417,41 @@ ${allUrls.map(url => `  <url>
         return pass;
       };
 
-      const password = generatePassword();
-      const bcrypt = await import("bcryptjs");
-      const passwordHash = await bcrypt.hash(password, 10);
-      const newUser = await storage.createUserWithPassword(email, passwordHash);
+      let password: string | null = null;
+      let targetUser = existingUser ?? null;
+      if (!targetUser) {
+        password = generatePassword();
+        const bcrypt = await import("bcryptjs");
+        const passwordHash = await bcrypt.hash(password, 10);
+        targetUser = await storage.createUserWithPassword(email, passwordHash);
+      }
+      if (!targetUser) {
+        return res.status(500).json({ message: "Failed to create or resolve user" });
+      }
 
       if (invite.inviteType === "homeopath") {
-        await storage.updateUserProfile(newUser.id, { isAdmin: true });
+        await storage.updateUserProfile(targetUser.id, { isAdmin: true });
       } else {
-        await storage.addHealthWallDoctor(newUser.id, invite.invitedByUserId);
+        await storage.addHealthWallDoctor(targetUser.id, invite.invitedByUserId);
+        const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: targetUser.id });
+        await storage.addConversationParticipant(conv.id, invite.invitedByUserId, "owner");
+        await storage.addConversationParticipant(conv.id, targetUser.id, "member");
         await publishDoctorChatsUpdated(invite.invitedByUserId);
       }
 
-      await storage.markInviteAccepted(invite.id, newUser.id, email);
-      await sendInviteAccessEmail(email, password);
+      await storage.markInviteAccepted(invite.id, targetUser.id, email);
+      if (password) {
+        await sendInviteAccessEmail(email, password);
+      }
 
-      (req.session as any).userId = newUser.id;
+      (req.session as any).userId = targetUser.id;
       (req.session as any).authType = "email";
 
       res.json({
-        id: newUser.id,
-        email: newUser.email,
-        isAdmin: invite.inviteType === "homeopath" ? true : newUser.isAdmin,
+        id: targetUser.id,
+        email: targetUser.email,
+        isAdmin: invite.inviteType === "homeopath" ? true : targetUser.isAdmin,
+        joinedAsExistingUser: canJoinAsExistingUser,
       });
     } catch (error) {
       console.error("Error accepting invite:", error);
@@ -1523,12 +1545,7 @@ ${allUrls.map(url => `  <url>
       if (!await canAccessHealthWall(req, patientUserId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      if (currentUserId !== patientUserId) {
-        const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
-        if (isConnected) {
-          await storage.updateDoctorLastVisit(patientUserId, currentUserId);
-        }
-      }
+      await notifyHealthWallSeen(patientUserId, currentUserId);
       res.json({ success: true });
     } catch (error) {
       console.error("Error marking health wall as read:", error);
@@ -1778,11 +1795,13 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // --- Messenger: paginated chat list for doctors ---
-  app.get("/api/me/chats", isAuthenticated, isAdmin, async (req: any, res) => {
+  // --- Messenger: paginated chat list ---
+  app.get("/api/me/chats", isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
 
       const folder = typeof req.query.folder === "string" ? req.query.folder : "personal";
       const parsedLimit = Number(req.query.limit);
@@ -1802,6 +1821,33 @@ ${allUrls.map(url => `  <url>
       };
 
       if (folder === "personal") {
+        if (!currentUser.isAdmin) {
+          const contacts = await storage.getMessengerPersonalContacts(currentUserId);
+          const items = contacts.map((contact) => {
+            const otherParticipantName =
+              [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
+            return {
+              source: "conversation" as const,
+              folder: "personal" as const,
+              type: "direct",
+              conversationId: contact.conversationId,
+              otherParticipantId: contact.userId,
+              otherParticipantName,
+              avatarUrl: contact.profileImageUrl ?? null,
+              lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
+              lastMessagePreview: contact.lastMessagePreview ?? null,
+              lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
+            };
+          });
+          items.sort((a, b) => {
+            const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            if (aTime !== bTime) return bTime - aTime;
+            return (a.otherParticipantName ?? "").localeCompare((b.otherParticipantName ?? ""), "ru");
+          });
+          return res.json(paged(items));
+        }
+
         const [contacts, connectedPatients] = await Promise.all([
           storage.getMessengerPersonalContacts(currentUserId),
           storage.getHealthWallPatients(currentUserId),
@@ -1851,6 +1897,10 @@ ${allUrls.map(url => `  <url>
           return aName.localeCompare(bName, "ru");
         });
         return res.json(paged(items));
+      }
+
+      if (!currentUser.isAdmin) {
+        return res.json(paged([]));
       }
 
       if (folder === "channels") {
@@ -1904,16 +1954,23 @@ ${allUrls.map(url => `  <url>
   });
 
   // Get or create direct conversation with another user (by their userId). Prevents duplicate direct chats.
-  app.get("/api/messenger/direct/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.get("/api/messenger/direct/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const { userId: partnerUserId } = req.params;
       if (partnerUserId === currentUserId) return res.status(400).json({ message: "Cannot open direct chat with yourself" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const partner = await storage.getUser(partnerUserId);
       if (!partner) return res.status(404).json({ message: "User not found" });
-      const isConnectedPatient = await storage.isHealthWallDoctorConnected(partnerUserId, currentUserId);
-      if (!partner.isAdmin && !isConnectedPatient) return res.status(404).json({ message: "User not found" });
+      if (currentUser.isAdmin) {
+        const isConnectedPatient = await storage.isHealthWallDoctorConnected(partnerUserId, currentUserId);
+        if (!partner.isAdmin && !isConnectedPatient) return res.status(404).json({ message: "User not found" });
+      } else {
+        const isConnectedDoctor = await storage.isHealthWallDoctorConnected(currentUserId, partnerUserId);
+        if (!partner.isAdmin && !isConnectedDoctor) return res.status(404).json({ message: "User not found" });
+      }
       let conversationId = await storage.getDirectConversationBetween(currentUserId, partnerUserId);
       if (!conversationId) {
         const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: null });
@@ -2278,7 +2335,7 @@ ${allUrls.map(url => `  <url>
     await backfillConversationRecent(conversationId, enriched);
   }
 
-  app.post("/api/conversations/:id/seen", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/seen", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -3126,7 +3183,7 @@ ${allUrls.map(url => `  <url>
   console.log("[routes] registerRoutes: handlers registered, creating HTTP server");
 
   const httpServer = createServer(app);
-  setupWebSocket(httpServer, activeSessionStore as Parameters<typeof setupWebSocket>[1], process.env.SESSION_SECRET!);
+  setupWebSocket(httpServer, sessionStore as Parameters<typeof setupWebSocket>[1], process.env.SESSION_SECRET!);
   console.log("[routes] registerRoutes: websocket ready");
   return httpServer;
 }

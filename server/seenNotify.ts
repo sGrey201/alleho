@@ -1,6 +1,10 @@
 import { storage } from "./storage";
 import { publishConversationSeen, publishHealthWallSeen } from "./redis";
 import {
+  cancelDeferredPushesForConversation,
+  cancelDeferredPushesForHealthWall,
+} from "./pushDefer";
+import {
   broadcastConversationWsEvent,
   broadcastHealthWallWsEvent,
 } from "./wsBroadcast";
@@ -9,6 +13,7 @@ export async function notifyConversationSeen(
   conversationId: string,
   userId: string
 ): Promise<void> {
+  cancelDeferredPushesForConversation(conversationId, userId);
   const lastSeenAt = await storage.markConversationSeen(conversationId, userId);
   if (!lastSeenAt) return;
   const payload = {
@@ -24,6 +29,7 @@ export async function notifyHealthWallSeen(
   patientUserId: string,
   userId: string
 ): Promise<void> {
+  cancelDeferredPushesForHealthWall(patientUserId, userId);
   const now = new Date();
   if (userId === patientUserId) {
     await storage.updatePatientLastVisit(patientUserId);

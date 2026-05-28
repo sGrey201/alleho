@@ -110,7 +110,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="min-h-[36px] resize-none overflow-y-auto rounded-[22px]"
+            className="min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm"
             style={{ maxHeight: "144px" }}
             data-testid="input-message"
           />

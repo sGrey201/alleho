@@ -233,6 +233,17 @@ export interface IStorage {
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
   markConversationSeen(conversationId: string, userId: string): Promise<Date | null>;
+  getConversationParticipantLastSeenAt(conversationId: string, userId: string): Promise<Date | null>;
+  isConversationMessageReadByUser(
+    conversationId: string,
+    userId: string,
+    messageCreatedAt: Date
+  ): Promise<boolean>;
+  isHealthWallMessageReadByUser(
+    patientUserId: string,
+    userId: string,
+    message: { authorUserId: string; createdAt: Date }
+  ): Promise<boolean>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
   getConversationMessageById(messageId: string): Promise<ConversationMessage | undefined>;
@@ -1361,6 +1372,48 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return now;
+  }
+
+  async getConversationParticipantLastSeenAt(
+    conversationId: string,
+    userId: string
+  ): Promise<Date | null> {
+    const [row] = await db
+      .select({ lastSeenAt: conversationParticipants.lastSeenAt })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return row?.lastSeenAt ?? null;
+  }
+
+  async isConversationMessageReadByUser(
+    conversationId: string,
+    userId: string,
+    messageCreatedAt: Date
+  ): Promise<boolean> {
+    const lastSeenAt = await this.getConversationParticipantLastSeenAt(conversationId, userId);
+    if (!lastSeenAt) return false;
+    return lastSeenAt.getTime() >= messageCreatedAt.getTime();
+  }
+
+  async isHealthWallMessageReadByUser(
+    patientUserId: string,
+    userId: string,
+    message: { authorUserId: string; createdAt: Date }
+  ): Promise<boolean> {
+    const createdMs = message.createdAt.getTime();
+    if (userId === patientUserId) {
+      if (message.authorUserId === patientUserId) return true;
+      const patientLastVisit = await this.getPatientLastVisit(patientUserId);
+      return patientLastVisit != null && patientLastVisit.getTime() >= createdMs;
+    }
+    if (message.authorUserId !== patientUserId) return true;
+    const doctorLastVisit = await this.getDoctorLastVisit(patientUserId, userId);
+    return doctorLastVisit != null && doctorLastVisit.getTime() >= createdMs;
   }
 
   async getConversationMessages(conversationId: string, limit: number = 100): Promise<ConversationMessage[]> {

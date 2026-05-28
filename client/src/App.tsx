@@ -68,6 +68,8 @@ function Router() {
       <Route path="/health-wall/:patientUserId" component={HealthWall} />
       <Route path="/messenger" component={Messenger} />
       <Route path="/messenger/direct/:conversationId" component={Messenger} />
+      <Route path="/messenger/patient" component={Messenger} />
+      <Route path="/messenger/patient/:patientUserId" component={Messenger} />
       <Route path="/messenger/group/:conversationId" component={Messenger} />
       <Route path="/messenger/channel/:conversationId" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/post/:messageId/comments" component={Messenger} />
@@ -173,7 +175,7 @@ function AppContent() {
       return (
         <div className="app-viewport">
           <ScrollToTop />
-          <main className="app-viewport-content overflow-y-auto">
+          <main className="app-viewport-content app-viewport-content--scroll">
             <Router />
           </main>
         </div>

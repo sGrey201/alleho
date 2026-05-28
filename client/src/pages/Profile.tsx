@@ -224,6 +224,11 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const [city, setCity] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState<string>("");
   const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showChangePasswordForm, setShowChangePasswordForm] = useState(false);
+  const hasPassword = (user as { hasPassword?: boolean } | undefined)?.hasPassword !== false;
   const { data: ownInviteSummary } = useQuery<{
     inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
     invitedCount: number;
@@ -287,6 +292,30 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
     },
   });
 
+  const changePasswordMutation = useMutation({
+    mutationFn: async (payload: {
+      currentPassword: string;
+      password: string;
+      confirmPassword: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/auth/change-password", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setShowChangePasswordForm(false);
+      toast({ title: t.passwordChanged });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: error.message || t.passwordChangeError,
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { firstName: string; lastName: string; gender: string | null; birthMonth: number | null; birthYear: number | null; height: number | null; weight: number | null; country: string | null; city: string | null; profileImageUrl: string | null }) => {
       return apiRequest('PUT', '/api/user/profile', data);
@@ -323,6 +352,26 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         variant: "destructive",
       });
     }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      toast({ title: t.passwordChangeError, description: "Заполните все поля", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: t.passwordMinLength, variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast({ title: t.passwordsDoNotMatch, variant: "destructive" });
+      return;
+    }
+    await changePasswordMutation.mutateAsync({
+      currentPassword,
+      password: newPassword,
+      confirmPassword: confirmNewPassword,
+    });
   };
 
   const handleLogout = async () => {
@@ -578,6 +627,90 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
             data-testid="input-city"
           />
         </div>
+
+        {hasPassword && (
+          <div>
+            {!showChangePasswordForm ? (
+              <button
+                type="button"
+                className="text-sm text-primary hover:underline"
+                onClick={() => setShowChangePasswordForm(true)}
+                data-testid="link-show-change-password"
+              >
+                {t.changePassword}
+              </button>
+            ) : (
+              <div className="space-y-4 rounded-lg border border-border/60 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">{t.changePassword}</p>
+                  <button
+                    type="button"
+                    className="text-sm text-muted-foreground hover:text-foreground hover:underline shrink-0"
+                    onClick={() => {
+                      setShowChangePasswordForm(false);
+                      setCurrentPassword("");
+                      setNewPassword("");
+                      setConfirmNewPassword("");
+                    }}
+                    data-testid="link-hide-change-password"
+                  >
+                    {t.hideChangePassword}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currentPassword">{t.currentPassword}</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    data-testid="input-current-password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">{t.newPassword}</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    data-testid="input-new-password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmNewPassword">{t.confirmNewPassword}</Label>
+                  <Input
+                    id="confirmNewPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    data-testid="input-confirm-new-password"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => void handleChangePassword()}
+                  disabled={changePasswordMutation.isPending}
+                  data-testid="button-change-password"
+                >
+                  {changePasswordMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {t.loading}
+                    </>
+                  ) : (
+                    t.changePassword
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm">
           <p className="font-medium text-foreground">

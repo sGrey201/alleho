@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { storage } from "./storage";
+import { scheduleConversationMessagePush, scheduleHealthWallMessagePush } from "./pushDefer";
 
 export type PushPayload = {
   title: string;
@@ -110,6 +111,7 @@ export async function notifyHealthWallNewMessage(
   authorUserId: string,
   message: {
     id: string;
+    createdAt: string | Date;
     content?: string | null;
     imageUrl?: string | null;
     author: MessageAuthorLike;
@@ -125,13 +127,9 @@ export async function notifyHealthWallNewMessage(
   const targets = recipientIds.filter((id) => id !== authorUserId);
   if (targets.length === 0) return;
 
-  const sender = formatSenderName(message.author);
-  await sendPushToUsers(targets, {
-    title: sender,
-    body: messagePreview(message.content, message.imageUrl),
-    url: authorUserId === patientUserId ? `/health-wall/${patientUserId}` : "/health-wall",
-    tag: `health-wall:${patientUserId}`,
-  });
+  for (const recipientUserId of targets) {
+    scheduleHealthWallMessagePush(patientUserId, recipientUserId, authorUserId, message);
+  }
 }
 
 export async function notifyConversationNewMessage(
@@ -139,6 +137,7 @@ export async function notifyConversationNewMessage(
   authorUserId: string,
   message: {
     id: string;
+    createdAt: string | Date;
     content?: string | null;
     imageUrl?: string | null;
     author: MessageAuthorLike;
@@ -151,19 +150,7 @@ export async function notifyConversationNewMessage(
   const targets = participants.map((p) => p.userId).filter((id) => id !== authorUserId);
   if (targets.length === 0) return;
 
-  const sender = formatSenderName(message.author);
-  const convLabel =
-    conv.type === "direct"
-      ? sender
-      : conv.name?.trim() || "Новое сообщение";
-
-  await sendPushToUsers(targets, {
-    title: conv.type === "direct" ? sender : convLabel,
-    body:
-      conv.type === "direct"
-        ? messagePreview(message.content, message.imageUrl)
-        : `${sender}: ${messagePreview(message.content, message.imageUrl)}`,
-    url: conversationPath(conv.type, conversationId),
-    tag: `conversation:${conversationId}`,
-  });
+  for (const recipientUserId of targets) {
+    scheduleConversationMessagePush(conversationId, recipientUserId, message, conv);
+  }
 }

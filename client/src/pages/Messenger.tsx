@@ -7,10 +7,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, MessageCircle } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
+import HealthWall from "@/pages/HealthWall";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
@@ -86,12 +87,55 @@ export type MessengerSearchResults = {
   groups: MessengerSearchGroup[];
   channels: MessengerSearchChannel[];
 };
-type MyPatientListItem = {
-  patientUserId: string;
-};
 
 function chatInitial(label: string): string {
-  return (label || "?").trim().charAt(0).toUpperCase() || "?";
+  return getPersonInitials(null, null, label);
+}
+
+function getPersonInitials(
+  firstName?: string | null,
+  lastName?: string | null,
+  fallbackLabel?: string | null,
+): string {
+  const fromNames = `${firstName?.trim()?.[0] ?? ""}${lastName?.trim()?.[0] ?? ""}`.toUpperCase();
+  if (fromNames) return fromNames;
+  if (fallbackLabel) {
+    const parts = fallbackLabel.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    const fromParts = parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
+    if (fromParts) return fromParts;
+    const first = fallbackLabel.trim()[0];
+    if (first) return first.toUpperCase();
+  }
+  return "?";
+}
+
+function ChatListAvatar({ chat, label }: { chat: ChatItem; label: string }) {
+  const isPatientChat = chat.source === "health_wall";
+  const useAvatar =
+    isPatientChat ||
+    (chat.source === "conversation" &&
+      (chat.type === "group" || chat.type === "channel" || chat.type === "direct"));
+
+  if (useAvatar) {
+    return (
+      <Avatar className={cn("shrink-0", isPatientChat ? "size-[3.3rem]" : "size-11")}>
+        <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} alt={label} />
+        <AvatarFallback className={isPatientChat ? "text-sm font-semibold" : undefined}>
+          {getPersonInitials(null, null, label)}
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
+
+  return (
+    <div className="rounded-full bg-primary/10 flex shrink-0 items-center justify-center size-11 p-2.5">
+      {chat.type === "channel" ? (
+        <Radio className="h-5 w-5 text-primary" />
+      ) : (
+        <Users className="h-5 w-5 text-primary" />
+      )}
+    </div>
+  );
 }
 
 const PAGE_SIZE = 20;
@@ -105,6 +149,7 @@ export default function Messenger() {
   const [, commentThreadParams] = useRoute("/messenger/channel/:conversationId/post/:messageId/comments");
   const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
+  const [, patientChatParams] = useRoute("/messenger/patient/:patientUserId");
   const conversationId =
     commentThreadParams?.conversationId ||
     groupParams?.conversationId ||
@@ -112,6 +157,7 @@ export default function Messenger() {
     directParams?.conversationId ||
     groupSettingsParams?.conversationId ||
     channelSettingsParams?.conversationId;
+  const patientUserId = patientChatParams?.patientUserId;
   const threadMessageId = commentThreadParams?.messageId;
   const isGroupChat = !!groupParams?.conversationId;
   const isChannelChat = !!channelParams?.conversationId;
@@ -122,7 +168,7 @@ export default function Messenger() {
   const [isMobileView, setIsMobileView] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
   );
-  const isMobileConversationOpen = !!conversationId && isMobileView;
+  const isMobileConversationOpen = (!!conversationId || !!patientUserId) && isMobileView;
 
   const isChatSelected = (chat: ChatItem) =>
     chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
@@ -151,8 +197,8 @@ export default function Messenger() {
 
   const isSearching = searchQuery.trim().length > 0;
 
-  const [folder, setFolder] = useState<"doctors" | "groups" | "channels">("doctors");
-  const [searchScope, setSearchScope] = useState<"all" | "doctors" | "groups" | "channels">("all");
+  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("doctors");
+  const [searchScope, setSearchScope] = useState<"all" | "doctors" | "patients" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteLinkData, setInviteLinkData] = useState<{
@@ -166,7 +212,7 @@ export default function Messenger() {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const apiFolder = folder === "doctors" ? "personal" : folder;
+  const apiFolder = folder === "doctors" || folder === "patients" ? "personal" : folder;
 
   const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
     queryKey: ["/api/me/chats", apiFolder, folder],
@@ -178,32 +224,25 @@ export default function Messenger() {
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextOffset : undefined),
-    enabled: isAuthenticated && isAdmin,
+    enabled: isAuthenticated,
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const { data: myPatientsData } = useQuery<MyPatientListItem[]>({
-    queryKey: ["/api/health-wall/my/patients"],
-    enabled: isAuthenticated && isAdmin,
-  });
-
   const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
-  const firstPatientId = myPatientsData?.[0]?.patientUserId;
-  const homeopathCabinetHref = isMobileView ? "/health-wall" : (firstPatientId ? `/health-wall/${firstPatientId}` : "/health-wall");
-  const unreadPatientsCount = useMemo(
-    () => chats.filter((chat) => chat.source === "health_wall" && (chat.unreadCount ?? 0) > 0).length,
-    [chats]
-  );
   const unreadChatsByFolder = useMemo(() => {
     const hasUnread = (chat: ChatItem) => (chat.unreadCount ?? 0) > 0;
     return {
       doctors: chats.filter((chat) => chat.source === "conversation" && chat.type === "direct" && hasUnread(chat)).length,
+      patients: chats.filter((chat) => chat.source === "health_wall" && hasUnread(chat)).length,
       groups: chats.filter((chat) => chat.source === "conversation" && chat.type === "group" && hasUnread(chat)).length,
       channels: chats.filter((chat) => chat.source === "conversation" && chat.type === "channel" && hasUnread(chat)).length,
     };
   }, [chats]);
   const chatsByFolder = useMemo(() => {
+    if (folder === "patients") {
+      return chats.filter((chat) => chat.source === "health_wall");
+    }
     if (folder === "doctors") {
       return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
     }
@@ -291,6 +330,16 @@ export default function Messenger() {
     return () => observer.disconnect();
   }, [isSearching, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
 
+  useEffect(() => {
+    if (!isAuthenticated || authLoading) return;
+    if (!isAdmin) {
+      setFolder("patients");
+      if (!patientUserId && user?.id) {
+        setLocation(`/messenger/patient/${user.id}`);
+      }
+    }
+  }, [isAuthenticated, authLoading, isAdmin, patientUserId, user?.id, setLocation]);
+
   const openDirectChat = async (params: { userId?: string; conversationId?: string }) => {
     let targetConversationId = params.conversationId;
 
@@ -317,7 +366,8 @@ export default function Messenger() {
 
   const handleSelectChat = async (chat: ChatItem) => {
     if (chat.source === "health_wall" && chat.patientUserId) {
-      setLocation(`/health-wall/${chat.patientUserId}`);
+      setFolder("patients");
+      setLocation(`/messenger/patient/${chat.patientUserId}`);
       return;
     }
     if (chat.source === "conversation" && chat.type === "direct") {
@@ -412,15 +462,10 @@ export default function Messenger() {
   if (!isAuthenticated) {
     return <Redirect to="/auth" />;
   }
-  if (!isAdmin) {
-    setLocation("/");
-    return null;
-  }
-
   return (
     <div className="flex h-full flex-col md:flex-row">
       {!isMobileConversationOpen && (
-      <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background pb-20 md:pb-0">
+      <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background">
         <Tabs
           value={isSearching && searchScope === "all" ? "" : folder}
           onValueChange={(v) => {
@@ -452,29 +497,40 @@ export default function Messenger() {
                     {t.profile}
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    createInviteLinkMutation.mutate("homeopath");
-                  }}
-                >
-                  {t.messengerInviteHomeopath}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setCreateConversationName("");
-                    setCreateConversationType("group");
-                  }}
-                >
-                  {t.createGroup}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setCreateConversationName("");
-                    setCreateConversationType("channel");
-                  }}
-                >
-                  {t.createChannel}
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        createInviteLinkMutation.mutate("patient");
+                      }}
+                    >
+                      {t.messengerInvitePatient}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        createInviteLinkMutation.mutate("homeopath");
+                      }}
+                    >
+                      {t.messengerInviteHomeopath}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("group");
+                      }}
+                    >
+                      {t.createGroup}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("channel");
+                      }}
+                    >
+                      {t.createChannel}
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="relative flex-1">
@@ -503,13 +559,12 @@ export default function Messenger() {
           {/* Floating top panel on mobile — Telegram-style */}
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className="grid h-10 w-full grid-cols-3 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
+              <TabsList className={cn("grid h-10 w-full gap-0 rounded-none border-0 border-b border-border bg-transparent p-0", isAdmin ? "grid-cols-4" : "grid-cols-2")}>
                 <TabsTrigger
                   value="doctors"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
-                  <MessageCircle className="h-4 w-4 shrink-0" />
-                  <span>Личка</span>
+                  <span>{t.folderCommunity}</span>
                   {unreadChatsByFolder.doctors > 0 && (
                     <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                       {unreadChatsByFolder.doctors}
@@ -517,10 +572,21 @@ export default function Messenger() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="patients"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  <span>Пациенты</span>
+                  {unreadChatsByFolder.patients > 0 && (
+                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                      {unreadChatsByFolder.patients}
+                    </span>
+                  )}
+                </TabsTrigger>
+                {isAdmin && (
+                <TabsTrigger
                   value="groups"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
-                  <Users className="h-4 w-4 shrink-0" />
                   <span>{t.folderGroups}</span>
                   {unreadChatsByFolder.groups > 0 && (
                     <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
@@ -528,11 +594,12 @@ export default function Messenger() {
                     </span>
                   )}
                 </TabsTrigger>
+                )}
+                {isAdmin && (
                 <TabsTrigger
                   value="channels"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
                 >
-                  <Radio className="h-4 w-4 shrink-0" />
                   <span>{t.folderChannels}</span>
                   {unreadChatsByFolder.channels > 0 && (
                     <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
@@ -540,6 +607,7 @@ export default function Messenger() {
                     </span>
                   )}
                 </TabsTrigger>
+                )}
               </TabsList>
             </div>
           </div>
@@ -608,27 +676,7 @@ export default function Messenger() {
                                 isSelected ? "bg-muted/70" : "bg-background"
                               )}
                             >
-                              {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
-                                <Avatar className="shrink-0 size-11">
-                                  <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} />
-                                  <AvatarFallback>{chatInitial(label)}</AvatarFallback>
-                                </Avatar>
-                              ) : (
-                                <div
-                                  className={cn(
-                                    "rounded-full bg-primary/10 flex shrink-0 items-center justify-center",
-                                    isHw ? "size-[3.3rem] p-3" : "size-11 p-2.5"
-                                  )}
-                                >
-                                  {chat.source === "health_wall" || chat.type === "direct" ? (
-                                    <User className={cn("text-primary", isHw ? "h-6 w-6" : "h-5 w-5")} />
-                                  ) : chat.type === "channel" ? (
-                                    <Radio className="h-5 w-5 text-primary" />
-                                  ) : (
-                                    <Users className="h-5 w-5 text-primary" />
-                                  )}
-                                </div>
-                              )}
+                              <ChatListAvatar chat={chat} label={label} />
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-foreground truncate">{label}</p>
                                 {hasMsgPreview ? (
@@ -783,27 +831,7 @@ export default function Messenger() {
                           isSelected ? "bg-muted/70" : "bg-background"
                         )}
                       >
-                        {chat.source === "conversation" && (chat.type === "group" || chat.type === "channel" || chat.type === "direct") ? (
-                          <Avatar className="shrink-0 size-11">
-                            <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} />
-                            <AvatarFallback>{chatInitial(label)}</AvatarFallback>
-                          </Avatar>
-                        ) : (
-                          <div
-                            className={cn(
-                              "rounded-full bg-primary/10 flex shrink-0 items-center justify-center",
-                              isHw ? "size-[3.3rem] p-3" : "size-11 p-2.5"
-                            )}
-                          >
-                            {chat.source === "health_wall" || chat.type === "direct" ? (
-                              <User className={cn("text-primary", isHw ? "h-6 w-6" : "h-5 w-5")} />
-                            ) : chat.type === "channel" ? (
-                              <Radio className="h-5 w-5 text-primary" />
-                            ) : (
-                              <Users className="h-5 w-5 text-primary" />
-                            )}
-                          </div>
-                        )}
+                        <ChatListAvatar chat={chat} label={label} />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-foreground truncate">{label}</p>
                           {hasMsgPreview ? (
@@ -838,48 +866,6 @@ export default function Messenger() {
             )}
           </TabsContent>
         </Tabs>
-        <div className="hidden md:block shrink-0 border-t border-border/60 bg-background px-3 py-2">
-          <Button
-            asChild
-            variant="outline"
-            className="h-10 w-full justify-center rounded-full border-0 bg-[hsl(62_18%_42%)] px-8 text-primary-foreground hover:bg-[hsl(62_18%_38%)]"
-            data-testid="button-homeopath-cabinet"
-          >
-            <Link
-              href={homeopathCabinetHref}
-              className="inline-flex w-full items-center justify-center gap-2"
-            >
-              <span>{t.homeopathCabinet}</span>
-              {unreadPatientsCount > 0 && (
-                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
-                  {unreadPatientsCount}
-                </span>
-              )}
-            </Link>
-          </Button>
-        </div>
-        <div className="fixed bottom-0 left-0 right-0 z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:hidden">
-          <div className="border-t border-border/60 bg-background px-0 py-2">
-            <Button
-              asChild
-              variant="outline"
-              className="h-10 w-full justify-center rounded-full border-0 bg-[hsl(62_18%_42%)] px-8 text-primary-foreground hover:bg-[hsl(62_18%_38%)]"
-              data-testid="button-homeopath-cabinet"
-            >
-              <Link
-                href={homeopathCabinetHref}
-                className="inline-flex w-full items-center justify-center gap-2"
-              >
-                <span>{t.homeopathCabinet}</span>
-                {unreadPatientsCount > 0 && (
-                  <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
-                    {unreadPatientsCount}
-                  </span>
-                )}
-              </Link>
-            </Button>
-          </div>
-        </div>
       </div>
       )}
 
@@ -901,6 +887,10 @@ export default function Messenger() {
               currentUserId={user?.id}
               onBack={() => setLocation(`/messenger/channel/${conversationId}`)}
             />
+          </div>
+        ) : patientUserId ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">
+            <HealthWall embeddedInMessenger forcedPatientUserId={patientUserId} />
           </div>
         ) : conversationId ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">
