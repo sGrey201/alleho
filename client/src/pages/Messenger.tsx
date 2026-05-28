@@ -842,31 +842,37 @@ export default function Messenger() {
           <Button
             asChild
             variant="outline"
-            className="relative h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+            className="h-10 w-full justify-center rounded-full border-0 bg-[hsl(62_18%_42%)] px-8 text-primary-foreground hover:bg-[hsl(62_18%_38%)]"
             data-testid="button-homeopath-cabinet"
           >
-            <Link href={homeopathCabinetHref}>
+            <Link
+              href={homeopathCabinetHref}
+              className="inline-flex w-full items-center justify-center gap-2"
+            >
               <span>{t.homeopathCabinet}</span>
               {unreadPatientsCount > 0 && (
-                <span className="absolute right-3 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                   {unreadPatientsCount}
                 </span>
               )}
             </Link>
           </Button>
         </div>
-        <div className="fixed bottom-0 left-0 right-0 md:hidden z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+        <div className="fixed bottom-0 left-0 right-0 z-30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] md:hidden">
           <div className="border-t border-border/60 bg-background px-0 py-2">
             <Button
               asChild
               variant="outline"
-              className="relative h-10 w-full justify-center rounded-full border-0 bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-10 w-full justify-center rounded-full border-0 bg-[hsl(62_18%_42%)] px-8 text-primary-foreground hover:bg-[hsl(62_18%_38%)]"
               data-testid="button-homeopath-cabinet"
             >
-              <Link href={homeopathCabinetHref}>
+              <Link
+                href={homeopathCabinetHref}
+                className="inline-flex w-full items-center justify-center gap-2"
+              >
                 <span>{t.homeopathCabinet}</span>
                 {unreadPatientsCount > 0 && (
-                  <span className="absolute right-3 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                  <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
                     {unreadPatientsCount}
                   </span>
                 )}

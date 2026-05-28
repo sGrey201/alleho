@@ -33,6 +33,7 @@ import HealthWall from "@/pages/HealthWall";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
+import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -209,6 +210,7 @@ function App() {
         <TooltipProvider>
           <AppContent />
           <Toaster />
+          <AppUpdatePrompt />
         </TooltipProvider>
       </QueryClientProvider>
     </HelmetProvider>
