@@ -1,8 +1,18 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { Loader2, Send, Image } from "lucide-react";
+import { Loader2, Send, Paperclip, Image, ClipboardList, ListChecks, MessageCircle, Pill, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
+import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+
+export type ChatMessageMode = "message" | "prescription" | "followup";
 
 type ChatInputBarProps = {
   value: string;
@@ -14,6 +24,12 @@ type ChatInputBarProps = {
   wrapperClassName?: string;
   onUploadImages?: (files: File[]) => Promise<void> | void;
   isUploadingImages?: boolean;
+  onSendQuestionnaire?: () => void;
+  showQuestionnaireAttach?: boolean;
+  onCreatePoll?: () => void;
+  showMessageModeSelector?: boolean;
+  messageMode?: ChatMessageMode;
+  onMessageModeChange?: (mode: ChatMessageMode) => void;
 };
 
 export type ChatInputBarHandle = {
@@ -30,9 +46,18 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   wrapperClassName = "border-t px-4 py-3 shrink-0",
   onUploadImages,
   isUploadingImages = false,
+  onSendQuestionnaire,
+  showQuestionnaireAttach = false,
+  onCreatePoll,
+  showMessageModeSelector = false,
+  messageMode = "message",
+  onMessageModeChange,
 }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSendDisabled = disabled || !value.trim() || isSending;
+  const showAttachMenu =
+    !value.trim() &&
+    (onUploadImages || (showQuestionnaireAttach && onSendQuestionnaire) || onCreatePoll);
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
@@ -76,33 +101,95 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   return (
     <div className={wrapperClassName}>
       <div className="flex items-end gap-2">
-        {!value.trim() && onUploadImages && (
+        {showAttachMenu && (
           <>
-            <Button
-              variant="outline"
-              size="icon"
-              disabled={disabled || isSending || isUploadingImages}
-              onClick={() => document.getElementById("chat-image-upload")?.click()}
-              className="rounded-full shrink-0 bg-[#e8ecf1] text-[#28292c] h-10 w-10"
-              data-testid="button-upload-photo"
-            >
-              {isUploadingImages ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Image className="h-4 w-4" />
-              )}
-            </Button>
-            <input
-              id="chat-image-upload"
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled={disabled || isSending || isUploadingImages}
+                  className="h-10 w-10 shrink-0 rounded-full bg-[#e8ecf1] text-[#28292c]"
+                  data-testid="button-attach-menu"
+                >
+                  {isUploadingImages ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="h-4 w-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {onUploadImages && (
+                  <DropdownMenuItem
+                    onSelect={() => document.getElementById("chat-image-upload")?.click()}
+                  >
+                    <Image className="mr-2 h-4 w-4" />
+                    {t.messagePhotoLabel ?? "Фото"}
+                  </DropdownMenuItem>
+                )}
+                {showQuestionnaireAttach && onSendQuestionnaire && (
+                  <DropdownMenuItem onSelect={onSendQuestionnaire}>
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    {t.questionnaire}
+                  </DropdownMenuItem>
+                )}
+                {onCreatePoll && (
+                  <DropdownMenuItem onSelect={onCreatePoll}>
+                    <ListChecks className="mr-2 h-4 w-4" />
+                    {t.pollCreate}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {onUploadImages && (
+              <input
+                id="chat-image-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            )}
           </>
         )}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
+          {showMessageModeSelector && onMessageModeChange && (
+            <div className="absolute bottom-1.5 right-2 z-10">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={disabled || isSending}
+                    className="h-7 w-7 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+                    data-testid="button-message-mode"
+                  >
+                    {messageMode === "prescription" ? (
+                      <Pill className="h-4 w-4" />
+                    ) : messageMode === "followup" ? (
+                      <FileText className="h-4 w-4" />
+                    ) : (
+                      <MessageCircle className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => onMessageModeChange("message")}>
+                    Сообщение
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onMessageModeChange("prescription")}>
+                    {t.prescription}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onMessageModeChange("followup")}>
+                    {t.followup}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           <Textarea
             ref={textareaRef}
             placeholder={placeholder}
@@ -110,7 +197,10 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm"
+            className={cn(
+              "min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm",
+              showMessageModeSelector && onMessageModeChange && "pr-10",
+            )}
             style={{ maxHeight: "144px" }}
             data-testid="input-message"
           />
@@ -119,7 +209,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
           size="icon"
           onClick={onSend}
           disabled={isSendDisabled}
-          className="rounded-full shrink-0 h-10 w-10 disabled:!opacity-60"
+          className="h-10 w-10 shrink-0 rounded-full disabled:!opacity-60"
           data-testid="button-send-message"
         >
           {isSending ? (

@@ -5,7 +5,8 @@ import {
   articleTags,
   payments,
   articleLikes,
-  userQuestionnaires,
+  questionnaireTemplates,
+  questionnaireInstances,
   invites,
   conversations,
   conversationParticipants,
@@ -26,8 +27,10 @@ import {
   type Payment,
   type InsertPayment,
   type ArticleLike,
-  type UserQuestionnaire,
-  type QuestionnaireData,
+  type QuestionnaireTemplate,
+  type QuestionnaireInstance,
+  type QuestionnaireInstanceData,
+  type QuestionnaireTemplateStructure,
   type Invite,
   type InsertInvite,
   type Conversation,
@@ -44,6 +47,12 @@ import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
+import {
+  DEFAULT_QUESTIONNAIRE_TEMPLATE_NAME,
+  deepCloneQuestionnaireStructure,
+  getDefaultQuestionnaireStructure,
+} from "./questionnaireDefaults";
+import { emptyQuestionnaireInstanceData } from "@shared/questionnaireTypes";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 export type MessengerPersonalContact = {
@@ -182,10 +191,48 @@ export interface IStorage {
   getArticleLikesInfo(articleId: string, userId?: string): Promise<{ likesCount: number; userLiked: boolean }>;
   getBulkArticleLikesInfo(articleIds: string[], userId?: string): Promise<Map<string, { likesCount: number; userLiked: boolean }>>;
 
-  // Questionnaire operations
-  getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined>;
-  saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire>;
-  getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]>;
+  // Questionnaire template & instance operations
+  listQuestionnaireTemplates(ownerUserId: string): Promise<QuestionnaireTemplate[]>;
+  getQuestionnaireTemplate(id: string): Promise<QuestionnaireTemplate | undefined>;
+  createQuestionnaireTemplate(data: {
+    ownerUserId: string;
+    name: string;
+    structure: QuestionnaireTemplateStructure;
+    isShared?: boolean;
+  }): Promise<QuestionnaireTemplate>;
+  updateQuestionnaireTemplate(
+    id: string,
+    ownerUserId: string,
+    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }>
+  ): Promise<QuestionnaireTemplate | undefined>;
+  deleteQuestionnaireTemplate(id: string, ownerUserId: string): Promise<boolean>;
+  duplicateQuestionnaireTemplate(id: string, ownerUserId: string): Promise<QuestionnaireTemplate | undefined>;
+  copySharedQuestionnaireTemplate(
+    sourceId: string,
+    newOwnerUserId: string,
+    name?: string
+  ): Promise<QuestionnaireTemplate | undefined>;
+  incrementTemplatePatientSendCount(templateId: string): Promise<void>;
+  ensureDefaultQuestionnaireTemplate(userId: string): Promise<QuestionnaireTemplate | undefined>;
+  backfillDefaultQuestionnaireTemplatesForAdmins(): Promise<number>;
+  listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]>;
+  getQuestionnaireInstance(id: string): Promise<QuestionnaireInstance | undefined>;
+  createQuestionnaireInstance(data: {
+    templateId: string;
+    conversationId: string;
+    messageId: string;
+    patientUserId: string;
+    doctorUserId: string;
+    structureSnapshot: QuestionnaireTemplateStructure;
+  }): Promise<QuestionnaireInstance>;
+  updateQuestionnaireInstanceData(
+    id: string,
+    data: QuestionnaireInstanceData
+  ): Promise<QuestionnaireInstance | undefined>;
+  canAccessQuestionnaireInstance(
+    instance: QuestionnaireInstance,
+    userId: string
+  ): Promise<boolean>;
 
   // Invite operations
   createInvite(invite: InsertInvite): Promise<Invite>;
@@ -739,59 +786,201 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  // Questionnaire operations
-  async getQuestionnaire(userId: string): Promise<UserQuestionnaire | undefined> {
-    const [questionnaire] = await db
+  // Questionnaire template & instance operations
+  async listQuestionnaireTemplates(ownerUserId: string): Promise<QuestionnaireTemplate[]> {
+    return db
       .select()
-      .from(userQuestionnaires)
-      .where(eq(userQuestionnaires.userId, userId));
-    return questionnaire;
+      .from(questionnaireTemplates)
+      .where(eq(questionnaireTemplates.ownerUserId, ownerUserId))
+      .orderBy(desc(questionnaireTemplates.updatedAt));
   }
 
-  async saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire> {
-    const existing = await this.getQuestionnaire(userId);
-    
-    if (existing) {
-      const [updated] = await db
-        .update(userQuestionnaires)
+  async getQuestionnaireTemplate(id: string): Promise<QuestionnaireTemplate | undefined> {
+    const [row] = await db.select().from(questionnaireTemplates).where(eq(questionnaireTemplates.id, id));
+    return row;
+  }
+
+  async createQuestionnaireTemplate(data: {
+    ownerUserId: string;
+    name: string;
+    structure: QuestionnaireTemplateStructure;
+    isShared?: boolean;
+  }): Promise<QuestionnaireTemplate> {
+    const [created] = await db
+      .insert(questionnaireTemplates)
+      .values({
+        ownerUserId: data.ownerUserId,
+        name: data.name.trim(),
+        structure: data.structure,
+        isShared: data.isShared ?? false,
+      })
+      .returning();
+    return created;
+  }
+
+  async updateQuestionnaireTemplate(
+    id: string,
+    ownerUserId: string,
+    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }>
+  ): Promise<QuestionnaireTemplate | undefined> {
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.structure !== undefined) patch.structure = data.structure;
+    if (data.isShared !== undefined) patch.isShared = data.isShared;
+    const [updated] = await db
+      .update(questionnaireTemplates)
+      .set(patch)
+      .where(and(eq(questionnaireTemplates.id, id), eq(questionnaireTemplates.ownerUserId, ownerUserId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteQuestionnaireTemplate(id: string, ownerUserId: string): Promise<boolean> {
+    const rows = await db
+      .delete(questionnaireTemplates)
+      .where(and(eq(questionnaireTemplates.id, id), eq(questionnaireTemplates.ownerUserId, ownerUserId)))
+      .returning();
+    return rows.length > 0;
+  }
+
+  async duplicateQuestionnaireTemplate(
+    id: string,
+    ownerUserId: string
+  ): Promise<QuestionnaireTemplate | undefined> {
+    const source = await this.getQuestionnaireTemplate(id);
+    if (!source || source.ownerUserId !== ownerUserId) return undefined;
+    return this.createQuestionnaireTemplate({
+      ownerUserId,
+      name: `${source.name} (копия)`,
+      structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
+      isShared: false,
+    });
+  }
+
+  async copySharedQuestionnaireTemplate(
+    sourceId: string,
+    newOwnerUserId: string,
+    name?: string
+  ): Promise<QuestionnaireTemplate | undefined> {
+    const source = await this.getQuestionnaireTemplate(sourceId);
+    if (!source) return undefined;
+    const isOwner = source.ownerUserId === newOwnerUserId;
+    if (!isOwner && !source.isShared) return undefined;
+
+    const created = await this.createQuestionnaireTemplate({
+      ownerUserId: newOwnerUserId,
+      name: name?.trim() || `${source.name} (копия)`,
+      structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
+      isShared: false,
+    });
+
+    if (!isOwner) {
+      await db
+        .update(questionnaireTemplates)
         .set({
-          data,
+          copyCount: sql`${questionnaireTemplates.copyCount} + 1`,
           updatedAt: new Date(),
         })
-        .where(eq(userQuestionnaires.userId, userId))
-        .returning();
-      return updated;
-    } else {
-      const [created] = await db
-        .insert(userQuestionnaires)
-        .values({
-          userId,
-          data,
-        })
-        .returning();
-      return created;
+        .where(eq(questionnaireTemplates.id, sourceId));
     }
+    return created;
   }
 
-  async getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]> {
-    const allQuestionnaires = await db
-      .select()
-      .from(userQuestionnaires)
-      .innerJoin(users, eq(userQuestionnaires.userId, users.id));
-    
-    const result: { questionnaire: UserQuestionnaire; user: User }[] = [];
-    
-    for (const row of allQuestionnaires) {
-      const data = row.user_questionnaires.data as QuestionnaireData;
-      if (data.sharedWithEmails?.includes(email)) {
-        result.push({
-          questionnaire: row.user_questionnaires,
-          user: row.users,
-        });
-      }
+  async incrementTemplatePatientSendCount(templateId: string): Promise<void> {
+    await db
+      .update(questionnaireTemplates)
+      .set({
+        patientSendCount: sql`${questionnaireTemplates.patientSendCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(questionnaireTemplates.id, templateId));
+  }
+
+  async ensureDefaultQuestionnaireTemplate(userId: string): Promise<QuestionnaireTemplate | undefined> {
+    const [existing] = await db
+      .select({ id: questionnaireTemplates.id })
+      .from(questionnaireTemplates)
+      .where(eq(questionnaireTemplates.ownerUserId, userId))
+      .limit(1);
+    if (existing) return undefined;
+    return this.createQuestionnaireTemplate({
+      ownerUserId: userId,
+      name: DEFAULT_QUESTIONNAIRE_TEMPLATE_NAME,
+      structure: getDefaultQuestionnaireStructure(),
+      isShared: false,
+    });
+  }
+
+  async backfillDefaultQuestionnaireTemplatesForAdmins(): Promise<number> {
+    const admins = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.isAdmin, true));
+    let count = 0;
+    for (const admin of admins) {
+      const created = await this.ensureDefaultQuestionnaireTemplate(admin.id);
+      if (created) count += 1;
     }
-    
-    return result;
+    return count;
+  }
+
+  async listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]> {
+    return db
+      .select()
+      .from(questionnaireTemplates)
+      .where(and(eq(questionnaireTemplates.ownerUserId, userId), eq(questionnaireTemplates.isShared, true)))
+      .orderBy(desc(questionnaireTemplates.updatedAt));
+  }
+
+  async getQuestionnaireInstance(id: string): Promise<QuestionnaireInstance | undefined> {
+    const [row] = await db.select().from(questionnaireInstances).where(eq(questionnaireInstances.id, id));
+    return row;
+  }
+
+  async createQuestionnaireInstance(data: {
+    templateId: string;
+    conversationId: string;
+    messageId: string;
+    patientUserId: string;
+    doctorUserId: string;
+    structureSnapshot: QuestionnaireTemplateStructure;
+  }): Promise<QuestionnaireInstance> {
+    const [created] = await db
+      .insert(questionnaireInstances)
+      .values({
+        templateId: data.templateId,
+        conversationId: data.conversationId,
+        messageId: data.messageId,
+        patientUserId: data.patientUserId,
+        doctorUserId: data.doctorUserId,
+        structureSnapshot: data.structureSnapshot,
+        data: emptyQuestionnaireInstanceData(),
+      })
+      .returning();
+    return created;
+  }
+
+  async updateQuestionnaireInstanceData(
+    id: string,
+    data: QuestionnaireInstanceData
+  ): Promise<QuestionnaireInstance | undefined> {
+    const [updated] = await db
+      .update(questionnaireInstances)
+      .set({ data, updatedAt: new Date() })
+      .where(eq(questionnaireInstances.id, id))
+      .returning();
+    return updated;
+  }
+
+  async canAccessQuestionnaireInstance(
+    instance: QuestionnaireInstance,
+    userId: string
+  ): Promise<boolean> {
+    if (instance.doctorUserId === userId) return true;
+    if (instance.patientUserId === userId) {
+      return this.isUserInConversation(userId, instance.conversationId);
+    }
+    return false;
   }
 
   async createInvite(invite: InsertInvite): Promise<Invite> {
@@ -1775,11 +1964,11 @@ export class DatabaseStorage implements IStorage {
 
       if (isDoctor) {
         const patientUser = conv.patientUserId ? await this.getUser(conv.patientUserId) : undefined;
-        avatarUrl = patientUser?.profileImageUrl ?? null;
+        avatarUrl = conv.avatarUrl ?? patientUser?.profileImageUrl ?? null;
         otherParticipantName = conv.name ?? undefined;
       } else if (other?.user) {
         otherParticipantId = other.userId;
-        avatarUrl = other.user.profileImageUrl ?? null;
+        avatarUrl = conv.avatarUrl ?? other.user.profileImageUrl ?? null;
         otherParticipantName =
           [other.user.firstName, other.user.lastName].filter(Boolean).join(" ").trim() ||
           other.user.email ||

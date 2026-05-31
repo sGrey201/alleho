@@ -11,7 +11,16 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendReceiptEmail, sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
-import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum, type QuestionnaireData } from "@shared/schema";
+import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
+import {
+  questionnaireInstanceDataSchema,
+  questionnaireTemplateStructureSchema,
+  validateQuestionnaireStructureDepth,
+  questionnaireMessageContentSchema,
+  questionnaireTemplateMessageContentSchema,
+  type QuestionnaireTemplateStructure,
+} from "@shared/questionnaireTypes";
+import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
 import {
@@ -19,7 +28,6 @@ import {
   insertConversationMessageSchema,
   insertConversationMessageCommentSchema,
   pollPayloadSchema,
-  type QuestionnaireData as QData,
   type User,
   type ConversationMessage,
 } from "@shared/schema";
@@ -106,6 +114,7 @@ function toAuthUserResponse(user: any) {
     weight: user.weight,
     country: user.country,
     city: user.city,
+    questionnaireHintsMode: user.questionnaireHintsMode ?? "icon",
     subscriptionExpiresAt: user.subscriptionExpiresAt,
     isAdmin: user.isAdmin,
     authType: "email",
@@ -425,6 +434,7 @@ ${allUrls.map(url => `  <url>
       let conversationId: string | undefined;
       if (invite.inviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true });
+        await storage.ensureDefaultQuestionnaireTemplate(targetUser.id);
       } else {
         if (!firstName || !lastName) {
           return res.status(400).json({ message: "first_name_and_last_name_required" });
@@ -1138,7 +1148,7 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, country, city, profileImageUrl } = req.body;
+      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, country, city, profileImageUrl, questionnaireHintsMode } = req.body;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -1168,6 +1178,9 @@ ${allUrls.map(url => `  <url>
         country: country || null,
         city: city || null,
         profileImageUrl: profileImageUrlToSave,
+        ...(questionnaireHintsMode === "always" || questionnaireHintsMode === "icon"
+          ? { questionnaireHintsMode }
+          : {}),
       });
       
       res.json(updatedUser);
@@ -1177,34 +1190,197 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Questionnaire routes (available to all authenticated users for their own data)
-  app.get('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+  // Questionnaire templates (doctors only)
+  app.get("/api/questionnaire-templates", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const questionnaire = await storage.getQuestionnaire(userId);
-      res.json({ data: questionnaire?.data || {} });
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const templates = await storage.listQuestionnaireTemplates(userId);
+      res.json(templates);
     } catch (error) {
-      console.error("Error fetching questionnaire:", error);
-      res.status(500).json({ message: "Failed to fetch questionnaire" });
+      console.error("Error listing questionnaire templates:", error);
+      res.status(500).json({ message: "Failed to list templates" });
     }
   });
 
-  app.post('/api/questionnaire', isAuthenticated, async (req: any, res) => {
+  app.post("/api/questionnaire-templates", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const name = String(req.body?.name ?? "Новая анкета").trim();
+      if (!name) return res.status(400).json({ message: "Name is required" });
+      let structure = req.body?.structure
+        ? questionnaireTemplateStructureSchema.parse(req.body.structure)
+        : { root: [] };
+      if (!validateQuestionnaireStructureDepth(structure)) {
+        return res.status(400).json({ message: "Structure exceeds max depth" });
       }
-      
-      const questionnaire = await storage.saveQuestionnaire(userId, req.body);
-      res.json(questionnaire);
+      const template = await storage.createQuestionnaireTemplate({ ownerUserId: userId, name, structure });
+      res.status(201).json(template);
     } catch (error) {
-      console.error("Error saving questionnaire:", error);
-      res.status(500).json({ message: "Failed to save questionnaire" });
+      console.error("Error creating questionnaire template:", error);
+      res.status(500).json({ message: "Failed to create template" });
+    }
+  });
+
+  app.post("/api/questionnaire-templates/restore-default", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const template = await storage.ensureDefaultQuestionnaireTemplate(userId);
+      if (!template) {
+        return res.status(409).json({ message: "Default template already exists" });
+      }
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error restoring default questionnaire template:", error);
+      res.status(500).json({ message: "Failed to restore default template" });
+    }
+  });
+
+  app.get("/api/questionnaire-templates/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const template = await storage.getQuestionnaireTemplate(req.params.id);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      if (template.ownerUserId !== userId && !template.isShared) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching questionnaire template:", error);
+      res.status(500).json({ message: "Failed to fetch template" });
+    }
+  });
+
+  app.patch("/api/questionnaire-templates/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const patch: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }> = {};
+      if (req.body?.name !== undefined) {
+        const name = String(req.body.name).trim();
+        if (!name) return res.status(400).json({ message: "Name cannot be empty" });
+        patch.name = name;
+      }
+      if (req.body?.structure !== undefined) {
+        const structure = questionnaireTemplateStructureSchema.parse(req.body.structure);
+        if (!validateQuestionnaireStructureDepth(structure)) {
+          return res.status(400).json({ message: "Structure exceeds max depth" });
+        }
+        patch.structure = structure;
+      }
+      if (req.body?.isShared !== undefined) patch.isShared = !!req.body.isShared;
+      const updated = await storage.updateQuestionnaireTemplate(req.params.id, userId, patch);
+      if (!updated) return res.status(404).json({ message: "Template not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating questionnaire template:", error);
+      res.status(500).json({ message: "Failed to update template" });
+    }
+  });
+
+  app.delete("/api/questionnaire-templates/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const deleted = await storage.deleteQuestionnaireTemplate(req.params.id, userId);
+      if (!deleted) return res.status(404).json({ message: "Template not found" });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting questionnaire template:", error);
+      res.status(500).json({ message: "Failed to delete template" });
+    }
+  });
+
+  app.post("/api/questionnaire-templates/:id/duplicate", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const copy = await storage.duplicateQuestionnaireTemplate(req.params.id, userId);
+      if (!copy) return res.status(404).json({ message: "Template not found" });
+      res.status(201).json(copy);
+    } catch (error) {
+      console.error("Error duplicating questionnaire template:", error);
+      res.status(500).json({ message: "Failed to duplicate template" });
+    }
+  });
+
+  app.post("/api/questionnaire-templates/:id/copy", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const name = req.body?.name ? String(req.body.name).trim() : undefined;
+      const copy = await storage.copySharedQuestionnaireTemplate(req.params.id, userId, name);
+      if (!copy) return res.status(404).json({ message: "Template not found or not shared" });
+      res.status(201).json(copy);
+    } catch (error) {
+      console.error("Error copying questionnaire template:", error);
+      res.status(500).json({ message: "Failed to copy template" });
+    }
+  });
+
+  app.get("/api/users/:userId/questionnaire-templates", async (req: any, res) => {
+    try {
+      const templates = await storage.listSharedQuestionnaireTemplatesByUser(req.params.userId);
+      res.json(
+        templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          copyCount: t.copyCount,
+          patientSendCount: t.patientSendCount,
+          updatedAt: t.updatedAt,
+        }))
+      );
+    } catch (error) {
+      console.error("Error listing shared questionnaire templates:", error);
+      res.status(500).json({ message: "Failed to list shared templates" });
+    }
+  });
+
+  app.get("/api/questionnaire-instances/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const instance = await storage.getQuestionnaireInstance(req.params.id);
+      if (!instance) return res.status(404).json({ message: "Instance not found" });
+      if (!(await storage.canAccessQuestionnaireInstance(instance, userId))) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const template = await storage.getQuestionnaireTemplate(instance.templateId);
+      res.json({
+        ...instance,
+        templateName: template?.name ?? "",
+      });
+    } catch (error) {
+      console.error("Error fetching questionnaire instance:", error);
+      res.status(500).json({ message: "Failed to fetch instance" });
+    }
+  });
+
+  app.patch("/api/questionnaire-instances/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(userId);
+      const instance = await storage.getQuestionnaireInstance(req.params.id);
+      if (!instance) return res.status(404).json({ message: "Instance not found" });
+      if (!(await storage.canAccessQuestionnaireInstance(instance, userId))) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const parsed = questionnaireInstanceDataSchema.parse(req.body?.data ?? req.body);
+      const toSave = currentUser?.isAdmin
+        ? parsed
+        : { ...parsed, homeopathNotes: undefined };
+      const updated = await storage.updateQuestionnaireInstanceData(instance.id, toSave);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating questionnaire instance:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid instance data" });
+      }
+      res.status(500).json({ message: "Failed to update instance" });
     }
   });
 
@@ -1224,112 +1400,6 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  /** Doctor may edit if they share a patient conversation or questionnaire is listed in sharedWithEmails. */
-  async function canDoctorAccessPatientQuestionnaire(
-    doctorUserId: string,
-    doctorEmail: string,
-    patientId: string,
-    existingData: QuestionnaireData | undefined
-  ): Promise<boolean> {
-    const patientChats = await storage.getPatientConversationsForUser(doctorUserId);
-    if (patientChats.some((c) => c.patientUserId === patientId)) {
-      return true;
-    }
-    return !!existingData?.sharedWithEmails?.includes(doctorEmail);
-  }
-
-  // Get a patient's questionnaire (Health Wall doctor or sharedWithEmails)
-  app.get('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
-    try {
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const currentUser = await storage.getUser(currentUserId);
-      if (!currentUser?.email) {
-        return res.status(400).json({ message: "User email not found" });
-      }
-      
-      const patientId = req.params.userId;
-      const questionnaire = await storage.getQuestionnaire(patientId);
-      const patient = await storage.getUser(patientId);
-      const patientPayload = {
-        id: patient?.id,
-        email: patient?.email,
-        firstName: patient?.firstName,
-        lastName: patient?.lastName,
-        gender: patient?.gender,
-        birthMonth: patient?.birthMonth,
-        birthYear: patient?.birthYear,
-        height: patient?.height,
-        weight: patient?.weight,
-        city: patient?.city,
-        profileImageUrl: patient?.profileImageUrl ?? null,
-      };
-
-      if (!questionnaire) {
-        if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, undefined))) {
-          return res.status(404).json({ message: "Questionnaire not found" });
-        }
-        return res.json({
-          data: {} as QuestionnaireData,
-          patient: patientPayload,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      const data = questionnaire.data as QuestionnaireData;
-      if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, data))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      res.json({
-        data: questionnaire.data,
-        patient: patientPayload,
-        updatedAt:
-          questionnaire.updatedAt instanceof Date
-            ? questionnaire.updatedAt.toISOString()
-            : questionnaire.updatedAt,
-      });
-    } catch (error) {
-      console.error("Error fetching patient questionnaire:", error);
-      res.status(500).json({ message: "Failed to fetch questionnaire" });
-    }
-  });
-
-  // Save a patient's questionnaire (Health Wall doctor or sharedWithEmails)
-  app.post('/api/patient/:userId/questionnaire', isAuthenticated, isAdmin, async (req: any, res) => {
-    try {
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const currentUser = await storage.getUser(currentUserId);
-      if (!currentUser?.email) {
-        return res.status(400).json({ message: "User email not found" });
-      }
-      
-      const patientId = req.params.userId;
-      const existingQuestionnaire = await storage.getQuestionnaire(patientId);
-      const existingData = existingQuestionnaire?.data as QuestionnaireData | undefined;
-
-      if (!(await canDoctorAccessPatientQuestionnaire(currentUserId, currentUser.email, patientId, existingData))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      // Shallow merge: doctor UI may send a partial payload (e.g. stale cache); never wipe patient-filled fields.
-      const incoming = (req.body || {}) as QuestionnaireData;
-      const base = (existingData || {}) as Record<string, unknown>;
-      const merged = { ...base, ...incoming } as QuestionnaireData;
-      const questionnaire = await storage.saveQuestionnaire(patientId, merged);
-      res.json(questionnaire);
-    } catch (error) {
-      console.error("Error saving patient questionnaire:", error);
-      res.status(500).json({ message: "Failed to save questionnaire" });
-    }
-  });
 
   // Get patients for this doctor (legacy admin list — one row per patient chat)
   app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
@@ -1344,7 +1414,6 @@ ${allUrls.map(url => `  <url>
         patientChats.map(async (chat) => {
           const patientId = chat.patientUserId;
           const patient = patientId ? await storage.getUser(patientId) : undefined;
-          const questionnaire = patientId ? await storage.getQuestionnaire(patientId) : undefined;
           return {
             id: chat.conversationId,
             userId: patientId,
@@ -1355,7 +1424,7 @@ ${allUrls.map(url => `  <url>
             gender: patient?.gender,
             email: patient?.email,
             profileImageUrl: chat.avatarUrl ?? patient?.profileImageUrl ?? null,
-            updatedAt: questionnaire?.updatedAt ?? null,
+            updatedAt: chat.lastMessageAt ?? null,
             unreadCount: chat.unreadCount,
             lastMessageAt: chat.lastMessageAt,
           };
@@ -1677,6 +1746,41 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Patient chat settings (name/avatar) — editable by doctor and patient participants
+  app.patch("/api/conversations/:id/patient-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "settings_available_only_for_patient_chat" });
+      }
+      const body = req.body as { name?: string; avatarUrl?: string | null };
+      const trimmedName = typeof body.name === "string" ? body.name.trim() : "";
+      if (!trimmedName && body.name != null) {
+        return res.status(400).json({ message: "name_required" });
+      }
+      await storage.updateConversation(id, {
+        ...(body.name != null ? { name: trimmedName } : {}),
+        ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
+      });
+      const updatedConv = await storage.getConversation(id);
+      const participants = await storage.getConversationParticipants(id);
+      const owner = participants.find((p) => p.role === "owner");
+      if (owner?.userId) {
+        await publishDoctorChatsUpdated(owner.userId);
+      }
+      res.json({ ...updatedConv, participants });
+    } catch (error) {
+      console.error("Error updating patient chat settings:", error);
+      res.status(500).json({ message: "Failed to update conversation" });
+    }
+  });
+
   // Update conversation (owner can edit group/channel name/avatar; group owner can add participants)
   app.patch("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -1976,6 +2080,7 @@ ${allUrls.map(url => `  <url>
         content?: string;
         imageUrl?: string;
         messageType?: string;
+        templateId?: string;
         replyToMessageId?: string;
         poll?: unknown;
         forwardSource?: { conversationId?: string; patientUserId?: string; messageId: string };
@@ -2038,6 +2143,29 @@ ${allUrls.map(url => `  <url>
           const parsed = pollPayloadSchema.parse(JSON.parse(content));
           content = JSON.stringify(parsed);
           imageUrl = null;
+        } else if (messageType === "questionnaire" || messageType === "questionnaire_template") {
+          if (!currentUser?.isAdmin) {
+            return res.status(403).json({ message: "Only doctors can send questionnaires" });
+          }
+          const templateId = String(body.templateId || "").trim();
+          if (!templateId) {
+            return res.status(400).json({ message: "templateId is required" });
+          }
+          const template = await storage.getQuestionnaireTemplate(templateId);
+          if (!template || template.ownerUserId !== currentUserId) {
+            return res.status(404).json({ message: "Template not found" });
+          }
+          if (messageType === "questionnaire") {
+            if (conv.type !== "patient") {
+              return res.status(400).json({ message: "Questionnaire instances only in patient chats" });
+            }
+            if (!conv.patientUserId) {
+              return res.status(400).json({ message: "Patient not found in conversation" });
+            }
+          } else if (conv.type === "patient") {
+            return res.status(400).json({ message: "Template preview not allowed in patient chats" });
+          }
+          imageUrl = null;
         }
       }
 
@@ -2063,6 +2191,22 @@ ${allUrls.map(url => `  <url>
       if (messageType === "poll" && imageUrl) {
         return res.status(400).json({ message: "Poll cannot have image" });
       }
+      if ((messageType === "questionnaire" || messageType === "questionnaire_template") && imageUrl) {
+        return res.status(400).json({ message: "Questionnaire cannot have image" });
+      }
+
+      if (messageType === "questionnaire_template") {
+        const template = await storage.getQuestionnaireTemplate(String(body.templateId));
+        if (!template || template.ownerUserId !== currentUserId) {
+          return res.status(404).json({ message: "Template not found" });
+        }
+        const payload = questionnaireTemplateMessageContentSchema.parse({
+          templateId: template.id,
+          templateName: template.name,
+          snapshot: deepCloneQuestionnaireStructure(template.structure as QuestionnaireTemplateStructure),
+        });
+        content = JSON.stringify(payload);
+      }
 
       const validated = insertConversationMessageSchema.parse({
         conversationId: id,
@@ -2075,7 +2219,44 @@ ${allUrls.map(url => `  <url>
         forwardedFromUserId,
       });
       const message = await storage.createConversationMessage(validated);
-      const [enriched] = await enrichConversationMessages([message], currentUserId);
+
+      let finalMessage = message;
+      if (messageType === "questionnaire" && conv.patientUserId) {
+        const template = await storage.getQuestionnaireTemplate(String(body.templateId));
+        if (template) {
+          const instance = await storage.createQuestionnaireInstance({
+            templateId: template.id,
+            conversationId: id,
+            messageId: message.id,
+            patientUserId: conv.patientUserId,
+            doctorUserId: currentUserId,
+            structureSnapshot: deepCloneQuestionnaireStructure(
+              template.structure as QuestionnaireTemplateStructure
+            ),
+          });
+          const payload = questionnaireMessageContentSchema.parse({
+            instanceId: instance.id,
+            templateName: template.name,
+          });
+          const updatedContent = JSON.stringify(payload);
+          await storage.editConversationMessage(message.id, updatedContent);
+          finalMessage = (await storage.getConversationMessageById(message.id)) ?? message;
+          finalMessage.content = updatedContent;
+          await storage.incrementTemplatePatientSendCount(template.id);
+          const pinned = await storage.pinConversationMessage(message.id, currentUserId);
+          if (pinned) {
+            finalMessage = pinned;
+            await publishConversationMessagePinned(id, {
+              conversationId: id,
+              messageId: message.id,
+              pinnedAt: (pinned.pinnedAt instanceof Date ? pinned.pinnedAt : new Date()).toISOString(),
+              pinnedByUserId: currentUserId,
+            });
+          }
+        }
+      }
+
+      const [enriched] = await enrichConversationMessages([finalMessage], currentUserId);
       await pushConversationRecentMessage(id, enriched);
       await publishConversationMessage(id, enriched);
       void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>

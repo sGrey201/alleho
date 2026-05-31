@@ -7,9 +7,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut, ClipboardList } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
+import PatientChatSettings from "@/components/PatientChatSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import {
+  readMessengerUiState,
+  writeMessengerUiState,
+  type MessengerFolder,
+} from "@/lib/messengerUiState";
 
 function formatChatTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
@@ -162,6 +168,9 @@ function ChatListAvatar({ chat, label }: { chat: ChatItem; label: string }) {
 
 const PAGE_SIZE = 20;
 
+const messengerFolderTabClass =
+  "relative !flex w-full min-w-0 items-center justify-center rounded-none border-b-2 border-transparent bg-transparent px-0 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
+
 export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [location, setLocation] = useLocation();
@@ -171,12 +180,14 @@ export default function Messenger() {
   const [, commentThreadParams] = useRoute("/messenger/channel/:conversationId/post/:messageId/comments");
   const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
+  const [, patientChatSettingsParams] = useRoute("/messenger/chat/:conversationId/settings");
   const [, patientChatParams] = useRoute("/messenger/chat/:conversationId");
   const conversationId =
     commentThreadParams?.conversationId ||
     groupParams?.conversationId ||
     channelParams?.conversationId ||
     directParams?.conversationId ||
+    patientChatSettingsParams?.conversationId ||
     patientChatParams?.conversationId ||
     groupSettingsParams?.conversationId ||
     channelSettingsParams?.conversationId;
@@ -184,7 +195,8 @@ export default function Messenger() {
   const isGroupChat = !!groupParams?.conversationId;
   const isChannelChat = !!channelParams?.conversationId;
   const isDirectChat = !!directParams?.conversationId;
-  const isPatientChat = !!patientChatParams?.conversationId;
+  const isPatientChatSettings = !!patientChatSettingsParams?.conversationId;
+  const isPatientChat = !!patientChatParams?.conversationId && !isPatientChatSettings;
   const isCommentThread = !!commentThreadParams?.conversationId && !!commentThreadParams?.messageId;
   const isGroupSettings = !!groupSettingsParams?.conversationId;
   const isChannelSettings = !!channelSettingsParams?.conversationId;
@@ -220,7 +232,9 @@ export default function Messenger() {
 
   const isSearching = searchQuery.trim().length > 0;
 
-  const [folder, setFolder] = useState<"doctors" | "patients" | "groups" | "channels">("doctors");
+  const [folder, setFolder] = useState<MessengerFolder>(
+    () => readMessengerUiState()?.folder ?? "patients"
+  );
   const [searchScope, setSearchScope] = useState<"all" | "doctors" | "patients" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
@@ -234,6 +248,7 @@ export default function Messenger() {
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const prevLocationRef = useRef(location);
 
   const activeFolder = isAdmin ? folder : "patients";
   const apiFolder = activeFolder === "doctors" || activeFolder === "patients" ? "personal" : activeFolder;
@@ -364,6 +379,33 @@ export default function Messenger() {
     }
   }, [isAuthenticated, authLoading, isAdmin]);
 
+  useEffect(() => {
+    if (isPatientChat) setFolder("patients");
+    else if (isDirectChat) setFolder("doctors");
+    else if (isGroupChat || isGroupSettings) setFolder("groups");
+    else if (isChannelChat || isChannelSettings || isCommentThread) setFolder("channels");
+  }, [isPatientChat, isDirectChat, isGroupChat, isGroupSettings, isChannelChat, isChannelSettings, isCommentThread]);
+
+  useEffect(() => {
+    if (!isAuthenticated || authLoading) return;
+    const effectiveFolder = isAdmin ? folder : "patients";
+    writeMessengerUiState({ folder: effectiveFolder, path: location });
+  }, [location, folder, isAuthenticated, authLoading, isAdmin]);
+
+  useEffect(() => {
+    const prev = prevLocationRef.current;
+    prevLocationRef.current = location;
+    if (!isAuthenticated || authLoading) return;
+    if (location !== "/messenger") return;
+    if (prev.startsWith("/messenger") && prev !== "/messenger") return;
+
+    const saved = readMessengerUiState();
+    if (isAdmin && saved?.folder) setFolder(saved.folder);
+    if (saved?.path && saved.path !== "/messenger") {
+      setLocation(saved.path);
+    }
+  }, [location, isAuthenticated, authLoading, isAdmin, setLocation]);
+
   const openDirectChat = async (params: { userId?: string; conversationId?: string }) => {
     let targetConversationId = params.conversationId;
 
@@ -395,23 +437,33 @@ export default function Messenger() {
       return;
     }
     if (chat.type === "direct") {
+      setFolder("doctors");
       await openDirectChat({ userId: chat.otherParticipantId, conversationId: chat.conversationId });
       return;
     }
     if (chat.conversationId) {
-      if (chat.type === "group") setLocation(`/messenger/group/${chat.conversationId}`);
-      else if (chat.type === "channel") setLocation(`/messenger/channel/${chat.conversationId}`);
-      else setLocation(`/messenger/channel/${chat.conversationId}`);
+      if (chat.type === "group") {
+        setFolder("groups");
+        setLocation(`/messenger/group/${chat.conversationId}`);
+      } else if (chat.type === "channel") {
+        setFolder("channels");
+        setLocation(`/messenger/channel/${chat.conversationId}`);
+      } else {
+        setFolder("channels");
+        setLocation(`/messenger/channel/${chat.conversationId}`);
+      }
     }
   };
 
   const handleSelectDoctor = (doctor: MessengerSearchDoctor) => {
     setSearchQuery("");
+    setFolder("doctors");
     void openDirectChat({ userId: doctor.userId, conversationId: doctor.conversationId });
   };
 
   const handleSelectGroup = async (group: MessengerSearchGroup) => {
     if (group.isMember) {
+      setFolder("groups");
       setLocation(`/messenger/group/${group.id}`);
       return;
     }
@@ -463,6 +515,7 @@ export default function Messenger() {
 
   const handleSelectChannel = async (channel: MessengerSearchChannel) => {
     if (channel.isMember) {
+      setFolder("channels");
       setLocation(`/messenger/channel/${channel.id}`);
       return;
     }
@@ -522,6 +575,14 @@ export default function Messenger() {
                     {t.profile}
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/questionnaires" className="cursor-pointer flex items-center">
+                      <ClipboardList className="h-4 w-4 mr-2" />
+                      {t.questionnaires}
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {!isAdmin && (
                   <DropdownMenuItem
                     onSelect={async () => {
@@ -601,47 +662,35 @@ export default function Messenger() {
           {isAdmin && (
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className="grid h-10 w-full grid-cols-4 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
-                <TabsTrigger
-                  value="doctors"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                >
-                  <span>{t.folderCommunity}</span>
-                  {unreadChatsByFolder.doctors > 0 && (
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
-                      {unreadChatsByFolder.doctors}
-                    </span>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="patients"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                >
-                  <span>Пациенты</span>
+              <TabsList className="!grid h-10 w-full grid-cols-4 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
+                <TabsTrigger value="patients" className={messengerFolderTabClass}>
+                  <span className="truncate px-1">{t.folderPatients}</span>
                   {unreadChatsByFolder.patients > 0 && (
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
                       {unreadChatsByFolder.patients}
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger
-                  value="groups"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                >
-                  <span>{t.folderGroups}</span>
+                <TabsTrigger value="doctors" className={messengerFolderTabClass}>
+                  <span className="truncate px-1">{t.folderCommunity}</span>
+                  {unreadChatsByFolder.doctors > 0 && (
+                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
+                      {unreadChatsByFolder.doctors}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="groups" className={messengerFolderTabClass}>
+                  <span className="truncate px-1">{t.folderGroups}</span>
                   {unreadChatsByFolder.groups > 0 && (
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
                       {unreadChatsByFolder.groups}
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger
-                  value="channels"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                >
-                  <span>{t.folderChannels}</span>
+                <TabsTrigger value="channels" className={messengerFolderTabClass}>
+                  <span className="truncate px-1">{t.folderChannels}</span>
                   {unreadChatsByFolder.channels > 0 && (
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-medium text-white">
+                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
                       {unreadChatsByFolder.channels}
                     </span>
                   )}
@@ -915,6 +964,13 @@ export default function Messenger() {
               onBack={() => setLocation(isGroupSettings ? `/messenger/group/${conversationId}` : `/messenger/channel/${conversationId}`)}
             />
           </div>
+        ) : isPatientChatSettings && conversationId ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <PatientChatSettings
+              conversationId={conversationId}
+              onBack={() => setLocation(`/messenger/chat/${conversationId}`)}
+            />
+          </div>
         ) : isCommentThread && conversationId && threadMessageId ? (
           <div className="flex-1 flex flex-col min-h-0 chat-panel-bg">
             <PostCommentsThread
@@ -932,7 +988,7 @@ export default function Messenger() {
               onTitleClick={() => {
                 if (isGroupChat) setLocation(`/messenger/group/${conversationId}/settings`);
                 if (isChannelChat) setLocation(`/messenger/channel/${conversationId}/settings`);
-                if (isDirectChat) return;
+                if (isPatientChat) setLocation(`/messenger/chat/${conversationId}/settings`);
               }}
             />
           </div>

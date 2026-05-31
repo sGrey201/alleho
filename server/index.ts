@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { log } from "./logger";
+import { storage } from "./storage";
 
 const app = express();
 
@@ -132,5 +133,8 @@ app.use((req, res, next) => {
 
   server.listen(listenOptions, () => {
     log(`serving on port ${port}`);
+    void storage.backfillDefaultQuestionnaireTemplatesForAdmins().then((count) => {
+      if (count > 0) log(`backfilled default questionnaire templates for ${count} doctors`);
+    }).catch((err) => console.error("[questionnaire] backfill error:", err));
   });
 })();

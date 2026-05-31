@@ -11,6 +11,14 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import {
+  questionnaireInstanceDataSchema,
+  questionnaireTemplateStructureSchema,
+  type QuestionnaireInstanceData,
+  type QuestionnaireTemplateStructure,
+} from "./questionnaireTypes";
+
+export type { QuestionnaireInstanceData, QuestionnaireTemplateStructure };
 
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
@@ -42,6 +50,7 @@ export const users = pgTable("users", {
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   isAdmin: boolean("is_admin").default(false).notNull(),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
+  questionnaireHintsMode: varchar("questionnaire_hints_mode", { length: 20 }).default("icon").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -210,147 +219,46 @@ export const articleLikes = pgTable("article_likes", {
 
 export type ArticleLike = typeof articleLikes.$inferSelect;
 
-// User questionnaire table
-export const userQuestionnaires = pgTable("user_questionnaires", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
-  data: jsonb("data").notNull().default({}),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("user_questionnaires_user_idx").on(table.userId),
-]);
+export const questionnaireTemplates = pgTable(
+  "questionnaire_templates",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    ownerUserId: varchar("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    structure: jsonb("structure").notNull().default({ root: [] }),
+    isShared: boolean("is_shared").notNull().default(false),
+    patientSendCount: integer("patient_send_count").notNull().default(0),
+    copyCount: integer("copy_count").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [index("questionnaire_templates_owner_idx").on(table.ownerUserId)]
+);
 
-export const questionnaireDataSchema = z.object({
-  head: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  face: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  neck: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  chest: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  heartBreathing: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  stomach: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  back: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  arms: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  legs: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  joints: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  muscles: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  skin: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  reproductive: z.object({
-    problem: z.string().optional(),
-    better: z.string().optional(),
-    worse: z.string().optional(),
-  }).optional(),
-  psyche: z.string().optional(),
-  sleep: z.string().optional(),
-  energy: z.string().optional(),
-  cognitive: z.string().optional(),
-  behavior: z.string().optional(),
-  character: z.string().optional(),
-  social: z.string().optional(),
-  general: z.string().optional(),
-  medicalHistory: z.string().optional(),
-  homeopathNotes: z.string().optional(),
-  // General patient info section
-  occupation: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  familyStatus: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  appearanceConstitution: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Complaints section
-  mainComplaint: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  otherComplaints: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Medical history section
-  familyDiseases: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  pastDiseasesAdult: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Childhood history section (under medicalHistory)
-  childhoodHistory: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // General symptoms and modalities section
-  thirstAndThermoregulation: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Unusual body sensations section (under psycheMental)
-  unusualSensations: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Sleep section (under psycheMental)
-  sleepPatterns: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Psyche and mental section
-  moodAndEnergy: z.object({
-    tags: z.array(z.string()).optional(),
-    description: z.string().optional(),
-  }).optional(),
-  socialRelations: z.object({
-    tags: z.array(z.string()).optional(),
-    description: z.string().optional(),
-  }).optional(),
-  willControl: z.object({
-    tags: z.array(z.string()).optional(),
-    description: z.string().optional(),
-  }).optional(),
-  intellectImagination: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  fears: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  emotionalReactions: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  specialMentalStates: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  desiresAversions: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  reactionToSuffering: z.object({ tags: z.array(z.string()).optional(), description: z.string().optional() }).optional(),
-  // Settings fields
-  patientName: z.string().optional(),
-  birthMonth: z.number().min(1).max(12).optional(),
-  birthYear: z.number().min(1900).max(2100).optional(),
-  gender: z.enum(['male', 'female', 'other']).optional(),
-  sharedWithEmails: z.array(z.string().email()).optional(),
+export const insertQuestionnaireTemplateSchema = createInsertSchema(questionnaireTemplates).omit({
+  id: true,
+  patientSendCount: true,
+  copyCount: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  name: z.string().trim().min(1).max(255),
+  structure: questionnaireTemplateStructureSchema,
 });
 
-export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
-export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;
+export type QuestionnaireTemplate = typeof questionnaireTemplates.$inferSelect;
+export type InsertQuestionnaireTemplate = z.infer<typeof insertQuestionnaireTemplateSchema>;
 
-/** Messenger conversation messages — includes clinical types and polls. */
+/** Messenger conversation messages — includes clinical types, polls, and questionnaires. */
 export const conversationMessageTypeEnum = z.enum([
   'message',
   'prescription',
   'followup',
   'poll',
+  'questionnaire',
+  'questionnaire_template',
 ]);
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 
@@ -460,6 +368,47 @@ export const insertConversationMessageSchema = createInsertSchema(conversationMe
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+
+export const questionnaireInstances = pgTable(
+  "questionnaire_instances",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    templateId: varchar("template_id")
+      .notNull()
+      .references(() => questionnaireTemplates.id, { onDelete: "restrict" }),
+    conversationId: varchar("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: varchar("message_id").references(() => conversationMessages.id, { onDelete: "set null" }),
+    patientUserId: varchar("patient_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    doctorUserId: varchar("doctor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    structureSnapshot: jsonb("structure_snapshot").notNull(),
+    data: jsonb("data").notNull().default({}),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("questionnaire_instances_conversation_idx").on(table.conversationId),
+    index("questionnaire_instances_patient_idx").on(table.patientUserId),
+    index("questionnaire_instances_doctor_idx").on(table.doctorUserId),
+  ]
+);
+
+export const insertQuestionnaireInstanceSchema = createInsertSchema(questionnaireInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  structureSnapshot: questionnaireTemplateStructureSchema,
+  data: questionnaireInstanceDataSchema,
+});
+
+export type QuestionnaireInstance = typeof questionnaireInstances.$inferSelect;
+export type InsertQuestionnaireInstance = z.infer<typeof insertQuestionnaireInstanceSchema>;
 
 export const conversationPollVotes = pgTable(
   "conversation_poll_votes",

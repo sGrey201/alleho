@@ -1,17 +1,23 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, LogOut, Camera, ArrowLeft } from "lucide-react";
+import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye } from "lucide-react";
+import { format } from "date-fns";
+import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link, useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
+import type { QuestionnaireHintsMode } from "@shared/questionnaireTypes";
+import { DEFAULT_QUESTIONNAIRE_HINTS_MODE } from "@shared/questionnaireTypes";
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
@@ -228,6 +234,9 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showChangePasswordForm, setShowChangePasswordForm] = useState(false);
+  const [questionnaireHintsMode, setQuestionnaireHintsMode] = useState<QuestionnaireHintsMode>(
+    DEFAULT_QUESTIONNAIRE_HINTS_MODE
+  );
   const hasPassword = (user as { hasPassword?: boolean } | undefined)?.hasPassword !== false;
   const { data: ownInviteSummary } = useQuery<{
     inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
@@ -266,6 +275,50 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
     retry: false,
   });
   const profileUser = isOwnProfile ? user : viewedProfile?.user;
+  const profileUserId = profileUser?.id ?? targetUserId;
+  const showSharedQuestionnaires = !!profileUser?.isAdmin && !!profileUserId;
+
+  const { data: sharedQuestionnaireTemplates = [] } = useQuery<
+    Array<{
+      id: string;
+      name: string;
+      copyCount: number;
+      patientSendCount: number;
+      updatedAt: string | null;
+    }>
+  >({
+    queryKey: ["/api/users", profileUserId, "questionnaire-templates"],
+    enabled: showSharedQuestionnaires,
+    queryFn: async () => {
+      const res = await fetch(`/api/users/${profileUserId}/questionnaire-templates`);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  });
+
+  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
+  const [previewTemplateMeta, setPreviewTemplateMeta] = useState<{ name: string } | null>(null);
+
+  const { data: previewTemplate } = useQuery({
+    queryKey: ["/api/questionnaire-templates", previewTemplateId],
+    enabled: !!previewTemplateId,
+    queryFn: async () => {
+      const res = await fetch(`/api/questionnaire-templates/${previewTemplateId}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+  });
+
+  const copyTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const res = await apiRequest("POST", `/api/questionnaire-templates/${templateId}/copy`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: t.questionnaireSaved });
+      void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
+    },
+  });
   const inviteSummary = isOwnProfile
     ? ownInviteSummary
     : {
@@ -280,6 +333,10 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
       setCountry(profileUser.country || "");
       setCity(profileUser.city || "");
       setProfileImageUrl(profileUser.profileImageUrl || "");
+      setQuestionnaireHintsMode(
+        (profileUser as { questionnaireHintsMode?: QuestionnaireHintsMode }).questionnaireHintsMode ??
+          DEFAULT_QUESTIONNAIRE_HINTS_MODE
+      );
     }
   }, [profileUser]);
 
@@ -317,7 +374,19 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string; gender: string | null; birthMonth: number | null; birthYear: number | null; height: number | null; weight: number | null; country: string | null; city: string | null; profileImageUrl: string | null }) => {
+    mutationFn: async (data: {
+      firstName: string;
+      lastName: string;
+      gender: string | null;
+      birthMonth: number | null;
+      birthYear: number | null;
+      height: number | null;
+      weight: number | null;
+      country: string | null;
+      city: string | null;
+      profileImageUrl: string | null;
+      questionnaireHintsMode?: QuestionnaireHintsMode;
+    }) => {
       return apiRequest('PUT', '/api/user/profile', data);
     },
     onSuccess: async () => {
@@ -340,6 +409,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         country: country || null,
         city: city || null,
         profileImageUrl: profileImageUrl || null,
+        questionnaireHintsMode,
       });
 
       toast({
@@ -399,6 +469,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           country: country || null,
           city: city || null,
           profileImageUrl: newAvatarPath,
+          questionnaireHintsMode,
         });
         toast({ title: "Аватар сохранен" });
       } catch {
@@ -628,6 +699,28 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           />
         </div>
 
+        <div className="space-y-3 rounded-lg border border-border/60 p-4">
+          <Label className="text-base font-medium">{t.questionnaireHintsSetting}</Label>
+          <RadioGroup
+            value={questionnaireHintsMode}
+            onValueChange={(value) => setQuestionnaireHintsMode(value as QuestionnaireHintsMode)}
+            disabled={!isOwnProfile}
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="always" id="questionnaire-hints-always" />
+              <Label htmlFor="questionnaire-hints-always" className="cursor-pointer font-normal">
+                {t.questionnaireHintsAlways}
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="icon" id="questionnaire-hints-icon" />
+              <Label htmlFor="questionnaire-hints-icon" className="cursor-pointer font-normal">
+                {t.questionnaireHintsIcon}
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+
         {hasPassword && (
           <div>
             {!showChangePasswordForm ? (
@@ -738,6 +831,52 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           </p>
         </div>
 
+        {showSharedQuestionnaires && sharedQuestionnaireTemplates.length > 0 && (
+          <div className="space-y-3 rounded-lg border p-4">
+            <h3 className="flex items-center gap-2 font-semibold">
+              <ClipboardList className="h-5 w-5" />
+              {t.questionnaires}
+            </h3>
+            <div className="space-y-2">
+              {sharedQuestionnaireTemplates.map((tpl) => (
+                <div key={tpl.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+                  <div>
+                    <p className="font-medium">{tpl.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.patientSendCount}: {tpl.patientSendCount} · {t.copyCount}: {tpl.copyCount}
+                      {tpl.updatedAt ? ` · ${format(new Date(tpl.updatedAt), "dd.MM.yyyy")}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewTemplateId(tpl.id);
+                        setPreviewTemplateMeta({ name: tpl.name });
+                      }}
+                    >
+                      <Eye className="mr-1 h-4 w-4" />
+                      {t.viewQuestionnaire}
+                    </Button>
+                    {user?.isAdmin && !isOwnProfile && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={copyTemplateMutation.isPending}
+                        onClick={() => copyTemplateMutation.mutate(tpl.id)}
+                      >
+                        {t.copyQuestionnaireTemplate}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isOwnProfile && (
           <Button
             onClick={handleSave}
@@ -779,6 +918,30 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Sheet open={!!previewTemplateId} onOpenChange={(open) => !open && setPreviewTemplateId(null)}>
+        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+          <SheetHeader className="sr-only">
+            <SheetTitle>{previewTemplateMeta?.name ?? t.questionnaireTitle}</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {previewTemplate?.structure && (
+              <DynamicQuestionnaireForm
+                mode="preview"
+                structure={previewTemplate.structure}
+                templateName={previewTemplate.name}
+                templateId={previewTemplate.id}
+                onCopy={
+                  user?.isAdmin && !isOwnProfile
+                    ? () => previewTemplateId && copyTemplateMutation.mutate(previewTemplateId)
+                    : undefined
+                }
+                isCopying={copyTemplateMutation.isPending}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

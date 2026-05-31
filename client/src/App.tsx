@@ -31,6 +31,7 @@ import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
+import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/health-wall/:patientUserId" component={() => <Redirect to="/messenger" />} />
       <Route path="/messenger" component={Messenger} />
       <Route path="/messenger/direct/:conversationId" component={Messenger} />
+      <Route path="/messenger/chat/:conversationId/settings" component={Messenger} />
       <Route path="/messenger/chat/:conversationId" component={Messenger} />
       <Route path="/messenger/patient" component={() => <Redirect to="/messenger" />} />
       <Route path="/messenger/patient/:patientUserId" component={() => <Redirect to="/messenger" />} />
@@ -81,6 +83,8 @@ function Router() {
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (
         <>
+          <Route path="/questionnaires/:id/edit" component={QuestionnaireTemplates} />
+          <Route path="/questionnaires" component={QuestionnaireTemplates} />
           <Route path="/admin" component={AdminHome} />
           <Route path="/admin/articles" component={AdminArticles} />
           <Route path="/admin/tags" component={AdminTags} />
@@ -115,9 +119,11 @@ function AppContent() {
   const [location] = useLocation();
 
   const isProfilePage = location.startsWith("/profile");
+  const isQuestionnairesPage = location.startsWith("/questionnaires");
   const isFullscreenPage =
     location.startsWith("/messenger") ||
-    isProfilePage;
+    isProfilePage ||
+    isQuestionnairesPage;
 
   useImmersiveViewport(isFullscreenPage);
 

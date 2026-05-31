@@ -1,0 +1,4545 @@
+{
+  "root": [
+    {
+      "id": "generalPatientInfo",
+      "title": "Общие сведения",
+      "children": [
+        {
+          "id": "occupation",
+          "title": "Род занятий",
+          "tags": [
+            {
+              "id": "study",
+              "label": "Учеба",
+              "hint": "На каком факультете/специальности? Какой курс или класс?"
+            },
+            {
+              "id": "work",
+              "label": "Работа",
+              "hint": "Какова ваша должность и сфера деятельности?"
+            },
+            {
+              "id": "business",
+              "label": "Бизнес",
+              "hint": "В какой сфере? Являетесь ли вы владельцем или руководителем?"
+            },
+            {
+              "id": "notWorking",
+              "label": "Не работаю",
+              "hint": "С чем связано? (домохозяйка, пенсионер, поиск работы, по состоянию здоровья)"
+            },
+            {
+              "id": "otherOccupation",
+              "label": "Другое",
+              "hint": "Уточните ваш род занятий"
+            }
+          ]
+        },
+        {
+          "id": "familyStatus",
+          "title": "Семейное положение",
+          "tags": [
+            {
+              "id": "single",
+              "label": "Не в отношениях",
+              "hint": "Это ваш осознанный выбор или сложившиеся обстоятельства?"
+            },
+            {
+              "id": "unofficialRelationship",
+              "label": "В неофициальных отношениях",
+              "hint": "Как долго длятся эти отношения?"
+            },
+            {
+              "id": "married",
+              "label": "В браке",
+              "hint": "Сколько длится этот союз? лет/месяцев. Есть ли дети?"
+            },
+            {
+              "id": "divorced",
+              "label": "В разводе",
+              "hint": "Как давно? Сохраняется ли общение с бывшим партнером?"
+            },
+            {
+              "id": "widowed",
+              "label": "Вдовец/вдова",
+              "hint": "Как давно произошла потеря?"
+            }
+          ]
+        },
+        {
+          "id": "appearanceConstitution",
+          "title": "Внешность и конституция",
+          "tags": [
+            {
+              "id": "hairColor",
+              "label": "Цвет волос",
+              "hint": "Русые, темно-русые, черные, рыжие, седые..."
+            },
+            {
+              "id": "eyeColor",
+              "label": "Цвет глаз",
+              "hint": "Голубые, серые, зеленые, карие..."
+            },
+            {
+              "id": "skinColor",
+              "label": "Цвет и особенности кожи лица",
+              "hint": "Светлое, розоватое, смуглое, веснушки, родинки, склонность к покраснению..."
+            },
+            {
+              "id": "bodyType",
+              "label": "Особенности телосложения, формы, размера",
+              "hint": "Общая конституция и особенности (высокий/низкий, крупнокостный/худощавый, широкие плечи/узкие бедра, худые ноги при крупном теле, особенности кистей, стоп, носа, ушей и т.д.)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "complaints",
+      "title": "Жалобы на момент обращения",
+      "children": [
+        {
+          "id": "mainComplaint",
+          "title": "Главная проблема",
+          "tags": [
+            {
+              "id": "mainProblem",
+              "label": "Основная жалоба",
+              "hint": "Опишите коротко, что вас беспокоит"
+            },
+            {
+              "id": "whenStarted",
+              "label": "Когда и как это началось?",
+              "hint": "Укажите дату или событие. Это случилось внезапно или постепенно?"
+            },
+            {
+              "id": "currentState",
+              "label": "Как это проявляется сейчас?",
+              "hint": "Как часто? Насколько сильно? Где именно болит? Что помогает, а что ухудшает состояние?"
+            },
+            {
+              "id": "lifeImpact",
+              "label": "Как это сказывается на вашей жизни?",
+              "hint": "Влияет ли на работу, сон, настроение, общение с близкими?"
+            },
+            {
+              "id": "previousTreatment",
+              "label": "Что вы уже сделали?",
+              "hint": "Какие врачи смотрели? Какие лекарства или процедуры пробовали? Что помогло, а что нет?"
+            }
+          ]
+        },
+        {
+          "id": "otherComplaints",
+          "title": "Другие жалобы",
+          "tags": [
+            {
+              "id": "otherHealthIssues",
+              "label": "Другие жалобы",
+              "hint": "Напишите о других проблемах со здоровьем, даже если они кажутся вам не связанными с основной"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "medicalHistory",
+      "title": "История болезни",
+      "children": [
+        {
+          "id": "childhoodHistory",
+          "title": "Начало жизни и детство (обязательно для заполнения и взрослым, и детям)",
+          "tags": [
+            {
+              "id": "motherPregnancy",
+              "label": "Особенности беременности мамы",
+              "hint": "Токсикоз, угрозы, болезни, стрессы, прием лекарств — если знаете"
+            },
+            {
+              "id": "birthProcess",
+              "label": "Как прошли роды",
+              "hint": "Преждевременные, быстрые или затяжные, стимуляция, кесарево, обвитие пуповиной и т.д."
+            },
+            {
+              "id": "newbornCondition",
+              "label": "Состояние ребенка после родов",
+              "hint": "Оценка по шкале Апгар, сразу ли закричал, как спал, были ли рефлексы в норме"
+            },
+            {
+              "id": "infantFeeding",
+              "label": "Питание в младенчестве",
+              "hint": "Грудное или искусственное, были ли срыгивания, колики, аллергия на смеси"
+            },
+            {
+              "id": "earlyDevelopment",
+              "label": "Развитие в первый год и позже",
+              "hint": "Когда начал сидеть, ходить, говорить? Были ли задержки или особенности?"
+            },
+            {
+              "id": "childhoodInfections",
+              "label": "Серьезные инфекции в детстве",
+              "hint": "Корь, скарлатина, коклюш, ветрянка и др. Чем лечили, были ли осложнения?"
+            },
+            {
+              "id": "frequentENT",
+              "label": "Частые ангины, аденоиды, отиты",
+              "hint": "Во сколько лет началось? Как протекало, чем лечили, повлияло ли на здоровье?"
+            },
+            {
+              "id": "childhoodSurgeries",
+              "label": "Операции в детстве (включая удаление миндалин, аденоидов, аппендицит)",
+              "hint": "В каком возрасте? Как все прошло?"
+            },
+            {
+              "id": "childhoodTraumas",
+              "label": "Травмы",
+              "hint": "Ушибы, переломы, ожоги, сотрясения. В каком возрасте? Как лечили и были ли последствия?"
+            },
+            {
+              "id": "childhoodPoisoning",
+              "label": "Отравления (пищевые, лекарственные, химические)",
+              "hint": "В каком возрасте? Чем отравились, как лечили?"
+            },
+            {
+              "id": "childhoodEmotionalShocks",
+              "label": "Сильные испуги или эмоциональные потрясения в детстве",
+              "hint": "Опишите, если помните такое событие"
+            },
+            {
+              "id": "childhoodVaccineReactions",
+              "label": "Прививки и реакции на них",
+              "hint": "Были ли необычные или тяжелые реакции на прививки?"
+            }
+          ]
+        },
+        {
+          "id": "pastDiseasesAdult",
+          "title": "Перенесённые заболевания и важные события (во взрослом возрасте)",
+          "tags": [
+            {
+              "id": "surgeries",
+              "label": "Операции (удаление миндалин, аппендицит и др.)",
+              "hint": "Что и в каком возрасте?"
+            },
+            {
+              "id": "traumaticBrainInjury",
+              "label": "Черепно-мозговая травма",
+              "hint": "В каком возрасте? Какие последствия?"
+            },
+            {
+              "id": "fractures",
+              "label": "Переломы",
+              "hint": "Чего? В каком возрасте? Как заживали? Какие последствия?"
+            },
+            {
+              "id": "burn",
+              "label": "Ожоги",
+              "hint": "В результате чего? Какие последствия?"
+            },
+            {
+              "id": "gunshotWound",
+              "label": "Огнестрельные рана",
+              "hint": "Последствия? Как заживала?"
+            },
+            {
+              "id": "stabWound",
+              "label": "Резаная, колотая или рваная рана",
+              "hint": "Последствия? Как заживала?"
+            },
+            {
+              "id": "animalBite",
+              "label": "Укус животного",
+              "hint": "Какого?"
+            },
+            {
+              "id": "otherInjury",
+              "label": "Другие травмы",
+              "hint": "Какие травмы и последствия?"
+            },
+            {
+              "id": "poisoning",
+              "label": "Отравления (пищевые, химические, лекарственные)",
+              "hint": "В каком возрасте?"
+            },
+            {
+              "id": "vaccineReactions",
+              "label": "Прививки и реакции на них",
+              "hint": "Были ли необычные реакции?"
+            },
+            {
+              "id": "childhoodInfectionsAdult",
+              "label": "Перенесённые во взрослом возрасте «детские» инфекции",
+              "hint": "Ветрянка, корь, краснуха; в каком возрасте?"
+            },
+            {
+              "id": "severeInfections",
+              "label": "Тяжёлые или частые инфекции (пневмонии, циститы, гаймориты, отиты, туберкулез)",
+              "hint": "Как протекали, какое было лечение и последствия?"
+            },
+            {
+              "id": "chronicDiseases",
+              "label": "Хронические болезни (гастрит, гипертония, ВСД и др.)",
+              "hint": "Когда диагностировали?"
+            },
+            {
+              "id": "sexuallyTransmittedDiseases",
+              "label": "Заболевания, передающиеся половым путем"
+            },
+            {
+              "id": "hormonalDisorders",
+              "label": "Гормональные нарушения (сбои цикла, заболевания щитовидной железы)",
+              "hint": "В каком возрасте начались?"
+            },
+            {
+              "id": "allergies",
+              "label": "Аллергии (пищевые, сезонные, кожные)",
+              "hint": "На что и как проявляются?"
+            },
+            {
+              "id": "emotionalShocks",
+              "label": "Эмоциональные потрясения, испуги, потери",
+              "hint": "Опишите событие и его последствия"
+            },
+            {
+              "id": "depressionNeurosis",
+              "label": "Депрессии, неврозы, панические атаки",
+              "hint": "В каком возрасте начались? Опишите течение, лечение и последствия"
+            },
+            {
+              "id": "criticalEvents",
+              "label": "Критические события (развод, потеря работы, переезд)",
+              "hint": "Опишите событие и были ли последствия"
+            },
+            {
+              "id": "pregnancyBirth",
+              "label": "Беременности, роды, аборты, выкидыши",
+              "hint": "Как протекали?"
+            },
+            {
+              "id": "substanceUse",
+              "label": "Курение, алкоголь, наркотики",
+              "hint": "Период, степень употребления"
+            },
+            {
+              "id": "longTermMedication",
+              "label": "Длительный приём лекарств (гормоны, антидепрессанты, антибиотики)",
+              "hint": "Что и как долго принимали?"
+            },
+            {
+              "id": "weightFluctuations",
+              "label": "Резкие колебания веса",
+              "hint": "С чем были связаны?"
+            },
+            {
+              "id": "diseaseChronology",
+              "label": "Хронология заболеваний и травм (заполнить обязательно)",
+              "hint": "Перечислите заболевания в хронологическом порядке."
+            }
+          ]
+        },
+        {
+          "id": "familyDiseases",
+          "title": "Наследственность и семейные болезни",
+          "hint": "Если знаете, укажите, кто именно болел (мама, папа, бабушка/дедушка (по чьей линии), брат/сестра и т.д.), в каком возрасте началось и как протекало (тяжело или легко). Если болезнь была у нескольких родственников — перечислите.",
+          "tags": [
+            {
+              "id": "tuberculosis",
+              "label": "Туберкулез или частые болезни легких"
+            },
+            {
+              "id": "oncology",
+              "label": "Онкология",
+              "hint": "Какой орган?"
+            },
+            {
+              "id": "hypertension",
+              "label": "Повышенное давление (гипертония)"
+            },
+            {
+              "id": "heartAttack",
+              "label": "Инфаркт"
+            },
+            {
+              "id": "stroke",
+              "label": "Инсульт"
+            },
+            {
+              "id": "aneurysm",
+              "label": "Аневризма"
+            },
+            {
+              "id": "diabetes",
+              "label": "Сахарный диабет"
+            },
+            {
+              "id": "thyroidDisease",
+              "label": "Болезни щитовидной железы (гипотиреоз, гипертиреоз, узлы)"
+            },
+            {
+              "id": "alcoholism",
+              "label": "Алкогольная зависимость"
+            },
+            {
+              "id": "drugAddiction",
+              "label": "Наркотическая зависимость"
+            },
+            {
+              "id": "mentalDisorders",
+              "label": "Психические расстройства, неврозы"
+            },
+            {
+              "id": "severeDepression",
+              "label": "Тяжелая депрессия"
+            },
+            {
+              "id": "suicides",
+              "label": "Самоубийства (суицид)"
+            },
+            {
+              "id": "migraines",
+              "label": "Мигрени, сильные головные боли"
+            },
+            {
+              "id": "rheumaticDiseases",
+              "label": "Ревматизм"
+            },
+            {
+              "id": "arthritis",
+              "label": "Артрит (воспаление суставов)"
+            },
+            {
+              "id": "rheumatoidArthritis",
+              "label": "Ревматоидный артрит"
+            },
+            {
+              "id": "psoriasis",
+              "label": "Псориаз"
+            },
+            {
+              "id": "eczema",
+              "label": "Экзема"
+            },
+            {
+              "id": "neurodermatitis",
+              "label": "Нейродермит"
+            },
+            {
+              "id": "asthma",
+              "label": "Астма"
+            },
+            {
+              "id": "allergy",
+              "label": "Аллергия"
+            },
+            {
+              "id": "kidneyFailure",
+              "label": "Хроническая почечная недостаточность"
+            },
+            {
+              "id": "hepatitis",
+              "label": "Гепатит"
+            },
+            {
+              "id": "liverCirrhosis",
+              "label": "Цирроз печени"
+            },
+            {
+              "id": "ulcer",
+              "label": "Язва желудка или двенадцатиперстной кишки"
+            },
+            {
+              "id": "crohnsDisease",
+              "label": "Болезнь Крона"
+            },
+            {
+              "id": "colitis",
+              "label": "Колит (воспаление кишечника)"
+            },
+            {
+              "id": "epilepsy",
+              "label": "Эпилепсия"
+            },
+            {
+              "id": "parkinsons",
+              "label": "Болезнь Паркинсона"
+            },
+            {
+              "id": "alzheimers",
+              "label": "Болезнь Альцгеймера"
+            },
+            {
+              "id": "multipleSclerosis",
+              "label": "Рассеянный склероз"
+            },
+            {
+              "id": "syphilis",
+              "label": "Сифилис (у старших поколений)"
+            },
+            {
+              "id": "gonorrhea",
+              "label": "Гонорея (у родственников)"
+            },
+            {
+              "id": "severeChronicExhaustion",
+              "label": "Тяжелые хронические болезни с истощением"
+            },
+            {
+              "id": "miscarriagesInfertility",
+              "label": "Выкидыши, замершие беременности, бесплодие (в семейной истории)"
+            },
+            {
+              "id": "myomasFibromas",
+              "label": "Миомы, фибромы"
+            },
+            {
+              "id": "lipomas",
+              "label": "Липомы (жировики)"
+            },
+            {
+              "id": "anemia",
+              "label": "Анемия (малокровие)"
+            },
+            {
+              "id": "leukemia",
+              "label": "Лейкоз (рак крови)"
+            },
+            {
+              "id": "hemophilia",
+              "label": "Гемофилия (нарушение свертываемости крови)"
+            },
+            {
+              "id": "familyObesity",
+              "label": "Сильное ожирение (как семейная особенность)"
+            },
+            {
+              "id": "longevity",
+              "label": "Долгожители в роду (90 лет и старше)",
+              "hint": "Кто именно и сколько прожил?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "modalitiesImprovement",
+      "title": "Модальности улучшения",
+      "hint": "От чего и когда вам в целом лучше",
+      "children": [
+        {
+          "id": "impTime",
+          "title": "Время",
+          "hint": "По возможности укажите временной промежуток точнее",
+          "tags": [
+            {
+              "id": "impTimeMorning",
+              "label": "Утром"
+            },
+            {
+              "id": "impTimeDay",
+              "label": "Днем"
+            },
+            {
+              "id": "impTimeEvening",
+              "label": "Вечером"
+            },
+            {
+              "id": "impTimeNight",
+              "label": "Ночью"
+            },
+            {
+              "id": "impTimeAfterSleep",
+              "label": "После сна"
+            },
+            {
+              "id": "impTimeSummer",
+              "label": "Летом"
+            }
+          ]
+        },
+        {
+          "id": "impPhysical",
+          "title": "Физические факторы",
+          "tags": [
+            {
+              "id": "impFromWarmth",
+              "label": "От тепла"
+            },
+            {
+              "id": "impWarmRoom",
+              "label": "В теплом помещении"
+            },
+            {
+              "id": "impWarmBaths",
+              "label": "От теплых ванн"
+            },
+            {
+              "id": "impHotWater",
+              "label": "От горячей воды"
+            },
+            {
+              "id": "impHotCompress",
+              "label": "От горячих компрессов"
+            },
+            {
+              "id": "impFromCold",
+              "label": "От холода"
+            },
+            {
+              "id": "impCoolRoom",
+              "label": "В прохладном помещении"
+            },
+            {
+              "id": "impFromBaths",
+              "label": "От ванн"
+            },
+            {
+              "id": "impColdProcedures",
+              "label": "После холодных процедур"
+            },
+            {
+              "id": "impColdWater",
+              "label": "От холодной воды"
+            },
+            {
+              "id": "impFromBathing",
+              "label": "От купания"
+            },
+            {
+              "id": "impFromCovering",
+              "label": "От укрывания"
+            },
+            {
+              "id": "impFromUncovering",
+              "label": "От раскрывания"
+            },
+            {
+              "id": "impLooseClothes",
+              "label": "В свободной одежде"
+            },
+            {
+              "id": "impHeadWrapped",
+              "label": "От укутывания головы"
+            },
+            {
+              "id": "impTightBandage",
+              "label": "От тугой повязки"
+            },
+            {
+              "id": "impBareHead",
+              "label": "С непокрытой головой"
+            },
+            {
+              "id": "impFromPressure",
+              "label": "От давления"
+            },
+            {
+              "id": "impFromMusic",
+              "label": "От музыки"
+            },
+            {
+              "id": "impFromLight",
+              "label": "От света"
+            },
+            {
+              "id": "impInDarkness",
+              "label": "В темноте"
+            },
+            {
+              "id": "impFromScratching",
+              "label": "От расчесывания"
+            },
+            {
+              "id": "impFromRubbing",
+              "label": "От растирания"
+            }
+          ]
+        },
+        {
+          "id": "impWeather",
+          "title": "Погода",
+          "tags": [
+            {
+              "id": "impColdWeather",
+              "label": "В холодную погоду"
+            },
+            {
+              "id": "impWarmWeather",
+              "label": "В теплую погоду"
+            },
+            {
+              "id": "impDampWeather",
+              "label": "В сырую погоду"
+            },
+            {
+              "id": "impDryWeather",
+              "label": "В сухую погоду"
+            },
+            {
+              "id": "impFreshAir",
+              "label": "На свежем воздухе"
+            },
+            {
+              "id": "impFromHeat",
+              "label": "От жары"
+            },
+            {
+              "id": "impSeaside",
+              "label": "На берегу моря"
+            },
+            {
+              "id": "impMountains",
+              "label": "В горах"
+            },
+            {
+              "id": "impWeatherOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "impBodyPosition",
+          "title": "Положение тела",
+          "tags": [
+            {
+              "id": "impFromMovement",
+              "label": "От движения",
+              "hint": "медленного, продолжительного, быстрого"
+            },
+            {
+              "id": "impChangePosition",
+              "label": "Перемены положения",
+              "hint": "уточните"
+            },
+            {
+              "id": "impFromWalking",
+              "label": "От ходьбы",
+              "hint": "от прохаживания по комнате, медленной, быстрой"
+            },
+            {
+              "id": "impFromRiding",
+              "label": "От езды"
+            },
+            {
+              "id": "impFromRest",
+              "label": "От отдыха"
+            },
+            {
+              "id": "impAtRest",
+              "label": "В покое"
+            },
+            {
+              "id": "impLying",
+              "label": "Лежа",
+              "hint": "с низко лежащей головой, с высоко лежащей головой, на спине, на животе, полулежа"
+            },
+            {
+              "id": "impSitting",
+              "label": "Сидя",
+              "hint": "в постели, со скрещенными ногами"
+            },
+            {
+              "id": "impStanding",
+              "label": "Стоя"
+            },
+            {
+              "id": "impRising",
+              "label": "При вставании"
+            },
+            {
+              "id": "impBending",
+              "label": "От сгибания",
+              "hint": "вдвое, в колено-локтевом положении"
+            },
+            {
+              "id": "impStretching",
+              "label": "От разгибания",
+              "hint": "откидывания головы назад, выгибания тела назад"
+            },
+            {
+              "id": "impLyingOnPainSide",
+              "label": "От лежания на больной стороне"
+            },
+            {
+              "id": "impLyingRight",
+              "label": "Лежа на правом боку"
+            },
+            {
+              "id": "impLyingLeft",
+              "label": "Лежа на левом боку"
+            },
+            {
+              "id": "impPhysicalLoad",
+              "label": "От физической нагрузки",
+              "hint": "умеренной, интенсивной"
+            },
+            {
+              "id": "impBodyOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "impFood",
+          "title": "В зависимости от приема пищи",
+          "tags": [
+            {
+              "id": "impFromAlcohol",
+              "label": "От алкоголя",
+              "hint": "от вина, от водки"
+            },
+            {
+              "id": "impDuringEating",
+              "label": "Во время еды"
+            },
+            {
+              "id": "impFromFood",
+              "label": "От еды",
+              "hint": "от горячей пищи, от небольшого количества, теплой"
+            },
+            {
+              "id": "impEmptyStomach",
+              "label": "На голодный желудок"
+            },
+            {
+              "id": "impFromDrinking",
+              "label": "От питья",
+              "hint": "холодной воды, горячего, теплого"
+            },
+            {
+              "id": "impFromCoffee",
+              "label": "От кофе"
+            },
+            {
+              "id": "impFromSour",
+              "label": "От кислого"
+            },
+            {
+              "id": "impFoodOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "impPhysiological",
+          "title": "Физиологические реакции",
+          "hint": "Опишите подробнее",
+          "tags": [
+            {
+              "id": "impFromSweating",
+              "label": "От потоотделения"
+            },
+            {
+              "id": "impAfterDefecation",
+              "label": "После дефекации"
+            },
+            {
+              "id": "impAfterSputum",
+              "label": "После отхождения мокроты"
+            },
+            {
+              "id": "impAfterVomiting",
+              "label": "После рвоты"
+            },
+            {
+              "id": "impFromDischarges",
+              "label": "От появления выделений"
+            },
+            {
+              "id": "impAfterBurping",
+              "label": "После отрыжки"
+            },
+            {
+              "id": "impFromBleeding",
+              "label": "От кровотечения"
+            },
+            {
+              "id": "impMenstruation",
+              "label": "С началом менструаций"
+            },
+            {
+              "id": "impFromRash",
+              "label": "От появления сыпи"
+            },
+            {
+              "id": "impAfterEjaculation",
+              "label": "После семяизвержения"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "modalitiesWorsening",
+      "title": "Модальности ухудшения",
+      "hint": "От чего и когда вам в целом хуже",
+      "children": [
+        {
+          "id": "worTime",
+          "title": "Время",
+          "tags": [
+            {
+              "id": "worMorning",
+              "label": "Утром"
+            },
+            {
+              "id": "worDay",
+              "label": "Днем"
+            },
+            {
+              "id": "worEvening",
+              "label": "Вечером"
+            },
+            {
+              "id": "worNight",
+              "label": "Ночью"
+            },
+            {
+              "id": "worDuringSleep",
+              "label": "Во время сна"
+            },
+            {
+              "id": "worAfterSleep",
+              "label": "После сна"
+            },
+            {
+              "id": "worSleepDeprivation",
+              "label": "От недосыпания"
+            },
+            {
+              "id": "worEveryOtherDay",
+              "label": "Через день"
+            },
+            {
+              "id": "worWinter",
+              "label": "Зимой"
+            },
+            {
+              "id": "worSpring",
+              "label": "Весной"
+            },
+            {
+              "id": "worSummer",
+              "label": "Летом"
+            },
+            {
+              "id": "worAutumn",
+              "label": "Осенью"
+            },
+            {
+              "id": "worFullMoon",
+              "label": "В полнолуние"
+            },
+            {
+              "id": "worNewMoon",
+              "label": "В новолуние"
+            },
+            {
+              "id": "worTimeOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "worPhysical",
+          "title": "Физические факторы",
+          "hint": "Опишите точнее",
+          "tags": [
+            {
+              "id": "worFromWarmth",
+              "label": "От тепла"
+            },
+            {
+              "id": "worWarmRoom",
+              "label": "В теплом помещении"
+            },
+            {
+              "id": "worBedWarmth",
+              "label": "В тепле постели"
+            },
+            {
+              "id": "worHotBath",
+              "label": "От горячей ванны"
+            },
+            {
+              "id": "worHotCompress",
+              "label": "От горячих компрессов"
+            },
+            {
+              "id": "worFromCold",
+              "label": "От холода"
+            },
+            {
+              "id": "worColdBath",
+              "label": "От холодных ванн, от купания"
+            },
+            {
+              "id": "worFromDampness",
+              "label": "От сырости"
+            },
+            {
+              "id": "worFromWater",
+              "label": "От воды"
+            },
+            {
+              "id": "worFromDraft",
+              "label": "От сквозняка"
+            },
+            {
+              "id": "worFreshCoolAir",
+              "label": "На свежем, прохладном воздухе"
+            },
+            {
+              "id": "worFromPressure",
+              "label": "От давления"
+            },
+            {
+              "id": "worFromTouch",
+              "label": "От прикосновения"
+            },
+            {
+              "id": "worExternalIrritation",
+              "label": "При внешнем раздражении"
+            },
+            {
+              "id": "worFromShaking",
+              "label": "От сотрясения"
+            },
+            {
+              "id": "worFromScratching",
+              "label": "От расчесывания"
+            },
+            {
+              "id": "worFromSounds",
+              "label": "От звуков"
+            },
+            {
+              "id": "worFromLight",
+              "label": "От света"
+            },
+            {
+              "id": "worInDarkness",
+              "label": "В темноте"
+            },
+            {
+              "id": "worFromSmells",
+              "label": "От запахов"
+            },
+            {
+              "id": "worFromUncovering",
+              "label": "При обнажении, раскрывании"
+            },
+            {
+              "id": "worFromWrapping",
+              "label": "От укутывания"
+            },
+            {
+              "id": "worAfterHaircut",
+              "label": "После стрижки волос"
+            },
+            {
+              "id": "worAfterHairWash",
+              "label": "После мытья головы"
+            },
+            {
+              "id": "worFromTalking",
+              "label": "От разговора"
+            },
+            {
+              "id": "worPhysicalOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "worWeather",
+          "title": "Погода",
+          "hint": "Опишите подробнее",
+          "tags": [
+            {
+              "id": "worColdDamp",
+              "label": "В холодную сырую погоду"
+            },
+            {
+              "id": "worWarmDamp",
+              "label": "В теплую сырую погоду"
+            },
+            {
+              "id": "worDryClear",
+              "label": "В сухую и ясную погоду"
+            },
+            {
+              "id": "worDryCold",
+              "label": "В сухую холодную погоду"
+            },
+            {
+              "id": "worFromWind",
+              "label": "От ветра"
+            },
+            {
+              "id": "worInFog",
+              "label": "При тумане"
+            },
+            {
+              "id": "worFromSun",
+              "label": "От солнца"
+            },
+            {
+              "id": "worFromHeat",
+              "label": "От жары"
+            },
+            {
+              "id": "worWeatherChange",
+              "label": "От перемены погоды"
+            },
+            {
+              "id": "worAtSea",
+              "label": "На море"
+            },
+            {
+              "id": "worBeforeStorm",
+              "label": "Перед грозой"
+            },
+            {
+              "id": "worSnowMelting",
+              "label": "На таяние снега"
+            },
+            {
+              "id": "worInStorm",
+              "label": "В грозу"
+            },
+            {
+              "id": "worWeatherOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "worBodyPosition",
+          "title": "Положение тела",
+          "hint": "Опишите подробнее",
+          "tags": [
+            {
+              "id": "worFromMovement",
+              "label": "От движения",
+              "hint": "малейшего, в начале движения, при поворачивании в постели"
+            },
+            {
+              "id": "worMovingDown",
+              "label": "При движении вниз"
+            },
+            {
+              "id": "worFromShakingBody",
+              "label": "От сотрясения"
+            },
+            {
+              "id": "worFromWalking",
+              "label": "При ходьбе"
+            },
+            {
+              "id": "worFromRiding",
+              "label": "От езды"
+            },
+            {
+              "id": "worHeadBend",
+              "label": "От наклона головы"
+            },
+            {
+              "id": "worFromBending",
+              "label": "От сгибания"
+            },
+            {
+              "id": "worFromRising",
+              "label": "При вставании"
+            },
+            {
+              "id": "worPhysicalStrain",
+              "label": "От физического напряжения"
+            },
+            {
+              "id": "worAtRest",
+              "label": "В покое"
+            },
+            {
+              "id": "worStanding",
+              "label": "Стоя"
+            },
+            {
+              "id": "worLying",
+              "label": "Лежа"
+            },
+            {
+              "id": "worSitting",
+              "label": "Сидя"
+            },
+            {
+              "id": "worLyingRight",
+              "label": "Лежа на правом боку"
+            },
+            {
+              "id": "worLyingLeft",
+              "label": "Лежа на левом боку"
+            },
+            {
+              "id": "worBodyOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "worFood",
+          "title": "В зависимости от приема пищи",
+          "hint": "Опишите подробнее",
+          "tags": [
+            {
+              "id": "worAfterEating",
+              "label": "После приема пищи"
+            },
+            {
+              "id": "worEmptyStomach",
+              "label": "На голодный желудок"
+            },
+            {
+              "id": "worOvereating",
+              "label": "От переедания"
+            },
+            {
+              "id": "worFromDrinking",
+              "label": "От питья"
+            },
+            {
+              "id": "worFromAlcohol",
+              "label": "От спиртного"
+            },
+            {
+              "id": "worFromFoodGeneral",
+              "label": "От пищи"
+            },
+            {
+              "id": "worFromStimulants",
+              "label": "От возбуждающих средств"
+            },
+            {
+              "id": "worFromTobacco",
+              "label": "От табака"
+            },
+            {
+              "id": "worFoodOther",
+              "label": "Другое"
+            }
+          ]
+        },
+        {
+          "id": "worPhysiological",
+          "title": "Физиологические реакции",
+          "hint": "Опишите подробнее",
+          "tags": [
+            {
+              "id": "worBeforeMenses",
+              "label": "Перед менструацией"
+            },
+            {
+              "id": "worDuringMenses",
+              "label": "Во время менструации"
+            },
+            {
+              "id": "worAfterMenses",
+              "label": "После менструации"
+            },
+            {
+              "id": "worDelayedMenses",
+              "label": "От задержки менструаций"
+            },
+            {
+              "id": "worFromEjaculation",
+              "label": "От семяизвержения"
+            },
+            {
+              "id": "worAfterIntercourse",
+              "label": "После полового акта"
+            },
+            {
+              "id": "worAfterDiarrheaVomit",
+              "label": "После поноса, рвоты"
+            },
+            {
+              "id": "worSuppressedRash",
+              "label": "После подавления сыпи"
+            },
+            {
+              "id": "worFromUrination",
+              "label": "От мочеиспускания"
+            },
+            {
+              "id": "worDuringMenopause",
+              "label": "Во время климакса"
+            },
+            {
+              "id": "worPhysioOther",
+              "label": "Другое"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pain",
+      "title": "Боль",
+      "children": [
+        {
+          "id": "painOralTeeth",
+          "title": "Ротовая полость, зубы",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painOralTeeth_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painOralTeeth_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painOralTeeth_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painOralTeeth_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painOralTeeth_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painOralTeeth_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painOralTeeth_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painOralTeeth_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painOralTeeth_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painOralTeeth_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painOralTeeth_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painOralTeeth_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painOralTeeth_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painOralTeeth_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painOralTeeth_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painOralTeeth_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painOralTeeth_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painOralTeeth_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painHead",
+          "title": "Голова",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painHead_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painHead_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painHead_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painHead_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painHead_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painHead_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painHead_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painHead_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painHead_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painHead_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painHead_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painHead_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painHead_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painHead_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painHead_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painHead_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painHead_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painHead_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painEars",
+          "title": "Уши",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painEars_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painEars_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painEars_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painEars_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painEars_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painEars_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painEars_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painEars_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painEars_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painEars_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painEars_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painEars_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painEars_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painEars_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painEars_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painEars_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painEars_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painEars_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painThroat",
+          "title": "Горло",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painThroat_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painThroat_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painThroat_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painThroat_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painThroat_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painThroat_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painThroat_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painThroat_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painThroat_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painThroat_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painThroat_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painThroat_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painThroat_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painThroat_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painThroat_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painThroat_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painThroat_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painThroat_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painEyes",
+          "title": "Глаза",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painEyes_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painEyes_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painEyes_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painEyes_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painEyes_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painEyes_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painEyes_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painEyes_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painEyes_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painEyes_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painEyes_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painEyes_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painEyes_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painEyes_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painEyes_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painEyes_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painEyes_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painEyes_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painAbdomen",
+          "title": "Живот",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painAbdomen_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painAbdomen_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painAbdomen_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painAbdomen_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painAbdomen_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painAbdomen_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painAbdomen_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painAbdomen_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painAbdomen_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painAbdomen_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painAbdomen_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painAbdomen_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painAbdomen_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painAbdomen_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painAbdomen_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painAbdomen_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painAbdomen_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painAbdomen_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painFemaleGenital",
+          "title": "Женские половые органы",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painFemaleGenital_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painFemaleGenital_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painFemaleGenital_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painFemaleGenital_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painFemaleGenital_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painFemaleGenital_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painFemaleGenital_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painFemaleGenital_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painFemaleGenital_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painFemaleGenital_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painFemaleGenital_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painFemaleGenital_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painFemaleGenital_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painFemaleGenital_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painFemaleGenital_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painFemaleGenital_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painFemaleGenital_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painFemaleGenital_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painMaleGenital",
+          "title": "Мужские половые органы",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painMaleGenital_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painMaleGenital_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painMaleGenital_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painMaleGenital_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painMaleGenital_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painMaleGenital_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painMaleGenital_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painMaleGenital_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painMaleGenital_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painMaleGenital_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painMaleGenital_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painMaleGenital_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painMaleGenital_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painMaleGenital_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painMaleGenital_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painMaleGenital_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painMaleGenital_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painMaleGenital_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painChest",
+          "title": "Грудная клетка",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painChest_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painChest_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painChest_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painChest_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painChest_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painChest_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painChest_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painChest_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painChest_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painChest_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painChest_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painChest_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painChest_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painChest_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painChest_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painChest_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painChest_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painChest_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painGI",
+          "title": "Желудочно-кишечный тракт",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painGI_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painGI_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painGI_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painGI_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painGI_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painGI_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painGI_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painGI_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painGI_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painGI_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painGI_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painGI_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painGI_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painGI_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painGI_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painGI_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painGI_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painGI_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painRectum",
+          "title": "Прямая кишка и анус",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painRectum_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painRectum_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painRectum_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painRectum_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painRectum_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painRectum_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painRectum_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painRectum_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painRectum_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painRectum_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painRectum_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painRectum_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painRectum_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painRectum_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painRectum_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painRectum_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painRectum_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painRectum_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painUrinary",
+          "title": "Мочевыводящая система",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painUrinary_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painUrinary_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painUrinary_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painUrinary_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painUrinary_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painUrinary_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painUrinary_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painUrinary_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painUrinary_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painUrinary_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painUrinary_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painUrinary_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painUrinary_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painUrinary_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painUrinary_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painUrinary_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painUrinary_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painUrinary_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painSkin",
+          "title": "Кожа",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painSkin_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painSkin_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painSkin_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painSkin_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painSkin_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painSkin_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painSkin_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painSkin_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painSkin_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painSkin_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painSkin_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painSkin_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painSkin_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painSkin_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painSkin_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painSkin_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painSkin_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painSkin_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painArms",
+          "title": "Руки",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painArms_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painArms_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painArms_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painArms_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painArms_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painArms_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painArms_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painArms_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painArms_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painArms_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painArms_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painArms_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painArms_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painArms_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painArms_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painArms_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painArms_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painArms_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painLegs",
+          "title": "Ноги",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painLegs_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painLegs_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painLegs_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painLegs_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painLegs_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painLegs_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painLegs_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painLegs_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painLegs_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painLegs_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painLegs_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painLegs_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painLegs_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painLegs_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painLegs_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painLegs_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painLegs_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painLegs_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painMuscles",
+          "title": "Мышцы",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painMuscles_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painMuscles_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painMuscles_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painMuscles_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painMuscles_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painMuscles_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painMuscles_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painMuscles_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painMuscles_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painMuscles_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painMuscles_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painMuscles_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painMuscles_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painMuscles_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painMuscles_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painMuscles_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painMuscles_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painMuscles_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painBones",
+          "title": "Кости",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painBones_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painBones_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painBones_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painBones_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painBones_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painBones_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painBones_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painBones_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painBones_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painBones_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painBones_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painBones_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painBones_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painBones_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painBones_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painBones_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painBones_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painBones_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        },
+        {
+          "id": "painOther",
+          "title": "Другое",
+          "hint": "Ослабевает или усиливается: ночью; вечером; утром; в сухую теплую погоду; в сырую влажную погоду; при перемене погоды; на холоде; на ветру; после еды; до/во время/после стула или мочеиспускания; до/во время/после менструации; тепло (компресс, ванна, постель); холод; примочки; сквозняк; малейшее движение; медленное движение; физическая нагрузка; покой; сильное давление; лежание на больной стороне; малейшее прикосновение; сгибание пополам; что-то другое. Сопровождается: онемением, чувством холода, жара в больном месте, холодным потом, бледностью лица, и отдает ли в другие части тела?",
+          "tags": [
+            {
+              "id": "painOther_aching",
+              "label": "ноющая, тупая"
+            },
+            {
+              "id": "painOther_stabbing",
+              "label": "колющая, как иглами"
+            },
+            {
+              "id": "painOther_cutting",
+              "label": "режущая, как ножом"
+            },
+            {
+              "id": "painOther_burning",
+              "label": "жгучая, как от ожога"
+            },
+            {
+              "id": "painOther_drilling",
+              "label": "сверлящая, будто буравят"
+            },
+            {
+              "id": "painOther_tearing",
+              "label": "разрывающая, будто лопнет"
+            },
+            {
+              "id": "painOther_pressing",
+              "label": "давящая, сжимающая (обруч, тиски)"
+            },
+            {
+              "id": "painOther_cramping",
+              "label": "схваткообразная (сжимает и отпускает)"
+            },
+            {
+              "id": "painOther_shooting",
+              "label": "стреляющая, как ток"
+            },
+            {
+              "id": "painOther_gnawing",
+              "label": "грызущая изнутри"
+            },
+            {
+              "id": "painOther_jerking",
+              "label": "дергающая"
+            },
+            {
+              "id": "painOther_twisting",
+              "label": "скручивающая"
+            },
+            {
+              "id": "painOther_tingling",
+              "label": "покалывающая"
+            },
+            {
+              "id": "painOther_pulsating",
+              "label": "пульсирующая (в такт сердцу)"
+            },
+            {
+              "id": "painOther_stiffening",
+              "label": "сковывающая"
+            },
+            {
+              "id": "painOther_bruised",
+              "label": "как ушиб, больно касаться"
+            },
+            {
+              "id": "painOther_withNausea",
+              "label": "с тошнотой"
+            },
+            {
+              "id": "painOther_otherPain",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thirstThermoregulation",
+      "title": "Жажда и теплообмен обычно",
+      "children": [
+        {
+          "id": "thirst",
+          "title": "Жажда",
+          "tags": [
+            {
+              "id": "strongThirst",
+              "label": "Жажда сильная, пью много и часто большими глотками",
+              "hint": "Какую температуру воды предпочитаете?"
+            },
+            {
+              "id": "noThirst",
+              "label": "Жажды почти нет, пью мало и редко, могу забыть пить"
+            },
+            {
+              "id": "changingThirst",
+              "label": "Жажда изменчивая: то есть, то нет"
+            },
+            {
+              "id": "specificDrinks",
+              "label": "Желание только определенных напитков",
+              "hint": "Уточните, какие именно? холодное/горячее, кислое, газированное, молочное и т.д."
+            },
+            {
+              "id": "smallSipsOften",
+              "label": "Пью маленькими глотками, часто"
+            },
+            {
+              "id": "thirstAtSpecificTime",
+              "label": "Сильная жажда в определенное время суток",
+              "hint": "Когда именно?"
+            },
+            {
+              "id": "dryMouthNoThirst",
+              "label": "Ощущение сухости во рту/горле без жажды"
+            },
+            {
+              "id": "preferColdDrinks",
+              "label": "Предпочитаю пить холодные напитки, даже когда болею"
+            },
+            {
+              "id": "preferHotDrinks",
+              "label": "Предпочитаю пить теплые/горячие напитки"
+            },
+            {
+              "id": "preferRoomTempDrinks",
+              "label": "Пью напитки только комнатной температуры"
+            }
+          ]
+        },
+        {
+          "id": "thermoregulation",
+          "title": "Теплообмен",
+          "tags": [
+            {
+              "id": "alwaysHot",
+              "label": "Мне всегда жарко",
+              "hint": "Что делаете, чтобы охладиться?"
+            },
+            {
+              "id": "hotFlushes",
+              "label": "Приливы жара, особенно к голове/лицу",
+              "hint": "Что их провоцирует?"
+            },
+            {
+              "id": "heatIntolerance",
+              "label": "Плохо переношу жару, солнце, душные помещения",
+              "hint": "Как именно плохо?"
+            },
+            {
+              "id": "alwaysCold",
+              "label": "Ощущение холода в теле, всегда холодно",
+              "hint": "Что делаете, чтобы согреться?"
+            },
+            {
+              "id": "localCold",
+              "label": "Мерзну локально (кисти, стопы, нос, спина, живот)",
+              "hint": "Какие именно части тела мерзнут больше всего?"
+            },
+            {
+              "id": "coldAndHeatIntolerance",
+              "label": "Плохо переношу и холод, и жару"
+            },
+            {
+              "id": "chills",
+              "label": "Озноб, дрожь (с температурой или без)",
+              "hint": "С чем обычно связан?"
+            },
+            {
+              "id": "lovesWarmth",
+              "label": "Люблю тепло, укутываюсь, греюсь у обогревателя"
+            },
+            {
+              "id": "lovesCool",
+              "label": "Люблю прохладу, легко одеваюсь, открываю окна"
+            },
+            {
+              "id": "generalSweating",
+              "label": "Потливость общая",
+              "hint": "Когда?"
+            },
+            {
+              "id": "localSweatingThermo",
+              "label": "Потливость локальная",
+              "hint": "Где именно и когда усиливается? голова/лицо/шея, стопы, ладони, подмышки"
+            },
+            {
+              "id": "sweatingEatingDrinking",
+              "label": "Потливость во время еды/питья"
+            },
+            {
+              "id": "sweatingDuringSleep",
+              "label": "Потливость во сне",
+              "hint": "Общая или отдельной части тела"
+            },
+            {
+              "id": "sweatSmell",
+              "label": "Пот с характерным запахом",
+              "hint": "Опишите, если замечали. Кислый, едкий, тяжелый и т.д."
+            },
+            {
+              "id": "sweatingNoReliefThermo",
+              "label": "Потливость, которая не приносит облегчения"
+            },
+            {
+              "id": "sweatingReliefThermo",
+              "label": "Потливость, которая приносит облегчение"
+            },
+            {
+              "id": "coldSweatThermo",
+              "label": "Холодный пот (особенно при страхе, слабости)"
+            },
+            {
+              "id": "innerColdThermo",
+              "label": "Ощущение холода внутри, при внешней нормальной температуре кожи"
+            },
+            {
+              "id": "innerHeatThermo",
+              "label": "Ощущение жара внутри, при внешней прохладной коже"
+            },
+            {
+              "id": "mixedTempThermo",
+              "label": "Одновременное ощущение жара и холода в разных частях тела",
+              "hint": "Опишите свою комбинацию. Например, горячая голова и холодные ноги. Разная температура ног"
+            },
+            {
+              "id": "blanketOnOffThermo",
+              "label": "Желание снять одеяло ночью и сразу натянуть обратно"
+            },
+            {
+              "id": "otherThermoNuances",
+              "label": "Дополнительные нюансы",
+              "hint": "Опишите свои необычные реакции на температуру, которые не вошли в список."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "discharges",
+      "title": "Выделения всех видов",
+      "children": [
+        {
+          "id": "woundDischarges",
+          "title": "Выделения из открытых ран, свищей, нарывов",
+          "tags": [
+            {
+              "id": "woundAmount",
+              "label": "Количество выделений",
+              "hint": "Много, умеренно, совсем мало?"
+            },
+            {
+              "id": "woundTiming",
+              "label": "Когда выделений становится больше или меньше",
+              "hint": "В какое время суток или при каких обстоятельствах это меняется?"
+            },
+            {
+              "id": "woundConsistency",
+              "label": "Консистенция",
+              "hint": "Жидкие, густые, вязкие, тягучие, как кисель, как вода, как каша и т.д."
+            },
+            {
+              "id": "woundColor",
+              "label": "Цвет"
+            },
+            {
+              "id": "woundSmell",
+              "label": "Запах",
+              "hint": "На что похож? Меняется ли в течение дня?"
+            },
+            {
+              "id": "woundCorrosive",
+              "label": "Выделения едкие, разъедают кожу вокруг"
+            },
+            {
+              "id": "woundSticky",
+              "label": "Выделения липкие"
+            },
+            {
+              "id": "woundCrust",
+              "label": "На месте выделений образуется короста"
+            },
+            {
+              "id": "woundOther",
+              "label": "Другие особенности"
+            }
+          ]
+        },
+        {
+          "id": "eyeNoseEarMouthDischarges",
+          "title": "Выделения из глаз, носа, ушей, рта",
+          "tags": [
+            {
+              "id": "eneAmount",
+              "label": "Количество выделений",
+              "hint": "Много, умеренно, совсем мало?"
+            },
+            {
+              "id": "eneTiming",
+              "label": "Когда выделений становится больше или меньше",
+              "hint": "В какое время суток или при каких обстоятельствах это меняется?"
+            },
+            {
+              "id": "eneConsistency",
+              "label": "Консистенция",
+              "hint": "Жидкие, густые, вязкие, тягучие, как кисель, как вода, как каша и т.д."
+            },
+            {
+              "id": "eneColor",
+              "label": "Цвет"
+            },
+            {
+              "id": "eneSmell",
+              "label": "Запах",
+              "hint": "На что похож? Меняется ли в течение дня?"
+            },
+            {
+              "id": "eneCorrosive",
+              "label": "Выделения едкие, разъедают кожу вокруг"
+            },
+            {
+              "id": "eneSticky",
+              "label": "Выделения липкие"
+            },
+            {
+              "id": "eneOther",
+              "label": "Другие особенности"
+            }
+          ]
+        },
+        {
+          "id": "genitalDischarges",
+          "title": "Выделения из половых органов",
+          "tags": [
+            {
+              "id": "genAmount",
+              "label": "Количество выделений",
+              "hint": "Много, умеренно, совсем мало?"
+            },
+            {
+              "id": "genTiming",
+              "label": "Когда выделений становится больше или меньше",
+              "hint": "В какое время суток, в какие дни цикла или при каких обстоятельствах это меняется?"
+            },
+            {
+              "id": "genConsistency",
+              "label": "Консистенция",
+              "hint": "Жидкие, густые, вязкие, тягучие, как кисель, как вода, как каша, творожистые и т.д."
+            },
+            {
+              "id": "genColor",
+              "label": "Цвет"
+            },
+            {
+              "id": "genSmell",
+              "label": "Запах",
+              "hint": "На что похож? Меняется ли в течение дня?"
+            },
+            {
+              "id": "genCorrosive",
+              "label": "Выделения едкие, вызывают зуд или жжение"
+            },
+            {
+              "id": "genSticky",
+              "label": "Выделения липкие"
+            },
+            {
+              "id": "genOther",
+              "label": "Другие особенности"
+            }
+          ]
+        },
+        {
+          "id": "sputumDischarges",
+          "title": "Мокрота (выделения из легких)",
+          "tags": [
+            {
+              "id": "sputumAmount",
+              "label": "Количество мокроты",
+              "hint": "Много, умеренно, совсем мало?"
+            },
+            {
+              "id": "sputumTiming",
+              "label": "Когда мокроты становится больше или меньше",
+              "hint": "В какое время суток или при каких обстоятельствах это меняется?"
+            },
+            {
+              "id": "sputumConsistency",
+              "label": "Консистенция",
+              "hint": "Жидкая, густая, вязкая, пенистая, с кровью, как вода, как каша и т.д."
+            },
+            {
+              "id": "sputumColor",
+              "label": "Цвет"
+            },
+            {
+              "id": "sputumTaste",
+              "label": "Вкус мокроты",
+              "hint": "Есть ли необычный привкус? Меняется ли?"
+            },
+            {
+              "id": "sputumOther",
+              "label": "Другие особенности"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sensations",
+      "title": "Ощущения",
+      "children": []
+    },
+    {
+      "id": "foodPreferences",
+      "title": "Пищевые пристрастия и отвращения",
+      "children": [
+        {
+          "id": "foodLove",
+          "title": "Очень люблю",
+          "tags": [
+            {
+              "id": "lovSweets",
+              "label": "сладкое (шоколад, конфеты, пирожное)"
+            },
+            {
+              "id": "lovFatty",
+              "label": "жирное"
+            },
+            {
+              "id": "lovFried",
+              "label": "жареное"
+            },
+            {
+              "id": "lovSalty",
+              "label": "соленое, селедка, соленья"
+            },
+            {
+              "id": "lovSour",
+              "label": "кислое (лимон, уксус, квашеная капуста)"
+            },
+            {
+              "id": "lovSpicy",
+              "label": "острое, пряное, перец, чеснок, лук"
+            },
+            {
+              "id": "lovBitter",
+              "label": "горькое"
+            },
+            {
+              "id": "lovSmoked",
+              "label": "копченое"
+            },
+            {
+              "id": "lovSpicyFood",
+              "label": "острая, пряная еда"
+            },
+            {
+              "id": "lovBlandFood",
+              "label": "пресная, не соленая еда"
+            },
+            {
+              "id": "lovBoiledStewed",
+              "label": "вареная, тушеная еда"
+            },
+            {
+              "id": "lovRawFood",
+              "label": "сырая еда (салаты, свежие овощи, фрукты)"
+            },
+            {
+              "id": "lovBakedFood",
+              "label": "запеченная еда"
+            },
+            {
+              "id": "lovMeat",
+              "label": "мясо (говядина, свинина, птица)"
+            },
+            {
+              "id": "lovMilk",
+              "label": "молоко"
+            },
+            {
+              "id": "lovFermented",
+              "label": "кисломолочное (кефир, йогурт, творог)"
+            },
+            {
+              "id": "lovCheese",
+              "label": "сыр"
+            },
+            {
+              "id": "lovEggs",
+              "label": "яйца"
+            },
+            {
+              "id": "lovButter",
+              "label": "масло"
+            },
+            {
+              "id": "lovFishSeafood",
+              "label": "рыба, морепродукты"
+            },
+            {
+              "id": "lovBreadPasta",
+              "label": "хлеб, мучное, макароны"
+            },
+            {
+              "id": "lovGrainsCereal",
+              "label": "крупы, каши"
+            },
+            {
+              "id": "lovFruits",
+              "label": "фрукты",
+              "hint": "какие именно?"
+            },
+            {
+              "id": "lovSourFruits",
+              "label": "кислые фрукты"
+            },
+            {
+              "id": "lovVegetables",
+              "label": "овощи",
+              "hint": "какие именно?"
+            },
+            {
+              "id": "lovBoiledFood",
+              "label": "отварная пища"
+            },
+            {
+              "id": "lovHotFood",
+              "label": "горячая еда"
+            },
+            {
+              "id": "lovSoups",
+              "label": "супы"
+            },
+            {
+              "id": "lovColdFood",
+              "label": "холодная еда"
+            },
+            {
+              "id": "lovIceCream",
+              "label": "мороженое"
+            },
+            {
+              "id": "lovSpicesCondiments",
+              "label": "специи, приправы"
+            },
+            {
+              "id": "lovUnusual",
+              "label": "необычное, несъедобное (мел, уголь, земля)",
+              "hint": "что именно?"
+            },
+            {
+              "id": "lovHotWater",
+              "label": "горячая вода"
+            },
+            {
+              "id": "lovColdIceWater",
+              "label": "холодная вода, ледяная"
+            },
+            {
+              "id": "lovHotDrinks",
+              "label": "горячее питье (чай, кофе, горячая вода)"
+            },
+            {
+              "id": "lovTea",
+              "label": "чай (черный, зеленый, травяной)"
+            },
+            {
+              "id": "lovCoffee",
+              "label": "кофе"
+            },
+            {
+              "id": "lovMilkCocoa",
+              "label": "молоко, какао"
+            },
+            {
+              "id": "lovSodas",
+              "label": "газированные напитки, лимонады"
+            },
+            {
+              "id": "lovAlcohol",
+              "label": "алкоголь",
+              "hint": "какой именно?"
+            },
+            {
+              "id": "lovSourDrinks",
+              "label": "кислые напитки (морсы, лимонад, компот)"
+            },
+            {
+              "id": "lovSweetDrinks",
+              "label": "сладкие напитки"
+            },
+            {
+              "id": "lovOtherPrefs",
+              "label": "другие пристрастия или отвращения"
+            }
+          ]
+        },
+        {
+          "id": "foodAversion",
+          "title": "Отвращение",
+          "tags": [
+            {
+              "id": "avMeat",
+              "label": "мясо"
+            },
+            {
+              "id": "avFatty",
+              "label": "жирное"
+            },
+            {
+              "id": "avMilk",
+              "label": "молоко"
+            },
+            {
+              "id": "avSweets",
+              "label": "сладкое"
+            },
+            {
+              "id": "avHot",
+              "label": "горячее"
+            },
+            {
+              "id": "avCold",
+              "label": "холодное"
+            },
+            {
+              "id": "avFruits",
+              "label": "фрукты"
+            },
+            {
+              "id": "avEggs",
+              "label": "яйца"
+            },
+            {
+              "id": "avBread",
+              "label": "хлеб"
+            },
+            {
+              "id": "avVegetables",
+              "label": "овощи"
+            },
+            {
+              "id": "avPotato",
+              "label": "картофель"
+            },
+            {
+              "id": "avFoodSmell",
+              "label": "отвращение к запаху еды"
+            },
+            {
+              "id": "avSpecificProducts",
+              "label": "отвращение к определенным продуктам",
+              "hint": "к каким?"
+            },
+            {
+              "id": "avOther",
+              "label": "другое",
+              "hint": "опишите"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "otherSymptomsModalities",
+      "title": "Другие общие симптомы",
+      "children": [
+        {
+          "id": "laterality",
+          "title": "Сторонность",
+          "hint": "Какие именно симптомы и где?",
+          "tags": [
+            {
+              "id": "leftSide",
+              "label": "все симптомы с левой стороны"
+            },
+            {
+              "id": "rightSide",
+              "label": "все симптомы с правой стороны"
+            },
+            {
+              "id": "sideChanging",
+              "label": "симптомы переходят с одной стороны на другую"
+            },
+            {
+              "id": "diagonalUpperRightLowerLeft",
+              "label": "симптомы располагаются по диагонали (верхняя часть тела - справа, нижняя – слева)"
+            },
+            {
+              "id": "diagonalUpperLeftLowerRight",
+              "label": "симптомы располагаются по диагонали (верхняя часть тела - слева, нижняя – справа)"
+            },
+            {
+              "id": "lateralityOther",
+              "label": "другое"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "psycheMental",
+      "title": "Психика и ментальная сфера",
+      "hint": "Отметьте только самое яркое, самое мучительное, самое необыкновенное, что присуще вам. То, что очень выражено",
+      "children": [
+        {
+          "id": "moodAndEnergy",
+          "title": "Настроение и энергия",
+          "tags": [
+            {
+              "id": "joyfulness",
+              "label": "Жизнерадостность, эйфория"
+            },
+            {
+              "id": "melancholy",
+              "label": "Глубокая меланхолия, уныние"
+            },
+            {
+              "id": "serenity",
+              "label": "Безмятежность, внутренний покой"
+            },
+            {
+              "id": "anxiety",
+              "label": "Тревожность, предчувствие беды"
+            },
+            {
+              "id": "apathy",
+              "label": "Апатия, безразличие ко всему"
+            },
+            {
+              "id": "excitement",
+              "label": "Возбужденность, гиперчувствительность"
+            },
+            {
+              "id": "suppression",
+              "label": "Подавленность, ощущение тяжести"
+            },
+            {
+              "id": "lightness",
+              "label": "Легкость, ощущение полета"
+            },
+            {
+              "id": "despair",
+              "label": "Отчаяние, чувство безнадежности"
+            },
+            {
+              "id": "optimism",
+              "label": "Оптимизм, уверенность в будущем"
+            },
+            {
+              "id": "cyclicMoods",
+              "label": "Цикличность настроений"
+            },
+            {
+              "id": "glassWall",
+              "label": "Ощущение, как будто отделен от мира стеклянной стеной"
+            },
+            {
+              "id": "novelty",
+              "label": "Жажда новизны, перемен"
+            },
+            {
+              "id": "fearOfChange",
+              "label": "Страх перемен, потребность в стабильности"
+            },
+            {
+              "id": "suicidal",
+              "label": "Суицидальное настроение"
+            },
+            {
+              "id": "depression",
+              "label": "Депрессия"
+            }
+          ]
+        },
+        {
+          "id": "socialRelations",
+          "title": "Социальные отношения и реакции",
+          "tags": [
+            {
+              "id": "extroversion",
+              "label": "Общительность, экстраверсия"
+            },
+            {
+              "id": "introversion",
+              "label": "Замкнутость, интроверсия"
+            },
+            {
+              "id": "needSympathy",
+              "label": "Жажда сочувствия и компании"
+            },
+            {
+              "id": "solitude",
+              "label": "Желание одиночества"
+            },
+            {
+              "id": "dependentOnOpinion",
+              "label": "Зависимость от мнения окружающих"
+            },
+            {
+              "id": "indifferentToOpinion",
+              "label": "Полное безразличие к мнению других"
+            },
+            {
+              "id": "arrogance",
+              "label": "Высокомерие"
+            },
+            {
+              "id": "shyness",
+              "label": "Робость, застенчивость"
+            },
+            {
+              "id": "boldness",
+              "label": "Развязность, бесцеремонность"
+            },
+            {
+              "id": "suspicion",
+              "label": "Подозрительность, недоверчивость"
+            },
+            {
+              "id": "trust",
+              "label": "Доверчивость, наивность"
+            },
+            {
+              "id": "jealousy",
+              "label": "Ревность, собственничество"
+            },
+            {
+              "id": "generosity",
+              "label": "Великодушие"
+            },
+            {
+              "id": "resentment",
+              "label": "Обидчивость, злопамятность"
+            },
+            {
+              "id": "notResentful",
+              "label": "Необидчивость"
+            },
+            {
+              "id": "attentionSeeking",
+              "label": "Желание быть в центре внимания"
+            },
+            {
+              "id": "unnoticed",
+              "label": "Желание оставаться незамеченным"
+            },
+            {
+              "id": "competitiveness",
+              "label": "Соревновательность, амбициозность"
+            },
+            {
+              "id": "noAmbition",
+              "label": "Отсутствие амбиций, покорность"
+            },
+            {
+              "id": "dominance",
+              "label": "Доминирование, властность"
+            },
+            {
+              "id": "submission",
+              "label": "Покорность, подчинение"
+            },
+            {
+              "id": "criticism",
+              "label": "Критиканство, саркастичность"
+            },
+            {
+              "id": "admiration",
+              "label": "Восхищение другими, лицемерие"
+            },
+            {
+              "id": "intolerance",
+              "label": "Нетерпимость к противоречию"
+            },
+            {
+              "id": "acceptance",
+              "label": "Легкое принятие чужой точки зрения"
+            },
+            {
+              "id": "fearOfJudgment",
+              "label": "Страх осуждения"
+            },
+            {
+              "id": "persecution",
+              "label": "Ощущение, что Вас преследуют или за Вами наблюдают"
+            },
+            {
+              "id": "outcast",
+              "label": "Ощущение себя изгоем"
+            },
+            {
+              "id": "justice",
+              "label": "Борьба за справедливость, анархизм"
+            },
+            {
+              "id": "religiosity",
+              "label": "Религиозность"
+            },
+            {
+              "id": "atheism",
+              "label": "Воинствующий атеизм"
+            },
+            {
+              "id": "falling",
+              "label": "Влюбчивость, множественные контакты"
+            },
+            {
+              "id": "abstinence",
+              "label": "Воздержание"
+            },
+            {
+              "id": "nostalgia",
+              "label": "Ностальгия по родине"
+            },
+            {
+              "id": "riskTaking",
+              "label": "Чрезмерная смелость, риск"
+            },
+            {
+              "id": "fearfulness",
+              "label": "Боязливость, пугливость"
+            },
+            {
+              "id": "revenge",
+              "label": "Мстительность"
+            },
+            {
+              "id": "friendliness",
+              "label": "Дружелюбие"
+            },
+            {
+              "id": "addictions",
+              "label": "Зависимости (клептомания, игромания, наркотики, алкоголизм)"
+            },
+            {
+              "id": "watchIntolerance",
+              "label": "Нетерпимость, когда на Вас смотрят"
+            },
+            {
+              "id": "touchIntolerance",
+              "label": "Нетерпимость к прикосновениям"
+            },
+            {
+              "id": "aversionOppositeSex",
+              "label": "Отвращение к людям противоположенного пола"
+            },
+            {
+              "id": "aversionSameSex",
+              "label": "Отвращение к людям своего пола"
+            },
+            {
+              "id": "aversionYouOwnSex",
+              "label": "Неприятие собственного пола"
+            }
+          ]
+        },
+        {
+          "id": "willControl",
+          "title": "Воля, деятельность, контроль",
+          "tags": [
+            {
+              "id": "strongWill",
+              "label": "Сильная воля, решительность"
+            },
+            {
+              "id": "weakWill",
+              "label": "Слабость воли, нерешительность"
+            },
+            {
+              "id": "stubbornness",
+              "label": "Упрямство, несгибаемость"
+            },
+            {
+              "id": "compliance",
+              "label": "Уступчивость, мягкотелость"
+            },
+            {
+              "id": "impulsiveness",
+              "label": "Импульсивность"
+            },
+            {
+              "id": "caution",
+              "label": "Осторожность"
+            },
+            {
+              "id": "hastiness",
+              "label": "Торопливость"
+            },
+            {
+              "id": "slowness",
+              "label": "Медлительность"
+            },
+            {
+              "id": "workaholism",
+              "label": "Трудоголизм"
+            },
+            {
+              "id": "laziness",
+              "label": "Лень, прокрастинация, откладывает все на потом"
+            },
+            {
+              "id": "pedantry",
+              "label": "Педантичность, сильное стремление к порядку"
+            },
+            {
+              "id": "disorder",
+              "label": "Беспорядочность, хаотичность"
+            },
+            {
+              "id": "obsession",
+              "label": "Одержимость идеей, фанатизм"
+            },
+            {
+              "id": "superficiality",
+              "label": "Поверхностность"
+            },
+            {
+              "id": "selfControl",
+              "label": "Самоконтроль, сдержанность"
+            },
+            {
+              "id": "lackOfRestraint",
+              "label": "Несдержанность"
+            },
+            {
+              "id": "perfectionism",
+              "label": "Перфекционизм"
+            },
+            {
+              "id": "negligence",
+              "label": "Халатность, «и так сойдет»"
+            },
+            {
+              "id": "controlDesire",
+              "label": "Желание все контролировать"
+            },
+            {
+              "id": "noInitiative",
+              "label": "Отсутствие инициативы, ожидание указаний"
+            }
+          ]
+        },
+        {
+          "id": "intellectImagination",
+          "title": "Интеллектуальная сфера и воображение",
+          "tags": [
+            {
+              "id": "clarityOfThinking",
+              "label": "Ясность мышления"
+            },
+            {
+              "id": "confusion",
+              "label": "Спутанность, туман в голове"
+            },
+            {
+              "id": "focusOnDetails",
+              "label": "Концентрация на деталях"
+            },
+            {
+              "id": "absentMindedness",
+              "label": "Рассеянность, витание в облаках"
+            },
+            {
+              "id": "quickMind",
+              "label": "Быстрота ума"
+            },
+            {
+              "id": "slowThinking",
+              "label": "Замедленное мышление"
+            },
+            {
+              "id": "creativeInspiration",
+              "label": "Творческое вдохновение"
+            },
+            {
+              "id": "mentalStupor",
+              "label": "Умственный ступор, отсутствие идей"
+            },
+            {
+              "id": "vividImagination",
+              "label": "Живое воображение (вплоть до иллюзий)"
+            },
+            {
+              "id": "pragmatism",
+              "label": "Приземленность, прагматизм"
+            },
+            {
+              "id": "fixationOnPast",
+              "label": "Фиксация на прошлом"
+            },
+            {
+              "id": "fixationOnFuture",
+              "label": "Фиксация на будущем (тревога или планы)"
+            },
+            {
+              "id": "obsessiveThoughts",
+              "label": "Навязчивые мысли, идеи"
+            },
+            {
+              "id": "brainOverload",
+              "label": "Ощущение, что мозг перегружен и вот-вот взорвется"
+            },
+            {
+              "id": "wordFindingDifficulty",
+              "label": "Трудность с подбором слов"
+            },
+            {
+              "id": "memoryProblem",
+              "label": "Проблемы с памятью"
+            },
+            {
+              "id": "slowResponseToQuestion",
+              "label": "Медленная реакция на вопросы"
+            },
+            {
+              "id": "stuckOneThought",
+              "label": "Застревание на одной мысли, которая крутится в голове"
+            },
+            {
+              "id": "tooManyIdea",
+              "label": "Слишком много идей"
+            }
+          ]
+        },
+        {
+          "id": "fears",
+          "title": "Страхи",
+          "hint": "Когда и где возникает страх? Как проявляется телесно? Что облегчает? Есть ли история возникновения страхов, связь с другими симптомами или обстоятельствами жизни",
+          "tags": [
+            {
+              "id": "fearOfDeath",
+              "label": "Страх смерти, тяжелой болезни"
+            },
+            {
+              "id": "fearOfLoneliness",
+              "label": "Страх одиночества, покинутости"
+            },
+            {
+              "id": "fearOfCrowds",
+              "label": "Страх толпы, скопления людей"
+            },
+            {
+              "id": "claustrophobia",
+              "label": "Страх замкнутого пространства"
+            },
+            {
+              "id": "fearOfHeights",
+              "label": "Страх высоты"
+            },
+            {
+              "id": "fearOfWater",
+              "label": "Страх воды"
+            },
+            {
+              "id": "fearOfDarkness",
+              "label": "Страх темноты"
+            },
+            {
+              "id": "fearOfFailure",
+              "label": "Страх неудачи, осуждения, публичных выступлений"
+            },
+            {
+              "id": "fearOfInsanity",
+              "label": "Страх безумия, потери контроля"
+            },
+            {
+              "id": "fearOfFuture",
+              "label": "Страх будущего, бедности, нищеты"
+            },
+            {
+              "id": "fearOfIllness",
+              "label": "Страх болезни"
+            },
+            {
+              "id": "fearOfContamination",
+              "label": "Страх загрязнения, заражения, микробов"
+            },
+            {
+              "id": "fearOfDisaster",
+              "label": "Страх несчастного случая, катастрофы (в т.ч. страх во время грозы, шторма)"
+            },
+            {
+              "id": "fearOfAnimals",
+              "label": "Страх животных, насекомых, пауков"
+            },
+            {
+              "id": "fearOfSupernatural",
+              "label": "Страх привидений, сверхъестественного"
+            },
+            {
+              "id": "fearOfSharpObjects",
+              "label": "Страх острых предметов, ножей"
+            },
+            {
+              "id": "fearInSleep",
+              "label": "Страх во сне (кошмары, пробуждение со страхом)"
+            },
+            {
+              "id": "anxiousAnticipation",
+              "label": "Тревожное ожидание (постоянное предчувствие чего-то плохого)"
+            },
+            {
+              "id": "fearWorseAlone",
+              "label": "Страх, усиливающийся в одиночестве"
+            },
+            {
+              "id": "fearWorseInDark",
+              "label": "Страх, усиливающийся в темноте"
+            },
+            {
+              "id": "fearWorseInCrowd",
+              "label": "Страх, усиливающийся в толпе/обществе"
+            },
+            {
+              "id": "panicAttacks",
+              "label": "Иррациональный, необъяснимый страх (панические атаки)"
+            },
+            {
+              "id": "fearWithRestlessness",
+              "label": "Страх, который вызывает сильное физическое беспокойство (не может усидеть на месте)"
+            },
+            {
+              "id": "fearWithParalysis",
+              "label": "Страх, который парализует, вызывает оцепенение"
+            },
+            {
+              "id": "fearWithFlightResponse",
+              "label": "Страх, от которого хочется убежать и спрятаться"
+            },
+            {
+              "id": "otherFears",
+              "label": "Другие страхи",
+              "hint": "Чего вы боитесь?"
+            }
+          ]
+        },
+        {
+          "id": "emotionalReactions",
+          "title": "Эмоциональные реакции и проявления",
+          "hint": "Распишите подробнее",
+          "tags": [
+            {
+              "id": "irritability",
+              "label": "Гневливость, вспыльчивость"
+            },
+            {
+              "id": "phlegmatic",
+              "label": "Флегматичность, невозмутимость"
+            },
+            {
+              "id": "rage",
+              "label": "Ярость, разрушительный гнев"
+            },
+            {
+              "id": "annoyance",
+              "label": "Досада, тихое раздражение"
+            },
+            {
+              "id": "irritabilityFromTrifles",
+              "label": "Раздражительность от мелочей"
+            },
+            {
+              "id": "patience",
+              "label": "Терпеливость"
+            },
+            {
+              "id": "tearfulness",
+              "label": "Плаксивость, слезливость"
+            },
+            {
+              "id": "inabilityToCry",
+              "label": "Сухость, неспособность плакать"
+            },
+            {
+              "id": "sentimentality",
+              "label": "Сентиментальность"
+            },
+            {
+              "id": "coldness",
+              "label": "Черствость, холодность"
+            },
+            {
+              "id": "jealousy",
+              "label": "Ревность"
+            },
+            {
+              "id": "indifference",
+              "label": "Безучастность"
+            },
+            {
+              "id": "envy",
+              "label": "Зависть"
+            },
+            {
+              "id": "compassion",
+              "label": "Сочувствие, помощь, участие в делах других"
+            },
+            {
+              "id": "selfPity",
+              "label": "Жалость к себе"
+            },
+            {
+              "id": "selfSeverity",
+              "label": "Суровость к себе"
+            },
+            {
+              "id": "guilt",
+              "label": "Чувство вины, самообвинение"
+            },
+            {
+              "id": "blamingOthers",
+              "label": "Оправдание себя, обвинение других"
+            },
+            {
+              "id": "shyness",
+              "label": "Стыдливость"
+            },
+            {
+              "id": "shamelessness",
+              "label": "Бесстыдство"
+            },
+            {
+              "id": "pride",
+              "label": "Гордость, чувство собственного достоинства"
+            },
+            {
+              "id": "worthlessness",
+              "label": "Ощущение ничтожности"
+            },
+            {
+              "id": "impatience",
+              "label": "Нетерпение"
+            },
+            {
+              "id": "longSuffering",
+              "label": "Долготерпение"
+            },
+            {
+              "id": "hysteria",
+              "label": "Истеричность, демонстративность реакций"
+            },
+            {
+              "id": "innerTrembling",
+              "label": "Внутренняя дрожь, «трепет» от эмоций"
+            },
+            {
+              "id": "frenzy",
+              "label": "Неистовство"
+            },
+            {
+              "id": "loveOfAnimals",
+              "label": "Любовь к животным"
+            },
+            {
+              "id": "disappointmentInLove",
+              "label": "Разочарование в любви"
+            },
+            {
+              "id": "sad",
+              "label": "Печаль"
+            },
+            {
+              "id": "desireToSwear",
+              "label": "Желание браниться"
+            },
+            {
+              "id": "taciturnity",
+              "label": "Молчаливость"
+            },
+            {
+              "id": "talkActiviness",
+              "label": "Разговорчивость"
+            }
+          ]
+        },
+        {
+          "id": "specialMentalStates",
+          "title": "Особые ментальные состояния и ощущения",
+          "hint": "Распишите подробнее",
+          "tags": [
+            {
+              "id": "splitPersonality",
+              "label": "Ощущение раздвоенности личности"
+            },
+            {
+              "id": "unrealityFeeling",
+              "label": "Чувство, что происходит что-то нереальное"
+            },
+            {
+              "id": "depersonalization",
+              "label": "Ощущение отчужденности от собственного тела или мыслей"
+            },
+            {
+              "id": "suddenInsights",
+              "label": "Внезапные, яркие прозрения или озарения. Ясновидение"
+            },
+            {
+              "id": "sensOfMission",
+              "label": "Чувство избранности, особой миссии"
+            },
+            {
+              "id": "persecutionMania",
+              "label": "Мания преследования"
+            },
+            {
+              "id": "delusionalIdeas",
+              "label": "Бредовые идеи (величия, обнищания и т.д.)"
+            },
+            {
+              "id": "hallucinations",
+              "label": "Галлюцинации (слуховые, зрительные)"
+            },
+            {
+              "id": "obsessiveRituals",
+              "label": "Навязчивые счет, перепроверки, ритуалы"
+            },
+            {
+              "id": "timeLoss",
+              "label": "Потеря ощущения времени"
+            },
+            {
+              "id": "obsessiveWashing",
+              "label": "Навязчивое стремление мыть руки, стирать"
+            },
+            {
+              "id": "someoneStandingBehind",
+              "label": "Ощущение, что кто-то стоит за спиной, идет за Вами"
+            }
+          ]
+        },
+        {
+          "id": "desiresAversions",
+          "title": "Желания и отвращения (ментально-эмоциональные)",
+          "hint": " и распишите подробнее",
+          "tags": [
+            {
+              "id": "desireForComfort",
+              "label": "Желание быть утешенным"
+            },
+            {
+              "id": "desireToBeAlone",
+              "label": "Желание, чтобы его оставили в покое"
+            },
+            {
+              "id": "desireToTravel",
+              "label": "Желание путешествовать, менять место"
+            },
+            {
+              "id": "desireForHome",
+              "label": "Желание быть дома, в безопасности"
+            },
+            {
+              "id": "desireForAlcohol",
+              "label": "Желание алкоголя, стимуляторов"
+            },
+            {
+              "id": "aversionToAlcohol",
+              "label": "Отвращение к алкоголю и стимуляторам"
+            },
+            {
+              "id": "desireForMusic",
+              "label": "Желание музыки, искусства"
+            },
+            {
+              "id": "aversionToMusic",
+              "label": "Отвращение к музыке, искусству"
+            },
+            {
+              "id": "desireForBusiness",
+              "label": "Желание заниматься бизнесом, предприимчивость"
+            },
+            {
+              "id": "desireForRoutine",
+              "label": "Желание спокойной, рутинной работы"
+            },
+            {
+              "id": "desireToDramatize",
+              "label": "Желание драматизировать"
+            },
+            {
+              "id": "desireToHideFeelings",
+              "label": "Желание скрыть чувства"
+            },
+            {
+              "id": "deathWish",
+              "label": "Желание смерти (как покоя)"
+            },
+            {
+              "id": "thirstForLife",
+              "label": "Сильная жажда жизни"
+            },
+            {
+              "id": "aversionToStimuli",
+              "label": "Отвращение к определенным цветам, звукам, прикосновениям"
+            }
+          ]
+        },
+        {
+          "id": "reactionToSuffering",
+          "title": "Реакция на страдание и болезнь",
+          "hint": "Распишите подробнее",
+          "tags": [
+            {
+              "id": "stoicism",
+              "label": "Стойкость в страдании"
+            },
+            {
+              "id": "painIntolerance",
+              "label": "Нетерпимость к боли, требовательность"
+            },
+            {
+              "id": "exaggeration",
+              "label": "Преувеличение симптомов"
+            },
+            {
+              "id": "minimization",
+              "label": "Преуменьшение, скрытность"
+            },
+            {
+              "id": "fearOfDyingFromIllness",
+              "label": "Страх умереть от болезни"
+            },
+            {
+              "id": "beliefIncurable",
+              "label": "Убежденность в неизлечимости, отказ от помощи"
+            },
+            {
+              "id": "irritabilityFromPain",
+              "label": "Раздражительность от боли"
+            },
+            {
+              "id": "apathyInPain",
+              "label": "Апатия и покорность при боли"
+            },
+            {
+              "id": "demandAttention",
+              "label": "Требование внимания к себе при болезни"
+            },
+            {
+              "id": "desireSolitudeInIllness",
+              "label": "Желание уединения при болезни"
+            },
+            {
+              "id": "worseFromSympathy",
+              "label": "Ухудшение от сочувствия, избегание его"
+            },
+            {
+              "id": "betterFromSympathy",
+              "label": "Улучшение от сочувствия"
+            },
+            {
+              "id": "fearOfDoctors",
+              "label": "Страх врачей, лечения"
+            }
+          ]
+        },
+        {
+          "id": "unusualSensations",
+          "title": "Необычные ощущения в теле",
+          "tags": [
+            {
+              "id": "innerTension",
+              "label": "Внутреннее напряжение, дрожь, трепет",
+              "hint": "От чего возникает? Что помогает успокоиться?"
+            },
+            {
+              "id": "innerColdSensation",
+              "label": "Внутренний холод, будто ледяной шар внутри, озноб изнутри"
+            },
+            {
+              "id": "innerHeatSensation",
+              "label": "Жар, приливы, ощущение жара внутри"
+            },
+            {
+              "id": "emptiness",
+              "label": "Пустота, чувство опустошенности, «будто что-то вынули изнутри»"
+            },
+            {
+              "id": "bursting",
+              "label": "Распирание, переполнение, «как будто сейчас лопну»",
+              "hint": "Где именно?"
+            },
+            {
+              "id": "heaviness",
+              "label": "Тяжесть, будто свинец налили",
+              "hint": "В какой части тела?"
+            },
+            {
+              "id": "weightlessness",
+              "label": "Невесомость, парение, «отрыва от земли»",
+              "hint": "Когда это бывает и приятно ли это чувство?"
+            },
+            {
+              "id": "numbness",
+              "label": "Онемение, потеря чувствительности, «будто заморозили»",
+              "hint": "Какая часть тела?"
+            },
+            {
+              "id": "stiffness",
+              "label": "Скованность, тугоподвижность",
+              "hint": "Где именно?"
+            },
+            {
+              "id": "tingling",
+              "label": "Покалывание, мурашки, «иголочки»",
+              "hint": "Где ощущаются?"
+            },
+            {
+              "id": "itching",
+              "label": "Зуд, щекотание",
+              "hint": "В каком месте?"
+            },
+            {
+              "id": "burning",
+              "label": "Жжение, горение",
+              "hint": "Где именно?"
+            },
+            {
+              "id": "crawlingSensation",
+              "label": "Ощущение, будто под кожей кто-то ползает (как червячки)",
+              "hint": "В какой части тела?"
+            },
+            {
+              "id": "constriction",
+              "label": "Стягивание, сдавливание, будто обручем",
+              "hint": "Какая часть тела?"
+            },
+            {
+              "id": "aliveInAbdomen",
+              "label": "Ощущение, что в животе что-то живое"
+            },
+            {
+              "id": "fragility",
+              "label": "Ощущение хрупкости тела или его части",
+              "hint": "Что именно кажется хрупким?"
+            },
+            {
+              "id": "bodyNotOwn",
+              "label": "Чувство, что тело не свое, чужое, нереальное",
+              "hint": "Опишите это подробнее"
+            },
+            {
+              "id": "derealization",
+              "label": "Чувство, что мир вокруг нереальный, как во сне",
+              "hint": "Опишите это состояние"
+            },
+            {
+              "id": "vulnerability",
+              "label": "Ощущение уязвимости, обостренная чувствительность",
+              "hint": "К чему именно вы стали чувствительны?"
+            },
+            {
+              "id": "cannotRelax",
+              "label": "Постоянное напряжение, не могу расслабиться"
+            },
+            {
+              "id": "unexplainedFatigue",
+              "label": "Слабость, упадок сил, усталость без видимой причины"
+            },
+            {
+              "id": "rushFeeling",
+              "label": "Ощущение постоянной спешки, будто надо все делать быстрее"
+            },
+            {
+              "id": "innerDirtiness",
+              "label": "Ощущение внутренней «грязи», хочется постоянно мыться"
+            },
+            {
+              "id": "timeSlow",
+              "label": "Ощущение, что время тянется очень медленно"
+            },
+            {
+              "id": "timeFast",
+              "label": "Ощущение, что время летит незаметно, очень быстро"
+            },
+            {
+              "id": "innerHunger",
+              "label": "Внутренний голод, который не связан с едой",
+              "hint": "Чего именно не хватает?"
+            },
+            {
+              "id": "lumpInThroat",
+              "label": "Ком в горле, сдавление",
+              "hint": "Мешает ли это глотать или дышать?"
+            },
+            {
+              "id": "breathlessness",
+              "label": "Нехватка воздуха, чувство удушья"
+            },
+            {
+              "id": "hairOnTongue",
+              "label": "Ощущение волоса или нитки на языке"
+            },
+            {
+              "id": "cobwebOnFace",
+              "label": "Ощущение паутины на лице"
+            },
+            {
+              "id": "plugSensation",
+              "label": "Ощущение пробки в какой-то части тела",
+              "hint": "Где именно?"
+            },
+            {
+              "id": "splinterInThroat",
+              "label": "Ощущение занозы в горле"
+            },
+            {
+              "id": "windSensation",
+              "label": "Ощущение ветра, который дует в глаза или уши"
+            },
+            {
+              "id": "bodyPartEnlarged",
+              "label": "Ощущение, что какая-то часть тела стала больше"
+            },
+            {
+              "id": "pressureDown",
+              "label": "Давление вниз, будто органы сейчас выпадут"
+            },
+            {
+              "id": "otherUnusualSensations",
+              "label": "Другие необычные или трудноописуемые ощущения",
+              "hint": "Опишите их как можно подробнее, даже если кажутся странными"
+            }
+          ]
+        },
+        {
+          "id": "sleepPatterns",
+          "title": "Сон",
+          "tags": [
+            {
+              "id": "insomniaFallAsleep",
+              "label": "Бессонница (трудно заснуть)",
+              "hint": "Опишите свое состояние: что крутится в голове и что обычно помогает уснуть?"
+            },
+            {
+              "id": "insomniaEarlyWaking",
+              "label": "Бессонница (ранние пробуждения)",
+              "hint": "Во сколько вы просыпаетесь и получается ли уснуть снова?"
+            },
+            {
+              "id": "insomniaFrequentWaking",
+              "label": "Бессонница (частые пробуждения ночью)",
+              "hint": "Отчего вы просыпаетесь? Получается ли быстро заснуть? В одно и то же время это происходит?"
+            },
+            {
+              "id": "excessiveSleepiness",
+              "label": "Сильная сонливость, сплю очень много",
+              "hint": "Когда особенно сильно клонит в сон?"
+            },
+            {
+              "id": "deepSleep",
+              "label": "Очень крепкий сон («спящий» сон)",
+              "hint": "Трудно ли вас разбудить?"
+            },
+            {
+              "id": "lightSleep",
+              "label": "Чуткий сон (просыпаюсь от любого шороха)",
+              "hint": "Какие именно звуки мешают?"
+            },
+            {
+              "id": "specialSleepConditions",
+              "label": "Особые условия для сна",
+              "hint": "Что вам необходимо для хорошего сна? (Полная темнота, тишина, любимая поза и т.д.)"
+            },
+            {
+              "id": "unnaturalPositions",
+              "label": "Неестественные позы во сне",
+              "hint": "Опишите, в какой позе просыпаетесь"
+            },
+            {
+              "id": "sleepTalking",
+              "label": "Разговоры во сне"
+            },
+            {
+              "id": "bruxism",
+              "label": "Скрежет зубами (бруксизм)"
+            },
+            {
+              "id": "sleepWalking",
+              "label": "Хождение во сне (лунатизм)"
+            },
+            {
+              "id": "vividDreams",
+              "label": "Яркие, цветные сны",
+              "hint": "Какого они обычно характера?"
+            },
+            {
+              "id": "nightmares",
+              "label": "Кошмары (страшные сны)",
+              "hint": "Как часто снятся и про что?"
+            },
+            {
+              "id": "anxiousDreams",
+              "label": "Тревожные, суетливые сны (про работу, погони)"
+            },
+            {
+              "id": "eroticDreams",
+              "label": "Эротические сны"
+            },
+            {
+              "id": "recurringDreams",
+              "label": "Сны, которые повторяются",
+              "hint": "Опишите их сюжет"
+            },
+            {
+              "id": "fallingFlyingDreams",
+              "label": "Сны про падения, полеты, катастрофы"
+            },
+            {
+              "id": "mundaneDreams",
+              "label": "Сны про повседневные дела"
+            },
+            {
+              "id": "daytimeSleepiness",
+              "label": "Сонливость днем (особенно после еды)"
+            },
+            {
+              "id": "morningGrogginess",
+              "label": "Чувство разбитости после пробуждения",
+              "hint": "Сколько времени нужно, чтобы окончательно прийти в себя?"
+            },
+            {
+              "id": "wakingFromTouch",
+              "label": "Просыпаюсь от прикосновения или скрипа"
+            },
+            {
+              "id": "wakingFromSnoring",
+              "label": "Просыпаюсь от своего храпа или нехватки воздуха"
+            },
+            {
+              "id": "sleepApnea",
+              "label": "Остановка дыхания во сне (апноэ)"
+            },
+            {
+              "id": "openMouthSleep",
+              "label": "Сон с открытым ртом"
+            },
+            {
+              "id": "openEyesSleep",
+              "label": "Сон с приоткрытыми глазами"
+            },
+            {
+              "id": "nightSweats",
+              "label": "Сильно потею во сне",
+              "hint": "В какое время ночи? Приходится ли менять одежду или белье?"
+            },
+            {
+              "id": "headSweatsNight",
+              "label": "Потеет голова во сне",
+              "hint": "В какое время ночи? Насколько сильно?"
+            },
+            {
+              "id": "racingThoughts",
+              "label": "Не могу уснуть из-за потока мыслей",
+              "hint": "О чем обычно думается?"
+            },
+            {
+              "id": "restlessLegs",
+              "label": "Не могу уснуть из-за беспокойства в ногах или теле",
+              "hint": "Где и как это чувствуется?"
+            },
+            {
+              "id": "anxietyInsomnia",
+              "label": "Не могу уснуть из-за тревоги",
+              "hint": "Поделитесь, что вас тревожит"
+            },
+            {
+              "id": "sleepCoveredHead",
+              "label": "Всегда сплю под одеялом с головой"
+            },
+            {
+              "id": "feetOutOfBlanket",
+              "label": "Во сне высовываю ноги из-под одеяла"
+            },
+            {
+              "id": "substancesAffectSleep",
+              "label": "Алкоголь, кофе или лекарства влияют на сон",
+              "hint": "Как именно?"
+            },
+            {
+              "id": "otherSleepFeatures",
+              "label": "Другие важные особенности сна",
+              "hint": "Напишите здесь, если хотите добавить что-то еще о своем сне"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

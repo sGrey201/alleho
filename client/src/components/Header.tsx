@@ -168,6 +168,12 @@ export function Header() {
                 {isAdmin && (
                   <>
                     <DropdownMenuItem asChild>
+                      <Link href="/questionnaires" className="flex w-full items-center" data-testid="link-questionnaires">
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        {t.questionnaires}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
                       <Link href="/messenger" className="flex w-full items-center" data-testid="link-messenger">
                         <MessageCircle className="mr-2 h-4 w-4" />
                         {t.messenger}

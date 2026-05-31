@@ -24,23 +24,17 @@ import {
   Check,
   Copy,
   Link2,
-  ListChecks,
   Pill,
   FileText,
-  MessageCircle,
+  ClipboardList,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import QuestionnairePanel from "@/components/QuestionnairePanel";
+import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog,
   DialogContent,
@@ -149,6 +143,40 @@ function parsePollPayload(
   if (!content?.trim()) return null;
   try {
     return pollPayloadSchema.parse(JSON.parse(content));
+  } catch {
+    return null;
+  }
+}
+
+function parseQuestionnaireMessageContent(content: string | null | undefined): { instanceId: string; templateName: string } | null {
+  if (!content?.trim()) return null;
+  try {
+    const parsed = JSON.parse(content) as { instanceId?: string; templateName?: string };
+    if (parsed.instanceId && parsed.templateName) return { instanceId: parsed.instanceId, templateName: parsed.templateName };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseQuestionnaireTemplateMessageContent(
+  content: string | null | undefined
+): { templateId: string; templateName: string; snapshot?: { root: unknown[] } } | null {
+  if (!content?.trim()) return null;
+  try {
+    const parsed = JSON.parse(content) as {
+      templateId?: string;
+      templateName?: string;
+      snapshot?: { root: unknown[] };
+    };
+    if (parsed.templateId && parsed.templateName) {
+      return {
+        templateId: parsed.templateId,
+        templateName: parsed.templateName,
+        snapshot: parsed.snapshot,
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -273,6 +301,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [message, setMessage] = useState("");
   const [addMembersOpen, setAddMembersOpen] = useState(false);
   const [doctorSearch, setDoctorSearch] = useState("");
@@ -294,23 +323,19 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
-  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
-  const [isMdUp, setIsMdUp] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : false,
-  );
+  const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
+  const [templatePreview, setTemplatePreview] = useState<{
+    templateId: string;
+    templateName: string;
+    snapshot: { root: import("@shared/questionnaireTypes").QuestionnaireNode[] };
+  } | null>(null);
+  const [questionnairePickerOpen, setQuestionnairePickerOpen] = useState(false);
 
   useEffect(() => {
-    setShowQuestionnaire(false);
+    setOpenQuestionnaireInstanceId(null);
+    setTemplatePreview(null);
+    setQuestionnairePickerOpen(false);
   }, [conversationId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mediaQuery = window.matchMedia("(min-width: 768px)");
-    const onChange = (event: MediaQueryListEvent) => setIsMdUp(event.matches);
-    setIsMdUp(mediaQuery.matches);
-    mediaQuery.addEventListener("change", onChange);
-    return () => mediaQuery.removeEventListener("change", onChange);
-  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -407,11 +432,52 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
   });
 
+  const { data: myQuestionnaireTemplates = [] } = useQuery<
+    Array<{ id: string; name: string }>
+  >({
+    queryKey: ["/api/questionnaire-templates"],
+    enabled: questionnairePickerOpen && !!user?.isAdmin,
+  });
+
+  const copyTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const res = await apiRequest("POST", `/api/questionnaire-templates/${templateId}/copy`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: t.questionnaireSaved });
+      void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
+    },
+  });
+
+  const sendQuestionnaireMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, {
+        messageType: conv?.type === "patient" ? "questionnaire" : "questionnaire_template",
+        templateId,
+      });
+      return res.json() as Promise<ConversationMessageWithAuthor>;
+    },
+    onSuccess: (newMessage) => {
+      if (!conversationId) return;
+      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+        ["/api/conversations", conversationId, "messages"],
+        (old) => {
+          const list = old ?? [];
+          if (list.some((m) => m.id === newMessage.id)) return old ?? list;
+          return [...list, newMessage];
+        }
+      );
+      setQuestionnairePickerOpen(false);
+    },
+  });
+
   const sendMutation = useMutation({
     mutationFn: async (data: {
       content?: string;
       imageUrl?: string;
       messageType?: string;
+      templateId?: string;
       replyToMessageId?: string;
       poll?: { question: string; options: string[]; allowMultiple: boolean };
     }) => {
@@ -426,6 +492,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               content: data.content,
               imageUrl: data.imageUrl,
               messageType: data.messageType ?? "message",
+              templateId: data.templateId,
               replyToMessageId: data.replyToMessageId,
             };
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, body);
@@ -947,30 +1014,30 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       t.chatWithDoctor
     : title;
   const chatName = conv.name?.trim() || null;
-  const headerTitle =
-    isPatientConv && !user?.isAdmin && chatName
-      ? `${directDisplayName} (${chatName})`
-      : directDisplayName;
-  const headerAvatarUrl =
-    conv.type === "direct" || conv.type === "patient"
+  const headerTitle = isPatientConv
+    ? chatName || t.patient
+    : conv.type === "direct"
+      ? directDisplayName
+      : title;
+  const headerAvatarUrl = isPatientConv
+    ? (conv.avatarUrl ?? null)
+    : conv.type === "direct"
       ? (peerParticipant?.user?.profileImageUrl ?? null)
       : (conv.avatarUrl ?? null);
   const directProfileUserId =
-    conv.type === "direct"
-      ? peerParticipant?.userId
-      : conv.type === "patient" && user?.isAdmin
-        ? conv.patientUserId ?? undefined
-        : conv.type === "patient"
-          ? peerParticipant?.userId
-          : undefined;
+    conv.type === "direct" ? peerParticipant?.userId : undefined;
   const handleHeaderProfileClick = () => {
-    if (directProfileUserId) {
+    if (conv.type === "patient") {
+      onTitleClick?.();
+      return;
+    }
+    if (conv.type === "direct" && directProfileUserId) {
       setLocation(`/profile/${directProfileUserId}`);
       return;
     }
     onTitleClick?.();
   };
-  const canClickHeader = !!directProfileUserId || !!onTitleClick;
+  const canClickHeader = conv.type === "patient" ? !!onTitleClick : !!directProfileUserId || !!onTitleClick;
   const headerInitials = directDisplayName
     .split(" ")
     .filter(Boolean)
@@ -1224,6 +1291,24 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     );
   };
 
+  const openQuestionnaireFromMessage = (msg: ConversationMessageWithAuthor) => {
+    if (msg.messageType === "questionnaire") {
+      const payload = parseQuestionnaireMessageContent(msg.content);
+      if (payload) setOpenQuestionnaireInstanceId(payload.instanceId);
+      return;
+    }
+    if (msg.messageType === "questionnaire_template") {
+      const payload = parseQuestionnaireTemplateMessageContent(msg.content);
+      if (payload?.snapshot) {
+        setTemplatePreview({
+          templateId: payload.templateId,
+          templateName: payload.templateName,
+          snapshot: payload.snapshot as { root: import("@shared/questionnaireTypes").QuestionnaireNode[] },
+        });
+      }
+    }
+  };
+
   const renderMessageBody = (msg: ConversationMessageWithAuthor, isOwn: boolean) => (
     <>
       {!isOwn && showMessageAuthorName && (
@@ -1253,6 +1338,27 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             pollVoteMutation.isPending && pollVoteMutation.variables?.messageId === msg.id
           }
         />
+      ) : msg.messageType === "questionnaire" || msg.messageType === "questionnaire_template" ? (
+        (() => {
+          const qPayload =
+            msg.messageType === "questionnaire"
+              ? parseQuestionnaireMessageContent(msg.content)
+              : parseQuestionnaireTemplateMessageContent(msg.content);
+          const name = qPayload?.templateName ?? t.questionnaire;
+          return (
+            <button
+              type="button"
+              className="mb-1 w-full rounded-md border border-primary/20 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10"
+              onClick={() => openQuestionnaireFromMessage(msg)}
+            >
+              <Badge variant="secondary" className="mb-1 bg-blue-100 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                <ClipboardList className="mr-1 h-3 w-3" />
+                {t.questionnaireMessageLabel}
+              </Badge>
+              <p className="text-sm font-medium">{name}</p>
+            </button>
+          );
+        })()
       ) : (
         <>
           {msg.messageType === "prescription" && (
@@ -1305,45 +1411,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
   const isComposerSending = sendMutation.isPending || editMutation.isPending;
 
-  const canShowQuestionnaire = isPatientConv && !!user?.isAdmin && !!conv.patientUserId;
-
-  const handleQuestionnaireToggle = () => {
-    if (!conv.patientUserId) {
-      toast({
-        title: t.error,
-        description: "Не удалось определить пациента для анкеты",
-        variant: "destructive",
-      });
-      return;
-    }
-    setShowQuestionnaire((v) => !v);
+  const questionnairePanelOpen = !!openQuestionnaireInstanceId || !!templatePreview;
+  const closeQuestionnairePanel = () => {
+    setOpenQuestionnaireInstanceId(null);
+    setTemplatePreview(null);
   };
-
-  const questionnairePanel = conv.patientUserId ? (
-    <QuestionnairePanel patientUserId={conv.patientUserId} isOwnQuestionnaire={false} />
-  ) : null;
+  const questionnairePanelTitle = openQuestionnaireInstanceId
+    ? t.questionnaireTitle
+    : templatePreview?.templateName ?? t.questionnaireTitle;
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-row">
-      {canShowQuestionnaire && showQuestionnaire && isMdUp && questionnairePanel && (
-        <aside className="flex w-[min(420px,40%)] shrink-0 flex-col min-h-0 border-r border-border/60 bg-background">
-          {questionnairePanel}
-        </aside>
-      )}
-      {canShowQuestionnaire && questionnairePanel && (
-        <Sheet
-          open={showQuestionnaire && !isMdUp}
-          onOpenChange={(open) => setShowQuestionnaire(open)}
-        >
-          <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
-            <SheetHeader className="sr-only">
-              <SheetTitle>{t.questionnaireTitle}</SheetTitle>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto">{questionnairePanel}</div>
-          </SheetContent>
-        </Sheet>
-      )}
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col md:flex-row">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="pointer-events-none z-30 flex w-full min-w-0 max-w-full shrink-0 flex-col gap-1.5 overflow-hidden px-3 pt-3.5">
         <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
@@ -1392,11 +1471,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               preview={
                 activePinnedMessage.messageType === "poll"
                   ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
-                  : activePinnedMessage.content
-                    ? activePinnedMessage.content
-                    : activePinnedMessage.imageUrl
-                      ? t.messagePhotoLabel
-                      : t.messageDeleted
+                  : activePinnedMessage.messageType === "questionnaire" ||
+                      activePinnedMessage.messageType === "questionnaire_template"
+                    ? (parseQuestionnaireMessageContent(activePinnedMessage.content)?.templateName ??
+                        parseQuestionnaireTemplateMessageContent(activePinnedMessage.content)?.templateName ??
+                        t.questionnaire)
+                    : activePinnedMessage.content
+                      ? activePinnedMessage.content
+                      : activePinnedMessage.imageUrl
+                        ? t.messagePhotoLabel
+                        : t.messageDeleted
               }
               activeIndex={activePinnedIndex}
               totalCount={pinnedMessages.length}
@@ -1639,68 +1723,64 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </Button>
             ) : null
           ) : (
-            <div className="flex items-end gap-2 px-4 pt-3 pb-3">
-              {isPatientConv && user?.isAdmin && !editing && (
-                <Button
-                  type="button"
-                  variant={showQuestionnaire ? "default" : "outline"}
-                  size="sm"
-                  className="shrink-0"
-                  onClick={handleQuestionnaireToggle}
-                  data-testid="button-open-questionnaire"
-                >
-                  {t.questionnaireTitle ?? "Анкета"}
-                </Button>
-              )}
-              {isPatientConv && user?.isAdmin && !editing && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-full">
-                      {messageMode === "prescription" ? (
-                        <Pill className="h-4 w-4" />
-                      ) : messageMode === "followup" ? (
-                        <FileText className="h-4 w-4" />
-                      ) : (
-                        <MessageCircle className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setMessageMode("message")}>Сообщение</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setMessageMode("prescription")}>{t.prescription}</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setMessageMode("followup")}>{t.followup}</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {!editing && canPostToChannel && !composerValue.trim() && !isPatientConv && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 rounded-full bg-[#e8ecf1] text-[#28292c]"
-                  onClick={() => setPollDialogOpen(true)}
-                  title={t.pollCreate}
-                >
-                  <ListChecks className="h-4 w-4" />
-                </Button>
-              )}
-              <div className="min-w-0 flex-1">
-                <ChatInputBar
-                  ref={chatInputRef}
-                  value={composerValue}
-                  placeholder={editing ? t.messageEditingTitle : t.writeMessage}
-                  onChange={handleComposerChange}
-                  onSend={handleSend}
-                  isSending={isComposerSending}
-                  disabled={!canPostToChannel}
-                  onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
-                  isUploadingImages={isUploadingPhoto}
-                  wrapperClassName="border-0 px-0 py-0"
-                />
-              </div>
+            <div className="px-4 pt-3 pb-3">
+              <ChatInputBar
+                ref={chatInputRef}
+                value={composerValue}
+                placeholder={editing ? t.messageEditingTitle : t.writeMessage}
+                onChange={handleComposerChange}
+                onSend={handleSend}
+                isSending={isComposerSending}
+                disabled={!canPostToChannel}
+                onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
+                isUploadingImages={isUploadingPhoto}
+                wrapperClassName="border-0 px-0 py-0"
+                showQuestionnaireAttach={!!user?.isAdmin && !editing && canPostToChannel}
+                onSendQuestionnaire={
+                  user?.isAdmin && !editing && canPostToChannel
+                    ? () => setQuestionnairePickerOpen(true)
+                    : undefined
+                }
+                onCreatePoll={
+                  !editing && canPostToChannel && !isPatientConv
+                    ? () => setPollDialogOpen(true)
+                    : undefined
+                }
+                showMessageModeSelector={isPatientConv && !!user?.isAdmin && !editing}
+                messageMode={messageMode}
+                onMessageModeChange={setMessageMode}
+              />
             </div>
           )}
         </div>
+      )}
+      </div>
+
+      {!isMobile && questionnairePanelOpen && (
+        <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-background md:w-[min(32rem,45%)] md:max-w-lg">
+          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+            <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{questionnairePanelTitle}</h2>
+            <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={closeQuestionnairePanel}>
+              <X className="h-4 w-4" />
+              <span className="sr-only">{t.cancel}</span>
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {openQuestionnaireInstanceId && (
+              <DynamicQuestionnaireForm mode="instance" instanceId={openQuestionnaireInstanceId} />
+            )}
+            {templatePreview && !openQuestionnaireInstanceId && (
+              <DynamicQuestionnaireForm
+                mode="preview"
+                structure={templatePreview.snapshot}
+                templateName={templatePreview.templateName}
+                templateId={templatePreview.templateId}
+                onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
+                isCopying={copyTemplateMutation.isPending}
+              />
+            )}
+          </div>
+        </aside>
       )}
 
       <Dialog open={pollDialogOpen} onOpenChange={setPollDialogOpen}>
@@ -1946,7 +2026,56 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </AlertDialogContent>
       </AlertDialog>
 
-    </div>
+      <Dialog open={questionnairePickerOpen} onOpenChange={setQuestionnairePickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.selectQuestionnaireToSend}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {myQuestionnaireTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t.noDataAvailable}</p>
+            ) : (
+              myQuestionnaireTemplates.map((tpl) => (
+                <Button
+                  key={tpl.id}
+                  variant="outline"
+                  className="w-full justify-start"
+                  disabled={sendQuestionnaireMutation.isPending}
+                  onClick={() => sendQuestionnaireMutation.mutate(tpl.id)}
+                >
+                  {tpl.name}
+                </Button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {isMobile && (
+        <Sheet open={questionnairePanelOpen} onOpenChange={(open) => !open && closeQuestionnairePanel()}>
+          <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{questionnairePanelTitle}</SheetTitle>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {openQuestionnaireInstanceId && (
+                <DynamicQuestionnaireForm mode="instance" instanceId={openQuestionnaireInstanceId} />
+              )}
+              {templatePreview && !openQuestionnaireInstanceId && (
+                <DynamicQuestionnaireForm
+                  mode="preview"
+                  structure={templatePreview.snapshot}
+                  templateName={templatePreview.templateName}
+                  templateId={templatePreview.templateId}
+                  onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
+                  isCopying={copyTemplateMutation.isPending}
+                />
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
+
     </div>
   );
 }

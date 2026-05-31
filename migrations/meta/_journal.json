@@ -120,6 +120,20 @@
       "when": 1774040000000,
       "tag": "0016_patient_conversations_drop_health_wall",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1774050000000,
+      "tag": "0017_questionnaire_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1774060000000,
+      "tag": "0018_questionnaire_hints_mode",
+      "breakpoints": true
     }
   ]
 }
