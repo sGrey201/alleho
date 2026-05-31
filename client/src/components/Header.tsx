@@ -160,9 +160,9 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/health-wall" className="flex w-full items-center" data-testid="link-health-wall">
-                    <Heart className="mr-2 h-4 w-4" />
-                    {t.healthWall}
+                  <Link href="/messenger" className="flex w-full items-center" data-testid="link-messenger-patient">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    {t.messenger}
                   </Link>
                 </DropdownMenuItem>
                 {isAdmin && (

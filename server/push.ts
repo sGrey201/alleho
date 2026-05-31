@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { storage } from "./storage";
-import { scheduleConversationMessagePush, scheduleHealthWallMessagePush } from "./pushDefer";
+import { scheduleConversationMessagePush } from "./pushDefer";
 
 export type PushPayload = {
   title: string;
@@ -95,6 +95,7 @@ export function messagePreview(content?: string | null, imageUrl?: string | null
 }
 
 export function conversationPath(type: string, conversationId: string): string {
+  if (type === "patient") return `/messenger/chat/${conversationId}`;
   const t = type === "group" || type === "channel" || type === "direct" ? type : "direct";
   return `/messenger/${t}/${conversationId}`;
 }
@@ -105,32 +106,6 @@ type MessageAuthorLike = {
   lastName?: string | null;
   email?: string | null;
 };
-
-export async function notifyHealthWallNewMessage(
-  patientUserId: string,
-  authorUserId: string,
-  message: {
-    id: string;
-    createdAt: string | Date;
-    content?: string | null;
-    imageUrl?: string | null;
-    author: MessageAuthorLike;
-  }
-): Promise<void> {
-  const recipientIds: string[] = [];
-  if (authorUserId === patientUserId) {
-    const doctors = await storage.getHealthWallDoctors(patientUserId);
-    recipientIds.push(...doctors.map((d) => d.user.id));
-  } else {
-    recipientIds.push(patientUserId);
-  }
-  const targets = recipientIds.filter((id) => id !== authorUserId);
-  if (targets.length === 0) return;
-
-  for (const recipientUserId of targets) {
-    scheduleHealthWallMessagePush(patientUserId, recipientUserId, authorUserId, message);
-  }
-}
 
 export async function notifyConversationNewMessage(
   conversationId: string,

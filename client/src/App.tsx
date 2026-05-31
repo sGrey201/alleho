@@ -29,7 +29,6 @@ import AdminTags from "@/pages/admin/AdminTags";
 import About from "@/pages/About";
 import AllRemedies from "@/pages/AllRemedies";
 import AllSituations from "@/pages/AllSituations";
-import HealthWall from "@/pages/HealthWall";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
@@ -64,12 +63,13 @@ function Router() {
       <Route path="/subscribe" component={Subscribe} />
       <Route path="/remedies" component={AllRemedies} />
       <Route path="/situations" component={AllSituations} />
-      <Route path="/health-wall" component={HealthWall} />
-      <Route path="/health-wall/:patientUserId" component={HealthWall} />
+      <Route path="/health-wall" component={() => <Redirect to="/messenger" />} />
+      <Route path="/health-wall/:patientUserId" component={() => <Redirect to="/messenger" />} />
       <Route path="/messenger" component={Messenger} />
       <Route path="/messenger/direct/:conversationId" component={Messenger} />
-      <Route path="/messenger/patient" component={Messenger} />
-      <Route path="/messenger/patient/:patientUserId" component={Messenger} />
+      <Route path="/messenger/chat/:conversationId" component={Messenger} />
+      <Route path="/messenger/patient" component={() => <Redirect to="/messenger" />} />
+      <Route path="/messenger/patient/:patientUserId" component={() => <Redirect to="/messenger" />} />
       <Route path="/messenger/group/:conversationId" component={Messenger} />
       <Route path="/messenger/channel/:conversationId" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/post/:messageId/comments" component={Messenger} />
@@ -116,7 +116,6 @@ function AppContent() {
 
   const isProfilePage = location.startsWith("/profile");
   const isFullscreenPage =
-    location.startsWith("/health-wall") ||
     location.startsWith("/messenger") ||
     isProfilePage;
 

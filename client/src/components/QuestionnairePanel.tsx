@@ -229,9 +229,8 @@ export default function QuestionnairePanel({
 
   const invalidateProfileAvatarQueries = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    await queryClient.invalidateQueries({ queryKey: ["/api/health-wall/my/patients"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
     if (patientUserId) {
-      await queryClient.invalidateQueries({ queryKey: ["/api/health-wall", patientUserId, "info"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/patient", patientUserId, "questionnaire"] });
     }
   }, [patientUserId]);

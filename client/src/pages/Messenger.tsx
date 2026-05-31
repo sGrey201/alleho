@@ -7,11 +7,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
-import HealthWall from "@/pages/HealthWall";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
@@ -45,7 +44,7 @@ function formatChatTime(dateStr: string | null | undefined): string {
 }
 
 export type ChatItem = {
-  source: "health_wall" | "conversation";
+  source: "conversation";
   folder: "personal" | "groups" | "channels";
   patientUserId?: string;
   patientName?: string;
@@ -92,6 +91,28 @@ function chatInitial(label: string): string {
   return getPersonInitials(null, null, label);
 }
 
+function getChatListLabel(chat: ChatItem, isAdminUser: boolean): string {
+  if (chat.type === "patient") {
+    if (!isAdminUser) {
+      return chat.name ?? chat.patientName ?? t.chatWithDoctor;
+    }
+    return chat.name ?? chat.patientName ?? chat.patientEmail ?? t.patient;
+  }
+  if (chat.type === "direct") {
+    return chat.otherParticipantName ?? t.chatWithDoctor;
+  }
+  return (
+    chat.name ??
+    (chat.type === "consilium"
+      ? t.chatConsilium
+      : chat.type === "channel"
+        ? chat.myRole === "owner"
+          ? t.channelOwn
+          : t.channelSub
+        : t.chatGroup)
+  );
+}
+
 function getPersonInitials(
   firstName?: string | null,
   lastName?: string | null,
@@ -110,11 +131,12 @@ function getPersonInitials(
 }
 
 function ChatListAvatar({ chat, label }: { chat: ChatItem; label: string }) {
-  const isPatientChat = chat.source === "health_wall";
+  const isPatientChat = chat.type === "patient";
   const useAvatar =
     isPatientChat ||
-    (chat.source === "conversation" &&
-      (chat.type === "group" || chat.type === "channel" || chat.type === "direct"));
+    chat.type === "group" ||
+    chat.type === "channel" ||
+    chat.type === "direct";
 
   if (useAvatar) {
     return (
@@ -149,29 +171,30 @@ export default function Messenger() {
   const [, commentThreadParams] = useRoute("/messenger/channel/:conversationId/post/:messageId/comments");
   const [, groupSettingsParams] = useRoute("/messenger/group/:conversationId/settings");
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
-  const [, patientChatParams] = useRoute("/messenger/patient/:patientUserId");
+  const [, patientChatParams] = useRoute("/messenger/chat/:conversationId");
   const conversationId =
     commentThreadParams?.conversationId ||
     groupParams?.conversationId ||
     channelParams?.conversationId ||
     directParams?.conversationId ||
+    patientChatParams?.conversationId ||
     groupSettingsParams?.conversationId ||
     channelSettingsParams?.conversationId;
-  const patientUserId = patientChatParams?.patientUserId;
   const threadMessageId = commentThreadParams?.messageId;
   const isGroupChat = !!groupParams?.conversationId;
   const isChannelChat = !!channelParams?.conversationId;
   const isDirectChat = !!directParams?.conversationId;
+  const isPatientChat = !!patientChatParams?.conversationId;
   const isCommentThread = !!commentThreadParams?.conversationId && !!commentThreadParams?.messageId;
   const isGroupSettings = !!groupSettingsParams?.conversationId;
   const isChannelSettings = !!channelSettingsParams?.conversationId;
   const [isMobileView, setIsMobileView] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
   );
-  const isMobileConversationOpen = (!!conversationId || !!patientUserId) && isMobileView;
+  const isMobileConversationOpen = !!conversationId && isMobileView;
 
   const isChatSelected = (chat: ChatItem) =>
-    chat.source === "conversation" && !!conversationId && chat.conversationId === conversationId;
+    !!conversationId && !!chat.conversationId && chat.conversationId === conversationId;
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const { toast } = useToast();
@@ -212,10 +235,11 @@ export default function Messenger() {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const apiFolder = folder === "doctors" || folder === "patients" ? "personal" : folder;
+  const activeFolder = isAdmin ? folder : "patients";
+  const apiFolder = activeFolder === "doctors" || activeFolder === "patients" ? "personal" : activeFolder;
 
   const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
-    queryKey: ["/api/me/chats", apiFolder, folder],
+    queryKey: ["/api/me/chats", apiFolder, activeFolder],
     queryFn: async ({ pageParam = 0 }) => {
       const url = `/api/me/chats?folder=${apiFolder}&limit=${PAGE_SIZE}&offset=${pageParam}`;
       const res = await fetch(url, { credentials: "include" });
@@ -234,20 +258,23 @@ export default function Messenger() {
     const hasUnread = (chat: ChatItem) => (chat.unreadCount ?? 0) > 0;
     return {
       doctors: chats.filter((chat) => chat.source === "conversation" && chat.type === "direct" && hasUnread(chat)).length,
-      patients: chats.filter((chat) => chat.source === "health_wall" && hasUnread(chat)).length,
+      patients: chats.filter((chat) => chat.type === "patient" && hasUnread(chat)).length,
       groups: chats.filter((chat) => chat.source === "conversation" && chat.type === "group" && hasUnread(chat)).length,
       channels: chats.filter((chat) => chat.source === "conversation" && chat.type === "channel" && hasUnread(chat)).length,
     };
   }, [chats]);
   const chatsByFolder = useMemo(() => {
-    if (folder === "patients") {
-      return chats.filter((chat) => chat.source === "health_wall");
+    if (!isAdmin) {
+      return chats.filter((chat) => chat.type === "patient");
     }
-    if (folder === "doctors") {
+    if (activeFolder === "patients") {
+      return chats.filter((chat) => chat.type === "patient");
+    }
+    if (activeFolder === "doctors") {
       return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
     }
     return chats;
-  }, [chats, folder]);
+  }, [chats, activeFolder, isAdmin]);
 
   const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch: refetchSearch } = useQuery<MessengerSearchResults>({
     queryKey: ["/api/messenger/search", debouncedSearchQuery],
@@ -268,8 +295,8 @@ export default function Messenger() {
     const words = q.split(/\s+/).filter(Boolean);
     return items.filter((chat) => {
       const searchable =
-        chat.source === "health_wall"
-          ? [chat.patientName, chat.patientEmail].filter(Boolean).join(" ")
+        chat.type === "patient"
+          ? [chat.name, chat.patientName, chat.patientEmail].filter(Boolean).join(" ")
           : chat.type === "direct"
             ? (chat.otherParticipantName ?? "")
             : (chat.name ?? "");
@@ -284,8 +311,8 @@ export default function Messenger() {
     }
   }, [isSearching]);
 
-  const activeSearchScope = isSearching ? searchScope : folder;
-  const searchChatsSource = activeSearchScope === "all" ? chats.filter((chat) => chat.source !== "health_wall") : chatsByFolder;
+  const activeSearchScope = isSearching ? searchScope : activeFolder;
+  const searchChatsSource = activeSearchScope === "all" ? chats.filter((chat) => chat.type !== "patient") : chatsByFolder;
   const searchFiltered =
     isSearching && searchQuery.trim()
       ? filterChatsBySearch(searchChatsSource, searchQuery)
@@ -334,11 +361,8 @@ export default function Messenger() {
     if (!isAuthenticated || authLoading) return;
     if (!isAdmin) {
       setFolder("patients");
-      if (!patientUserId && user?.id) {
-        setLocation(`/messenger/patient/${user.id}`);
-      }
     }
-  }, [isAuthenticated, authLoading, isAdmin, patientUserId, user?.id, setLocation]);
+  }, [isAuthenticated, authLoading, isAdmin]);
 
   const openDirectChat = async (params: { userId?: string; conversationId?: string }) => {
     let targetConversationId = params.conversationId;
@@ -365,16 +389,16 @@ export default function Messenger() {
   };
 
   const handleSelectChat = async (chat: ChatItem) => {
-    if (chat.source === "health_wall" && chat.patientUserId) {
+    if (chat.type === "patient" && chat.conversationId) {
       setFolder("patients");
-      setLocation(`/messenger/patient/${chat.patientUserId}`);
+      setLocation(`/messenger/chat/${chat.conversationId}`);
       return;
     }
-    if (chat.source === "conversation" && chat.type === "direct") {
+    if (chat.type === "direct") {
       await openDirectChat({ userId: chat.otherParticipantId, conversationId: chat.conversationId });
       return;
     }
-    if (chat.source === "conversation" && chat.conversationId) {
+    if (chat.conversationId) {
       if (chat.type === "group") setLocation(`/messenger/group/${chat.conversationId}`);
       else if (chat.type === "channel") setLocation(`/messenger/channel/${chat.conversationId}`);
       else setLocation(`/messenger/channel/${chat.conversationId}`);
@@ -467,8 +491,9 @@ export default function Messenger() {
       {!isMobileConversationOpen && (
       <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background">
         <Tabs
-          value={isSearching && searchScope === "all" ? "" : folder}
+          value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
           onValueChange={(v) => {
+            if (!isAdmin) return;
             const nextFolder = v as typeof folder;
             setFolder(nextFolder);
             if (isSearching) {
@@ -497,6 +522,18 @@ export default function Messenger() {
                     {t.profile}
                   </Link>
                 </DropdownMenuItem>
+                {!isAdmin && (
+                  <DropdownMenuItem
+                    onSelect={async () => {
+                      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+                      qc.clear();
+                      window.location.href = "/";
+                    }}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    {t.logout}
+                  </DropdownMenuItem>
+                )}
                 {isAdmin && (
                   <>
                     <DropdownMenuItem
@@ -533,6 +570,10 @@ export default function Messenger() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {!isAdmin && (
+              <h1 className="flex-1 truncate text-base font-semibold">{t.messenger}</h1>
+            )}
+            {isAdmin && (
             <div className="relative flex-1">
               <Input
                 ref={searchInputRef}
@@ -555,11 +596,12 @@ export default function Messenger() {
                 </button>
               )}
             </div>
+            )}
           </div>
-          {/* Floating top panel on mobile — Telegram-style */}
+          {isAdmin && (
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
-              <TabsList className={cn("grid h-10 w-full gap-0 rounded-none border-0 border-b border-border bg-transparent p-0", isAdmin ? "grid-cols-4" : "grid-cols-2")}>
+              <TabsList className="grid h-10 w-full grid-cols-4 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
                 <TabsTrigger
                   value="doctors"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -582,7 +624,6 @@ export default function Messenger() {
                     </span>
                   )}
                 </TabsTrigger>
-                {isAdmin && (
                 <TabsTrigger
                   value="groups"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -594,8 +635,6 @@ export default function Messenger() {
                     </span>
                   )}
                 </TabsTrigger>
-                )}
-                {isAdmin && (
                 <TabsTrigger
                   value="channels"
                   className="inline-flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-1 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
@@ -607,11 +646,14 @@ export default function Messenger() {
                     </span>
                   )}
                 </TabsTrigger>
-                )}
               </TabsList>
             </div>
           </div>
-          <TabsContent value={isSearching && searchScope === "all" ? "" : folder} className="flex-1 m-0 min-h-0 overflow-hidden bg-background">
+          )}
+          <TabsContent
+            value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
+            className="flex-1 m-0 min-h-0 overflow-hidden bg-background"
+          >
             {isSearching ? (
               searchLoading && !searchResults ? (
                 <div className="flex items-center justify-center p-4 min-h-[200px]">
@@ -634,15 +676,12 @@ export default function Messenger() {
                         </p>
                         {searchFiltered.map((chat) => {
                           const isSelected = isChatSelected(chat);
-                          const label =
-                            chat.source === "health_wall"
-                              ? chat.patientName ?? chat.patientEmail ?? t.patient
-                              : chat.type === "direct"
-                                ? (chat.otherParticipantName ?? t.chatWithDoctor)
-                                : chat.name ?? (chat.type === "consilium" ? t.chatConsilium : chat.type === "channel" ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub) : t.chatGroup);
+                          const label = getChatListLabel(chat, !!isAdmin);
                           const badge =
-                            chat.source === "health_wall"
-                              ? t.chatWithPatient
+                            chat.type === "patient"
+                              ? isAdmin
+                                ? t.chatWithPatient
+                                : (chat.otherParticipantName ?? t.chatWithDoctor)
                               : chat.type === "direct"
                                 ? t.chatWithDoctor
                                 : chat.type === "consilium"
@@ -650,13 +689,13 @@ export default function Messenger() {
                                   : chat.type === "channel"
                                     ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                                     : t.chatGroup;
-                          const isHw = chat.source === "health_wall";
+                          const isPatientRow = chat.type === "patient";
                           const hasMsgPreview = !!chat.lastMessagePreview?.trim();
-                          const alignTop = isHw || hasMsgPreview;
+                          const alignTop = isPatientRow || hasMsgPreview;
                           const subtitleText = chat.lastMessagePreview?.trim() || badge;
                           return (
                             <button
-                              key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
+                              key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                               type="button"
                               onClick={() => {
                                 if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
@@ -789,15 +828,12 @@ export default function Messenger() {
                 <div className="pt-1">
                   {listToShow.map((chat) => {
                     const isSelected = isChatSelected(chat);
-                    const label =
-                      chat.source === "health_wall"
-                        ? chat.patientName ?? chat.patientEmail ?? t.patient
-                        : chat.type === "direct"
-                          ? (chat.otherParticipantName ?? t.chatWithDoctor)
-                          : chat.name ?? (chat.type === "consilium" ? t.chatConsilium : chat.type === "channel" ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub) : t.chatGroup);
+                    const label = getChatListLabel(chat, !!isAdmin);
                     const badge =
-                      chat.source === "health_wall"
-                        ? t.chatWithPatient
+                      chat.type === "patient"
+                        ? isAdmin
+                          ? t.chatWithPatient
+                          : (chat.otherParticipantName ?? t.chatWithDoctor)
                         : chat.type === "direct"
                           ? t.chatWithDoctor
                           : chat.type === "consilium"
@@ -805,13 +841,13 @@ export default function Messenger() {
                             : chat.type === "channel"
                               ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                               : t.chatGroup;
-                    const isHw = chat.source === "health_wall";
+                    const isPatientRow = chat.type === "patient";
                     const hasMsgPreview = !!chat.lastMessagePreview?.trim();
-                    const alignTop = isHw || hasMsgPreview;
+                    const alignTop = isPatientRow || hasMsgPreview;
                     const subtitleText = chat.lastMessagePreview?.trim() || badge;
                     return (
                       <button
-                        key={chat.source === "health_wall" ? chat.patientUserId! : `${chat.conversationId ?? "direct"}-${chat.otherParticipantId ?? ""}`}
+                        key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                         type="button"
                         onClick={() => {
                           if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
@@ -887,10 +923,6 @@ export default function Messenger() {
               currentUserId={user?.id}
               onBack={() => setLocation(`/messenger/channel/${conversationId}`)}
             />
-          </div>
-        ) : patientUserId ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">
-            <HealthWall embeddedInMessenger forcedPatientUserId={patientUserId} />
           </div>
         ) : conversationId ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">

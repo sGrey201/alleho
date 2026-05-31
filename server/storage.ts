@@ -6,13 +6,10 @@ import {
   payments,
   articleLikes,
   userQuestionnaires,
-  healthWallMessages,
-  healthWallDoctors,
   invites,
   conversations,
   conversationParticipants,
   conversationMessages,
-  healthWallMessageReactions,
   conversationMessageReactions,
   conversationMessageComments,
   conversationMessageCommentReactions,
@@ -31,10 +28,6 @@ import {
   type ArticleLike,
   type UserQuestionnaire,
   type QuestionnaireData,
-  type HealthWallMessage,
-  type InsertHealthWallMessage,
-  type HealthWallDoctor,
-  type InsertHealthWallDoctor,
   type Invite,
   type InsertInvite,
   type Conversation,
@@ -74,6 +67,18 @@ export type MessengerChannelListItem = {
   lastPostAt: Date | null;
   lastMessagePreview: string | null;
   myRole?: string;
+};
+
+export type PatientConversationListItem = {
+  conversationId: string;
+  name: string | null;
+  patientUserId: string | null;
+  avatarUrl: string | null;
+  lastMessageAt: Date | null;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+  otherParticipantId?: string;
+  otherParticipantName?: string;
 };
 
 export type MessageReactionSummary = {
@@ -182,38 +187,15 @@ export interface IStorage {
   saveQuestionnaire(userId: string, data: QuestionnaireData): Promise<UserQuestionnaire>;
   getQuestionnairesSharedWith(email: string): Promise<{ questionnaire: UserQuestionnaire; user: User }[]>;
 
-  // Health wall operations
-  getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]>;
-  getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]>;
-  getHealthWallMessageById(messageId: string): Promise<HealthWallMessage | undefined>;
-  createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage>;
-  editHealthWallMessage(messageId: string, content: string): Promise<HealthWallMessage | undefined>;
-  softDeleteHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
-  pinHealthWallMessage(messageId: string, userId: string): Promise<HealthWallMessage | undefined>;
-  unpinHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined>;
-  toggleHealthWallMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
-  getHealthWallMessageReactionSummaries(
-    messageIds: string[],
-    currentUserId: string
-  ): Promise<Map<string, MessageReactionSummary[]>>;
-  getPatientHealthWallStats(patientUserId: string, doctorUserId: string): Promise<{
-    unreadCount: number;
-    lastMessageAt: Date | null;
-    lastMessagePreview: string | null;
-  }>;
-
-  // Health wall doctors operations
-  getHealthWallDoctors(patientUserId: string): Promise<{ doctor: HealthWallDoctor; user: User }[]>;
-  getHealthWallPatients(doctorUserId: string): Promise<{ connection: HealthWallDoctor; patient: User }[]>;
-  addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor>;
-  removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean>;
-  isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean>;
-  canAccessHealthWall(userId: string, patientUserId: string): Promise<boolean>;
-
   // Invite operations
   createInvite(invite: InsertInvite): Promise<Invite>;
   getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined>;
-  markInviteAccepted(inviteId: string, acceptedUserId: string, acceptedEmail?: string): Promise<Invite>;
+  markInviteAccepted(
+    inviteId: string,
+    acceptedUserId: string,
+    acceptedEmail?: string,
+    conversationId?: string
+  ): Promise<Invite>;
   markInviteExpired(inviteId: string): Promise<Invite>;
   getInviterOfUser(userId: string): Promise<User | undefined>;
   getAcceptedInvitesCountByUser(inviterUserId: string): Promise<number>;
@@ -238,11 +220,6 @@ export interface IStorage {
     conversationId: string,
     userId: string,
     messageCreatedAt: Date
-  ): Promise<boolean>;
-  isHealthWallMessageReadByUser(
-    patientUserId: string,
-    userId: string,
-    message: { authorUserId: string; createdAt: Date }
   ): Promise<boolean>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
@@ -286,6 +263,7 @@ export interface IStorage {
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
   updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
+  getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
 
   // Web Push subscriptions
@@ -816,330 +794,6 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  // Health wall operations
-  async getHealthWallMessages(patientUserId: string): Promise<HealthWallMessage[]> {
-    return await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.patientUserId, patientUserId))
-      .orderBy(healthWallMessages.createdAt);
-  }
-
-  async getHealthWallMessagesRecent(patientUserId: string, limit: number): Promise<HealthWallMessage[]> {
-    const rows = await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.patientUserId, patientUserId))
-      .orderBy(desc(healthWallMessages.createdAt))
-      .limit(limit);
-    return rows.reverse();
-  }
-
-  async getHealthWallMessageById(messageId: string): Promise<HealthWallMessage | undefined> {
-    const [message] = await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.id, messageId));
-    return message;
-  }
-
-  async createHealthWallMessage(message: InsertHealthWallMessage): Promise<HealthWallMessage> {
-    const [created] = await db
-      .insert(healthWallMessages)
-      .values(message)
-      .returning();
-    const preview = previewFromConversationMessageParts(created.content, created.imageUrl);
-    const at = created.createdAt ?? new Date();
-    await db
-      .update(users)
-      .set({
-        healthWallLastMessageAt: at,
-        healthWallLastMessagePreview: preview,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, created.patientUserId));
-    return created;
-  }
-
-  async editHealthWallMessage(messageId: string, content: string): Promise<HealthWallMessage | undefined> {
-    const [updated] = await db
-      .update(healthWallMessages)
-      .set({ content, editedAt: new Date() })
-      .where(eq(healthWallMessages.id, messageId))
-      .returning();
-    if (!updated) return undefined;
-
-    const [last] = await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.patientUserId, updated.patientUserId))
-      .orderBy(desc(healthWallMessages.createdAt))
-      .limit(1);
-    if (last?.id === updated.id) {
-      await db
-        .update(users)
-        .set({
-          healthWallLastMessagePreview: previewFromConversationMessageParts(updated.content, updated.imageUrl),
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, updated.patientUserId));
-    }
-
-    return updated;
-  }
-
-  async softDeleteHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined> {
-    const [updated] = await db
-      .update(healthWallMessages)
-      .set({
-        deletedAt: new Date(),
-        content: null,
-        imageUrl: null,
-        pinnedAt: null,
-        pinnedByUserId: null,
-      })
-      .where(eq(healthWallMessages.id, messageId))
-      .returning();
-    if (!updated) return undefined;
-
-    const [last] = await db
-      .select()
-      .from(healthWallMessages)
-      .where(eq(healthWallMessages.patientUserId, updated.patientUserId))
-      .orderBy(desc(healthWallMessages.createdAt))
-      .limit(1);
-    if (last?.id === updated.id) {
-      await db
-        .update(users)
-        .set({ healthWallLastMessagePreview: null, updatedAt: new Date() })
-        .where(eq(users.id, updated.patientUserId));
-    }
-
-    return updated;
-  }
-
-  async pinHealthWallMessage(messageId: string, userId: string): Promise<HealthWallMessage | undefined> {
-    const [updated] = await db
-      .update(healthWallMessages)
-      .set({ pinnedAt: new Date(), pinnedByUserId: userId })
-      .where(eq(healthWallMessages.id, messageId))
-      .returning();
-    return updated;
-  }
-
-  async unpinHealthWallMessage(messageId: string): Promise<HealthWallMessage | undefined> {
-    const [updated] = await db
-      .update(healthWallMessages)
-      .set({ pinnedAt: null, pinnedByUserId: null })
-      .where(eq(healthWallMessages.id, messageId))
-      .returning();
-    return updated;
-  }
-
-  async toggleHealthWallMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    try {
-      const [existing] = await db
-        .select({ id: healthWallMessageReactions.id })
-        .from(healthWallMessageReactions)
-        .where(
-          and(
-            eq(healthWallMessageReactions.messageId, messageId),
-            eq(healthWallMessageReactions.userId, userId),
-            eq(healthWallMessageReactions.emoji, emoji)
-          )
-        )
-        .limit(1);
-      if (existing) {
-        await db.delete(healthWallMessageReactions).where(eq(healthWallMessageReactions.id, existing.id));
-        return;
-      }
-      await db.insert(healthWallMessageReactions).values({ messageId, userId, emoji });
-    } catch (error) {
-      if (isMissingRelationError(error)) return;
-      throw error;
-    }
-  }
-
-  async getHealthWallMessageReactionSummaries(
-    messageIds: string[],
-    currentUserId: string
-  ): Promise<Map<string, MessageReactionSummary[]>> {
-    if (messageIds.length === 0) return new Map();
-    let rows: Array<{ messageId: string; userId: string; emoji: string }> = [];
-    try {
-      rows = (await db
-        .select()
-        .from(healthWallMessageReactions)
-        .where(inArray(healthWallMessageReactions.messageId, messageIds))) as Array<{
-        messageId: string;
-        userId: string;
-        emoji: string;
-      }>;
-    } catch (error) {
-      if (isMissingRelationError(error)) return new Map();
-      throw error;
-    }
-    const byMessage = new Map<string, Map<string, MessageReactionSummary>>();
-    rows.forEach((row) => {
-      if (!byMessage.has(row.messageId)) byMessage.set(row.messageId, new Map());
-      const msgMap = byMessage.get(row.messageId)!;
-      const existing = msgMap.get(row.emoji);
-      if (existing) {
-        existing.count += 1;
-        if (row.userId === currentUserId) existing.reactedByMe = true;
-      } else {
-        msgMap.set(row.emoji, {
-          emoji: row.emoji,
-          count: 1,
-          reactedByMe: row.userId === currentUserId,
-        });
-      }
-    });
-    const result = new Map<string, MessageReactionSummary[]>();
-    byMessage.forEach((emojiMap, messageId) => {
-      result.set(messageId, Array.from(emojiMap.values()));
-    });
-    return result;
-  }
-
-  async getPatientHealthWallStats(
-    patientUserId: string,
-    doctorUserId: string
-  ): Promise<{ unreadCount: number; lastMessageAt: Date | null; lastMessagePreview: string | null }> {
-    const doctorLastVisit = await this.getDoctorLastVisit(patientUserId, doctorUserId);
-
-    const unreadConditions = [
-      eq(healthWallMessages.patientUserId, patientUserId),
-      eq(healthWallMessages.authorUserId, patientUserId),
-    ];
-    if (doctorLastVisit != null) {
-      unreadConditions.push(gt(healthWallMessages.createdAt, doctorLastVisit));
-    }
-    const [unreadRow] = await db
-      .select({ c: count() })
-      .from(healthWallMessages)
-      .where(and(...unreadConditions));
-    const unreadCount = Number(unreadRow?.c ?? 0);
-
-    const patient = await this.getUser(patientUserId);
-    return {
-      unreadCount,
-      lastMessageAt: patient?.healthWallLastMessageAt ?? null,
-      lastMessagePreview: patient?.healthWallLastMessagePreview ?? null,
-    };
-  }
-
-  // Health wall doctors operations
-  async getHealthWallDoctors(patientUserId: string): Promise<{ doctor: HealthWallDoctor; user: User }[]> {
-    const connections = await db
-      .select()
-      .from(healthWallDoctors)
-      .where(eq(healthWallDoctors.patientUserId, patientUserId))
-      .orderBy(healthWallDoctors.createdAt);
-
-    const result: { doctor: HealthWallDoctor; user: User }[] = [];
-    for (const connection of connections) {
-      const user = await this.getUser(connection.doctorUserId);
-      if (user) {
-        result.push({ doctor: connection, user });
-      }
-    }
-    return result;
-  }
-
-  async getHealthWallPatients(doctorUserId: string): Promise<{ connection: HealthWallDoctor; patient: User }[]> {
-    const connections = await db
-      .select()
-      .from(healthWallDoctors)
-      .where(eq(healthWallDoctors.doctorUserId, doctorUserId))
-      .orderBy(healthWallDoctors.createdAt);
-
-    const result: { connection: HealthWallDoctor; patient: User }[] = [];
-    for (const connection of connections) {
-      const patient = await this.getUser(connection.patientUserId);
-      if (patient) {
-        result.push({ connection, patient });
-      }
-    }
-    return result;
-  }
-
-  async addHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<HealthWallDoctor> {
-    const [created] = await db
-      .insert(healthWallDoctors)
-      .values({ patientUserId, doctorUserId })
-      .returning();
-    return created;
-  }
-
-  async removeHealthWallDoctor(patientUserId: string, doctorUserId: string): Promise<boolean> {
-    const result = await db
-      .delete(healthWallDoctors)
-      .where(
-        and(
-          eq(healthWallDoctors.patientUserId, patientUserId),
-          eq(healthWallDoctors.doctorUserId, doctorUserId)
-        )
-      )
-      .returning();
-    return result.length > 0;
-  }
-
-  async isHealthWallDoctorConnected(patientUserId: string, doctorUserId: string): Promise<boolean> {
-    const [connection] = await db
-      .select()
-      .from(healthWallDoctors)
-      .where(
-        and(
-          eq(healthWallDoctors.patientUserId, patientUserId),
-          eq(healthWallDoctors.doctorUserId, doctorUserId)
-        )
-      );
-    return !!connection;
-  }
-
-  async updateDoctorLastVisit(patientUserId: string, doctorUserId: string): Promise<void> {
-    await db
-      .update(healthWallDoctors)
-      .set({ lastVisitedAt: new Date() })
-      .where(
-        and(
-          eq(healthWallDoctors.patientUserId, patientUserId),
-          eq(healthWallDoctors.doctorUserId, doctorUserId)
-        )
-      );
-  }
-
-  async getDoctorLastVisit(patientUserId: string, doctorUserId: string): Promise<Date | null> {
-    const [connection] = await db
-      .select({ lastVisitedAt: healthWallDoctors.lastVisitedAt })
-      .from(healthWallDoctors)
-      .where(
-        and(
-          eq(healthWallDoctors.patientUserId, patientUserId),
-          eq(healthWallDoctors.doctorUserId, doctorUserId)
-        )
-      );
-    return connection?.lastVisitedAt || null;
-  }
-
-  async updatePatientLastVisit(patientUserId: string): Promise<void> {
-    await db
-      .update(healthWallDoctors)
-      .set({ patientLastVisitedAt: new Date() })
-      .where(eq(healthWallDoctors.patientUserId, patientUserId));
-  }
-
-  async getPatientLastVisit(patientUserId: string): Promise<Date | null> {
-    const [connection] = await db
-      .select({ patientLastVisitedAt: healthWallDoctors.patientLastVisitedAt })
-      .from(healthWallDoctors)
-      .where(eq(healthWallDoctors.patientUserId, patientUserId))
-      .orderBy(healthWallDoctors.patientLastVisitedAt)
-      .limit(1);
-    return connection?.patientLastVisitedAt || null;
-  }
-
   async createInvite(invite: InsertInvite): Promise<Invite> {
     const [created] = await db
       .insert(invites)
@@ -1156,13 +810,19 @@ export class DatabaseStorage implements IStorage {
     return invite;
   }
 
-  async markInviteAccepted(inviteId: string, acceptedUserId: string, acceptedEmail?: string): Promise<Invite> {
+  async markInviteAccepted(
+    inviteId: string,
+    acceptedUserId: string,
+    acceptedEmail?: string,
+    conversationId?: string
+  ): Promise<Invite> {
     const [updated] = await db
       .update(invites)
       .set({
         email: acceptedEmail ?? undefined,
         status: "accepted",
         acceptedUserId,
+        conversationId: conversationId ?? undefined,
         acceptedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1398,22 +1058,6 @@ export class DatabaseStorage implements IStorage {
     const lastSeenAt = await this.getConversationParticipantLastSeenAt(conversationId, userId);
     if (!lastSeenAt) return false;
     return lastSeenAt.getTime() >= messageCreatedAt.getTime();
-  }
-
-  async isHealthWallMessageReadByUser(
-    patientUserId: string,
-    userId: string,
-    message: { authorUserId: string; createdAt: Date }
-  ): Promise<boolean> {
-    const createdMs = message.createdAt.getTime();
-    if (userId === patientUserId) {
-      if (message.authorUserId === patientUserId) return true;
-      const patientLastVisit = await this.getPatientLastVisit(patientUserId);
-      return patientLastVisit != null && patientLastVisit.getTime() >= createdMs;
-    }
-    if (message.authorUserId !== patientUserId) return true;
-    const doctorLastVisit = await this.getDoctorLastVisit(patientUserId, userId);
-    return doctorLastVisit != null && doctorLastVisit.getTime() >= createdMs;
   }
 
   async getConversationMessages(conversationId: string, limit: number = 100): Promise<ConversationMessage[]> {
@@ -1933,7 +1577,9 @@ export class DatabaseStorage implements IStorage {
     const rows = await Promise.all(
       adminUsers.map(async (user) => {
         const conversationId = await this.getDirectConversationBetween(currentUserId, user.id);
-        const lastVisitedAt = await this.getDoctorLastVisit(currentUserId, user.id);
+        const lastVisitedAt = conversationId
+          ? await this.getConversationParticipantLastSeenAt(conversationId, currentUserId)
+          : null;
         return { user, conversationId, lastVisitedAt };
       })
     );
@@ -2088,9 +1734,79 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(pushSubscriptions.userId, userIds));
   }
 
-  async canAccessHealthWall(userId: string, patientUserId: string): Promise<boolean> {
-    if (userId === patientUserId) return true;
-    return this.isHealthWallDoctorConnected(patientUserId, userId);
+  async getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]> {
+    const parts = await db
+      .select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, userId));
+    const convIds = parts.map((p) => p.conversationId);
+    if (convIds.length === 0) return [];
+
+    const convRows = await db
+      .select()
+      .from(conversations)
+      .where(and(inArray(conversations.id, convIds), eq(conversations.type, "patient")));
+
+    const currentUser = await this.getUser(userId);
+    const isDoctor = !!currentUser?.isAdmin;
+
+    const items: PatientConversationListItem[] = [];
+    for (const conv of convRows) {
+      const participants = await this.getConversationParticipants(conv.id);
+      const other = participants.find((p) => p.userId !== userId);
+      const lastSeenAt = await this.getConversationParticipantLastSeenAt(conv.id, userId);
+
+      const unreadConditions = [
+        eq(conversationMessages.conversationId, conv.id),
+        ne(conversationMessages.authorUserId, userId),
+        sql`${conversationMessages.deletedAt} IS NULL`,
+      ];
+      if (lastSeenAt) {
+        unreadConditions.push(gt(conversationMessages.createdAt, lastSeenAt));
+      }
+      const [unreadRow] = await db
+        .select({ c: count() })
+        .from(conversationMessages)
+        .where(and(...unreadConditions));
+
+      let avatarUrl: string | null = conv.avatarUrl ?? null;
+      let otherParticipantId: string | undefined;
+      let otherParticipantName: string | undefined;
+
+      if (isDoctor) {
+        const patientUser = conv.patientUserId ? await this.getUser(conv.patientUserId) : undefined;
+        avatarUrl = patientUser?.profileImageUrl ?? null;
+        otherParticipantName = conv.name ?? undefined;
+      } else if (other?.user) {
+        otherParticipantId = other.userId;
+        avatarUrl = other.user.profileImageUrl ?? null;
+        otherParticipantName =
+          [other.user.firstName, other.user.lastName].filter(Boolean).join(" ").trim() ||
+          other.user.email ||
+          undefined;
+      }
+
+      items.push({
+        conversationId: conv.id,
+        name: conv.name,
+        patientUserId: conv.patientUserId,
+        avatarUrl,
+        lastMessageAt: conv.lastMessageAt,
+        lastMessagePreview: conv.lastMessagePreview,
+        unreadCount: Number(unreadRow?.c ?? 0),
+        otherParticipantId,
+        otherParticipantName: isDoctor ? conv.name ?? otherParticipantName : otherParticipantName,
+      });
+    }
+
+    items.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+
+    return items;
   }
 }
 

@@ -14,7 +14,7 @@ export default function Landing() {
         setLocation("/messenger");
         return;
       }
-      setLocation("/health-wall");
+      setLocation("/messenger");
     }
   }, [isLoading, isAuthenticated, isAdmin, setLocation]);
 

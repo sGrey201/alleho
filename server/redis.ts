@@ -4,8 +4,6 @@ import { broadcastDoctorChatsUpdated } from "./wsBroadcast";
 const REDIS_URL =
   process.env.REDIS_URL ??
   (process.env.REDIS_HOST ? `redis://${process.env.REDIS_HOST}:6379` : undefined);
-const HEALTH_WALL_RECENT_PREFIX = "health-wall:recent:";
-const HEALTH_WALL_CHANNEL_PREFIX = "health-wall:channel:";
 const CONVERSATION_RECENT_PREFIX = "conversation:recent:";
 const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
 const DOCTOR_EVENTS_CHANNEL_PREFIX = "doctor:events:";
@@ -23,66 +21,6 @@ export type MessageReactionSummary = {
   emoji: string;
   count: number;
   reactedByMe: boolean;
-};
-
-export type HealthWallMessageWithAuthor = {
-  id: string;
-  patientUserId: string;
-  authorUserId: string;
-  messageType: string;
-  content?: string | null;
-  imageUrl?: string | null;
-  createdAt: string;
-  editedAt?: string | null;
-  deletedAt?: string | null;
-  pinnedAt?: string | null;
-  pinnedByUserId?: string | null;
-  replyToMessageId?: string | null;
-  forwardedFromMessageId?: string | null;
-  forwardedFromUserId?: string | null;
-  replyTo?: {
-    id: string;
-    authorUserId: string;
-    content?: string | null;
-    imageUrl?: string | null;
-    deletedAt?: string | null;
-    author?: MessageAuthor | null;
-  } | null;
-  forwardedFromAuthor?: MessageAuthor | null;
-  reactions?: MessageReactionSummary[];
-  author: MessageAuthor;
-};
-
-export type HealthWallMessageEditedPayload = {
-  patientUserId: string;
-  messageId: string;
-  content: string | null;
-  editedAt: string;
-};
-
-export type HealthWallMessageDeletedPayload = {
-  patientUserId: string;
-  messageId: string;
-  deletedAt: string;
-};
-
-export type HealthWallMessagePinnedPayload = {
-  patientUserId: string;
-  messageId: string;
-  pinnedAt: string;
-  pinnedByUserId: string;
-};
-
-export type HealthWallMessageUnpinnedPayload = {
-  patientUserId: string;
-  messageId: string;
-};
-
-export type HealthWallSeenPayload = {
-  patientUserId: string;
-  userId: string;
-  lastVisitedAt: string;
-  role: "doctor" | "patient";
 };
 
 let client: Redis | null = null;
@@ -106,148 +44,21 @@ export function getRedisSubscriber(): Redis | null {
   return subscriber;
 }
 
-export async function getHealthWallRecentMessages(patientUserId: string): Promise<HealthWallMessageWithAuthor[]> {
-  const c = getClient();
-  if (!c) return [];
-  try {
-    const raw = await c.lrange(HEALTH_WALL_RECENT_PREFIX + patientUserId, 0, -1);
-    const list = raw.map((s) => {
-      try {
-        return JSON.parse(s) as HealthWallMessageWithAuthor;
-      } catch {
-        return null;
-      }
-    }).filter(Boolean) as HealthWallMessageWithAuthor[];
-    return list;
-  } catch (err) {
-    console.error("[Redis] getHealthWallRecentMessages error:", err);
-    return [];
-  }
-}
-
-export async function pushHealthWallRecentMessage(patientUserId: string, message: HealthWallMessageWithAuthor): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    const key = HEALTH_WALL_RECENT_PREFIX + patientUserId;
-    const payload = JSON.stringify(message);
-    await c.lpush(key, payload);
-    await c.ltrim(key, 0, RECENT_LIMIT - 1);
-  } catch (err) {
-    console.error("[Redis] pushHealthWallRecentMessage error:", err);
-  }
-}
-
-export async function publishHealthWallMessage(patientUserId: string, message: HealthWallMessageWithAuthor): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
-    await c.publish(channel, JSON.stringify({ type: "health_wall_message", payload: message }));
-  } catch (err) {
-    console.error("[Redis] publishHealthWallMessage error:", err);
-  }
-}
-
-export async function invalidateHealthWallRecent(patientUserId: string): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.del(HEALTH_WALL_RECENT_PREFIX + patientUserId);
-  } catch (err) {
-    console.error("[Redis] invalidateHealthWallRecent error:", err);
-  }
-}
-
-async function publishHealthWallEvent(patientUserId: string, type: string, payload: unknown): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(HEALTH_WALL_CHANNEL_PREFIX + patientUserId, JSON.stringify({ type, payload }));
-  } catch (err) {
-    console.error(`[Redis] ${type} error:`, err);
-  }
-}
-
-export async function publishHealthWallMessageEdited(
-  patientUserId: string,
-  payload: HealthWallMessageEditedPayload
-): Promise<void> {
-  await publishHealthWallEvent(patientUserId, "health_wall_message_edited", payload);
-}
-
-export async function publishHealthWallMessageDeleted(
-  patientUserId: string,
-  payload: HealthWallMessageDeletedPayload
-): Promise<void> {
-  await publishHealthWallEvent(patientUserId, "health_wall_message_deleted", payload);
-}
-
-export async function publishHealthWallMessagePinned(
-  patientUserId: string,
-  payload: HealthWallMessagePinnedPayload
-): Promise<void> {
-  await publishHealthWallEvent(patientUserId, "health_wall_message_pinned", payload);
-}
-
-export async function publishHealthWallMessageUnpinned(
-  patientUserId: string,
-  payload: HealthWallMessageUnpinnedPayload
-): Promise<void> {
-  await publishHealthWallEvent(patientUserId, "health_wall_message_unpinned", payload);
-}
-
-export async function publishHealthWallSeen(
-  patientUserId: string,
-  payload: HealthWallSeenPayload
-): Promise<void> {
-  await publishHealthWallEvent(patientUserId, "health_wall_seen", payload);
-}
-
-export async function backfillHealthWallRecent(patientUserId: string, messages: HealthWallMessageWithAuthor[]): Promise<void> {
-  const c = getClient();
-  if (!c || messages.length === 0) return;
-  try {
-    const key = HEALTH_WALL_RECENT_PREFIX + patientUserId;
-    const toPush = messages.slice(-RECENT_LIMIT).map((m) => JSON.stringify(m));
-    if (toPush.length === 0) return;
-    await c.del(key);
-    if (toPush.length > 0) {
-      await c.rpush(key, ...toPush);
-    }
-  } catch (err) {
-    console.error("[Redis] backfillHealthWallRecent error:", err);
-  }
-}
-
 export function isRedisAvailable(): boolean {
   return !!REDIS_URL;
 }
 
-export type DoctorHealthWallChatUpdate = {
-  patientUserId: string;
-  message: HealthWallMessageWithAuthor;
-  lastMessageAt: string;
-  lastMessagePreview: string | null;
-  unreadCount: number;
-};
-
-export async function publishDoctorChatsUpdated(
-  doctorUserId: string,
-  healthWall?: DoctorHealthWallChatUpdate
-): Promise<void> {
+export async function publishDoctorChatsUpdated(doctorUserId: string): Promise<void> {
   const envelope = {
     type: "doctor_chats_updated" as const,
     doctorUserId,
     timestamp: new Date().toISOString(),
-    healthWall: healthWall ?? undefined,
   };
   const serialized = JSON.stringify(envelope);
   const clientWire = JSON.stringify({
     type: "doctor_chats_updated",
     payload: {
       timestamp: envelope.timestamp,
-      healthWall: envelope.healthWall,
     },
   });
   const c = getClient();

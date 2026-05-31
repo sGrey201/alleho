@@ -6,7 +6,7 @@ import {
   type DoctorChatsUpdatedPayload,
 } from "@/lib/doctorChatsRealtime";
 
-/** Personal channel for doctors: list updates + health wall message payloads. */
+/** Personal channel for doctors: chat list updates. */
 export function useDoctorChatsWs(enabled: boolean): void {
   const { isAuthenticated, isAdmin, user } = useAuth();
 

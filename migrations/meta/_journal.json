@@ -113,6 +113,13 @@
       "when": 1774030000000,
       "tag": "0015_message_delivery_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1774040000000,
+      "tag": "0016_patient_conversations_drop_health_wall",
+      "breakpoints": true
     }
   ]
 }

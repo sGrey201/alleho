@@ -42,9 +42,6 @@ export const users = pgTable("users", {
   resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   isAdmin: boolean("is_admin").default(false).notNull(),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
-  /** Denormalized from latest health_wall_messages for this patient’s wall */
-  healthWallLastMessageAt: timestamp("health_wall_last_message_at"),
-  healthWallLastMessagePreview: text("health_wall_last_message_preview"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -68,6 +65,7 @@ export const invites = pgTable("invites", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   acceptedUserId: varchar("accepted_user_id").references(() => users.id, { onDelete: "set null" }),
+  conversationId: varchar("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
   expiresAt: timestamp("expires_at").notNull(),
   acceptedAt: timestamp("accepted_at"),
   revokedAt: timestamp("revoked_at"),
@@ -347,11 +345,7 @@ export const questionnaireDataSchema = z.object({
 export type QuestionnaireData = z.infer<typeof questionnaireDataSchema>;
 export type UserQuestionnaire = typeof userQuestionnaires.$inferSelect;
 
-// Health wall message type enum
-export const healthWallMessageTypeEnum = z.enum(['message', 'prescription', 'followup']);
-export type HealthWallMessageType = z.infer<typeof healthWallMessageTypeEnum>;
-
-/** Messenger conversation messages — includes `poll`; health wall does not use `poll`. */
+/** Messenger conversation messages — includes clinical types and polls. */
 export const conversationMessageTypeEnum = z.enum([
   'message',
   'prescription',
@@ -368,106 +362,8 @@ export const pollPayloadSchema = z.object({
 });
 export type PollPayload = z.infer<typeof pollPayloadSchema>;
 
-// Health wall messages table (chat between doctor and patient)
-export const healthWallMessages = pgTable("health_wall_messages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  patientUserId: varchar("patient_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  authorUserId: varchar("author_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  messageType: varchar("message_type", { length: 50 }).notNull().default('message'),
-  content: text("content"),
-  imageUrl: text("image_url"),
-  replyToMessageId: varchar("reply_to_message_id"),
-  forwardedFromMessageId: varchar("forwarded_from_message_id"),
-  forwardedFromUserId: varchar("forwarded_from_user_id"),
-  editedAt: timestamp("edited_at"),
-  deletedAt: timestamp("deleted_at"),
-  pinnedAt: timestamp("pinned_at"),
-  pinnedByUserId: varchar("pinned_by_user_id"),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("health_wall_patient_idx").on(table.patientUserId),
-  index("health_wall_created_idx").on(table.createdAt),
-  index("health_wall_messages_pinned_idx").on(table.patientUserId, table.pinnedAt),
-]);
-
-export const insertHealthWallMessageSchema = createInsertSchema(healthWallMessages).omit({
-  id: true,
-  createdAt: true,
-  editedAt: true,
-  deletedAt: true,
-  pinnedAt: true,
-  pinnedByUserId: true,
-}).extend({
-  messageType: healthWallMessageTypeEnum.default('message'),
-});
-
-export type InsertHealthWallMessage = z.infer<typeof insertHealthWallMessageSchema>;
-export type HealthWallMessage = typeof healthWallMessages.$inferSelect;
-
-export const healthWallMessageReactions = pgTable("health_wall_message_reactions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  messageId: varchar("message_id").notNull().references(() => healthWallMessages.id, { onDelete: "cascade" }),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  emoji: varchar("emoji", { length: 16 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("health_wall_message_reactions_message_idx").on(table.messageId),
-  index("health_wall_message_reactions_user_idx").on(table.userId),
-  sql`CONSTRAINT health_wall_message_reactions_unique UNIQUE (message_id, user_id, emoji)`,
-]);
-
-export const insertHealthWallMessageReactionSchema = createInsertSchema(healthWallMessageReactions).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type HealthWallMessageReaction = typeof healthWallMessageReactions.$inferSelect;
-export type InsertHealthWallMessageReaction = z.infer<typeof insertHealthWallMessageReactionSchema>;
-
-export const healthWallMessageDeliveries = pgTable(
-  "health_wall_message_deliveries",
-  {
-    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-    messageId: varchar("message_id")
-      .notNull()
-      .references(() => healthWallMessages.id, { onDelete: "cascade" }),
-    recipientUserId: varchar("recipient_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    deliveredAt: timestamp("delivered_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("health_wall_message_deliveries_message_idx").on(table.messageId),
-    sql`CONSTRAINT health_wall_message_deliveries_unique UNIQUE (message_id, recipient_user_id)`,
-  ]
-);
-
-// Health wall doctors table (doctors connected to patient's health wall)
-export const healthWallDoctors = pgTable("health_wall_doctors", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  patientUserId: varchar("patient_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  doctorUserId: varchar("doctor_user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp("created_at").defaultNow(),
-  lastVisitedAt: timestamp("last_visited_at"),
-  patientLastVisitedAt: timestamp("patient_last_visited_at"),
-}, (table) => [
-  index("health_wall_doctors_patient_idx").on(table.patientUserId),
-  index("health_wall_doctors_doctor_idx").on(table.doctorUserId),
-  sql`CONSTRAINT health_wall_doctors_unique UNIQUE (patient_user_id, doctor_user_id)`,
-]);
-
-export const insertHealthWallDoctorSchema = createInsertSchema(healthWallDoctors).omit({
-  id: true,
-  createdAt: true,
-  lastVisitedAt: true,
-  patientLastVisitedAt: true,
-});
-
-export type InsertHealthWallDoctor = z.infer<typeof insertHealthWallDoctorSchema>;
-export type HealthWallDoctor = typeof healthWallDoctors.$inferSelect;
-
-// Messenger: conversation types (doctor-to-doctor, groups, consiliums, channels)
-export const conversationTypeEnum = z.enum(["direct", "group", "consilium", "channel"]);
+// Messenger: conversation types (doctor-to-doctor, patient chats, groups, consiliums, channels)
+export const conversationTypeEnum = z.enum(["direct", "patient", "group", "consilium", "channel"]);
 export type ConversationType = z.infer<typeof conversationTypeEnum>;
 
 export const participantRoleEnum = z.enum(["member", "admin", "owner"]);

@@ -15,7 +15,6 @@ import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSch
 import { truncateHtml } from "./utils/htmlTruncate";
 import { invalidateCache, invalidateTagCache } from "./prerender";
 import {
-  insertHealthWallMessageSchema,
   insertConversationSchema,
   insertConversationMessageSchema,
   insertConversationMessageCommentSchema,
@@ -23,19 +22,9 @@ import {
   type QuestionnaireData as QData,
   type User,
   type ConversationMessage,
-  type HealthWallMessage,
 } from "@shared/schema";
-import { notifyDoctorsHealthWallMessage } from "./doctorChatsNotify";
 import {
-  pushHealthWallRecentMessage,
-  publishHealthWallMessage,
-  publishHealthWallMessageEdited,
-  publishHealthWallMessageDeleted,
-  publishHealthWallMessagePinned,
-  publishHealthWallMessageUnpinned,
   publishDoctorChatsUpdated,
-  backfillHealthWallRecent,
-  type HealthWallMessageWithAuthor,
   type MessageAuthor,
   pushConversationRecentMessage,
   publishConversationMessage,
@@ -54,11 +43,11 @@ import {
   type ConversationCommentWithAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
-import { notifyConversationSeen, notifyHealthWallSeen } from "./seenNotify";
+import { notifyConversationSeen } from "./seenNotify";
+import { notifyPatientConversationActivity } from "./doctorChatsNotify";
 import {
   getVapidPublicKey,
   isPushConfigured,
-  notifyHealthWallNewMessage,
   notifyConversationNewMessage,
 } from "./push";
 
@@ -311,8 +300,10 @@ ${allUrls.map(url => `  <url>
       if (email) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) return res.status(400).json({ message: "Invalid email" });
-        const existingUser = await storage.getUserByEmail(email);
-        if (existingUser) return res.status(409).json({ message: "user_exists" });
+        if (inviteType === "homeopath") {
+          const existingUser = await storage.getUserByEmail(email);
+          if (existingUser) return res.status(409).json({ message: "user_exists" });
+        }
       }
 
       const token = crypto.randomBytes(32).toString("hex");
@@ -380,6 +371,8 @@ ${allUrls.map(url => `  <url>
     try {
       const email = String(req.body?.email || "").trim().toLowerCase();
       const token = String(req.body?.token || "").trim();
+      const firstName = String(req.body?.firstName || "").trim();
+      const lastName = String(req.body?.lastName || "").trim();
       if (!email || !token) return res.status(400).json({ message: "Email and token are required" });
 
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -429,17 +422,29 @@ ${allUrls.map(url => `  <url>
         return res.status(500).json({ message: "Failed to create or resolve user" });
       }
 
+      let conversationId: string | undefined;
       if (invite.inviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true });
       } else {
-        await storage.addHealthWallDoctor(targetUser.id, invite.invitedByUserId);
-        const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: targetUser.id });
+        if (!firstName || !lastName) {
+          return res.status(400).json({ message: "first_name_and_last_name_required" });
+        }
+        const chatName = `${lastName} ${firstName}`.trim();
+        if (!canJoinAsExistingUser) {
+          await storage.updateUserProfile(targetUser.id, { firstName, lastName });
+        }
+        const conv = await storage.createConversation({
+          type: "patient",
+          name: chatName,
+          patientUserId: targetUser.id,
+        });
         await storage.addConversationParticipant(conv.id, invite.invitedByUserId, "owner");
         await storage.addConversationParticipant(conv.id, targetUser.id, "member");
+        conversationId = conv.id;
         await publishDoctorChatsUpdated(invite.invitedByUserId);
       }
 
-      await storage.markInviteAccepted(invite.id, targetUser.id, email);
+      await storage.markInviteAccepted(invite.id, targetUser.id, email, conversationId);
       if (password) {
         await sendInviteAccessEmail(email, password);
       }
@@ -452,6 +457,7 @@ ${allUrls.map(url => `  <url>
         email: targetUser.email,
         isAdmin: invite.inviteType === "homeopath" ? true : targetUser.isAdmin,
         joinedAsExistingUser: canJoinAsExistingUser,
+        conversationId: conversationId ?? null,
       });
     } catch (error) {
       console.error("Error accepting invite:", error);
@@ -1218,14 +1224,15 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  /** Doctor may edit if linked on Health Wall (invite / health_wall_doctors) or listed in sharedWithEmails. */
+  /** Doctor may edit if they share a patient conversation or questionnaire is listed in sharedWithEmails. */
   async function canDoctorAccessPatientQuestionnaire(
     doctorUserId: string,
     doctorEmail: string,
     patientId: string,
     existingData: QuestionnaireData | undefined
   ): Promise<boolean> {
-    if (await storage.isHealthWallDoctorConnected(patientId, doctorUserId)) {
+    const patientChats = await storage.getPatientConversationsForUser(doctorUserId);
+    if (patientChats.some((c) => c.patientUserId === patientId)) {
       return true;
     }
     return !!existingData?.sharedWithEmails?.includes(doctorEmail);
@@ -1324,474 +1331,48 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Get patients who connected this doctor to their Health Wall
+  // Get patients for this doctor (legacy admin list — one row per patient chat)
   app.get('/api/my-patients', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const doctorUserId = await getCurrentUserId(req);
       if (!doctorUserId) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
-      // Get patients from health_wall_doctors table
-      const connectedPatients = await storage.getHealthWallPatients(doctorUserId);
-      
-      const result = await Promise.all(connectedPatients.map(async ({ connection, patient }) => {
-        // Get questionnaire for updatedAt only
-        const questionnaire = await storage.getQuestionnaire(patient.id);
-        const stats = await storage.getPatientHealthWallStats(patient.id, doctorUserId);
-        
-        // Use patient profile data, not questionnaire data
-        return {
-          id: connection.id,
-          userId: patient.id,
-          patientName:
-            [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() || patient.email || "",
-          birthMonth: patient.birthMonth,
-          birthYear: patient.birthYear,
-          gender: patient.gender,
-          email: patient.email,
-          profileImageUrl: patient.profileImageUrl ?? null,
-          updatedAt: questionnaire?.updatedAt || connection.createdAt,
-          unreadCount: stats.unreadCount,
-          lastMessageAt: stats.lastMessageAt,
-        };
-      }));
-      
+
+      const patientChats = await storage.getPatientConversationsForUser(doctorUserId);
+      const result = await Promise.all(
+        patientChats.map(async (chat) => {
+          const patientId = chat.patientUserId;
+          const patient = patientId ? await storage.getUser(patientId) : undefined;
+          const questionnaire = patientId ? await storage.getQuestionnaire(patientId) : undefined;
+          return {
+            id: chat.conversationId,
+            userId: patientId,
+            conversationId: chat.conversationId,
+            patientName: chat.name ?? patient?.email ?? "",
+            birthMonth: patient?.birthMonth,
+            birthYear: patient?.birthYear,
+            gender: patient?.gender,
+            email: patient?.email,
+            profileImageUrl: chat.avatarUrl ?? patient?.profileImageUrl ?? null,
+            updatedAt: questionnaire?.updatedAt ?? null,
+            unreadCount: chat.unreadCount,
+            lastMessageAt: chat.lastMessageAt,
+          };
+        })
+      );
+
       result.sort((a, b) => {
         if (!a.lastMessageAt && !b.lastMessageAt) return 0;
         if (!a.lastMessageAt) return 1;
         if (!b.lastMessageAt) return -1;
         return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
       });
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching my patients:", error);
       res.status(500).json({ message: "Failed to fetch patients" });
-    }
-  });
-
-  // Health Wall Routes
-
-  // Check if current user can access a patient's health wall
-  async function canAccessHealthWall(req: any, patientUserId: string): Promise<boolean> {
-    const currentUserId = await getCurrentUserId(req);
-    if (!currentUserId) return false;
-    
-    // User can access their own health wall
-    if (currentUserId === patientUserId) return true;
-    
-    // Doctors can access if the patient connected them to their health wall
-    const isConnected = await storage.isHealthWallDoctorConnected(patientUserId, currentUserId);
-    return isConnected;
-  }
-
-  const HEALTH_WALL_EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
-
-  function userToMessageAuthor(u: User | undefined | null): MessageAuthor {
-    return {
-      id: u?.id ?? "",
-      email: u?.email ?? null,
-      firstName: u?.firstName ?? null,
-      lastName: u?.lastName ?? null,
-      isAdmin: u?.isAdmin ?? null,
-    };
-  }
-
-  async function enrichHealthWallMessages(
-    messages: HealthWallMessage[],
-    currentUserId: string,
-    patientUserId: string
-  ): Promise<HealthWallMessageWithAuthor[]> {
-    const userIds = new Set<string>();
-    messages.forEach((m) => {
-      userIds.add(m.authorUserId);
-      if (m.forwardedFromUserId) userIds.add(m.forwardedFromUserId);
-      if (m.pinnedByUserId) userIds.add(m.pinnedByUserId);
-    });
-
-    const replyIds = Array.from(
-      new Set(
-        messages
-          .map((m) => m.replyToMessageId)
-          .filter((id): id is string => typeof id === "string" && id.length > 0)
-      )
-    );
-    const replyTargets =
-      replyIds.length > 0
-        ? await Promise.all(replyIds.map((rid) => storage.getHealthWallMessageById(rid)))
-        : [];
-    const replyMap = new Map<string, HealthWallMessage>();
-    replyTargets.forEach((reply) => {
-      if (reply) {
-        replyMap.set(reply.id, reply);
-        userIds.add(reply.authorUserId);
-      }
-    });
-
-    const users = userIds.size > 0 ? await Promise.all(Array.from(userIds).map((id) => storage.getUser(id))) : [];
-    const userMap = new Map<string, User>();
-    users.forEach((u) => {
-      if (u) userMap.set(u.id, u);
-    });
-    const reactionMap = await storage.getHealthWallMessageReactionSummaries(
-      messages.map((m) => m.id),
-      currentUserId
-    );
-    return messages.map((m) => {
-      const reply = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
-      return {
-        id: m.id,
-        patientUserId: m.patientUserId,
-        authorUserId: m.authorUserId,
-        messageType: m.messageType,
-        content: m.content ?? null,
-        imageUrl: m.imageUrl ?? null,
-        createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
-        editedAt: m.editedAt ? (m.editedAt instanceof Date ? m.editedAt.toISOString() : String(m.editedAt)) : null,
-        deletedAt: m.deletedAt ? (m.deletedAt instanceof Date ? m.deletedAt.toISOString() : String(m.deletedAt)) : null,
-        pinnedAt: m.pinnedAt ? (m.pinnedAt instanceof Date ? m.pinnedAt.toISOString() : String(m.pinnedAt)) : null,
-        pinnedByUserId: m.pinnedByUserId ?? null,
-        replyToMessageId: m.replyToMessageId ?? null,
-        forwardedFromMessageId: m.forwardedFromMessageId ?? null,
-        forwardedFromUserId: m.forwardedFromUserId ?? null,
-        replyTo: reply
-          ? {
-              id: reply.id,
-              authorUserId: reply.authorUserId,
-              content: reply.content ?? null,
-              imageUrl: reply.imageUrl ?? null,
-              deletedAt: reply.deletedAt
-                ? reply.deletedAt instanceof Date
-                  ? reply.deletedAt.toISOString()
-                  : String(reply.deletedAt)
-                : null,
-              author: userToMessageAuthor(userMap.get(reply.authorUserId) ?? null),
-            }
-          : null,
-        forwardedFromAuthor: m.forwardedFromUserId
-          ? userToMessageAuthor(userMap.get(m.forwardedFromUserId) ?? null)
-          : null,
-        reactions: reactionMap.get(m.id) ?? [],
-        author: userToMessageAuthor(userMap.get(m.authorUserId) ?? null),
-      };
-    });
-  }
-
-  const RECENT_MESSAGES_LIMIT = 100;
-
-  async function syncHealthWallRecentCache(
-    patientUserId: string,
-    currentUserId: string
-  ): Promise<void> {
-    const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
-    const enriched = await enrichHealthWallMessages(messages, currentUserId, patientUserId);
-    await backfillHealthWallRecent(patientUserId, enriched);
-  }
-
-  app.post("/api/health-wall/:patientUserId/seen", isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!(await canAccessHealthWall(req, patientUserId))) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      await notifyHealthWallSeen(patientUserId, currentUserId);
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Error marking health wall seen:", error);
-      res.status(500).json({ message: "Failed to mark seen" });
-    }
-  });
-
-  // Get health wall messages for a patient
-  app.get('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      
-      if (currentUserId) {
-        await notifyHealthWallSeen(patientUserId, currentUserId);
-      }
-
-      const messages = await storage.getHealthWallMessagesRecent(patientUserId, RECENT_MESSAGES_LIMIT);
-      const messagesWithAuthors = await enrichHealthWallMessages(
-        messages,
-        currentUserId ?? "",
-        patientUserId
-      );
-      res.json(messagesWithAuthors);
-      backfillHealthWallRecent(patientUserId, messagesWithAuthors).catch((err) =>
-        console.error("Redis backfill error:", err)
-      );
-    } catch (error) {
-      console.error("Error fetching health wall messages:", error);
-      res.status(500).json({ message: "Failed to fetch messages" });
-    }
-  });
-
-  app.post('/api/health-wall/:patientUserId/read', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      await notifyHealthWallSeen(patientUserId, currentUserId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error marking health wall as read:", error);
-      res.status(500).json({ message: "Failed to mark as read" });
-    }
-  });
-
-  // Post a new message to health wall
-  app.post('/api/health-wall/:patientUserId', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      
-      if (!currentUserId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      
-      // Only admins (doctors) can post prescriptions
-      const currentUser = await storage.getUser(currentUserId);
-      const messageType = req.body.messageType || 'message';
-      if (messageType === 'prescription' && !currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Only doctors can post prescriptions" });
-      }
-      
-      let content: string | null = req.body.content ?? null;
-      let imageUrl: string | null = req.body.imageUrl ?? null;
-      let forwardedFromMessageId: string | null = null;
-      let forwardedFromUserId: string | null = null;
-
-      if (req.body.forwardSource?.patientUserId && req.body.forwardSource?.messageId) {
-        const sourcePatientUserId = String(req.body.forwardSource.patientUserId);
-        if (!await canAccessHealthWall(req, sourcePatientUserId)) {
-          return res.status(403).json({ message: "Cannot forward from this chat" });
-        }
-        const source = await storage.getHealthWallMessageById(String(req.body.forwardSource.messageId));
-        if (!source || source.patientUserId !== sourcePatientUserId || source.deletedAt) {
-          return res.status(404).json({ message: "Source message not found" });
-        }
-        content = source.content ?? null;
-        imageUrl = source.imageUrl ?? null;
-        forwardedFromMessageId = source.id;
-        forwardedFromUserId = source.forwardedFromUserId ?? source.authorUserId;
-      }
-
-      let replyToMessageId: string | null = null;
-      if (req.body.replyToMessageId) {
-        const reply = await storage.getHealthWallMessageById(String(req.body.replyToMessageId));
-        if (!reply || reply.patientUserId !== patientUserId) {
-          return res.status(400).json({ message: "Invalid reply target" });
-        }
-        replyToMessageId = reply.id;
-      }
-
-      const validatedData = insertHealthWallMessageSchema.parse({
-        patientUserId,
-        authorUserId: currentUserId,
-        messageType,
-        content,
-        imageUrl,
-        replyToMessageId,
-        forwardedFromMessageId,
-        forwardedFromUserId,
-      });
-      
-      const message = await storage.createHealthWallMessage(validatedData);
-      const [messageWithAuthor] = await enrichHealthWallMessages(
-        [message],
-        currentUserId,
-        patientUserId
-      );
-      await pushHealthWallRecentMessage(patientUserId, messageWithAuthor);
-      await publishHealthWallMessage(patientUserId, messageWithAuthor);
-      void notifyDoctorsHealthWallMessage(patientUserId, messageWithAuthor, currentUserId).catch((err) =>
-        console.error("[DoctorChats] notify doctors error:", err)
-      );
-      void notifyHealthWallNewMessage(patientUserId, currentUserId, messageWithAuthor).catch((err) =>
-        console.error("[Push] health wall notify error:", err)
-      );
-      res.json(messageWithAuthor);
-    } catch (error) {
-      console.error("Error posting health wall message:", error);
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid message data" });
-      }
-      res.status(500).json({ message: "Failed to post message" });
-    }
-  });
-
-  app.patch('/api/health-wall/:patientUserId/messages/:messageId', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId, messageId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      const existing = await storage.getHealthWallMessageById(messageId);
-      if (!existing || existing.patientUserId !== patientUserId) {
-        return res.status(404).json({ message: "Message not found" });
-      }
-      if (existing.authorUserId !== currentUserId) {
-        return res.status(403).json({ message: "Only author can edit" });
-      }
-      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
-
-      const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
-      if (Date.now() - createdAt > HEALTH_WALL_EDIT_WINDOW_MS) {
-        return res.status(400).json({ message: "Edit window expired" });
-      }
-
-      const content = (req.body?.content ?? "").toString().trim();
-      if (!content) return res.status(400).json({ message: "Content required" });
-
-      const updated = await storage.editHealthWallMessage(messageId, content);
-      if (!updated) return res.status(404).json({ message: "Message not found" });
-      await syncHealthWallRecentCache(patientUserId, currentUserId);
-      await publishHealthWallMessageEdited(patientUserId, {
-        patientUserId,
-        messageId,
-        content: updated.content ?? null,
-        editedAt: (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString(),
-      });
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Error editing health wall message:", error);
-      res.status(500).json({ message: "Failed to edit message" });
-    }
-  });
-
-  app.delete('/api/health-wall/:patientUserId/messages/:messageId', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId, messageId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      const existing = await storage.getHealthWallMessageById(messageId);
-      if (!existing || existing.patientUserId !== patientUserId) {
-        return res.status(404).json({ message: "Message not found" });
-      }
-      if (existing.deletedAt) return res.json({ ok: true });
-      if (existing.authorUserId !== currentUserId) {
-        return res.status(403).json({ message: "Only author can delete" });
-      }
-
-      const updated = await storage.softDeleteHealthWallMessage(messageId);
-      if (!updated) return res.status(404).json({ message: "Message not found" });
-      await syncHealthWallRecentCache(patientUserId, currentUserId);
-      await publishHealthWallMessageDeleted(patientUserId, {
-        patientUserId,
-        messageId,
-        deletedAt: (updated.deletedAt instanceof Date ? updated.deletedAt : new Date()).toISOString(),
-      });
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Error deleting health wall message:", error);
-      res.status(500).json({ message: "Failed to delete message" });
-    }
-  });
-
-  app.post('/api/health-wall/:patientUserId/messages/:messageId/pin', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId, messageId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      const existing = await storage.getHealthWallMessageById(messageId);
-      if (!existing || existing.patientUserId !== patientUserId) {
-        return res.status(404).json({ message: "Message not found" });
-      }
-      if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
-      const updated = await storage.pinHealthWallMessage(messageId, currentUserId);
-      if (!updated) return res.status(404).json({ message: "Message not found" });
-      await syncHealthWallRecentCache(patientUserId, currentUserId);
-      await publishHealthWallMessagePinned(patientUserId, {
-        patientUserId,
-        messageId,
-        pinnedAt: (updated.pinnedAt instanceof Date ? updated.pinnedAt : new Date()).toISOString(),
-        pinnedByUserId: currentUserId,
-      });
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Error pinning health wall message:", error);
-      res.status(500).json({ message: "Failed to pin message" });
-    }
-  });
-
-  app.post('/api/health-wall/:patientUserId/messages/:messageId/unpin', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId, messageId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      const existing = await storage.getHealthWallMessageById(messageId);
-      if (!existing || existing.patientUserId !== patientUserId) {
-        return res.status(404).json({ message: "Message not found" });
-      }
-      const updated = await storage.unpinHealthWallMessage(messageId);
-      if (!updated) return res.status(404).json({ message: "Message not found" });
-      await syncHealthWallRecentCache(patientUserId, currentUserId);
-      await publishHealthWallMessageUnpinned(patientUserId, { patientUserId, messageId });
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Error unpinning health wall message:", error);
-      res.status(500).json({ message: "Failed to unpin message" });
-    }
-  });
-
-  app.post('/api/health-wall/:patientUserId/messages/:messageId/reactions', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId, messageId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      const existing = await storage.getHealthWallMessageById(messageId);
-      if (!existing || existing.patientUserId !== patientUserId) {
-        return res.status(404).json({ message: "Message not found" });
-      }
-      if (existing.deletedAt) {
-        return res.status(400).json({ message: "Message deleted" });
-      }
-      const emoji = String(req.body?.emoji ?? "").trim();
-      const allowed = new Set(["👍", "❤️", "🔥", "😂", "🙏", "😢"]);
-      if (!allowed.has(emoji)) {
-        return res.status(400).json({ message: "Unsupported reaction" });
-      }
-      await storage.toggleHealthWallMessageReaction(messageId, currentUserId, emoji);
-      const reactions = (await storage.getHealthWallMessageReactionSummaries([messageId], currentUserId)).get(messageId) ?? [];
-      await syncHealthWallRecentCache(patientUserId, currentUserId);
-      res.json({ messageId, reactions });
-    } catch (error) {
-      console.error("Error toggling health wall reaction:", error);
-      res.status(500).json({ message: "Failed to toggle reaction" });
     }
   });
 
@@ -1822,35 +1403,36 @@ ${allUrls.map(url => `  <url>
 
       if (folder === "personal") {
         if (!currentUser.isAdmin) {
-          const contacts = await storage.getMessengerPersonalContacts(currentUserId);
-          const items = contacts.map((contact) => {
-            const otherParticipantName =
-              [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
-            return {
-              source: "conversation" as const,
-              folder: "personal" as const,
-              type: "direct",
-              conversationId: contact.conversationId,
-              otherParticipantId: contact.userId,
-              otherParticipantName,
-              avatarUrl: contact.profileImageUrl ?? null,
-              lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
-              lastMessagePreview: contact.lastMessagePreview ?? null,
-              lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
-            };
-          });
+          const patientChats = await storage.getPatientConversationsForUser(currentUserId);
+          const items = patientChats.map((chat) => ({
+            source: "conversation" as const,
+            folder: "personal" as const,
+            type: "patient" as const,
+            conversationId: chat.conversationId,
+            name: chat.name ?? chat.otherParticipantName ?? undefined,
+            patientUserId: chat.patientUserId ?? undefined,
+            otherParticipantId: chat.otherParticipantId,
+            otherParticipantName: chat.otherParticipantName,
+            avatarUrl: chat.avatarUrl,
+            lastMessageAt: chat.lastMessageAt?.toISOString() ?? null,
+            lastMessagePreview: chat.lastMessagePreview ?? null,
+            unreadCount: chat.unreadCount,
+          }));
           items.sort((a, b) => {
             const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
             const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
             if (aTime !== bTime) return bTime - aTime;
-            return (a.otherParticipantName ?? "").localeCompare((b.otherParticipantName ?? ""), "ru");
+            return (a.name ?? a.otherParticipantName ?? "").localeCompare(
+              b.name ?? b.otherParticipantName ?? "",
+              "ru"
+            );
           });
           return res.json(paged(items));
         }
 
-        const [contacts, connectedPatients] = await Promise.all([
+        const [contacts, patientChats] = await Promise.all([
           storage.getMessengerPersonalContacts(currentUserId),
-          storage.getHealthWallPatients(currentUserId),
+          storage.getPatientConversationsForUser(currentUserId),
         ]);
         const doctorItems = contacts.map((contact) => {
           const otherParticipantName =
@@ -1868,32 +1450,33 @@ ${allUrls.map(url => `  <url>
             lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
           };
         });
-        const patientItems = await Promise.all(
-          connectedPatients.map(async ({ patient }) => {
-            const stats = await storage.getPatientHealthWallStats(patient.id, currentUserId);
-            const patientName = [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() || patient.email || "Patient";
-            return {
-              source: "health_wall" as const,
-              folder: "personal" as const,
-              chatKind: "patient" as const,
-              patientUserId: patient.id,
-              patientName,
-              patientEmail: patient.email,
-              avatarUrl: patient.profileImageUrl ?? null,
-              lastMessageAt: stats.lastMessageAt?.toISOString() ?? null,
-              lastMessagePreview: stats.lastMessagePreview ?? null,
-              unreadCount: stats.unreadCount,
-            };
-          })
-        );
+        const patientItems = patientChats.map((chat) => ({
+          source: "conversation" as const,
+          folder: "personal" as const,
+          type: "patient" as const,
+          conversationId: chat.conversationId,
+          name: chat.name ?? undefined,
+          patientUserId: chat.patientUserId ?? undefined,
+          patientName: chat.name ?? undefined,
+          avatarUrl: chat.avatarUrl,
+          lastMessageAt: chat.lastMessageAt?.toISOString() ?? null,
+          lastMessagePreview: chat.lastMessagePreview ?? null,
+          unreadCount: chat.unreadCount,
+        }));
         const items = [...patientItems, ...doctorItems];
         items.sort((a, b) => {
           const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
           const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
           if (aTime !== bTime) return bTime - aTime;
-          if (a.source !== b.source) return a.source === "health_wall" ? -1 : 1;
-          const aName = a.source === "health_wall" ? a.patientName ?? a.patientEmail ?? "" : a.otherParticipantName ?? "";
-          const bName = b.source === "health_wall" ? b.patientName ?? b.patientEmail ?? "" : b.otherParticipantName ?? "";
+          if (a.type !== b.type) return a.type === "patient" ? -1 : 1;
+          const aName =
+            a.type === "patient"
+              ? ("name" in a ? a.name : "") ?? ""
+              : ("otherParticipantName" in a ? a.otherParticipantName : "") ?? "";
+          const bName =
+            b.type === "patient"
+              ? ("name" in b ? b.name : "") ?? ""
+              : ("otherParticipantName" in b ? b.otherParticipantName : "") ?? "";
           return aName.localeCompare(bName, "ru");
         });
         return res.json(paged(items));
@@ -1964,12 +1547,8 @@ ${allUrls.map(url => `  <url>
       if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const partner = await storage.getUser(partnerUserId);
       if (!partner) return res.status(404).json({ message: "User not found" });
-      if (currentUser.isAdmin) {
-        const isConnectedPatient = await storage.isHealthWallDoctorConnected(partnerUserId, currentUserId);
-        if (!partner.isAdmin && !isConnectedPatient) return res.status(404).json({ message: "User not found" });
-      } else {
-        const isConnectedDoctor = await storage.isHealthWallDoctorConnected(currentUserId, partnerUserId);
-        if (!partner.isAdmin && !isConnectedDoctor) return res.status(404).json({ message: "User not found" });
+      if (!currentUser.isAdmin || !partner.isAdmin) {
+        return res.status(404).json({ message: "User not found" });
       }
       let conversationId = await storage.getDirectConversationBetween(currentUserId, partnerUserId);
       if (!conversationId) {
@@ -2077,7 +1656,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Get conversation by id
-  app.get("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.get("/api/conversations/:id", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2208,6 +1787,7 @@ ${allUrls.map(url => `  <url>
 
   // Conversation message helpers
   const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+  const RECENT_MESSAGES_LIMIT = 100;
 
   function userToConvAuthor(u: User | undefined | null): ConversationMessageAuthor {
     return {
@@ -2351,7 +1931,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Get conversation messages (Postgres; Redis write-through cache)
-  app.get("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.get("/api/conversations/:id/messages", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2375,7 +1955,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Post conversation message (supports reply + forward)
-  app.post("/api/conversations/:id/messages", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/messages", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2391,6 +1971,7 @@ ${allUrls.map(url => `  <url>
           return res.status(403).json({ message: "only_owner_or_admin_can_post_to_channel" });
         }
       }
+      const currentUser = await storage.getUser(currentUserId);
       const body = req.body as {
         content?: string;
         imageUrl?: string;
@@ -2409,82 +1990,41 @@ ${allUrls.map(url => `  <url>
         directForwardedFromUserId?: string | null;
         directForwardedFromMessageId?: string | null;
         fallbackAuthorUserId: string;
-        sourceKind: "conversation" | "health_wall";
       }) => {
         if (params.directForwardedFromUserId) return params.directForwardedFromUserId;
         if (params.directForwardedFromMessageId) {
-          if (params.sourceKind === "conversation") {
-            const root = await storage.getConversationMessageById(params.directForwardedFromMessageId);
-            if (root) return root.forwardedFromUserId ?? root.authorUserId;
-          } else {
-            const root = await storage.getHealthWallMessageById(params.directForwardedFromMessageId);
-            if (root) return root.forwardedFromUserId ?? root.authorUserId;
-          }
+          const root = await storage.getConversationMessageById(params.directForwardedFromMessageId);
+          if (root) return root.forwardedFromUserId ?? root.authorUserId;
         }
         return params.fallbackAuthorUserId;
       };
 
-      if (body.forwardSource) {
-        if (body.forwardSource.conversationId) {
-          const inSource = await storage.isUserInConversation(
-            currentUserId,
-            body.forwardSource.conversationId
-          );
-          if (!inSource) return res.status(403).json({ message: "Cannot forward from this chat" });
-          const src = await storage.getConversationMessageById(body.forwardSource.messageId);
-          if (
-            !src ||
-            src.conversationId !== body.forwardSource.conversationId ||
-            src.deletedAt
-          ) {
-            return res.status(404).json({ message: "Source message not found" });
-          }
-          content = src.content ?? null;
-          imageUrl = src.imageUrl ?? null;
-          forwardedFromMessageId = src.id;
-          forwardedFromUserId = await resolveForwardedAuthorId({
-            directForwardedFromUserId: src.forwardedFromUserId,
-            directForwardedFromMessageId: src.forwardedFromMessageId,
-            fallbackAuthorUserId: src.authorUserId,
-            sourceKind: "conversation",
-          });
-          messageType = src.messageType;
-          if (messageType === "poll" && content) {
-            try {
-              pollPayloadSchema.parse(JSON.parse(content));
-            } catch {
-              return res.status(400).json({ message: "Invalid poll data" });
-            }
-          }
-        } else if (body.forwardSource.patientUserId) {
-          const sourcePatientUserId = String(body.forwardSource.patientUserId);
-          const canAccessSourceWall = await canAccessHealthWall(req, sourcePatientUserId);
-          if (!canAccessSourceWall) {
-            return res.status(403).json({ message: "Cannot forward from this health wall" });
-          }
-          const src = await storage.getHealthWallMessageById(body.forwardSource.messageId);
-          if (
-            !src ||
-            src.patientUserId !== sourcePatientUserId ||
-            src.deletedAt
-          ) {
-            return res.status(404).json({ message: "Source message not found" });
-          }
-          content = src.content ?? null;
-          imageUrl = src.imageUrl ?? null;
-          // Keep null here: conversation FK points to conversation_messages only.
-          // Health wall source ids are from another table and would violate FK.
-          forwardedFromMessageId = null;
-          forwardedFromUserId = await resolveForwardedAuthorId({
-            directForwardedFromUserId: src.forwardedFromUserId,
-            directForwardedFromMessageId: src.forwardedFromMessageId,
-            fallbackAuthorUserId: src.authorUserId,
-            sourceKind: "health_wall",
-          });
-          messageType = src.messageType;
-        } else {
-          return res.status(400).json({ message: "Invalid forward source" });
+      if (body.forwardSource?.conversationId) {
+        const sourceConversationId = String(body.forwardSource.conversationId);
+        const inSource = await storage.isUserInConversation(currentUserId, sourceConversationId);
+        if (!inSource) return res.status(403).json({ message: "Cannot forward from this chat" });
+        const src = await storage.getConversationMessageById(body.forwardSource.messageId);
+        if (!src || src.conversationId !== sourceConversationId || src.deletedAt) {
+          return res.status(404).json({ message: "Source message not found" });
         }
+        content = src.content ?? null;
+        imageUrl = src.imageUrl ?? null;
+        forwardedFromMessageId = src.id;
+        forwardedFromUserId = await resolveForwardedAuthorId({
+          directForwardedFromUserId: src.forwardedFromUserId,
+          directForwardedFromMessageId: src.forwardedFromMessageId,
+          fallbackAuthorUserId: src.authorUserId,
+        });
+        messageType = src.messageType;
+        if (messageType === "poll" && content) {
+          try {
+            pollPayloadSchema.parse(JSON.parse(content));
+          } catch {
+            return res.status(400).json({ message: "Invalid poll data" });
+          }
+        }
+      } else if (body.forwardSource) {
+        return res.status(400).json({ message: "Invalid forward source" });
       } else {
         if (body.poll !== undefined && body.poll !== null) {
           const parsed = pollPayloadSchema.parse(body.poll);
@@ -2499,6 +2039,16 @@ ${allUrls.map(url => `  <url>
           content = JSON.stringify(parsed);
           imageUrl = null;
         }
+      }
+
+      if (
+        (messageType === "prescription" || messageType === "followup") &&
+        !currentUser?.isAdmin
+      ) {
+        return res.status(403).json({ message: "Only doctors can post prescriptions" });
+      }
+      if (conv.type === "patient" && messageType === "poll") {
+        return res.status(400).json({ message: "Polls are not allowed in patient chats" });
       }
 
       let replyToMessageId: string | null = null;
@@ -2531,6 +2081,9 @@ ${allUrls.map(url => `  <url>
       void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
         console.error("[Push] conversation notify error:", err)
       );
+      void notifyPatientConversationActivity(id, currentUserId).catch((err) =>
+        console.error("[DoctorChats] patient conversation notify error:", err)
+      );
       res.status(201).json(enriched);
     } catch (error) {
       console.error("Error posting conversation message:", error);
@@ -2542,7 +2095,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Edit conversation message (author only, within 48h, not deleted)
-  app.patch("/api/conversations/:id/messages/:messageId", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.patch("/api/conversations/:id/messages/:messageId", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2583,7 +2136,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Delete conversation message (author OR conversation owner). Soft delete.
-  app.delete("/api/conversations/:id/messages/:messageId", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.delete("/api/conversations/:id/messages/:messageId", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2616,7 +2169,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Pin conversation message
-  app.post("/api/conversations/:id/messages/:messageId/pin", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/messages/:messageId/pin", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2645,7 +2198,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Unpin conversation message
-  app.post("/api/conversations/:id/messages/:messageId/unpin", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/messages/:messageId/unpin", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2724,7 +2277,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  app.post("/api/conversations/:id/messages/:messageId/reactions", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/messages/:messageId/reactions", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -2940,186 +2493,6 @@ ${allUrls.map(url => `  <url>
     }
   );
 
-  // Get patient info for health wall header
-  app.get('/api/health-wall/:patientUserId/info', isAuthenticated, async (req: any, res) => {
-    try {
-      const { patientUserId } = req.params;
-      const currentUserId = await getCurrentUserId(req);
-      
-      if (!await canAccessHealthWall(req, patientUserId)) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      
-      const patient = await storage.getUser(patientUserId);
-      
-      // Get patient's last visit time for doctors viewing this patient
-      let patientLastVisitedAt = null;
-      if (currentUserId && currentUserId !== patientUserId) {
-        patientLastVisitedAt = await storage.getPatientLastVisit(patientUserId);
-      }
-      
-      // Use patient profile data, not questionnaire data
-      const patientDisplayName =
-        [patient?.firstName, patient?.lastName].filter(Boolean).join(" ").trim() || patient?.email || "";
-      res.json({
-        id: patient?.id,
-        email: patient?.email,
-        patientName: patientDisplayName,
-        profileImageUrl: patient?.profileImageUrl ?? null,
-        birthMonth: patient?.birthMonth,
-        birthYear: patient?.birthYear,
-        gender: patient?.gender,
-        height: patient?.height,
-        weight: patient?.weight,
-        city: patient?.city,
-        patientLastVisitedAt,
-      });
-    } catch (error) {
-      console.error("Error fetching patient info:", error);
-      res.status(500).json({ message: "Failed to fetch patient info" });
-    }
-  });
-
-  // Health Wall Doctors API
-
-  // Get connected doctors for own health wall
-  app.get('/api/health-wall/my/doctors', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const doctors = await storage.getHealthWallDoctors(userId);
-      res.json(doctors.map(d => ({
-        id: d.doctor.id,
-        doctorUserId: d.user.id,
-        email: d.user.email,
-        firstName: d.user.firstName,
-        lastName: d.user.lastName,
-        createdAt: d.doctor.createdAt,
-        lastVisitedAt: d.doctor.lastVisitedAt,
-      })));
-    } catch (error) {
-      console.error("Error fetching connected doctors:", error);
-      res.status(500).json({ message: "Failed to fetch connected doctors" });
-    }
-  });
-
-  // Add doctor to own health wall by email
-  app.post('/api/health-wall/my/doctors', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
-
-      // Find doctor by email
-      const doctor = await storage.getUserByEmail(email);
-      if (!doctor) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Can't add yourself
-      if (doctor.id === userId) {
-        return res.status(400).json({ message: "Cannot add yourself as a doctor" });
-      }
-
-      // Check if already connected
-      const isConnected = await storage.isHealthWallDoctorConnected(userId, doctor.id);
-      if (isConnected) {
-        return res.status(400).json({ message: "Doctor already connected" });
-      }
-
-      const connection = await storage.addHealthWallDoctor(userId, doctor.id);
-      res.json({
-        id: connection.id,
-        doctorUserId: doctor.id,
-        email: doctor.email,
-        firstName: doctor.firstName,
-        lastName: doctor.lastName,
-        createdAt: connection.createdAt,
-      });
-    } catch (error) {
-      console.error("Error adding doctor:", error);
-      res.status(500).json({ message: "Failed to add doctor" });
-    }
-  });
-
-  // Remove doctor from own health wall
-  app.delete('/api/health-wall/my/doctors/:doctorUserId', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const { doctorUserId } = req.params;
-      const removed = await storage.removeHealthWallDoctor(userId, doctorUserId);
-      
-      if (!removed) {
-        return res.status(404).json({ message: "Doctor connection not found" });
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error removing doctor:", error);
-      res.status(500).json({ message: "Failed to remove doctor" });
-    }
-  });
-
-  // Get patients who connected this doctor (for doctors to see their patients)
-  app.get('/api/health-wall/my/patients', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const patients = await storage.getHealthWallPatients(userId);
-      
-      // Get additional info for each patient
-      const result = await Promise.all(patients.map(async (p) => {
-        const stats = await storage.getPatientHealthWallStats(p.patient.id, userId);
-        const lastMessageAt = stats.lastMessageAt;
-        return {
-          id: p.connection.id,
-          patientUserId: p.patient.id,
-          email: p.patient.email,
-          firstName: p.patient.firstName,
-          lastName: p.patient.lastName,
-          birthMonth: p.patient.birthMonth,
-          birthYear: p.patient.birthYear,
-          profileImageUrl: p.patient.profileImageUrl ?? null,
-          createdAt: p.connection.createdAt,
-          unreadCount: stats.unreadCount,
-          lastMessageAt: lastMessageAt instanceof Date ? lastMessageAt.toISOString() : lastMessageAt,
-        };
-      }));
-
-      result.sort((a, b) => {
-        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        if (bTime !== aTime) return bTime - aTime;
-        const aName =
-          [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || a.email || "";
-        const bName =
-          [b.firstName, b.lastName].filter(Boolean).join(" ").trim() || b.email || "";
-        return aName.localeCompare(bName, "ru");
-      });
-
-      res.json(result);
-    } catch (error) {
-      console.error("Error fetching patients:", error);
-      res.status(500).json({ message: "Failed to fetch patients" });
-    }
-  });
-
   // Invite patient (legacy endpoint kept for compatibility with existing client)
   app.post('/api/invite-patient', isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -3134,11 +2507,6 @@ ${allUrls.map(url => `  <url>
       }
 
       const normalizedEmail = email.toLowerCase().trim();
-
-      const existingUser = await storage.getUserByEmail(normalizedEmail);
-      if (existingUser) {
-        return res.status(409).json({ message: "user_exists" });
-      }
 
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");

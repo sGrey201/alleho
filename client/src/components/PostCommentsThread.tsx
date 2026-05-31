@@ -118,7 +118,7 @@ export default function PostCommentsThread({
   };
 
   type MyChatItem = {
-    source: "conversation" | "health_wall";
+    source: "conversation";
     folder: "personal" | "groups" | "channels";
     type?: string;
     conversationId?: string;

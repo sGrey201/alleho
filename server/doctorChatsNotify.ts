@@ -1,27 +1,18 @@
 import { storage } from "./storage";
-import { publishDoctorChatsUpdated, type HealthWallMessageWithAuthor } from "./redis";
+import { publishDoctorChatsUpdated } from "./redis";
 
-/** Notify all doctors linked to a patient after a new health wall message. */
-export async function notifyDoctorsHealthWallMessage(
-  patientUserId: string,
-  message: HealthWallMessageWithAuthor,
-  _authorUserId: string
+/** Refresh doctor chat lists after activity in a patient conversation. */
+export async function notifyPatientConversationActivity(
+  conversationId: string,
+  authorUserId: string
 ): Promise<void> {
-  const doctors = await storage.getHealthWallDoctors(patientUserId);
-  if (doctors.length === 0) return;
+  const conv = await storage.getConversation(conversationId);
+  if (!conv || conv.type !== "patient") return;
 
-  const createdAt = message.createdAt;
-
+  const participants = await storage.getConversationParticipants(conversationId);
   await Promise.all(
-    doctors.map(async ({ user }) => {
-      const stats = await storage.getPatientHealthWallStats(patientUserId, user.id);
-      await publishDoctorChatsUpdated(user.id, {
-        patientUserId,
-        message,
-        lastMessageAt: createdAt,
-        lastMessagePreview: stats.lastMessagePreview,
-        unreadCount: stats.unreadCount,
-      });
-    })
+    participants
+      .filter((p) => p.userId !== authorUserId && p.user.isAdmin)
+      .map((p) => publishDoctorChatsUpdated(p.userId))
   );
 }

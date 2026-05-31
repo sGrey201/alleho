@@ -8,8 +8,7 @@ export function getSite(): Site {
   const path = window.location.pathname;
   if (path === "/" || path === "") return "landing";
   if (path.startsWith("/portraits") || path.startsWith("/article") || path.startsWith("/remedies") || path.startsWith("/situations")) return "portraits";
-  if (path.startsWith("/messenger")) return "chat";
-  if (path.startsWith("/health-wall")) return "wall";
+  if (path.startsWith("/messenger") || path.startsWith("/health-wall")) return "chat";
   return "portraits";
 }
 
@@ -20,7 +19,7 @@ export function getChatBaseUrl(): string {
 
 export function getWallBaseUrl(): string {
   if (typeof window === "undefined") return "";
-  return `${window.location.origin}/health-wall`;
+  return `${window.location.origin}/messenger`;
 }
 
 export function getPortraitsBaseUrl(): string {

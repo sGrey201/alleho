@@ -4,19 +4,10 @@ import { WebSocketServer, type WebSocket as WsWebSocket } from "ws";
 import { parse as parseCookie } from "cookie";
 // @ts-expect-error no types
 import * as cookieSignature from "cookie-signature";
-import {
-  getRedisSubscriber,
-  type HealthWallMessageWithAuthor,
-  type ConversationMessageWithAuthor,
-} from "./redis";
-import {
-  registerConversationBroadcaster,
-  registerDoctorBroadcaster,
-  registerHealthWallBroadcaster,
-} from "./wsBroadcast";
+import { getRedisSubscriber, type ConversationMessageWithAuthor } from "./redis";
+import { registerConversationBroadcaster, registerDoctorBroadcaster } from "./wsBroadcast";
 
 const WS_PATH = "/ws";
-const HEALTH_WALL_CHANNEL_PREFIX = "health-wall:channel:";
 const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
 const DOCTOR_EVENTS_CHANNEL_PREFIX = "doctor:events:";
 
@@ -31,34 +22,9 @@ export function setupWebSocket(
 ): void {
   const wss = new WebSocketServer({ noServer: true });
 
-  const channelToSockets = new Map<string, Set<WsWebSocket>>();
-  const socketToChannels = new Map<WsWebSocket, Set<string>>();
   const conversationChannelToSockets = new Map<string, Set<WsWebSocket>>();
   const socketToConversationChannels = new Map<WsWebSocket, Set<string>>();
   const doctorToSockets = new Map<string, Set<WsWebSocket>>();
-
-  function subscribeSocketToChannel(ws: WsWebSocket, patientUserId: string): void {
-    const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
-    if (!channelToSockets.has(channel)) {
-      channelToSockets.set(channel, new Set());
-    }
-    channelToSockets.get(channel)!.add(ws);
-    if (!socketToChannels.has(ws)) {
-      socketToChannels.set(ws, new Set());
-    }
-    socketToChannels.get(ws)!.add(channel);
-  }
-
-  function unsubscribeSocketFromChannel(ws: WsWebSocket, patientUserId: string): void {
-    const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
-    const set = channelToSockets.get(channel);
-    if (set) {
-      set.delete(ws);
-      if (set.size === 0) channelToSockets.delete(channel);
-    }
-    const channels = socketToChannels.get(ws);
-    if (channels) channels.delete(channel);
-  }
 
   function subscribeSocketToConversationChannel(ws: WsWebSocket, conversationId: string): void {
     const channel = CONVERSATION_CHANNEL_PREFIX + conversationId;
@@ -91,15 +57,6 @@ export function setupWebSocket(
     });
   }
 
-  function sendToHealthWallChannel(patientUserId: string, data: string): void {
-    const channel = HEALTH_WALL_CHANNEL_PREFIX + patientUserId;
-    const sockets = channelToSockets.get(channel);
-    if (!sockets || sockets.size === 0) return;
-    Array.from(sockets).forEach((ws) => {
-      if (ws.readyState === 1) ws.send(data);
-    });
-  }
-
   function sendToDoctor(doctorUserId: string, data: string): void {
     const sockets = doctorToSockets.get(doctorUserId);
     if (!sockets || sockets.size === 0) return;
@@ -109,21 +66,9 @@ export function setupWebSocket(
   }
 
   registerConversationBroadcaster(sendToConversationChannel);
-  registerHealthWallBroadcaster(sendToHealthWallChannel);
   registerDoctorBroadcaster(sendToDoctor);
 
   function cleanupSocket(ws: WsWebSocket): void {
-    const channels = socketToChannels.get(ws);
-    if (channels) {
-      Array.from(channels).forEach((ch) => {
-        const set = channelToSockets.get(ch);
-        if (set) {
-          set.delete(ws);
-          if (set.size === 0) channelToSockets.delete(ch);
-        }
-      });
-      socketToChannels.delete(ws);
-    }
     const convChannels = socketToConversationChannels.get(ws);
     if (convChannels) {
       Array.from(convChannels).forEach((ch) => {
@@ -140,36 +85,7 @@ export function setupWebSocket(
   const redisSub = getRedisSubscriber();
   if (redisSub) {
     redisSub.on("message", (channel: string, message: string) => {
-      if (channel.startsWith(HEALTH_WALL_CHANNEL_PREFIX)) {
-        try {
-          const parsed = JSON.parse(message) as
-            | { type?: string; payload?: unknown }
-            | HealthWallMessageWithAuthor;
-          const knownTypes = new Set([
-            "health_wall_message",
-            "health_wall_message_edited",
-            "health_wall_message_deleted",
-            "health_wall_message_pinned",
-            "health_wall_message_unpinned",
-            "health_wall_seen",
-          ]);
-          const data =
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "type" in parsed &&
-            typeof (parsed as { type?: unknown }).type === "string" &&
-            knownTypes.has((parsed as { type: string }).type) &&
-            "payload" in parsed
-              ? JSON.stringify({
-                  type: (parsed as { type: string }).type,
-                  payload: (parsed as { payload: unknown }).payload,
-                })
-              : JSON.stringify({ type: "health_wall_message", payload: parsed });
-          sendToHealthWallChannel(channel.slice(HEALTH_WALL_CHANNEL_PREFIX.length), data);
-        } catch {
-          // ignore
-        }
-      } else if (channel.startsWith(CONVERSATION_CHANNEL_PREFIX)) {
+      if (channel.startsWith(CONVERSATION_CHANNEL_PREFIX)) {
         const conversationId = channel.slice(CONVERSATION_CHANNEL_PREFIX.length);
         try {
           const parsed = JSON.parse(message) as
@@ -202,7 +118,6 @@ export function setupWebSocket(
               payload: (parsed as { payload: unknown }).payload,
             });
           } else {
-            // Backward compatibility with plain conversation message payload.
             data = JSON.stringify({ type: "conversation_message", payload: parsed });
           }
           if (!data) return;
@@ -216,14 +131,12 @@ export function setupWebSocket(
           const parsed = JSON.parse(message) as {
             type?: string;
             timestamp?: string;
-            healthWall?: unknown;
           };
           if (parsed.type !== "doctor_chats_updated") return;
           const data = JSON.stringify({
             type: "doctor_chats_updated",
             payload: {
               timestamp: parsed.timestamp ?? null,
-              healthWall: parsed.healthWall ?? undefined,
             },
           });
           sendToDoctor(doctorUserId, data);
@@ -287,27 +200,15 @@ export function setupWebSocket(
     if (redisSub) {
       void redisSub.subscribe(DOCTOR_EVENTS_CHANNEL_PREFIX + userId);
     }
-    const subscribedChannels = new Set<string>();
 
     ws.on("message", (raw: string | Buffer | ArrayBuffer | Buffer[]) => {
       try {
         const text = typeof raw === "string" ? raw : Buffer.isBuffer(raw) ? raw.toString() : "";
         const data = JSON.parse(text) as {
           type: string;
-          patientUserId?: string;
           conversationId?: string;
-          messageId?: string;
         };
-        if (data.type === "subscribe" && data.patientUserId) {
-          const channel = HEALTH_WALL_CHANNEL_PREFIX + data.patientUserId;
-          const wasEmpty = !channelToSockets.has(channel);
-          subscribeSocketToChannel(ws, data.patientUserId);
-          subscribedChannels.add(channel);
-          if (redisSub && wasEmpty) redisSub.subscribe(channel);
-        } else if (data.type === "unsubscribe" && data.patientUserId) {
-          unsubscribeSocketFromChannel(ws, data.patientUserId);
-          subscribedChannels.delete(HEALTH_WALL_CHANNEL_PREFIX + data.patientUserId);
-        } else if (data.type === "subscribe_conversation" && data.conversationId) {
+        if (data.type === "subscribe_conversation" && data.conversationId) {
           const channel = CONVERSATION_CHANNEL_PREFIX + data.conversationId;
           const wasEmpty = !conversationChannelToSockets.has(channel);
           subscribeSocketToConversationChannel(ws, data.conversationId);

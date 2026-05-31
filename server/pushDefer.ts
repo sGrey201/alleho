@@ -31,10 +31,6 @@ export function cancelDeferredPushesForConversation(conversationId: string, user
   dequeueByPrefix(`conv:${conversationId}:user:${userId}:`);
 }
 
-export function cancelDeferredPushesForHealthWall(patientUserId: string, userId: string): void {
-  dequeueByPrefix(`hw:${patientUserId}:user:${userId}:`);
-}
-
 function enqueuePush(key: string, send: () => Promise<void>): void {
   const existing = queue.get(key);
   if (existing) clearTimeout(existing);
@@ -69,11 +65,16 @@ export function scheduleConversationMessagePush(
   const key = `conv:${conversationId}:user:${recipientUserId}:msg:${message.id}`;
   const createdAt = new Date(message.createdAt);
   const sender = formatSenderName(message.author);
-  const convLabel = conv.type === "direct" ? sender : conv.name?.trim() || "Новое сообщение";
+  const convLabel =
+    conv.type === "patient"
+      ? conv.name?.trim() || "Чат с пациентом"
+      : conv.type === "direct"
+        ? sender
+        : conv.name?.trim() || "Новое сообщение";
   const payload: PushPayload = {
     title: conv.type === "direct" ? sender : convLabel,
     body:
-      conv.type === "direct"
+      conv.type === "direct" || conv.type === "patient"
         ? messagePreview(message.content, message.imageUrl)
         : `${sender}: ${messagePreview(message.content, message.imageUrl)}`,
     url: conversationPath(conv.type, conversationId),
@@ -82,41 +83,6 @@ export function scheduleConversationMessagePush(
 
   enqueuePush(key, async () => {
     if (await storage.isConversationMessageReadByUser(conversationId, recipientUserId, createdAt)) {
-      return;
-    }
-    await sendPushToUsers([recipientUserId], payload);
-  });
-}
-
-export function scheduleHealthWallMessagePush(
-  patientUserId: string,
-  recipientUserId: string,
-  authorUserId: string,
-  message: {
-    id: string;
-    createdAt: string | Date;
-    content?: string | null;
-    imageUrl?: string | null;
-    author: MessageAuthorLike;
-  }
-): void {
-  const key = `hw:${patientUserId}:user:${recipientUserId}:msg:${message.id}`;
-  const createdAt = new Date(message.createdAt);
-  const sender = formatSenderName(message.author);
-  const payload: PushPayload = {
-    title: sender,
-    body: messagePreview(message.content, message.imageUrl),
-    url: `/messenger/patient/${patientUserId}`,
-    tag: `health-wall:${patientUserId}`,
-  };
-
-  enqueuePush(key, async () => {
-    if (
-      await storage.isHealthWallMessageReadByUser(patientUserId, recipientUserId, {
-        authorUserId,
-        createdAt,
-      })
-    ) {
       return;
     }
     await sendPushToUsers([recipientUserId], payload);

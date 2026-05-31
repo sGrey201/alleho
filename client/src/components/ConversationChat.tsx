@@ -9,6 +9,7 @@ import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/u
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { t } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   Loader2,
   ArrowLeft,
@@ -24,7 +25,19 @@ import {
   Copy,
   Link2,
   ListChecks,
+  Pill,
+  FileText,
+  MessageCircle,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import QuestionnairePanel from "@/components/QuestionnairePanel";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -96,7 +109,7 @@ function getThumbUrl(url: string): string {
 }
 
 type MyChatItem = {
-  source: "conversation" | "health_wall";
+  source: "conversation";
   folder: "personal" | "groups" | "channels";
   type?: string;
   conversationId?: string;
@@ -280,6 +293,24 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [isMdUp, setIsMdUp] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : false,
+  );
+
+  useEffect(() => {
+    setShowQuestionnaire(false);
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const onChange = (event: MediaQueryListEvent) => setIsMdUp(event.matches);
+    setIsMdUp(mediaQuery.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => mediaQuery.removeEventListener("change", onChange);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -669,7 +700,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         return chat.myRole === "owner" || chat.myRole === "admin";
       }
       if (chat.type === "group") return true;
-      return chat.type === "direct";
+      return chat.type === "direct" || chat.type === "patient";
     });
     if (!q) return allowedChats;
     return allowedChats.filter((chat) => {
@@ -766,9 +797,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (!message.trim()) return;
     sendMutation.mutate({
       content: message.trim(),
-      messageType: "message",
+      messageType: messageMode,
       replyToMessageId: replyTo?.id,
     });
+    if (messageMode !== "message") setMessageMode("message");
   };
 
   const handleUploadImages = async (files: File[]) => {
@@ -801,6 +833,12 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
   }, [messages]);
+
+  const isPatientConv = conv?.type === "patient";
+  const displayMessages = useMemo(() => {
+    if (!isPatientConv || user?.isAdmin) return sortedMessages;
+    return sortedMessages.filter((m) => m.messageType !== "followup");
+  }, [sortedMessages, isPatientConv, user?.isAdmin]);
 
   useEffect(() => {
     if (sortedMessages.length === 0) return;
@@ -896,19 +934,35 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     );
   }
 
-  const title = conv.name ?? (conv.type === "direct" ? t.chatWithDoctor : conv.type);
-  const peerParticipant = conv.type === "direct"
-    ? conv.participants?.find((p) => p.userId !== user?.id)
-    : undefined;
-  const directDisplayName = conv.type === "direct"
+  const title =
+    conv.name ??
+    (conv.type === "direct" ? t.chatWithDoctor : conv.type === "patient" ? t.patient : conv.type);
+  const peerParticipant =
+    conv.type === "direct" || conv.type === "patient"
+      ? conv.participants?.find((p) => p.userId !== user?.id)
+      : undefined;
+  const directDisplayName = conv.type === "direct" || conv.type === "patient"
     ? [peerParticipant?.user?.firstName, peerParticipant?.user?.lastName].filter(Boolean).join(" ").trim() ||
       peerParticipant?.user?.email?.split("@")[0] ||
       t.chatWithDoctor
     : title;
-  const headerAvatarUrl = conv.type === "direct"
-    ? (peerParticipant?.user?.profileImageUrl ?? null)
-    : (conv.avatarUrl ?? null);
-  const directProfileUserId = conv.type === "direct" ? peerParticipant?.userId : undefined;
+  const chatName = conv.name?.trim() || null;
+  const headerTitle =
+    isPatientConv && !user?.isAdmin && chatName
+      ? `${directDisplayName} (${chatName})`
+      : directDisplayName;
+  const headerAvatarUrl =
+    conv.type === "direct" || conv.type === "patient"
+      ? (peerParticipant?.user?.profileImageUrl ?? null)
+      : (conv.avatarUrl ?? null);
+  const directProfileUserId =
+    conv.type === "direct"
+      ? peerParticipant?.userId
+      : conv.type === "patient" && user?.isAdmin
+        ? conv.patientUserId ?? undefined
+        : conv.type === "patient"
+          ? peerParticipant?.userId
+          : undefined;
   const handleHeaderProfileClick = () => {
     if (directProfileUserId) {
       setLocation(`/profile/${directProfileUserId}`);
@@ -925,9 +979,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     .join("") || "?";
 
   const showMessageAuthorName = conv.type !== "direct";
-  const showReceiptIcons = conv.type === "direct";
+  const showReceiptIcons = conv.type === "direct" || conv.type === "patient";
   const peerLastReadAt =
-    conv.type === "direct" ? (peerParticipant?.lastSeenAt ?? null) : null;
+    conv.type === "direct" || conv.type === "patient"
+      ? (peerParticipant?.lastSeenAt ?? null)
+      : null;
   const myRole = myChannelRole;
   const isOwner = myRole === "owner";
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
@@ -1032,7 +1088,12 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       Date.now() - createdAt < EDIT_WINDOW_MS;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
-    const routeType = conv.type === "group" || conv.type === "channel" ? conv.type : "direct";
+    const routeType =
+      conv.type === "group" || conv.type === "channel"
+        ? conv.type
+        : conv.type === "patient"
+          ? "chat"
+          : "direct";
     const messageLink =
       typeof window !== "undefined"
         ? `${window.location.origin}/messenger/${routeType}/${conversationId}?messageId=${msg.id}`
@@ -1192,9 +1253,29 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             pollVoteMutation.isPending && pollVoteMutation.variables?.messageId === msg.id
           }
         />
-      ) : msg.content ? (
-        <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p>
-      ) : null}
+      ) : (
+        <>
+          {msg.messageType === "prescription" && (
+            <div className="mb-0.5 pr-8">
+              <Badge variant="secondary" className="bg-green-100 text-xs text-green-800 dark:bg-green-900 dark:text-green-200">
+                <Pill className="mr-1 h-3 w-3" />
+                {t.prescription}
+              </Badge>
+            </div>
+          )}
+          {msg.messageType === "followup" && (
+            <div className="mb-0.5 pr-8">
+              <Badge variant="secondary" className="bg-purple-100 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                <FileText className="mr-1 h-3 w-3" />
+                {t.followup}
+              </Badge>
+            </div>
+          )}
+          {msg.content ? (
+            <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p>
+          ) : null}
+        </>
+      )}
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="min-w-0">{renderReactionPills(msg)}</div>
@@ -1224,15 +1305,55 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
   const isComposerSending = sendMutation.isPending || editMutation.isPending;
 
+  const canShowQuestionnaire = isPatientConv && !!user?.isAdmin && !!conv.patientUserId;
+
+  const handleQuestionnaireToggle = () => {
+    if (!conv.patientUserId) {
+      toast({
+        title: t.error,
+        description: "Не удалось определить пациента для анкеты",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowQuestionnaire((v) => !v);
+  };
+
+  const questionnairePanel = conv.patientUserId ? (
+    <QuestionnairePanel patientUserId={conv.patientUserId} isOwnQuestionnaire={false} />
+  ) : null;
+
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-col">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-row">
+      {canShowQuestionnaire && showQuestionnaire && isMdUp && questionnairePanel && (
+        <aside className="flex w-[min(420px,40%)] shrink-0 flex-col min-h-0 border-r border-border/60 bg-background">
+          {questionnairePanel}
+        </aside>
+      )}
+      {canShowQuestionnaire && questionnairePanel && (
+        <Sheet
+          open={showQuestionnaire && !isMdUp}
+          onOpenChange={(open) => setShowQuestionnaire(open)}
+        >
+          <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{t.questionnaireTitle}</SheetTitle>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto">{questionnairePanel}</div>
+          </SheetContent>
+        </Sheet>
+      )}
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <div className="pointer-events-none z-30 flex w-full min-w-0 max-w-full shrink-0 flex-col gap-1.5 overflow-hidden px-3 pt-3.5">
         <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
             variant="secondary"
             size="icon"
             onClick={onBack}
-            className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50 md:hidden"
+            className={cn(
+              "h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50",
+              user?.isAdmin && "md:hidden",
+            )}
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -1244,8 +1365,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             className={`flex h-12 min-w-0 flex-1 flex-col justify-center rounded-full border border-border bg-card px-4 text-left shadow-sm ${canClickHeader ? "cursor-pointer" : ""}`}
             data-testid="header-pill"
           >
-            <p className="truncate text-sm font-semibold leading-tight">{directDisplayName}</p>
-            {conv.type === "direct" && (
+            <p className="truncate text-sm font-semibold leading-tight">{headerTitle}</p>
+            {(conv.type === "direct" || conv.type === "patient") && (
               <p className="truncate text-xs leading-tight text-muted-foreground">
                 {formatLastSeen(peerParticipant?.lastSeenAt)}
               </p>
@@ -1295,8 +1416,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : sortedMessages.length > 0 ? (
-            sortedMessages.map((msg) => {
+          ) : displayMessages.length > 0 ? (
+            displayMessages.map((msg) => {
               const isOwn = msg.authorUserId === user?.id;
               const isDeleted = !!msg.deletedAt;
               return (
@@ -1519,7 +1640,39 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             ) : null
           ) : (
             <div className="flex items-end gap-2 px-4 pt-3 pb-3">
-              {!editing && canPostToChannel && !composerValue.trim() && (
+              {isPatientConv && user?.isAdmin && !editing && (
+                <Button
+                  type="button"
+                  variant={showQuestionnaire ? "default" : "outline"}
+                  size="sm"
+                  className="shrink-0"
+                  onClick={handleQuestionnaireToggle}
+                  data-testid="button-open-questionnaire"
+                >
+                  {t.questionnaireTitle ?? "Анкета"}
+                </Button>
+              )}
+              {isPatientConv && user?.isAdmin && !editing && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-full">
+                      {messageMode === "prescription" ? (
+                        <Pill className="h-4 w-4" />
+                      ) : messageMode === "followup" ? (
+                        <FileText className="h-4 w-4" />
+                      ) : (
+                        <MessageCircle className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setMessageMode("message")}>Сообщение</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMessageMode("prescription")}>{t.prescription}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setMessageMode("followup")}>{t.followup}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {!editing && canPostToChannel && !composerValue.trim() && !isPatientConv && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1793,6 +1946,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </AlertDialogContent>
       </AlertDialog>
 
+    </div>
     </div>
   );
 }
