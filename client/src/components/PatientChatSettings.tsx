@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { postConversationSeen } from "@/lib/markConversationSeen";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ArrowLeft, Camera, Loader2 } from "lucide-react";
@@ -55,6 +56,11 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
     queryKey: ["/api/conversations", conversationId],
     enabled: !!conversationId,
   });
+
+  useEffect(() => {
+    if (!conversationId) return;
+    postConversationSeen(conversationId);
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conv) return;

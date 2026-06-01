@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
+import { postConversationSeen } from "@/lib/markConversationSeen";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -399,6 +400,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
 
   useConversationWs(conversationId, !!conversationId, user?.id);
+
+  useEffect(() => {
+    if (!conversationId || !user?.id) return;
+    postConversationSeen(conversationId);
+  }, [conversationId, user?.id]);
 
   const { data: doctorSearchData, isLoading: doctorSearchLoading } = useQuery<SearchResponse>({
     queryKey: ["/api/messenger/search", doctorSearch],

@@ -1272,9 +1272,6 @@ ${allUrls.map(url => `  <url>
       const inConv = await storage.isUserInConversation(currentUserId, id);
       const canReadConversation = inConv || conv.type === "channel";
       if (!canReadConversation) return res.status(403).json({ message: "Access denied" });
-      if (inConv) {
-        await notifyConversationSeen(id, currentUserId);
-      }
       const participants = await storage.getConversationParticipants(id);
       res.json({ ...conv, participants });
     } catch (error) {
@@ -1582,9 +1579,6 @@ ${allUrls.map(url => `  <url>
       const inConv = await storage.isUserInConversation(currentUserId, id);
       const canReadMessages = inConv || conv.type === "channel";
       if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
-      if (inConv) {
-        await notifyConversationSeen(id, currentUserId);
-      }
       const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
       const withAuthors = await enrichConversationMessages(messages, currentUserId);
       res.json(withAuthors);

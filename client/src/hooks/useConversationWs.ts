@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
+import { postConversationSeen } from "@/lib/markConversationSeen";
 
 export interface ConversationMessageAuthor {
   id: string;
@@ -163,25 +164,36 @@ export function useConversationWs(
     const scheduleMarkSeen = () => {
       const convId = conversationIdRef.current;
       if (!convId || !currentUserIdRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       if (markSeenTimeoutRef.current) clearTimeout(markSeenTimeoutRef.current);
       markSeenTimeoutRef.current = setTimeout(() => {
         markSeenTimeoutRef.current = null;
-        void fetch(`/api/conversations/${convId}/seen`, {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => {});
+        if (conversationIdRef.current !== convId) return;
+        postConversationSeen(convId);
       }, 400);
     };
 
+    let disposed = false;
+    const activeConversationId = conversationId;
+
     const connect = () => {
+      if (disposed) return;
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "subscribe_conversation", conversationId }));
-        scheduleMarkSeen();
+        if (disposed || conversationIdRef.current !== activeConversationId) {
+          ws.close();
+          return;
+        }
+        ws.send(
+          JSON.stringify({
+            type: "subscribe_conversation",
+            conversationId: activeConversationId,
+          })
+        );
       };
 
       ws.onmessage = (event) => {
@@ -354,8 +366,12 @@ export function useConversationWs(
       };
 
       ws.onclose = () => {
-        wsRef.current = null;
-        if (conversationIdRef.current) {
+        if (wsRef.current === ws) wsRef.current = null;
+        if (
+          !disposed &&
+          conversationIdRef.current === activeConversationId &&
+          conversationIdRef.current
+        ) {
           reconnectTimeoutRef.current = setTimeout(connect, 2000);
         }
       };
@@ -368,6 +384,7 @@ export function useConversationWs(
     connect();
 
     return () => {
+      disposed = true;
       if (markSeenTimeoutRef.current) {
         clearTimeout(markSeenTimeoutRef.current);
         markSeenTimeoutRef.current = null;
@@ -378,7 +395,12 @@ export function useConversationWs(
       }
       if (wsRef.current) {
         if (wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: "unsubscribe_conversation", conversationId }));
+          wsRef.current.send(
+            JSON.stringify({
+              type: "unsubscribe_conversation",
+              conversationId: activeConversationId,
+            })
+          );
         }
         wsRef.current.close();
         wsRef.current = null;

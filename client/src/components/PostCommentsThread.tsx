@@ -14,6 +14,7 @@ import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { postConversationSeen } from "@/lib/markConversationSeen";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -74,6 +75,11 @@ export default function PostCommentsThread({
   const deepLinkHandledRef = useRef<string | null>(null);
 
   useConversationWs(conversationId, true);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    postConversationSeen(conversationId);
+  }, [conversationId]);
 
   const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
