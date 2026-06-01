@@ -5,13 +5,13 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, payments, articles } from "@shared/schema";
-import { sql, eq, desc } from "drizzle-orm";
+import { users, payments } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin } from "./emailAuth";
 import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
-import { sendReceiptEmail, sendInviteEmail, sendInviteAccessEmail } from "./email";
+import { sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
-import { insertArticleSchema, updateArticleSchema, insertTagSchema, updateTagSchema, tagCategoryEnum } from "@shared/schema";
+import { tagCategoryEnum } from "@shared/schema";
 import {
   questionnaireInstanceDataSchema,
   questionnaireTemplateStructureSchema,
@@ -21,8 +21,6 @@ import {
   type QuestionnaireTemplateStructure,
 } from "@shared/questionnaireTypes";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
-import { truncateHtml } from "./utils/htmlTruncate";
-import { invalidateCache, invalidateTagCache } from "./prerender";
 import {
   insertConversationSchema,
   insertConversationMessageSchema,
@@ -59,7 +57,6 @@ import {
   notifyConversationNewMessage,
 } from "./push";
 
-const PREVIEW_LENGTH = 500;
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
 let objectStorageModulePromise: Promise<typeof import("./replit_integrations/object_storage")> | null = null;
 
@@ -75,19 +72,6 @@ function getObjectStorageModule(): Promise<typeof import("./replit_integrations/
     objectStorageModulePromise = import("./replit_integrations/object_storage");
   }
   return objectStorageModulePromise;
-}
-
-async function checkSubscription(req: any): Promise<boolean> {
-  const session = req.session as any;
-  
-  if (session?.userId && session?.authType === 'email') {
-    const user = await storage.getUser(session.userId);
-    return user?.subscriptionExpiresAt 
-      ? new Date(user.subscriptionExpiresAt) > new Date() 
-      : false;
-  }
-  
-  return false;
 }
 
 async function getCurrentUserId(req: any): Promise<string | null> {
@@ -158,26 +142,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const baseUrl = process.env.APP_URL || BASE_URL;
       
-      const articles = await storage.getAllArticles();
-      
       const staticPages: Array<{ loc: string; priority: string; changefreq: string; lastmod?: string }> = [
         { loc: '/', priority: '1.0', changefreq: 'daily' },
-        { loc: '/remedies', priority: '0.9', changefreq: 'weekly' },
-        { loc: '/situations', priority: '0.9', changefreq: 'weekly' },
         { loc: '/subscribe', priority: '0.8', changefreq: 'monthly' },
         { loc: '/about', priority: '0.6', changefreq: 'monthly' },
         { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
         { loc: '/oferta', priority: '0.3', changefreq: 'yearly' },
       ];
       
-      const articleUrls = articles.map(article => ({
-        loc: `/article/${article.slug}`,
-        priority: '0.7',
-        changefreq: 'weekly',
-        lastmod: article.updatedAt ? new Date(article.updatedAt).toISOString().split('T')[0] : undefined,
-      }));
-      
-      const allUrls = [...staticPages, ...articleUrls];
+      const allUrls = staticPages;
       
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -278,7 +251,7 @@ ${allUrls.map(url => `  <url>
       if (!userId) return res.status(401).json({ message: "Not authenticated" });
 
       const inviter = await storage.getInviterOfUser(userId);
-      const invitedCount = await storage.getAcceptedInvitesCountByUser(userId);
+      const acceptedInvites = await storage.getAcceptedInvitesCountsByUser(userId);
 
       res.json({
         inviter: inviter
@@ -289,7 +262,7 @@ ${allUrls.map(url => `  <url>
               lastName: inviter.lastName,
             }
           : null,
-        invitedCount,
+        acceptedInvites,
       });
     } catch (error) {
       console.error("Error fetching invite profile summary:", error);
@@ -475,157 +448,6 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Public article routes (accessible to everyone, preview for non-subscribers)
-  app.get('/api/articles', async (req: any, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
-      const offset = req.query.offset ? parseInt(req.query.offset, 10) : undefined;
-      const articlesList = await storage.getAllArticles({ limit, offset });
-      const hasActiveSubscription = await checkSubscription(req);
-      const userId = await getCurrentUserId(req);
-
-      // Get likes info for all articles in one query
-      const articleIds = articlesList.map(a => a.id);
-      const likesInfo = await storage.getBulkArticleLikesInfo(articleIds, userId || undefined);
-
-      // Add likes info to articles
-      const articlesWithLikes = articlesList.map(article => {
-        const likes = likesInfo.get(article.id) || { likesCount: 0, userLiked: false };
-        return {
-          ...article,
-          content: (!hasActiveSubscription && !article.isFree) 
-            ? truncateHtml(article.content, PREVIEW_LENGTH) 
-            : article.content,
-          likesCount: likes.likesCount,
-          userLiked: likes.userLiked,
-        };
-      });
-
-      res.json(articlesWithLikes);
-    } catch (error) {
-      console.error("Error fetching articles:", error);
-      res.status(500).json({ message: "Failed to fetch articles" });
-    }
-  });
-
-  app.get('/api/articles/slug/:slug', async (req: any, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    try {
-      const article = await storage.getArticleBySlug(req.params.slug);
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-
-      const hasActiveSubscription = await checkSubscription(req);
-
-      if (!hasActiveSubscription && !article.isFree) {
-        const previewArticle = {
-          ...article,
-          content: truncateHtml(article.content, PREVIEW_LENGTH),
-        };
-        return res.json(previewArticle);
-      }
-
-      res.json(article);
-    } catch (error) {
-      console.error("Error fetching article:", error);
-      res.status(500).json({ message: "Failed to fetch article" });
-    }
-  });
-
-  app.get('/api/articles/:id', async (req: any, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    try {
-      const article = await storage.getArticleById(req.params.id);
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-
-      const hasActiveSubscription = await checkSubscription(req);
-
-      if (!hasActiveSubscription && !article.isFree) {
-        const previewArticle = {
-          ...article,
-          content: truncateHtml(article.content, PREVIEW_LENGTH),
-        };
-        return res.json(previewArticle);
-      }
-
-      res.json(article);
-    } catch (error) {
-      console.error("Error fetching article:", error);
-      res.status(500).json({ message: "Failed to fetch article" });
-    }
-  });
-
-  // Search articles
-  app.get('/api/articles/search/:query', async (req: any, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    try {
-      const { query } = req.params;
-      const results = await storage.searchArticles(query);
-      const hasActiveSubscription = await checkSubscription(req);
-
-      if (!hasActiveSubscription) {
-        const previewResults = results.map(article => ({
-          ...article,
-          content: article.isFree ? article.content : truncateHtml(article.content, PREVIEW_LENGTH),
-        }));
-        return res.json(previewResults);
-      }
-
-      res.json(results);
-    } catch (error) {
-      console.error("Error searching articles:", error);
-      res.status(500).json({ message: "Failed to search articles" });
-    }
-  });
-
-  // Article like routes
-  app.get('/api/articles/:id/likes', async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const session = req.session as any;
-      const userId = session?.userId;
-      
-      const likesInfo = await storage.getArticleLikesInfo(id, userId);
-      res.json(likesInfo);
-    } catch (error) {
-      console.error("Error fetching likes:", error);
-      res.status(500).json({ message: "Failed to fetch likes" });
-    }
-  });
-
-  app.post('/api/articles/:id/like', async (req: any, res) => {
-    try {
-      const { id } = req.params;
-      const session = req.session as any;
-      
-      if (!session?.userId) {
-        return res.status(401).json({ message: "Необходимо войти в систему" });
-      }
-      
-      const article = await storage.getArticleById(id);
-      if (!article) {
-        return res.status(404).json({ message: "Статья не найдена" });
-      }
-      
-      if (!article.isFree) {
-        const hasActiveSubscription = await checkSubscription(req);
-        if (!hasActiveSubscription) {
-          return res.status(403).json({ message: "Требуется подписка для лайка этой статьи" });
-        }
-      }
-      
-      const result = await storage.toggleLike(id, session.userId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error toggling like:", error);
-      res.status(500).json({ message: "Failed to toggle like" });
-    }
-  });
-
   // Tag routes (public - for browsing and searching)
   app.get('/api/tags', async (req, res) => {
     try {
@@ -657,291 +479,6 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error searching tags:", error);
       res.status(500).json({ message: "Failed to search tags" });
-    }
-  });
-
-  // Admin tag routes
-  app.post('/api/admin/tags', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const validatedData = insertTagSchema.parse(req.body);
-      const tag = await storage.createTag(validatedData);
-      invalidateTagCache(tag.category as 'remedy' | 'situation');
-      res.json(tag);
-    } catch (error) {
-      console.error("Error creating tag:", error);
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid tag data" });
-      }
-      res.status(500).json({ message: "Failed to create tag" });
-    }
-  });
-
-  app.put('/api/admin/tags/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const validatedData = updateTagSchema.parse(req.body);
-      const tag = await storage.updateTag(id, validatedData);
-      if (!tag) {
-        return res.status(404).json({ message: "Tag not found" });
-      }
-      invalidateTagCache();
-      res.json(tag);
-    } catch (error) {
-      console.error("Error updating tag:", error);
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid tag data" });
-      }
-      res.status(500).json({ message: "Failed to update tag" });
-    }
-  });
-
-  app.delete('/api/admin/tags/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const deleted = await storage.deleteTag(id);
-      if (!deleted) {
-        return res.status(404).json({ message: "Tag not found" });
-      }
-      invalidateTagCache();
-      res.json({ message: "Tag deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting tag:", error);
-      res.status(500).json({ message: "Failed to delete tag" });
-    }
-  });
-
-
-  // Admin stats - fast count query
-  app.get('/api/admin/stats', isAuthenticated, isAdmin, async (_req, res) => {
-    try {
-      const [[articlesResult], [usersResult]] = await Promise.all([
-        db.select({ count: sql<number>`count(*)::int` }).from(articles),
-        db.select({ count: sql<number>`count(*)::int` }).from(users),
-      ]);
-      res.json({
-        articlesCount: articlesResult?.count || 0,
-        usersCount: usersResult?.count || 0,
-      });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-      res.status(500).json({ message: "Failed to fetch stats" });
-    }
-  });
-
-  // Admin article routes
-  app.get('/api/admin/articles', isAuthenticated, isAdmin, async (_req, res) => {
-    try {
-      const articlesList = await storage.getAllArticles();
-      res.json(articlesList);
-    } catch (error) {
-      console.error("Error fetching articles:", error);
-      res.status(500).json({ message: "Failed to fetch articles" });
-    }
-  });
-
-  app.post('/api/admin/articles', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { tagIds, ...articleData } = req.body;
-      const validatedData = insertArticleSchema.parse(articleData);
-      
-      // Validate tagIds
-      let validatedTagIds: string[] = [];
-      if (tagIds) {
-        if (!Array.isArray(tagIds)) {
-          return res.status(400).json({ message: "tagIds must be an array" });
-        }
-        
-        // Deduplicate and validate format
-        const uniqueTagIds = Array.from(new Set(tagIds));
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        for (const id of uniqueTagIds) {
-          if (typeof id !== 'string' || !uuidRegex.test(id)) {
-            return res.status(400).json({ message: "Invalid tag ID format" });
-          }
-        }
-        
-        // Verify all tags exist
-        const existingTags = await storage.getTagsByIds(uniqueTagIds);
-        if (existingTags.length !== uniqueTagIds.length) {
-          return res.status(400).json({ message: "One or more tag IDs do not exist" });
-        }
-        
-        validatedTagIds = uniqueTagIds;
-      }
-      
-      const article = await storage.createArticle(validatedData, validatedTagIds);
-      invalidateCache(article.slug);
-      res.json(article);
-    } catch (error) {
-      console.error("Error creating article:", error);
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid article data" });
-      }
-      res.status(500).json({ message: "Failed to create article" });
-    }
-  });
-
-  app.put('/api/admin/articles/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { tagIds, ...articleData } = req.body;
-      const validatedData = updateArticleSchema.parse(articleData);
-      
-      // Validate tagIds if provided
-      let validatedTagIds: string[] | undefined = undefined;
-      if (tagIds !== undefined) {
-        if (!Array.isArray(tagIds)) {
-          return res.status(400).json({ message: "tagIds must be an array" });
-        }
-        
-        // Deduplicate and validate format
-        const uniqueTagIds = Array.from(new Set(tagIds));
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        for (const id of uniqueTagIds) {
-          if (typeof id !== 'string' || !uuidRegex.test(id)) {
-            return res.status(400).json({ message: "Invalid tag ID format" });
-          }
-        }
-        
-        // Verify all tags exist
-        const existingTags = await storage.getTagsByIds(uniqueTagIds);
-        if (existingTags.length !== uniqueTagIds.length) {
-          return res.status(400).json({ message: "One or more tag IDs do not exist" });
-        }
-        
-        validatedTagIds = uniqueTagIds;
-      }
-      
-      const article = await storage.updateArticle(req.params.id, validatedData, validatedTagIds);
-      invalidateCache(article.slug);
-      res.json(article);
-    } catch (error) {
-      console.error("Error updating article:", error);
-      if (error instanceof Error && error.name === 'ZodError') {
-        return res.status(400).json({ message: "Invalid article data" });
-      }
-      res.status(500).json({ message: "Failed to update article" });
-    }
-  });
-
-  app.delete('/api/admin/articles/:id', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const article = await storage.getArticleById(req.params.id);
-      await storage.deleteArticle(req.params.id);
-      if (article) {
-        invalidateCache(article.slug);
-      }
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting article:", error);
-      res.status(500).json({ message: "Failed to delete article" });
-    }
-  });
-
-  // Admin user/subscription routes
-  app.get('/api/admin/users', isAuthenticated, isAdmin, async (_req, res) => {
-    try {
-      // Get all users with their last successful payment date
-      const usersWithPayments = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          isAdmin: users.isAdmin,
-          subscriptionExpiresAt: users.subscriptionExpiresAt,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-          lastPaymentDate: sql<Date | null>`(
-            SELECT MAX(p.created_at) 
-            FROM payments p 
-            WHERE p.user_id = users.id 
-            AND p.status = 'completed'
-          )`.as('last_payment_date'),
-        })
-        .from(users)
-        .orderBy(sql`(
-          SELECT MAX(p.created_at) 
-          FROM payments p 
-          WHERE p.user_id = users.id 
-          AND p.status = 'completed'
-        ) DESC NULLS LAST`);
-      
-      res.json(usersWithPayments);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
-  // Get user's payment history
-  app.get('/api/admin/users/:id/payments', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const userPayments = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.userId, req.params.id))
-        .orderBy(desc(payments.createdAt));
-      
-      res.json(userPayments);
-    } catch (error) {
-      console.error("Error fetching user payments:", error);
-      res.status(500).json({ message: "Failed to fetch user payments" });
-    }
-  });
-
-  // Update payment receipt URL and send email to user
-  app.put('/api/admin/payments/:id/receipt', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { receiptUrl } = req.body;
-      const [updated] = await db
-        .update(payments)
-        .set({ receiptUrl, updatedAt: new Date() })
-        .where(eq(payments.id, req.params.id))
-        .returning();
-      
-      if (!updated) {
-        return res.status(404).json({ message: "Payment not found" });
-      }
-
-      // Send receipt email to user
-      if (receiptUrl) {
-        const [user] = await db
-          .select({ email: users.email })
-          .from(users)
-          .where(eq(users.id, updated.userId));
-        
-        if (user?.email) {
-          const paymentDate = updated.createdAt 
-            ? new Date(updated.createdAt).toLocaleDateString('ru-RU')
-            : 'неизвестно';
-          
-          try {
-            await sendReceiptEmail(user.email, receiptUrl, updated.amount, paymentDate);
-            console.log(`Receipt email sent to ${user.email}`);
-          } catch (emailError) {
-            console.error("Error sending receipt email:", emailError);
-            // Don't fail the request if email fails
-          }
-        }
-      }
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating receipt URL:", error);
-      res.status(500).json({ message: "Failed to update receipt URL" });
-    }
-  });
-
-  app.put('/api/admin/users/:id/subscription', isAuthenticated, isAdmin, async (req, res) => {
-    try {
-      const { subscriptionExpiresAt } = req.body;
-      const expiresAt = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null;
-      const user = await storage.updateUserSubscription(req.params.id, expiresAt);
-      res.json(user);
-    } catch (error) {
-      console.error("Error updating subscription:", error);
-      res.status(500).json({ message: "Failed to update subscription" });
     }
   });
 
@@ -1105,10 +642,10 @@ ${allUrls.map(url => `  <url>
       }
 
       let inviter: Awaited<ReturnType<typeof storage.getInviterOfUser>> | undefined;
-      let invitedCount = 0;
+      let acceptedInvites = { homeopath: 0, patient: 0 };
       try {
         inviter = await storage.getInviterOfUser(targetUserId);
-        invitedCount = await storage.getAcceptedInvitesCountByUser(targetUserId);
+        acceptedInvites = await storage.getAcceptedInvitesCountsByUser(targetUserId);
       } catch (inviteError) {
         // Do not block profile view if invite subsystem is unavailable.
         console.error("Invite summary unavailable for profile:", inviteError);
@@ -1133,7 +670,7 @@ ${allUrls.map(url => `  <url>
               lastName: inviter.lastName,
             }
           : null,
-        invitedCount,
+        acceptedInvites,
       });
     } catch (error) {
       console.error("Error fetching public profile:", error);

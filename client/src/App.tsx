@@ -5,15 +5,10 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
-import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { AppSidebar } from "@/components/AppSidebar";
 import NotFound from "@/pages/not-found";
-import Home from "@/pages/Home";
 import Landing from "@/pages/Landing";
-import ArticleReader from "@/pages/ArticleReader";
 import Terms from "@/pages/Terms";
 import Oferta from "@/pages/Oferta";
 import Subscribe from "@/pages/Subscribe";
@@ -22,13 +17,7 @@ import PaymentFail from "@/pages/PaymentFail";
 import AuthPage from "@/pages/AuthPage";
 import InviteAccept from "@/pages/InviteAccept";
 import ResetPassword from "@/pages/ResetPassword";
-import AdminHome from "@/pages/admin/AdminHome";
-import AdminArticles from "@/pages/admin/AdminArticles";
-import AdminSubscriptions from "@/pages/admin/AdminSubscriptions";
-import AdminTags from "@/pages/admin/AdminTags";
 import About from "@/pages/About";
-import AllRemedies from "@/pages/AllRemedies";
-import AllSituations from "@/pages/AllSituations";
 import Messenger from "@/pages/Messenger";
 import Profile from "@/pages/Profile";
 import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
@@ -52,9 +41,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/portraits" component={Home} />
-      <Route path="/article/">{() => <Redirect to="/portraits" />}</Route>
-      <Route path="/article/:slug" component={ArticleReader} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/invite/accept" component={InviteAccept} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -62,8 +48,6 @@ function Router() {
       <Route path="/oferta" component={Oferta} />
       <Route path="/about" component={About} />
       <Route path="/subscribe" component={Subscribe} />
-      <Route path="/remedies" component={AllRemedies} />
-      <Route path="/situations" component={AllSituations} />
       <Route path="/health-wall" component={() => <Redirect to="/messenger" />} />
       <Route path="/health-wall/:patientUserId" component={() => <Redirect to="/messenger" />} />
       <Route path="/messenger" component={Messenger} />
@@ -85,10 +69,6 @@ function Router() {
         <>
           <Route path="/questionnaires/:id/edit" component={QuestionnaireTemplates} />
           <Route path="/questionnaires" component={QuestionnaireTemplates} />
-          <Route path="/admin" component={AdminHome} />
-          <Route path="/admin/articles" component={AdminArticles} />
-          <Route path="/admin/tags" component={AdminTags} />
-          <Route path="/admin/subscriptions" component={AdminSubscriptions} />
         </>
       )}
       <Route component={NotFound} />
@@ -98,11 +78,11 @@ function Router() {
 
 function ScrollToTop() {
   const [location] = useLocation();
-  
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location]);
-  
+
   return null;
 }
 
@@ -115,7 +95,7 @@ function useImmersiveViewport(enabled: boolean) {
 }
 
 function AppContent() {
-  const { isAdmin, isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
   const isProfilePage = location.startsWith("/profile");
@@ -148,29 +128,6 @@ function AppContent() {
     return <Redirect to="/auth" />;
   }
 
-  if (isAdmin && location.startsWith('/admin')) {
-    const style = {
-      "--sidebar-width": "16rem",
-      "--sidebar-width-icon": "3rem",
-    };
-
-    return (
-      <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full">
-          <AppSidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <Header />
-            <main className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-                <Router />
-              </div>
-            </main>
-          </div>
-        </div>
-      </SidebarProvider>
-    );
-  }
-
   const pushPromptEnabled =
     isAuthenticated &&
     (location.startsWith("/health-wall") || location.startsWith("/messenger"));
@@ -201,7 +158,6 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <ScrollToTop />
-      {!isAuthPage && !isInviteAcceptPage && <Header />}
       <main className="flex-1">
         <Router />
       </main>

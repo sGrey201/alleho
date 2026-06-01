@@ -11,6 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Lock, CheckCircle } from "lucide-react";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 const resetPasswordSchema = z.object({
   password: z.string().min(6, "Пароль должен быть не менее 6 символов"),
@@ -58,8 +60,12 @@ export default function ResetPassword() {
     },
   });
 
+  const resetSeo = <RouteSeo {...pageMeta.resetPassword} />;
+
   if (!token) {
     return (
+      <>
+        {resetSeo}
       <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4 py-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
@@ -75,11 +81,14 @@ export default function ResetPassword() {
           </CardContent>
         </Card>
       </div>
+      </>
     );
   }
 
   if (success) {
     return (
+      <>
+        {resetSeo}
       <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4 py-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
@@ -98,10 +107,13 @@ export default function ResetPassword() {
           </CardContent>
         </Card>
       </div>
+      </>
     );
   }
 
   return (
+    <>
+      {resetSeo}
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
@@ -170,5 +182,6 @@ export default function ResetPassword() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

@@ -12,6 +12,8 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 const loginSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -78,6 +80,8 @@ export default function AuthPage() {
   });
 
   return (
+    <>
+      <RouteSeo {...pageMeta.auth} />
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center pb-2">
@@ -231,5 +235,6 @@ export default function AuthPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

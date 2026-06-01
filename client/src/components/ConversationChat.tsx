@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -324,6 +324,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
+  const [openQuestionnaireTemplateName, setOpenQuestionnaireTemplateName] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<{
     templateId: string;
     templateName: string;
@@ -333,6 +334,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   useEffect(() => {
     setOpenQuestionnaireInstanceId(null);
+    setOpenQuestionnaireTemplateName(null);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
   }, [conversationId]);
@@ -1294,7 +1296,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const openQuestionnaireFromMessage = (msg: ConversationMessageWithAuthor) => {
     if (msg.messageType === "questionnaire") {
       const payload = parseQuestionnaireMessageContent(msg.content);
-      if (payload) setOpenQuestionnaireInstanceId(payload.instanceId);
+      if (payload) {
+        setOpenQuestionnaireInstanceId(payload.instanceId);
+        setOpenQuestionnaireTemplateName(payload.templateName);
+      }
       return;
     }
     if (msg.messageType === "questionnaire_template") {
@@ -1414,11 +1419,29 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const questionnairePanelOpen = !!openQuestionnaireInstanceId || !!templatePreview;
   const closeQuestionnairePanel = () => {
     setOpenQuestionnaireInstanceId(null);
+    setOpenQuestionnaireTemplateName(null);
     setTemplatePreview(null);
   };
   const questionnairePanelTitle = openQuestionnaireInstanceId
-    ? t.questionnaireTitle
+    ? openQuestionnaireTemplateName ?? t.questionnaireTitle
     : templatePreview?.templateName ?? t.questionnaireTitle;
+
+  const questionnairePanelHeader = (
+    <div className="flex shrink-0 items-center gap-2 border-b px-3 py-3">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0"
+        onClick={closeQuestionnairePanel}
+        aria-label={t.backToHealthWall}
+        data-testid="button-questionnaire-panel-back"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Button>
+      <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{questionnairePanelTitle}</h2>
+    </div>
+  );
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col md:flex-row">
@@ -1758,19 +1781,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
       {!isMobile && questionnairePanelOpen && (
         <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-background md:w-[min(32rem,45%)] md:max-w-lg">
-          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
-            <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{questionnairePanelTitle}</h2>
-            <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={closeQuestionnairePanel}>
-              <X className="h-4 w-4" />
-              <span className="sr-only">{t.cancel}</span>
-            </Button>
-          </div>
+          {questionnairePanelHeader}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {openQuestionnaireInstanceId && (
-              <DynamicQuestionnaireForm mode="instance" instanceId={openQuestionnaireInstanceId} />
+              <DynamicQuestionnaireForm hideTitle mode="instance" instanceId={openQuestionnaireInstanceId} />
             )}
             {templatePreview && !openQuestionnaireInstanceId && (
               <DynamicQuestionnaireForm
+                hideTitle
                 mode="preview"
                 structure={templatePreview.snapshot}
                 templateName={templatePreview.templateName}
@@ -2053,16 +2071,15 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
       {isMobile && (
         <Sheet open={questionnairePanelOpen} onOpenChange={(open) => !open && closeQuestionnairePanel()}>
-          <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
-            <SheetHeader className="sr-only">
-              <SheetTitle>{questionnairePanelTitle}</SheetTitle>
-            </SheetHeader>
+          <SheetContent side="right" hideCloseButton className="flex w-full flex-col p-0 sm:max-w-lg">
+            {questionnairePanelHeader}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {openQuestionnaireInstanceId && (
-                <DynamicQuestionnaireForm mode="instance" instanceId={openQuestionnaireInstanceId} />
+                <DynamicQuestionnaireForm hideTitle mode="instance" instanceId={openQuestionnaireInstanceId} />
               )}
               {templatePreview && !openQuestionnaireInstanceId && (
                 <DynamicQuestionnaireForm
+                  hideTitle
                   mode="preview"
                   structure={templatePreview.snapshot}
                   templateName={templatePreview.templateName}

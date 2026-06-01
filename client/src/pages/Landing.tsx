@@ -5,18 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
 export default function Landing() {
-  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      if (isAdmin) {
-        setLocation("/messenger");
-        return;
-      }
       setLocation("/messenger");
     }
-  }, [isLoading, isAuthenticated, isAdmin, setLocation]);
+  }, [isLoading, isAuthenticated, setLocation]);
 
   const handleLogin = () => setLocation("/auth");
 

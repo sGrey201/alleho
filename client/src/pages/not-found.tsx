@@ -1,8 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function NotFound() {
   return (
+    <>
+      <RouteSeo {...pageMeta.notFound} noindex />
     <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md mx-4">
         <CardContent className="pt-6">
@@ -17,5 +21,6 @@ export default function NotFound() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

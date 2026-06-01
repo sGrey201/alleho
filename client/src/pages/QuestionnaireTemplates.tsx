@@ -28,6 +28,8 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { QuestionnaireTemplate } from "@shared/schema";
 import { QuestionnaireTemplateEditor } from "@/pages/QuestionnaireTemplateEditor";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function QuestionnaireTemplates() {
   const { toast } = useToast();
@@ -254,6 +256,8 @@ export default function QuestionnaireTemplates() {
     ) : null;
 
   return (
+    <>
+      <RouteSeo {...(selectedId ? pageMeta.questionnaireEdit : pageMeta.questionnaires)} />
     <div className="flex h-full min-h-0 flex-col md:flex-row">
       {showList && (
         <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-b md:w-80 md:max-w-sm md:border-b-0 md:border-r">
@@ -265,5 +269,6 @@ export default function QuestionnaireTemplates() {
         <div className="flex min-h-0 flex-1 flex-col">{editorPanel}</div>
       )}
     </div>
+    </>
   );
 }

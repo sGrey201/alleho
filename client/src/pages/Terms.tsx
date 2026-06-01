@@ -1,9 +1,13 @@
 import { t } from '@/lib/i18n';
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CreditCard, Building2, RefreshCw, Mail } from 'lucide-react';
 
 export default function Terms() {
   return (
+    <>
+      <RouteSeo {...pageMeta.terms} />
     <div className="mx-auto max-w-4xl px-6 py-12">
       <div className="mb-8">
         <h1 className="mb-4 text-3xl md:text-4xl font-bold text-foreground">
@@ -120,5 +124,6 @@ export default function Terms() {
         </Card>
       </div>
     </div>
+    </>
   );
 }

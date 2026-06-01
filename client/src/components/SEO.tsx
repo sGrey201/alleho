@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async';
-import { BASE_URL, SITE_TITLE } from '@shared/brand';
+import { BASE_URL, META_DESCRIPTION, META_KEYWORDS, SITE_TITLE } from '@shared/brand';
 
 interface SEOProps {
   title?: string;
@@ -15,12 +15,14 @@ interface SEOProps {
     tags?: string[];
   };
   schema?: object;
+  noindex?: boolean;
 }
 
 const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`;
 const SITE_NAME = SITE_TITLE;
 const DEFAULT_TITLE = SITE_TITLE;
-const DEFAULT_DESCRIPTION = 'Уникальная галерея живых гомеопатических портретов. Ресурс, динамично пополняющийся новыми зарисовками из жизни.';
+const DEFAULT_DESCRIPTION = META_DESCRIPTION;
+const DEFAULT_KEYWORDS = META_KEYWORDS;
 
 export function SEO({
   title,
@@ -31,6 +33,7 @@ export function SEO({
   type = 'website',
   article,
   schema,
+  noindex = false,
 }: SEOProps) {
   const fullTitle = title ? `${title} | ${SITE_NAME}` : DEFAULT_TITLE;
   const canonicalUrl = url ? `${BASE_URL}${url}` : BASE_URL;
@@ -39,7 +42,8 @@ export function SEO({
     <Helmet>
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
-      {keywords && <meta name="keywords" content={keywords} />}
+      <meta name="keywords" content={keywords ?? DEFAULT_KEYWORDS} />
+      {noindex && <meta name="robots" content="noindex, nofollow" />}
       <link rel="canonical" href={canonicalUrl} />
 
       <meta property="og:type" content={type} />
@@ -122,30 +126,6 @@ export function generateWebsiteSchema() {
     name: SITE_NAME,
     url: BASE_URL,
     description: DEFAULT_DESCRIPTION,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: `${BASE_URL}/?search={search_term_string}`,
-      'query-input': 'required name=search_term_string',
-    },
   };
 }
 
-export function generateTagListSchema(tags: { name: string; slug: string }[], category: 'remedy' | 'situation') {
-  const categoryName = category === 'remedy' ? 'Препараты' : 'Случаи';
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: `${categoryName} — ${SITE_NAME}`,
-    url: `${BASE_URL}/${category === 'remedy' ? 'remedies' : 'situations'}`,
-    description: `Полный список ${category === 'remedy' ? 'гомеопатических препаратов' : 'клинических случаев'} на ${SITE_NAME}`,
-    mainEntity: {
-      '@type': 'ItemList',
-      itemListElement: tags.map((tag, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        name: tag.name,
-        url: `${BASE_URL}/?${category === 'remedy' ? 'remedies' : 'situations'}=${tag.slug}`,
-      })),
-    },
-  };
-}

@@ -1,5 +1,10 @@
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
+
 export default function About() {
   return (
+    <>
+      <RouteSeo {...pageMeta.about} />
     <div className="min-h-[calc(100vh-200px)] flex items-center justify-center">
       <div className="max-w-3xl px-6 py-12 text-center">
         
@@ -15,5 +20,6 @@ export default function About() {
         </div>
       </div>
     </div>
+    </>
   );
 }

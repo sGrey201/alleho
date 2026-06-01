@@ -7,6 +7,8 @@ import { Check, CreditCard, Loader2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function Subscribe() {
   const { user } = useAuth();
@@ -49,6 +51,8 @@ export default function Subscribe() {
   };
 
   return (
+    <>
+      <RouteSeo {...pageMeta.subscribe} />
     <div className="min-h-[80vh] py-12 px-4">
       <div className="mx-auto max-w-4xl">
         <div className="text-center mb-12">
@@ -199,5 +203,6 @@ export default function Subscribe() {
         )}
       </div>
     </div>
+    </>
   );
 }

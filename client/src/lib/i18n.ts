@@ -1876,7 +1876,7 @@ export const t = {
   patientChatSettings: 'Настройки чата',
   chatNameLabel: 'Название чата',
   changeChatPhoto: 'Изменить фото',
-  patientProfileLink: 'Профиль пациента',
+  contactPersonLabel: 'контактное лицо',
   createGroup: 'Создать группу',
   createConsilium: 'Создать консилиум',
   createChannel: 'Создать канал',

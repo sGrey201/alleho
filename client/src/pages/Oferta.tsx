@@ -1,7 +1,11 @@
 import { t } from '@/lib/i18n';
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function Oferta() {
   return (
+    <>
+      <RouteSeo {...pageMeta.oferta} />
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
       <article className="prose prose-slate max-w-none">
         <h1 className="text-3xl font-bold mb-2">ПУБЛИЧНАЯ ОФЕРТА</h1>
@@ -249,5 +253,6 @@ export default function Oferta() {
         </section>
       </article>
     </div>
+    </>
   );
 }

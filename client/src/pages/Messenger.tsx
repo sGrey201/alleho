@@ -12,6 +12,10 @@ import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PatientChatSettings from "@/components/PatientChatSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
+import ChatListMessagePreview from "@/components/ChatListMessagePreview";
+import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
@@ -540,6 +544,8 @@ export default function Messenger() {
     return <Redirect to="/auth" />;
   }
   return (
+    <>
+      <RouteSeo {...pageMeta.messenger} />
     <div className="flex h-full flex-col md:flex-row">
       {!isMobileConversationOpen && (
       <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background">
@@ -739,9 +745,10 @@ export default function Messenger() {
                                     ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                                     : t.chatGroup;
                           const isPatientRow = chat.type === "patient";
-                          const hasMsgPreview = !!chat.lastMessagePreview?.trim();
+                          const rawMsgPreview = chat.lastMessagePreview?.trim() ?? "";
+                          const displayMsgPreview = normalizeMessengerListPreview(rawMsgPreview);
+                          const hasMsgPreview = !!displayMsgPreview;
                           const alignTop = isPatientRow || hasMsgPreview;
-                          const subtitleText = chat.lastMessagePreview?.trim() || badge;
                           return (
                             <button
                               key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
@@ -768,11 +775,9 @@ export default function Messenger() {
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-foreground truncate">{label}</p>
                                 {hasMsgPreview ? (
-                                  <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 break-words leading-snug">
-                                    {subtitleText}
-                                  </p>
+                                  <ChatListMessagePreview preview={rawMsgPreview} multiline={alignTop} />
                                 ) : (
-                                  <p className="text-[13px] text-muted-foreground truncate mt-0.5">{subtitleText}</p>
+                                  <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
                                 )}
                               </div>
                             </button>
@@ -891,9 +896,10 @@ export default function Messenger() {
                               ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
                               : t.chatGroup;
                     const isPatientRow = chat.type === "patient";
-                    const hasMsgPreview = !!chat.lastMessagePreview?.trim();
+                    const rawMsgPreview = chat.lastMessagePreview?.trim() ?? "";
+                    const displayMsgPreview = normalizeMessengerListPreview(rawMsgPreview);
+                    const hasMsgPreview = !!displayMsgPreview;
                     const alignTop = isPatientRow || hasMsgPreview;
-                    const subtitleText = chat.lastMessagePreview?.trim() || badge;
                     return (
                       <button
                         key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
@@ -920,11 +926,9 @@ export default function Messenger() {
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-foreground truncate">{label}</p>
                           {hasMsgPreview ? (
-                            <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 break-words leading-snug">
-                              {subtitleText}
-                            </p>
+                            <ChatListMessagePreview preview={rawMsgPreview} multiline={alignTop} />
                           ) : (
-                            <p className="text-[13px] text-muted-foreground truncate mt-0.5">{subtitleText}</p>
+                            <p className="text-[13px] text-muted-foreground truncate mt-0.5">{badge}</p>
                           )}
                         </div>
                         <div className={cn("shrink-0 flex flex-col items-end gap-0.5", alignTop && "pt-0.5")}>
@@ -1118,5 +1122,6 @@ export default function Messenger() {
       </Dialog>
 
     </div>
+    </>
   );
 }

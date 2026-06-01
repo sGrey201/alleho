@@ -18,7 +18,25 @@ type ConversationInfo = {
   name?: string | null;
   avatarUrl?: string | null;
   patientUserId?: string | null;
+  participants?: Array<{
+    userId: string;
+    user?: {
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+    };
+  }>;
 };
+
+function formatContactFullName(user?: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): string {
+  if (!user) return "—";
+  const fullName = [user.lastName, user.firstName].filter(Boolean).join(" ").trim();
+  return fullName || user.email || "—";
+}
 
 type Props = {
   conversationId: string;
@@ -96,6 +114,8 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
 
   const displayName = nameDraft || conv.name || "—";
   const patientProfileId = conv.patientUserId;
+  const patientUser = conv.participants?.find((p) => p.userId === patientProfileId)?.user;
+  const contactFullName = formatContactFullName(patientUser);
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -175,9 +195,16 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
         </div>
 
         {patientProfileId && (
-          <Button type="button" variant="outline" className="w-full" asChild>
-            <Link href={`/profile/${patientProfileId}`}>{t.patientProfileLink}</Link>
-          </Button>
+          <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{t.contactPersonLabel}</p>
+            <Link
+              href={`/profile/${patientProfileId}`}
+              className="text-base font-medium text-primary hover:underline"
+              data-testid="link-contact-person-profile"
+            >
+              {contactFullName}
+            </Link>
+          </div>
         )}
       </div>
     </div>

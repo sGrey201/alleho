@@ -245,7 +245,7 @@ export interface IStorage {
   ): Promise<Invite>;
   markInviteExpired(inviteId: string): Promise<Invite>;
   getInviterOfUser(userId: string): Promise<User | undefined>;
-  getAcceptedInvitesCountByUser(inviterUserId: string): Promise<number>;
+  getAcceptedInvitesCountsByUser(inviterUserId: string): Promise<{ homeopath: number; patient: number }>;
 
   // Messenger conversations (doctors only)
   createConversation(data: InsertConversation): Promise<Conversation>;
@@ -1043,12 +1043,22 @@ export class DatabaseStorage implements IStorage {
     return this.getUser(invite.invitedByUserId);
   }
 
-  async getAcceptedInvitesCountByUser(inviterUserId: string): Promise<number> {
-    const [row] = await db
-      .select({ value: count() })
+  async getAcceptedInvitesCountsByUser(
+    inviterUserId: string
+  ): Promise<{ homeopath: number; patient: number }> {
+    const rows = await db
+      .select({ inviteType: invites.inviteType, value: count() })
       .from(invites)
-      .where(and(eq(invites.invitedByUserId, inviterUserId), eq(invites.status, "accepted")));
-    return row?.value ?? 0;
+      .where(and(eq(invites.invitedByUserId, inviterUserId), eq(invites.status, "accepted")))
+      .groupBy(invites.inviteType);
+
+    let homeopath = 0;
+    let patient = 0;
+    for (const row of rows) {
+      if (row.inviteType === "homeopath") homeopath = row.value;
+      else if (row.inviteType === "patient") patient = row.value;
+    }
+    return { homeopath, patient };
   }
 
   // Messenger conversations

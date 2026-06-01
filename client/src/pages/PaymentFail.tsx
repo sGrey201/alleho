@@ -2,11 +2,15 @@ import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { XCircle } from 'lucide-react';
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function PaymentFail() {
   const [, setLocation] = useLocation();
 
   return (
+    <>
+      <RouteSeo {...pageMeta.paymentFail} />
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="max-w-md w-full">
         <CardContent className="p-8 text-center">
@@ -46,5 +50,6 @@ export default function PaymentFail() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

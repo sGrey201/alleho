@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { queryClient } from '@/lib/queryClient';
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export default function PaymentSuccess() {
   const [, setLocation] = useLocation();
@@ -20,6 +22,8 @@ export default function PaymentSuccess() {
   }, [setLocation]);
 
   return (
+    <>
+      <RouteSeo {...pageMeta.paymentSuccess} />
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
       <Card className="max-w-md w-full">
         <CardContent className="p-8 text-center">
@@ -54,5 +58,6 @@ export default function PaymentSuccess() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

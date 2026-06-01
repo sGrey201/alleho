@@ -46,7 +46,10 @@ type InstanceResponse = {
   templateName: string;
 };
 
-type Props =
+type Props = {
+  /** Hide in-panel title when the parent already shows it (e.g. chat split header). */
+  hideTitle?: boolean;
+} & (
   | {
       mode: "instance";
       instanceId: string;
@@ -59,7 +62,8 @@ type Props =
       templateId?: string;
       onCopy?: () => void;
       isCopying?: boolean;
-    };
+    }
+);
 
 function getGenderLabel(gender: string | null) {
   if (gender === "male") return t.genderMale;
@@ -276,7 +280,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
 
   return (
     <div className="space-y-4 p-4">
-      {templateName && (
+      {templateName && !props.hideTitle && (
         <h2 className="text-lg font-semibold">{templateName}</h2>
       )}
       {props.mode === "preview" && props.onCopy && user?.isAdmin && (
@@ -290,19 +294,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
         <AccordionItem value="patient-profile">
           <AccordionTrigger className="text-sm font-medium">
             <span className="flex flex-1 items-center gap-2">
-              <span className="inline-flex items-center gap-1">
-                {t.questionnairePatientBlockTitle}
-                {showHintsAsIcon && (
-                  <QuestionnaireHintPopover hints={[t.questionnairePatientBlockHint]} />
-                )}
-              </span>
+              {t.questionnairePatientBlockTitle}
               {renderSaveStatus("profile")}
             </span>
           </AccordionTrigger>
           <AccordionContent>
-            {!showHintsAsIcon && (
-              <QuestionnaireHintText hint={t.questionnairePatientBlockHint} className="mb-3" />
-            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.lastName}</Label>

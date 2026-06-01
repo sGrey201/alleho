@@ -18,10 +18,57 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import type { QuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import { DEFAULT_QUESTIONNAIRE_HINTS_MODE } from "@shared/questionnaireTypes";
+import { RouteSeo } from "@/components/RouteSeo";
+import { pageMeta } from "@/lib/pageMeta";
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
 };
+
+type AcceptedInviteCounts = { homeopath: number; patient: number };
+
+type InviteProfileSummary = {
+  inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
+  acceptedInvites: AcceptedInviteCounts;
+};
+
+const EMPTY_ACCEPTED_INVITES: AcceptedInviteCounts = { homeopath: 0, patient: 0 };
+
+function InviteCountCard({
+  label,
+  count,
+  testId,
+}: {
+  label: string;
+  count: number;
+  testId: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className="text-base text-foreground" data-testid={testId}>
+        {count}
+      </p>
+    </div>
+  );
+}
+
+function AcceptedInvitesStats({ counts }: { counts: AcceptedInviteCounts }) {
+  return (
+    <>
+      <InviteCountCard
+        label="Приглашённые гомеопаты"
+        count={counts.homeopath}
+        testId="invite-count-homeopath"
+      />
+      <InviteCountCard
+        label="Приглашённые пациенты"
+        count={counts.patient}
+        testId="invite-count-patient"
+      />
+    </>
+  );
+}
 
 const COUNTRIES_RU = [
   "Австралия",
@@ -238,10 +285,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
     DEFAULT_QUESTIONNAIRE_HINTS_MODE
   );
   const hasPassword = (user as { hasPassword?: boolean } | undefined)?.hasPassword !== false;
-  const { data: ownInviteSummary } = useQuery<{
-    inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
-    invitedCount: number;
-  }>({
+  const { data: ownInviteSummary } = useQuery<InviteProfileSummary>({
     queryKey: ["/api/invites/profile-summary"],
     queryFn: async () => {
       const res = await fetch("/api/invites/profile-summary", { credentials: "include" });
@@ -262,9 +306,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
       city?: string | null;
       isAdmin: boolean;
     };
-    inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
-    invitedCount: number;
-  }>({
+  } & InviteProfileSummary>({
     queryKey: ["/api/users/profile", targetUserId],
     queryFn: async () => {
       const res = await fetch(`/api/users/${targetUserId}/profile`, { credentials: "include" });
@@ -319,12 +361,15 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
     },
   });
-  const inviteSummary = isOwnProfile
+  const inviteSummary: InviteProfileSummary | undefined = isOwnProfile
     ? ownInviteSummary
-    : {
-        inviter: viewedProfile?.inviter ?? null,
-        invitedCount: viewedProfile?.invitedCount ?? 0,
-      };
+    : viewedProfile
+      ? {
+          inviter: viewedProfile.inviter ?? null,
+          acceptedInvites: viewedProfile.acceptedInvites ?? EMPTY_ACCEPTED_INVITES,
+        }
+      : undefined;
+  const acceptedInvites = inviteSummary?.acceptedInvites ?? EMPTY_ACCEPTED_INVITES;
 
   useEffect(() => {
     if (profileUser) {
@@ -528,6 +573,8 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
 
   if (!isOwnProfile) {
     return (
+      <>
+        <RouteSeo {...pageMeta.profile} />
       <div className="min-h-screen bg-background">
         <div className="relative h-[50vh] min-h-[280px] max-h-[520px] w-full bg-muted">
           {profileImageUrl ? (
@@ -581,12 +628,16 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
               )}
             </p>
           </div>
+          <AcceptedInvitesStats counts={acceptedInvites} />
         </div>
       </div>
+      </>
     );
   }
 
   return (
+    <>
+      <RouteSeo {...pageMeta.profile} />
     <div className="container max-w-2xl mx-auto py-4 px-4 pb-8">
       <div className="space-y-6">
         <div className="flex items-center">
@@ -831,6 +882,10 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           </p>
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-2">
+          <AcceptedInvitesStats counts={acceptedInvites} />
+        </div>
+
         {showSharedQuestionnaires && sharedQuestionnaireTemplates.length > 0 && (
           <div className="space-y-3 rounded-lg border p-4">
             <h3 className="flex items-center gap-2 font-semibold">
@@ -927,6 +982,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           <div className="min-h-0 flex-1 overflow-y-auto">
             {previewTemplate?.structure && (
               <DynamicQuestionnaireForm
+                hideTitle
                 mode="preview"
                 structure={previewTemplate.structure}
                 templateName={previewTemplate.name}
@@ -943,5 +999,6 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         </SheetContent>
       </Sheet>
     </div>
+    </>
   );
 }
