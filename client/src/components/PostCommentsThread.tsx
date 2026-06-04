@@ -525,7 +525,7 @@ export default function PostCommentsThread({
         </div>
       </div>
 
-      <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 pt-20 pb-24">
+      <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 pt-20 pb-[calc(8rem+env(safe-area-inset-bottom,0px))]">
         <div className="space-y-3">
           {anchorPost && (
             <div className="flex w-full justify-start">
@@ -627,7 +627,7 @@ export default function PostCommentsThread({
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 pb-2 space-y-2">
+      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] space-y-2">
         {(replyTo || editing) && (
           <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
             {editing ? <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}

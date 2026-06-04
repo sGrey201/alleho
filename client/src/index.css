@@ -385,18 +385,11 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
 }
 
-/* Paint wallpaper into iOS home-indicator zone (below 100dvh) */
-html.app-immersive.app-shell-chat body,
-html.app-immersive.app-shell-chat .app-viewport {
-  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-}
-
 html.app-immersive.app-shell-chat,
 html.app-immersive.app-shell-chat body,
 html.app-immersive.app-shell-chat #root,
 html.app-immersive.app-shell-chat .app-viewport,
-html.app-immersive.app-shell-chat .app-viewport-content,
-html.app-immersive.app-shell-chat .chat-panel-bg {
+html.app-immersive.app-shell-chat .app-viewport-content {
   background-color: var(--chat-base, #a8c492);
   background-image:
     linear-gradient(
@@ -418,8 +411,7 @@ html.app-immersive.app-shell-chat .chat-panel-bg {
 .dark html.app-immersive.app-shell-chat body,
 .dark html.app-immersive.app-shell-chat #root,
 .dark html.app-immersive.app-shell-chat .app-viewport,
-.dark html.app-immersive.app-shell-chat .app-viewport-content,
-.dark html.app-immersive.app-shell-chat .chat-panel-bg {
+.dark html.app-immersive.app-shell-chat .app-viewport-content {
   --chat-base: #283322;
   background-color: var(--chat-base);
   background-image:
