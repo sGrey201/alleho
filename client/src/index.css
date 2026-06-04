@@ -380,16 +380,41 @@ html.app-immersive [data-radix-toast-viewport] {
   top: max(1rem, env(safe-area-inset-top, 0px));
 }
 
-/* Chat on mobile PWA: wallpaper edge-to-edge; safe areas on header/composer only */
+/* Chat on mobile PWA: wallpaper edge-to-edge (incl. iOS home indicator), safe areas on header/composer */
 html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
+  position: relative;
+  z-index: 1;
+  background: transparent;
 }
 
-html.app-immersive.app-shell-chat,
 html.app-immersive.app-shell-chat body,
-html.app-immersive.app-shell-chat .app-viewport,
-html.app-immersive.app-shell-chat .app-viewport-content {
-  background-color: var(--chat-base, #a8c492);
+html.app-immersive.app-shell-chat #root,
+html.app-immersive.app-shell-chat .app-viewport {
+  background: transparent;
+}
+
+html.app-immersive.app-shell-chat .app-viewport {
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+}
+
+html.app-immersive.app-shell-chat .chat-panel-bg {
+  background: transparent;
+}
+
+/* Fixed layer: 100dvh ends above home indicator; extend into safe-area insets */
+html.app-immersive.app-shell-chat::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  --chat-base: #a8c492;
+  background-color: var(--chat-base);
   background-image:
     linear-gradient(
       135deg,
@@ -406,10 +431,7 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   background-blend-mode: normal, multiply;
 }
 
-.dark html.app-immersive.app-shell-chat,
-.dark html.app-immersive.app-shell-chat body,
-.dark html.app-immersive.app-shell-chat .app-viewport,
-.dark html.app-immersive.app-shell-chat .app-viewport-content {
+.dark html.app-immersive.app-shell-chat::before {
   --chat-base: #283322;
   background-color: var(--chat-base);
   background-image:
