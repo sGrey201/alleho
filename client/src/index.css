@@ -385,48 +385,10 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
 }
 
-/* Behind 100dvh: fixed layer extends into iOS safe areas (pattern, not theme-color green) */
-html.app-immersive.app-shell-chat::before {
-  content: "";
-  position: fixed;
-  z-index: -1;
-  left: 0;
-  right: 0;
-  top: calc(-1 * env(safe-area-inset-top, 0px));
+/* Paint wallpaper into iOS home-indicator zone (below 100dvh) */
+html.app-immersive.app-shell-chat body,
+html.app-immersive.app-shell-chat .app-viewport {
   bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-  pointer-events: none;
-  --chat-base: #a8c492;
-  background-color: var(--chat-base);
-  background-image:
-    linear-gradient(
-      135deg,
-      rgba(118, 162, 88, 0.82) 0%,
-      rgba(138, 178, 98, 0.8) 30%,
-      rgba(152, 188, 106, 0.78) 55%,
-      rgba(162, 192, 112, 0.77) 80%,
-      rgba(168, 196, 116, 0.79) 100%
-    ),
-    url("/chat-wallpaper.png");
-  background-size: 100% 100%, 200px;
-  background-repeat: no-repeat, round;
-  background-position: center, center;
-  background-blend-mode: normal, multiply;
-  background-attachment: fixed, fixed;
-}
-
-.dark html.app-immersive.app-shell-chat::before {
-  --chat-base: #283322;
-  background-color: var(--chat-base);
-  background-image:
-    linear-gradient(
-      135deg,
-      rgba(42, 64, 36, 0.9) 0%,
-      rgba(48, 72, 40, 0.88) 35%,
-      rgba(52, 76, 42, 0.86) 65%,
-      rgba(56, 78, 44, 0.87) 100%
-    ),
-    url("/chat-wallpaper.png");
-  background-blend-mode: normal, soft-light;
 }
 
 html.app-immersive.app-shell-chat,
@@ -450,7 +412,6 @@ html.app-immersive.app-shell-chat .chat-panel-bg {
   background-repeat: no-repeat, round;
   background-position: center, center;
   background-blend-mode: normal, multiply;
-  background-attachment: fixed, fixed;
 }
 
 .dark html.app-immersive.app-shell-chat,
@@ -471,7 +432,6 @@ html.app-immersive.app-shell-chat .chat-panel-bg {
     ),
     url("/chat-wallpaper.png");
   background-blend-mode: normal, soft-light;
-  background-attachment: fixed, fixed;
 }
 
 .message {
