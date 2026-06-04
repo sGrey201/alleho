@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { Button } from "@/components/ui/button";
 
-const UPDATE_RELOAD_GUARD_KEY = "pwa-update-reload-attempted";
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 export function AppUpdatePrompt() {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -11,41 +11,47 @@ export function AppUpdatePrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      registration?.update();
+    },
   });
 
   useEffect(() => {
-    if (!needRefresh) {
-      const timer = window.setTimeout(() => {
-        sessionStorage.removeItem(UPDATE_RELOAD_GUARD_KEY);
-      }, 5000);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
+    if (!("serviceWorker" in navigator)) return;
+
+    const checkForUpdates = () => {
+      void navigator.serviceWorker.ready.then((registration) => registration.update());
+    };
+
+    checkForUpdates();
+    const intervalId = window.setInterval(checkForUpdates, UPDATE_CHECK_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        checkForUpdates();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!needRefresh) return;
+    setIsUpdating(false);
   }, [needRefresh]);
 
   if (!needRefresh) return null;
 
-  const dismiss = () => setNeedRefresh(false);
-
   const applyUpdate = async () => {
     if (isUpdating) return;
     setIsUpdating(true);
-
-    const alreadyReloaded = sessionStorage.getItem(UPDATE_RELOAD_GUARD_KEY) === "1";
-    if (!alreadyReloaded) {
-      sessionStorage.setItem(UPDATE_RELOAD_GUARD_KEY, "1");
-    }
-
     try {
       await updateServiceWorker(true);
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 1200);
-    } finally {
-      if (alreadyReloaded) {
-        setNeedRefresh(false);
-        setIsUpdating(false);
-      }
+    } catch {
+      setIsUpdating(false);
     }
   };
 
@@ -54,7 +60,13 @@ export function AppUpdatePrompt() {
       <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
         <p className="text-sm text-foreground">Доступна новая версия приложения</p>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={dismiss} disabled={isUpdating}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setNeedRefresh(false)}
+            disabled={isUpdating}
+          >
             Позже
           </Button>
           <Button type="button" size="sm" onClick={applyUpdate} disabled={isUpdating}>
