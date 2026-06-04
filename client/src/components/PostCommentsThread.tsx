@@ -627,7 +627,7 @@ export default function PostCommentsThread({
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] space-y-2">
+      <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 pb-[env(safe-area-inset-bottom,0px)] space-y-2">
         {(replyTo || editing) && (
           <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
             {editing ? <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Reply className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}

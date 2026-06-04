@@ -385,6 +385,7 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
 }
 
+html.app-immersive.app-shell-chat,
 html.app-immersive.app-shell-chat body,
 html.app-immersive.app-shell-chat .app-viewport,
 html.app-immersive.app-shell-chat .app-viewport-content {
@@ -405,6 +406,7 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   background-blend-mode: normal, multiply;
 }
 
+.dark html.app-immersive.app-shell-chat,
 .dark html.app-immersive.app-shell-chat body,
 .dark html.app-immersive.app-shell-chat .app-viewport,
 .dark html.app-immersive.app-shell-chat .app-viewport-content {

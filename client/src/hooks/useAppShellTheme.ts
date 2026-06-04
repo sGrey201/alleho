@@ -57,7 +57,8 @@ export function useAppShellTheme(variant: AppShellThemeVariant | null) {
       document.documentElement.style.removeProperty(SHELL_BG_VAR);
       document.documentElement.classList.remove("app-shell-chat");
       setThemeColorMeta(DEFAULT_SHELL_THEME_COLOR);
-      setAppleStatusBarStyle("default");
+      // Keep translucent in immersive messenger; iOS ignores runtime flip back to default.
+      setAppleStatusBarStyle("black-translucent");
     }
 
     return () => {
