@@ -380,6 +380,48 @@ html.app-immersive [data-radix-toast-viewport] {
   top: max(1rem, env(safe-area-inset-top, 0px));
 }
 
+/* Chat on mobile PWA: wallpaper edge-to-edge; safe areas on header/composer only */
+html.app-immersive.app-shell-chat .app-viewport-content {
+  padding: 0;
+}
+
+html.app-immersive.app-shell-chat body,
+html.app-immersive.app-shell-chat .app-viewport,
+html.app-immersive.app-shell-chat .app-viewport-content {
+  background-color: var(--chat-base, #a8c492);
+  background-image:
+    linear-gradient(
+      135deg,
+      rgba(118, 162, 88, 0.82) 0%,
+      rgba(138, 178, 98, 0.8) 30%,
+      rgba(152, 188, 106, 0.78) 55%,
+      rgba(162, 192, 112, 0.77) 80%,
+      rgba(168, 196, 116, 0.79) 100%
+    ),
+    url("/chat-wallpaper.png");
+  background-size: 100% 100%, 200px;
+  background-repeat: no-repeat, round;
+  background-position: center, center;
+  background-blend-mode: normal, multiply;
+}
+
+.dark html.app-immersive.app-shell-chat body,
+.dark html.app-immersive.app-shell-chat .app-viewport,
+.dark html.app-immersive.app-shell-chat .app-viewport-content {
+  --chat-base: #283322;
+  background-color: var(--chat-base);
+  background-image:
+    linear-gradient(
+      135deg,
+      rgba(42, 64, 36, 0.9) 0%,
+      rgba(48, 72, 40, 0.88) 35%,
+      rgba(52, 76, 42, 0.86) 65%,
+      rgba(56, 78, 44, 0.87) 100%
+    ),
+    url("/chat-wallpaper.png");
+  background-blend-mode: normal, soft-light;
+}
+
 .message {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
