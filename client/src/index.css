@@ -329,7 +329,7 @@ html.app-immersive body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: hsl(var(--background));
+  background-color: var(--app-shell-background, hsl(var(--background)));
 }
 
 html.app-immersive #root {
@@ -350,7 +350,7 @@ html.app-immersive #root {
   max-height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: hsl(var(--background));
+  background-color: var(--app-shell-background, hsl(var(--background)));
 }
 
 .app-viewport-content {

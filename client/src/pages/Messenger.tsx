@@ -19,6 +19,7 @@ import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
+import { useAppShellTheme } from "@/hooks/useAppShellTheme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -208,6 +209,12 @@ export default function Messenger() {
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
   );
   const isMobileConversationOpen = !!conversationId && isMobileView;
+  const isMessengerSettings =
+    isGroupSettings || isChannelSettings || isPatientChatSettings;
+  const useChatShell =
+    isMobileConversationOpen && !isMessengerSettings;
+
+  useAppShellTheme(useChatShell ? "chat" : "default");
 
   const isChatSelected = (chat: ChatItem) =>
     !!conversationId && !!chat.conversationId && chat.conversationId === conversationId;
