@@ -380,9 +380,28 @@ html.app-immersive [data-radix-toast-viewport] {
   top: max(1rem, env(safe-area-inset-top, 0px));
 }
 
-/* Chat on mobile PWA: wallpaper on shell; safe areas on header/composer only */
+/* Chat on mobile PWA: viewport-fit=cover + wallpaper edge-to-edge; safe-area on chrome only */
+html.app-immersive.app-shell-chat {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
+html.app-immersive.app-shell-chat .app-viewport {
+  max-height: none;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
+}
+
+html.app-immersive.app-shell-chat .chat-header-panel {
+  padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
+}
+
+html.app-immersive.app-shell-chat .chat-composer-panel {
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
 }
 
 html.app-immersive.app-shell-chat,
