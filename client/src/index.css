@@ -396,18 +396,8 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   padding: 0;
 }
 
-html.app-immersive.app-shell-chat .chat-header-panel,
-.chat-panel-bg .chat-header-panel {
+html.app-immersive.app-shell-chat .chat-header-panel {
   padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
-}
-
-html.app-immersive.app-shell-chat .chat-composer-panel,
-.chat-panel-bg .chat-composer-panel {
-  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
-}
-
-html.app-immersive.app-shell-chat .chat-panel-bg {
-  min-height: 100%;
 }
 
 html.app-immersive.app-shell-chat,
