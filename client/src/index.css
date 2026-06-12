@@ -437,6 +437,76 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-bottom: max(1.5rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));
 }
 
+/* Telegram-style edge scrims: blur + tint fading into the message list so bubbles
+   scrolling under the header/composer stay readable and never collide with the iOS
+   status bar icons in the notch. Fullscreen mobile PWA only (desktop untouched). */
+html.app-immersive.app-shell-chat {
+  --chat-scrim-rgb: 168, 196, 146; /* light theme, ~ --chat-base #a8c492 */
+  --chat-scrim-blur: 20px;
+  --chat-scrim-fade: 3rem; /* gradient tail reaching into the message area */
+}
+
+html.app-immersive.app-shell-chat .chat-header-panel::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  bottom: calc(-1 * var(--chat-scrim-fade));
+  z-index: 0;
+  pointer-events: none;
+  backdrop-filter: blur(var(--chat-scrim-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--chat-scrim-blur)) saturate(1.15);
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--chat-scrim-rgb), 0.75) 0%,
+    rgba(var(--chat-scrim-rgb), 0.35) 45%,
+    rgba(var(--chat-scrim-rgb), 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+
+html.app-immersive.app-shell-chat .chat-composer-panel::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: calc(-1 * var(--chat-scrim-fade));
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  backdrop-filter: blur(var(--chat-scrim-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--chat-scrim-blur)) saturate(1.15);
+  background: linear-gradient(
+    to top,
+    rgba(var(--chat-scrim-rgb), 0.75) 0%,
+    rgba(var(--chat-scrim-rgb), 0.35) 55%,
+    rgba(var(--chat-scrim-rgb), 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 45%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 45%, transparent 100%);
+}
+
+/* Keep the header controls and composer input above their scrim layer. */
+html.app-immersive.app-shell-chat .chat-header-panel > *,
+html.app-immersive.app-shell-chat .chat-composer-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Dark theme: tint matches the darker wallpaper base. */
+.dark html.app-immersive.app-shell-chat {
+  --chat-scrim-rgb: 40, 51, 34; /* ~ dark --chat-base #283322 */
+}
+
+/* Older WebViews without backdrop-filter: keep the gradient tint, drop the blur. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.app-immersive.app-shell-chat .chat-header-panel::before,
+  html.app-immersive.app-shell-chat .chat-composer-panel::before {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 html.app-immersive.app-shell-chat,
 html.app-immersive.app-shell-chat body,
 html.app-immersive.app-shell-chat #root,

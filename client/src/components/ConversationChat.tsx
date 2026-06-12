@@ -1499,7 +1499,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col md:flex-row">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="chat-header-panel pointer-events-none absolute inset-x-0 top-0 z-30 flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-hidden px-3">
+      <div className="chat-header-panel pointer-events-none absolute inset-x-0 top-0 z-30 flex w-full min-w-0 max-w-full flex-col gap-1.5 px-3">
         <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
             variant="secondary"
