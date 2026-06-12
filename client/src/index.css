@@ -402,6 +402,21 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
 }
 
+/* Desktop split view (sidebar + chat): same visual inset as mobile, without safe-area. */
+@media (min-width: 768px) {
+  html.app-immersive:not(.app-shell-chat) .chat-header-panel {
+    padding-top: 0.75rem;
+  }
+
+  html.app-immersive:not(.app-shell-chat) .chat-messages-pane {
+    padding-top: calc(4.5rem + 0.75rem);
+  }
+
+  html.app-immersive:not(.app-shell-chat) .chat-messages-pane--pinned {
+    padding-top: calc(7.75rem + 0.75rem);
+  }
+}
+
 /* Header floats over the messages; this padding keeps the oldest message reachable
    when scrolled to the very top. Extra room when the pinned banner is shown. */
 .chat-messages-pane {
