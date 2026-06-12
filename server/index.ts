@@ -137,11 +137,17 @@ app.use((req, res, next) => {
       if (count > 0) log(`backfilled default questionnaire templates for ${count} doctors`);
     }).catch((err) => console.error("[questionnaire] backfill error:", err));
 
-    // Periodically cancel calls nobody answered within the ring window.
-    void import("./voiceCall").then(({ sweepExpiredCalls }) => {
+    // Periodically cancel unanswered calls and clean up orphaned active calls.
+    void import("./voiceCall").then(({ sweepExpiredCalls, sweepOrphanedCalls }) => {
+      void sweepOrphanedCalls().catch((err) =>
+        console.error("[VoiceCall] initial orphan sweep error:", err)
+      );
       setInterval(() => {
         void sweepExpiredCalls().catch((err) =>
           console.error("[VoiceCall] sweep error:", err)
+        );
+        void sweepOrphanedCalls().catch((err) =>
+          console.error("[VoiceCall] orphan sweep error:", err)
         );
       }, 15_000);
     });

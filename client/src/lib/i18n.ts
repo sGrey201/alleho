@@ -1885,6 +1885,7 @@ export const t = {
   createConsilium: 'Создать консилиум',
   createChannel: 'Создать канал',
   subscribeToChannel: 'Подписаться на канал',
+  channelSubscribedHint: 'Вы подписаны на канал',
   searchDoctors: 'Врачи',
   searchGroups: 'Группы',
   searchChannels: 'Каналы',
@@ -1938,6 +1939,7 @@ export const t = {
 
   // Voice conferences (LiveKit)
   voiceCallStart: 'Голосовая конференция',
+  voiceCallDial: 'Позвонить',
   voiceCallIncomingTitle: 'Голосовая конференция',
   voiceCallIncomingFrom: 'приглашает в голосовую конференцию',
   voiceCallOngoing: 'Идёт голосовая конференция',

@@ -209,9 +209,39 @@ export async function endCall(
 
 async function endCallIfEmpty(call: ConversationCall): Promise<void> {
   const rows = await storage.getCallParticipants(call.id);
-  const stillJoined = rows.some((r) => r.status === "joined");
-  if (!stillJoined) {
+  const invited = rows.filter((r) => r.status === "invited");
+  if (invited.length > 0) return;
+
+  const joined = rows.filter((r) => r.status === "joined");
+  if (joined.length === 0) {
     await endCall(call, "ended");
+    return;
+  }
+
+  // Only the initiator remains — everyone else declined, left, or missed.
+  if (
+    joined.length === 1 &&
+    joined[0].userId === call.initiatedByUserId &&
+    rows.every(
+      (r) =>
+        r.userId === call.initiatedByUserId ||
+        r.status === "declined" ||
+        r.status === "left" ||
+        r.status === "missed"
+    )
+  ) {
+    await endCall(call, "ended");
+  }
+}
+
+/**
+ * Cleans up calls that are still marked active/ringing but have no one left to
+ * invite or join (e.g. initiator alone after everyone else declined).
+ */
+export async function sweepOrphanedCalls(): Promise<void> {
+  const calls = await storage.getActiveCalls();
+  for (const call of calls) {
+    await endCallIfEmpty(call);
   }
 }
 

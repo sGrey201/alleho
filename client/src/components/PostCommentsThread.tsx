@@ -21,6 +21,7 @@ import {
   handleMessagePointerMove,
   handleMessageTouchMove,
   handleMessageTouchStart,
+  layoutMessageActionLayer,
   type MessageLongPressRefs,
 } from "@/lib/messageLongPress";
 
@@ -694,25 +695,20 @@ export default function PostCommentsThread({
                 const vw = typeof window !== "undefined" ? window.innerWidth : 0;
                 const vh = typeof window !== "undefined" ? window.innerHeight : 0;
                 const menuWidth = 280;
-                const menuHeight = 220;
-                const bubbleToMenuGap = 8;
                 const reactionsBarMinWidth = QUICK_REACTIONS.length * 40 + 24;
                 const bubbleWidth = Math.min(Math.max(messageLayer.rect.width, reactionsBarMinWidth), vw - 24);
                 const left = Math.max(12, Math.min(messageLayer.rect.left, vw - bubbleWidth - 12));
-                const bubbleHeight = messageLayer.rect.height;
-                let bubbleTop = messageLayer.rect.top;
-                let menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
-                if (menuTop + menuHeight > vh - 12) {
-                  const overflow = menuTop + menuHeight - (vh - 12);
-                  bubbleTop = Math.max(54, bubbleTop - overflow);
-                  menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
-                }
+                const { bubbleTop, bubbleHeight, menuTop, reactionsTop } = layoutMessageActionLayer(
+                  messageLayer.rect,
+                  vh,
+                  { menuHeight: 220 },
+                );
                 const isOwn = messageLayer.comment.authorUserId === currentUserId;
                 return (
                   <>
                     <div
                       className="absolute animate-in fade-in zoom-in-95 duration-200"
-                      style={{ top: Math.max(12, bubbleTop - 42), left, width: bubbleWidth }}
+                      style={{ top: reactionsTop, left, width: bubbleWidth }}
                     >
                       <div className="mb-2 flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 py-1 shadow-lg">
                         {QUICK_REACTIONS.map((emoji) => (
@@ -731,7 +727,7 @@ export default function PostCommentsThread({
                       </div>
                     </div>
                     <div
-                      className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+                      className="message-action-bubble absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
                       style={{ top: bubbleTop, left, width: bubbleWidth }}
                     >
                       {renderReactionPills(messageLayer.comment)}

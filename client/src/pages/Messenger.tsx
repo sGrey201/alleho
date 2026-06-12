@@ -350,8 +350,14 @@ export default function Messenger() {
     activeSearchScope === "all" || activeSearchScope === "groups" ? (searchResults?.groups ?? []) : [];
   const channelSearchResults =
     activeSearchScope === "all" || activeSearchScope === "channels" ? (searchResults?.channels ?? []) : [];
+  const showChannelDiscoverSection =
+    activeSearchScope === "all" || activeSearchScope === "channels";
+  // Channels are listed in the dedicated «Каналы» section — keep them out of «Чаты».
+  const searchChatResults = showChannelDiscoverSection
+    ? searchFiltered.filter((chat) => chat.type !== "channel")
+    : searchFiltered;
   const hasSearchResults =
-    searchFiltered.length > 0 ||
+    searchChatResults.length > 0 ||
     doctorSearchResults.length > 0 ||
     groupSearchResults.length > 0 ||
     channelSearchResults.length > 0;
@@ -525,19 +531,9 @@ export default function Messenger() {
     },
   });
 
-  const handleSelectChannel = async (channel: MessengerSearchChannel) => {
-    if (channel.isMember) {
-      setFolder("channels");
-      setLocation(`/messenger/channel/${channel.id}`);
-      return;
-    }
-    try {
-      await apiRequest("POST", `/api/conversations/${channel.id}/subscribe`);
-      await qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
-      setLocation(`/messenger/channel/${channel.id}`);
-    } catch (e) {
-      toast({ title: "Ошибка подписки на канал", variant: "destructive" });
-    }
+  const handleSelectChannel = (channel: MessengerSearchChannel) => {
+    setFolder("channels");
+    setLocation(`/messenger/channel/${channel.id}`);
   };
 
   if (authLoading) {
@@ -732,12 +728,12 @@ export default function Messenger() {
               ) : (
                 <ScrollArea className="h-full min-h-[200px]">
                   <div className="pt-1 pb-2">
-                    {searchFiltered.length > 0 && (
+                    {searchChatResults.length > 0 && (
                       <section className="mb-2">
                         <p className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           {t.chatsTab}
                         </p>
-                        {searchFiltered.map((chat) => {
+                        {searchChatResults.map((chat) => {
                           const isSelected = isChatSelected(chat);
                           const label = getChatListLabel(chat, !!isAdmin);
                           const badge =
@@ -762,12 +758,12 @@ export default function Messenger() {
                               key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                               type="button"
                               onClick={() => {
-                                if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
-                                  void handleSelectChannel({
+                                if (chat.type === "channel" && chat.conversationId) {
+                                  handleSelectChannel({
                                     id: chat.conversationId,
                                     name: chat.name ?? null,
                                     avatarUrl: chat.avatarUrl ?? null,
-                                    isMember: false,
+                                    isMember: chat.isMember ?? true,
                                   });
                                   return;
                                 }
@@ -913,12 +909,12 @@ export default function Messenger() {
                         key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                         type="button"
                         onClick={() => {
-                          if (chat.type === "channel" && !chat.isMember && chat.conversationId) {
-                            void handleSelectChannel({
+                          if (chat.type === "channel" && chat.conversationId) {
+                            handleSelectChannel({
                               id: chat.conversationId,
                               name: chat.name ?? null,
                               avatarUrl: chat.avatarUrl ?? null,
-                              isMember: false,
+                              isMember: chat.isMember ?? true,
                             });
                             return;
                           }

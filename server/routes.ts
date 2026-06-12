@@ -1025,7 +1025,9 @@ ${allUrls.map(url => `  <url>
         items: T[]
       ): Promise<(T & { hasActiveCall: boolean })[]> => {
         const ids = items.map((i) => i.conversationId).filter((x): x is string => !!x);
-        const activeSet = new Set(await storage.getConversationIdsWithActiveCalls(ids));
+        const activeSet = new Set(
+          await storage.getConversationIdsWithActiveCalls(ids, currentUserId)
+        );
         return items.map((i) => ({
           ...i,
           hasActiveCall: !!i.conversationId && activeSet.has(i.conversationId),
@@ -1893,7 +1895,7 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
       if (!inConv) return res.status(403).json({ message: "Access denied" });
-      const call = await storage.getActiveCallForConversation(id);
+      const call = await storage.getActiveCallForConversation(id, currentUserId);
       if (!call) return res.json({ call: null });
       const state = await getCallStateDto(call.id);
       res.json({ call: state });

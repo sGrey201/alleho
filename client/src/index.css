@@ -586,6 +586,14 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   user-select: none;
 }
 
+/* Right-click / long-press message clone: cap at ~10 lines, scroll the rest. */
+.message-action-bubble {
+  max-height: calc(0.875rem * 1.375 * 10 + 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Chat wallpaper: apothecary pattern (tile fill) + green diagonal wash */
 .chat-panel-bg {
   --chat-base: #a8c492;

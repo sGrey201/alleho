@@ -71,6 +71,7 @@ import {
   handleMessagePointerMove,
   handleMessageTouchMove,
   handleMessageTouchStart,
+  layoutMessageActionLayer,
   type MessageLongPressRefs,
 } from "@/lib/messageLongPress";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
@@ -681,12 +682,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       await apiRequest("POST", `/api/conversations/${conversationId}/subscribe`, {});
     },
     onSuccess: () => {
+      setHideSubscribeButton(true);
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       toast({ title: "Вы подписались на канал" });
     },
     onError: (err: Error) => {
+      setHideSubscribeButton(false);
       toast({ title: t.error, description: err.message, variant: "destructive" });
     },
   });
@@ -1759,24 +1762,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 const vw = typeof window !== "undefined" ? window.innerWidth : 0;
                 const vh = typeof window !== "undefined" ? window.innerHeight : 0;
                 const menuWidth = 280;
-                const menuHeight = 280;
-                const bubbleToMenuGap = 8;
                 const reactionsBarMinWidth = QUICK_REACTIONS.length * 40 + 24;
                 const bubbleWidth = Math.min(Math.max(messageLayer.rect.width, reactionsBarMinWidth), vw - 24);
                 const left = Math.max(12, Math.min(messageLayer.rect.left, vw - bubbleWidth - 12));
-                const bubbleHeight = messageLayer.rect.height;
-                let bubbleTop = messageLayer.rect.top;
-                let menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
-                if (menuTop + menuHeight > vh - 12) {
-                  const overflow = menuTop + menuHeight - (vh - 12);
-                  bubbleTop = Math.max(54, bubbleTop - overflow);
-                  menuTop = bubbleTop + bubbleHeight + bubbleToMenuGap;
-                }
+                const { bubbleTop, bubbleHeight, menuTop, reactionsTop } = layoutMessageActionLayer(
+                  messageLayer.rect,
+                  vh,
+                );
                 return (
                   <>
                     <div
                       className="absolute animate-in fade-in zoom-in-95 duration-200"
-                      style={{ top: Math.max(12, bubbleTop - 42), left, width: bubbleWidth }}
+                      style={{ top: reactionsTop, left, width: bubbleWidth }}
                     >
                       <div className="mb-2 flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap rounded-full bg-background/95 px-2 py-1 shadow-lg">
                         {QUICK_REACTIONS.map((emoji) => (
@@ -1796,7 +1793,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                       </div>
                     </div>
                     <div
-                      className="absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+                      className="message-action-bubble absolute rounded-2xl border border-border/60 bg-background/95 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-200"
                       style={{ top: bubbleTop, left, width: bubbleWidth }}
                     >
                       {renderMessageBody(
@@ -1818,9 +1815,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </DialogContent>
       </Dialog>
 
-      {!isChannelMemberReadOnly && (
-        <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
-          {!isChannelReadOnly && (replyTo || editing) && (
+      <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
+          {!isChannelReadOnly && !isChannelMemberReadOnly && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
               {editing ? (
                 <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -1872,15 +1868,21 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               <Button
                 type="button"
                 className="w-full"
-                onClick={() => {
-                  setHideSubscribeButton(true);
-                  subscribeMutation.mutate();
-                }}
+                onClick={() => subscribeMutation.mutate()}
                 disabled={subscribeMutation.isPending}
               >
-                Подписаться на канал
+                {subscribeMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t.actionSubscribe}
+                  </>
+                ) : (
+                  t.subscribeToChannel
+                )}
               </Button>
             ) : null
+          ) : isChannelMemberReadOnly ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">{t.channelSubscribedHint}</p>
           ) : (
             <div className="pt-1">
               <ChatInputBar
@@ -1920,7 +1922,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </div>
           )}
         </div>
-      )}
       </div>
 
       {!isMobile && questionnairePanelOpen && (

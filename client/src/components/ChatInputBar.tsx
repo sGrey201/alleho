@@ -68,6 +68,9 @@ function formatRecordTime(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")},${String(centis).padStart(2, "0")}`;
 }
 
+const attachMenuItemClass =
+  "gap-3 px-3 py-3 text-base [&_svg]:size-5";
+
 const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function ChatInputBar({
   value,
   placeholder,
@@ -131,11 +134,13 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!disabled && value.trim()) {
-        onSend();
-      }
+    if (e.key !== "Enter" || e.isComposing) return;
+    // Enter — новая строка; Shift+Enter или Ctrl/Cmd+Enter — отправка.
+    const shouldSend = e.shiftKey || e.ctrlKey || e.metaKey;
+    if (!shouldSend) return;
+    e.preventDefault();
+    if (!disabled && value.trim()) {
+      onSend();
     }
   };
 
@@ -229,31 +234,36 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="start" className="min-w-[12rem] p-1.5">
                 {onUploadImages && (
                   <DropdownMenuItem
+                    className={attachMenuItemClass}
                     onSelect={() => document.getElementById("chat-image-upload")?.click()}
                   >
-                    <Image className="mr-2 h-4 w-4" />
+                    <Image />
                     {t.messagePhotoLabel ?? "Фото"}
                   </DropdownMenuItem>
                 )}
                 {showQuestionnaireAttach && onSendQuestionnaire && (
-                  <DropdownMenuItem onSelect={onSendQuestionnaire}>
-                    <ClipboardList className="mr-2 h-4 w-4" />
+                  <DropdownMenuItem className={attachMenuItemClass} onSelect={onSendQuestionnaire}>
+                    <ClipboardList />
                     {t.questionnaire}
                   </DropdownMenuItem>
                 )}
                 {onCreatePoll && (
-                  <DropdownMenuItem onSelect={onCreatePoll}>
-                    <ListChecks className="mr-2 h-4 w-4" />
+                  <DropdownMenuItem className={attachMenuItemClass} onSelect={onCreatePoll}>
+                    <ListChecks />
                     {t.pollCreate}
                   </DropdownMenuItem>
                 )}
                 {onStartVoiceCall && (
-                  <DropdownMenuItem onSelect={onStartVoiceCall} data-testid="menu-start-voice-call">
-                    <Phone className="mr-2 h-4 w-4" />
-                    {t.voiceCallStart}
+                  <DropdownMenuItem
+                    className={attachMenuItemClass}
+                    onSelect={onStartVoiceCall}
+                    data-testid="menu-start-voice-call"
+                  >
+                    <Phone />
+                    {t.voiceCallDial}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

@@ -327,7 +327,10 @@ export interface IStorage {
     ringExpiresAt: Date;
   }): Promise<ConversationCall>;
   getCallById(callId: string): Promise<ConversationCall | undefined>;
-  getActiveCallForConversation(conversationId: string): Promise<ConversationCall | undefined>;
+  getActiveCallForConversation(
+    conversationId: string,
+    forUserId?: string
+  ): Promise<ConversationCall | undefined>;
   getCallParticipants(callId: string): Promise<ConversationCallParticipant[]>;
   setCallParticipantStatus(
     callId: string,
@@ -337,7 +340,11 @@ export interface IStorage {
   markCallActive(callId: string): Promise<void>;
   endCall(callId: string, status: "ended" | "cancelled"): Promise<ConversationCall | undefined>;
   getExpiredRingingCalls(now: Date): Promise<ConversationCall[]>;
-  getConversationIdsWithActiveCalls(conversationIds: string[]): Promise<string[]>;
+  getActiveCalls(): Promise<ConversationCall[]>;
+  getConversationIdsWithActiveCalls(
+    conversationIds: string[],
+    forUserId: string
+  ): Promise<string[]>;
 
   upsertPushSubscription(
     userId: string,
@@ -1993,7 +2000,10 @@ export class DatabaseStorage implements IStorage {
     return c;
   }
 
-  async getActiveCallForConversation(conversationId: string): Promise<ConversationCall | undefined> {
+  async getActiveCallForConversation(
+    conversationId: string,
+    forUserId?: string
+  ): Promise<ConversationCall | undefined> {
     const [c] = await db
       .select()
       .from(conversationCalls)
@@ -2005,6 +2015,23 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(conversationCalls.createdAt))
       .limit(1);
+    if (!c || !forUserId) return c;
+
+    const [participation] = await db
+      .select({ status: conversationCallParticipants.status })
+      .from(conversationCallParticipants)
+      .where(
+        and(
+          eq(conversationCallParticipants.callId, c.id),
+          eq(conversationCallParticipants.userId, forUserId)
+        )
+      );
+    if (
+      !participation ||
+      (participation.status !== "invited" && participation.status !== "joined")
+    ) {
+      return undefined;
+    }
     return c;
   }
 
@@ -2070,10 +2097,20 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  async getConversationIdsWithActiveCalls(conversationIds: string[]): Promise<string[]> {
+  async getActiveCalls(): Promise<ConversationCall[]> {
+    return db
+      .select()
+      .from(conversationCalls)
+      .where(inArray(conversationCalls.status, ["ringing", "active"]));
+  }
+
+  async getConversationIdsWithActiveCalls(
+    conversationIds: string[],
+    forUserId: string
+  ): Promise<string[]> {
     if (conversationIds.length === 0) return [];
-    const rows = await db
-      .select({ conversationId: conversationCalls.conversationId })
+    const calls = await db
+      .select({ callId: conversationCalls.id, conversationId: conversationCalls.conversationId })
       .from(conversationCalls)
       .where(
         and(
@@ -2081,7 +2118,31 @@ export class DatabaseStorage implements IStorage {
           inArray(conversationCalls.status, ["ringing", "active"])
         )
       );
-    return Array.from(new Set(rows.map((r) => r.conversationId)));
+    if (calls.length === 0) return [];
+
+    const callIds = calls.map((c) => c.callId);
+    const participations = await db
+      .select({
+        callId: conversationCallParticipants.callId,
+        status: conversationCallParticipants.status,
+      })
+      .from(conversationCallParticipants)
+      .where(
+        and(
+          inArray(conversationCallParticipants.callId, callIds),
+          eq(conversationCallParticipants.userId, forUserId)
+        )
+      );
+
+    const visibleCallIds = new Set(
+      participations
+        .filter((p) => p.status === "invited" || p.status === "joined")
+        .map((p) => p.callId)
+    );
+
+    return Array.from(
+      new Set(calls.filter((c) => visibleCallIds.has(c.callId)).map((c) => c.conversationId))
+    );
   }
 
   async getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]> {

@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  LocalAudioTrack,
-  ParticipantEvent,
   Room,
   RoomEvent,
   Track,
@@ -10,7 +8,7 @@ import {
   type RemoteParticipant,
   type Participant,
 } from "livekit-client";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { t } from "@/lib/i18n";
 import type { ConversationCallWsEvent } from "@/hooks/useConversationWs";
@@ -98,11 +96,9 @@ export function useVoiceCall(
   const roomRef = useRef<Room | null>(null);
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const conversationIdRef = useRef(conversationId);
-  const micEnabledRef = useRef(micEnabled);
   const statusRef = useRef<ConnectionStatus>(status);
   const backgroundNoticeShownRef = useRef(false);
   conversationIdRef.current = conversationId;
-  micEnabledRef.current = micEnabled;
   statusRef.current = status;
 
   const detachAllAudio = useCallback(() => {
@@ -149,36 +145,13 @@ export function useVoiceCall(
     }
   }, []);
 
-  const resumeLocalMicrophone = useCallback(async (room: Room) => {
-    if (!micEnabledRef.current) return;
-    try {
-      const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-      const track = pub?.track;
-      if (track instanceof LocalAudioTrack) {
-        const mediaTrack = track.mediaStreamTrack;
-        if (mediaTrack.readyState === "ended" || mediaTrack.muted) {
-          await track.restartTrack();
-        } else {
-          await track.unmute();
-        }
-      } else {
-        await room.localParticipant.setMicrophoneEnabled(false);
-        await room.localParticipant.setMicrophoneEnabled(true);
-      }
-      setMicEnabled(true);
-    } catch (err) {
-      console.error("[VoiceCall] resume mic error:", err);
-    }
-  }, []);
-
-  const handleAppForeground = useCallback(async () => {
+  const handleAppForeground = useCallback(() => {
     if (document.visibilityState !== "visible") return;
-    const room = roomRef.current;
-    if (!room || statusRef.current !== "in-room") return;
+    if (statusRef.current !== "in-room") return;
     backgroundNoticeShownRef.current = false;
+    // Resume remote playback only — restarting the mic track re-prompts for permission.
     resumeRemoteAudio();
-    await resumeLocalMicrophone(room);
-  }, [resumeLocalMicrophone, resumeRemoteAudio]);
+  }, [resumeRemoteAudio]);
 
   const handleAppBackground = useCallback(() => {
     if (document.visibilityState !== "hidden") return;
@@ -235,25 +208,10 @@ export function useVoiceCall(
       room.on(RoomEvent.Disconnected, () => {
         void teardownRoom();
       });
-      room.on(RoomEvent.MediaDevicesError, () => {
-        if (document.visibilityState === "visible") {
-          void resumeLocalMicrophone(room);
-        }
-      });
       room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
         if (document.visibilityState === "visible") {
           resumeRemoteAudio();
         }
-      });
-      room.localParticipant.on(ParticipantEvent.TrackMuted, (publication) => {
-        if (
-          publication.source !== Track.Source.Microphone ||
-          !micEnabledRef.current ||
-          document.visibilityState !== "visible"
-        ) {
-          return;
-        }
-        void resumeLocalMicrophone(room);
       });
 
       try {
@@ -273,7 +231,7 @@ export function useVoiceCall(
         throw err;
       }
     },
-    [resumeLocalMicrophone, resumeRemoteAudio, teardownRoom, toast, updateParticipants]
+    [resumeRemoteAudio, teardownRoom, toast, updateParticipants]
   );
 
   const refetchActiveCall = useCallback(async () => {
@@ -339,6 +297,10 @@ export function useVoiceCall(
     }
   }, [call, connectToRoom, toast]);
 
+  const invalidateChatList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+  }, []);
+
   const declineCall = useCallback(async () => {
     const convId = conversationIdRef.current;
     const activeCall = call;
@@ -346,10 +308,11 @@ export function useVoiceCall(
     setCall(null);
     try {
       await apiRequest("POST", `/api/conversations/${convId}/calls/${activeCall.id}/decline`);
+      invalidateChatList();
     } catch (err) {
       console.error("[VoiceCall] decline error:", err);
     }
-  }, [call]);
+  }, [call, invalidateChatList]);
 
   const leaveCall = useCallback(async () => {
     const convId = conversationIdRef.current;
@@ -358,10 +321,11 @@ export function useVoiceCall(
     if (!convId || !activeCall) return;
     try {
       await apiRequest("POST", `/api/conversations/${convId}/calls/${activeCall.id}/leave`);
+      invalidateChatList();
     } catch (err) {
       console.error("[VoiceCall] leave error:", err);
     }
-  }, [call, teardownRoom]);
+  }, [call, invalidateChatList, teardownRoom]);
 
   const endCall = useCallback(async () => {
     const convId = conversationIdRef.current;
@@ -370,10 +334,11 @@ export function useVoiceCall(
     if (!convId || !activeCall) return;
     try {
       await apiRequest("POST", `/api/conversations/${convId}/calls/${activeCall.id}/end`);
+      invalidateChatList();
     } catch (err) {
       console.error("[VoiceCall] end error:", err);
     }
-  }, [call, teardownRoom]);
+  }, [call, invalidateChatList, teardownRoom]);
 
   const toggleMic = useCallback(async () => {
     const room = roomRef.current;
@@ -389,6 +354,8 @@ export function useVoiceCall(
 
   const handleCallWsEvent = useCallback(
     (event: ConversationCallWsEvent) => {
+      invalidateChatList();
+
       switch (event.type) {
         case "conversation_call_started": {
           const payload = event.payload as CallStateDto;
@@ -409,15 +376,15 @@ export function useVoiceCall(
         }
       }
     },
-    [refetchActiveCall, teardownRoom]
+    [invalidateChatList, refetchActiveCall, teardownRoom]
   );
 
-  // iOS suspends microphone capture when the PWA is backgrounded; resume on return.
+  // Resume remote audio when returning from background; mic recovers on its own.
   useEffect(() => {
     if (status !== "in-room") return;
 
     const onVisible = () => {
-      void handleAppForeground();
+      handleAppForeground();
     };
     const onHidden = () => {
       handleAppBackground();
