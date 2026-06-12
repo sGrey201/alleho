@@ -139,6 +139,15 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     }
   };
 
+  /** iOS blurs the textarea before click unless default is prevented on press. */
+  const handleSendPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+  };
+
+  const handleSendClick = () => {
+    if (!isSendDisabled) onSend();
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!onUploadImages) return;
     const files = e.target.files;
@@ -331,8 +340,10 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
           </Button>
         ) : (
           <Button
+            type="button"
             size="icon"
-            onClick={onSend}
+            onPointerDown={handleSendPointerDown}
+            onClick={handleSendClick}
             disabled={isSendDisabled}
             className="h-10 w-10 shrink-0 rounded-full disabled:!opacity-60"
             data-testid="button-send-message"

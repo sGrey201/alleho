@@ -551,6 +551,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       setPollQuestion("");
       setPollOptions(["", ""]);
       setPollAllowMultiple(false);
+      requestAnimationFrame(() => chatInputRef.current?.focusInput());
     },
   });
 

@@ -447,7 +447,8 @@ html.app-immersive.app-shell-chat.keyboard-open .chat-composer-panel {
 html.app-immersive.app-shell-chat {
   --chat-scrim-rgb: 168, 196, 146; /* light theme, ~ --chat-base #a8c492 */
   --chat-scrim-blur: 20px;
-  --chat-scrim-fade: 3rem; /* gradient tail reaching into the message area */
+  --chat-scrim-fade: 2.5rem; /* gradient tail reaching into the message area (header) */
+  --chat-scrim-fade-bottom: 2.5rem; /* composer — same depth, tunable separately */
 }
 
 html.app-immersive.app-shell-chat .chat-header-panel::before {
@@ -474,7 +475,7 @@ html.app-immersive.app-shell-chat .chat-composer-panel::before {
   content: "";
   position: absolute;
   inset-inline: 0;
-  top: calc(-1 * var(--chat-scrim-fade));
+  top: calc(-1 * var(--chat-scrim-fade-bottom));
   bottom: 0;
   z-index: 0;
   pointer-events: none;
