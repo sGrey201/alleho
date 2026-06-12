@@ -319,6 +319,8 @@
 /* Mobile PWA / fullscreen chat: edge-to-edge background, content in safe areas, no rubber-band */
 html.app-immersive {
   height: var(--app-height, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 html.app-immersive body {
@@ -404,6 +406,11 @@ html.app-immersive.app-shell-chat .chat-header-panel {
    when scrolled to the very top. Extra room when the pinned banner is shown. */
 .chat-messages-pane {
   padding-top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  /* Keep the swipe inside the list: without these, iOS standalone PWA hands the
+     gesture to the document and rubber-bands the whole app at the scroll edges. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .chat-messages-pane--pinned {
