@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  LocalAudioTrack,
+  ParticipantEvent,
   Room,
   RoomEvent,
   Track,
@@ -37,6 +39,30 @@ export type CallStateDto = {
 
 type ConnectionStatus = "idle" | "connecting" | "in-room";
 
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function configureRemoteAudioElement(el: HTMLAudioElement) {
+  el.style.display = "none";
+  el.autoplay = true;
+  el.setAttribute("playsinline", "true");
+  el.setAttribute("webkit-playsinline", "true");
+}
+
+async function playRemoteAudioElement(el: HTMLAudioElement) {
+  configureRemoteAudioElement(el);
+  try {
+    await el.play();
+  } catch {
+    // Safari may block until the next user gesture; resume on visibilitychange.
+  }
+}
+
 export type VoiceCallApi = {
   call: CallStateDto | null;
   /** True when the local user is connected to the LiveKit room. */
@@ -72,7 +98,12 @@ export function useVoiceCall(
   const roomRef = useRef<Room | null>(null);
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const conversationIdRef = useRef(conversationId);
+  const micEnabledRef = useRef(micEnabled);
+  const statusRef = useRef<ConnectionStatus>(status);
+  const backgroundNoticeShownRef = useRef(false);
   conversationIdRef.current = conversationId;
+  micEnabledRef.current = micEnabled;
+  statusRef.current = status;
 
   const detachAllAudio = useCallback(() => {
     audioElsRef.current.forEach((el) => {
@@ -108,21 +139,82 @@ export function useVoiceCall(
     setConnectedUserIds(Array.from(new Set(ids)));
   }, []);
 
+  const resumeRemoteAudio = useCallback(() => {
+    audioElsRef.current.forEach((el) => {
+      void playRemoteAudioElement(el);
+    });
+    const room = roomRef.current;
+    if (room) {
+      void room.startAudio().catch(() => {});
+    }
+  }, []);
+
+  const resumeLocalMicrophone = useCallback(async (room: Room) => {
+    if (!micEnabledRef.current) return;
+    try {
+      const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      const track = pub?.track;
+      if (track instanceof LocalAudioTrack) {
+        const mediaTrack = track.mediaStreamTrack;
+        if (mediaTrack.readyState === "ended" || mediaTrack.muted) {
+          await track.restartTrack();
+        } else {
+          await track.unmute();
+        }
+      } else {
+        await room.localParticipant.setMicrophoneEnabled(false);
+        await room.localParticipant.setMicrophoneEnabled(true);
+      }
+      setMicEnabled(true);
+    } catch (err) {
+      console.error("[VoiceCall] resume mic error:", err);
+    }
+  }, []);
+
+  const handleAppForeground = useCallback(async () => {
+    if (document.visibilityState !== "visible") return;
+    const room = roomRef.current;
+    if (!room || statusRef.current !== "in-room") return;
+    backgroundNoticeShownRef.current = false;
+    resumeRemoteAudio();
+    await resumeLocalMicrophone(room);
+  }, [resumeLocalMicrophone, resumeRemoteAudio]);
+
+  const handleAppBackground = useCallback(() => {
+    if (document.visibilityState !== "hidden") return;
+    if (statusRef.current !== "in-room" || backgroundNoticeShownRef.current) return;
+    if (!isIOS()) return;
+    backgroundNoticeShownRef.current = true;
+    toast({
+      title: t.voiceCallMicBackgroundPaused ?? "Микрофон приостановлен",
+      description:
+        t.voiceCallMicBackgroundPausedHint ??
+        "На iOS микрофон не работает, пока приложение свёрнуто или экран заблокирован. Вернитесь в чат, чтобы вас снова было слышно.",
+    });
+  }, [toast]);
+
   const connectToRoom = useCallback(
     async (livekitUrl: string, token: string) => {
       // Tear down any prior room first.
       await teardownRoom();
       setStatus("connecting");
-      const room = new Room({ adaptiveStream: false, dynacast: false });
+      const room = new Room({
+        adaptiveStream: false,
+        dynacast: false,
+        // WebAudio is suspended by iOS in background; HTMLAudio keeps playback alive.
+        webAudioMix: false,
+        // Stay in the call when the PWA is minimized or the screen locks.
+        disconnectOnPageLeave: false,
+      });
       roomRef.current = room;
 
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
         if (track.kind !== Track.Kind.Audio) return;
         const el = track.attach() as HTMLAudioElement;
-        el.style.display = "none";
-        el.autoplay = true;
+        configureRemoteAudioElement(el);
         document.body.appendChild(el);
         audioElsRef.current.set(participant.identity + ":" + track.sid, el);
+        void playRemoteAudioElement(el);
       });
       room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
         const key = participant.identity + ":" + track.sid;
@@ -143,9 +235,30 @@ export function useVoiceCall(
       room.on(RoomEvent.Disconnected, () => {
         void teardownRoom();
       });
+      room.on(RoomEvent.MediaDevicesError, () => {
+        if (document.visibilityState === "visible") {
+          void resumeLocalMicrophone(room);
+        }
+      });
+      room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+        if (document.visibilityState === "visible") {
+          resumeRemoteAudio();
+        }
+      });
+      room.localParticipant.on(ParticipantEvent.TrackMuted, (publication) => {
+        if (
+          publication.source !== Track.Source.Microphone ||
+          !micEnabledRef.current ||
+          document.visibilityState !== "visible"
+        ) {
+          return;
+        }
+        void resumeLocalMicrophone(room);
+      });
 
       try {
         await room.connect(livekitUrl, token);
+        await room.startAudio().catch(() => {});
         await room.localParticipant.setMicrophoneEnabled(true);
         setMicEnabled(true);
         setStatus("in-room");
@@ -160,7 +273,7 @@ export function useVoiceCall(
         throw err;
       }
     },
-    [teardownRoom, toast, updateParticipants]
+    [resumeLocalMicrophone, resumeRemoteAudio, teardownRoom, toast, updateParticipants]
   );
 
   const refetchActiveCall = useCallback(async () => {
@@ -298,6 +411,62 @@ export function useVoiceCall(
     },
     [refetchActiveCall, teardownRoom]
   );
+
+  // iOS suspends microphone capture when the PWA is backgrounded; resume on return.
+  useEffect(() => {
+    if (status !== "in-room") return;
+
+    const onVisible = () => {
+      void handleAppForeground();
+    };
+    const onHidden = () => {
+      handleAppBackground();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pageshow", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pageshow", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [handleAppBackground, handleAppForeground, status]);
+
+  // Prevent screen lock during a call so the mic is not cut off by iOS.
+  useEffect(() => {
+    if (status !== "in-room" || !("wakeLock" in navigator)) return;
+
+    let wakeLock: WakeLockSentinel | null = null;
+    let cancelled = false;
+
+    const requestWakeLock = async () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      try {
+        await wakeLock?.release();
+      } catch {
+        // ignore
+      }
+      wakeLock = null;
+      try {
+        wakeLock = await navigator.wakeLock.request("screen");
+      } catch {
+        // Permission denied or unsupported — call still works with screen on.
+      }
+    };
+
+    void requestWakeLock();
+    document.addEventListener("visibilitychange", requestWakeLock);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", requestWakeLock);
+      void wakeLock?.release();
+    };
+  }, [status]);
 
   // Restore active call when opening a conversation.
   useEffect(() => {

@@ -1957,4 +1957,7 @@ export const t = {
   voiceCallNotConfigured: 'Звонки недоступны',
   voiceCallInProgress: 'В разговоре',
   voiceCallRinging: 'Звонок…',
+  voiceCallMicBackgroundPaused: 'Микрофон приостановлен',
+  voiceCallMicBackgroundPausedHint:
+    'На iOS микрофон не работает, пока приложение свёрнуто или экран заблокирован. Вернитесь в чат, чтобы вас снова было слышно.',
 };
