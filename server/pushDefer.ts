@@ -58,6 +58,7 @@ export function scheduleConversationMessagePush(
     createdAt: string | Date;
     content?: string | null;
     imageUrl?: string | null;
+    messageType?: string | null;
     author: MessageAuthorLike;
   },
   conv: { type: string; name?: string | null }
@@ -75,8 +76,8 @@ export function scheduleConversationMessagePush(
     title: conv.type === "direct" ? sender : convLabel,
     body:
       conv.type === "direct" || conv.type === "patient"
-        ? messagePreview(message.content, message.imageUrl)
-        : `${sender}: ${messagePreview(message.content, message.imageUrl)}`,
+        ? messagePreview(message.content, message.imageUrl, message.messageType)
+        : `${sender}: ${messagePreview(message.content, message.imageUrl, message.messageType)}`,
     url: conversationPath(conv.type, conversationId),
     tag: `conversation:${conversationId}`,
   };

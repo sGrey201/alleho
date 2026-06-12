@@ -15,6 +15,7 @@ export interface ConversationMessageReplyTo {
   authorUserId: string;
   content?: string | null;
   imageUrl?: string | null;
+  messageType?: string | null;
   deletedAt?: string | null;
   author?: ConversationMessageAuthor | null;
 }

@@ -26,6 +26,7 @@ import {
   insertConversationMessageSchema,
   insertConversationMessageCommentSchema,
   pollPayloadSchema,
+  voicePayloadSchema,
   type User,
   type ConversationMessage,
 } from "@shared/schema";
@@ -1525,6 +1526,7 @@ ${allUrls.map(url => `  <url>
               authorUserId: replyTarget.authorUserId,
               content: replyTarget.content ?? null,
               imageUrl: replyTarget.imageUrl ?? null,
+              messageType: replyTarget.messageType,
               deletedAt: replyTarget.deletedAt
                 ? replyTarget.deletedAt instanceof Date
                   ? replyTarget.deletedAt.toISOString()
@@ -1614,6 +1616,7 @@ ${allUrls.map(url => `  <url>
         templateId?: string;
         replyToMessageId?: string;
         poll?: unknown;
+        voiceDurationSec?: number;
         forwardSource?: { conversationId?: string; patientUserId?: string; messageId: string };
       };
 
@@ -1674,6 +1677,14 @@ ${allUrls.map(url => `  <url>
           const parsed = pollPayloadSchema.parse(JSON.parse(content));
           content = JSON.stringify(parsed);
           imageUrl = null;
+        } else if (messageType === "voice") {
+          if (!imageUrl) {
+            return res.status(400).json({ message: "Voice message requires audio" });
+          }
+          const parsed = voicePayloadSchema.parse({
+            durationSec: Math.round(Number(body.voiceDurationSec ?? 0)),
+          });
+          content = JSON.stringify(parsed);
         } else if (messageType === "questionnaire" || messageType === "questionnaire_template") {
           if (!currentUser?.isAdmin) {
             return res.status(403).json({ message: "Only doctors can send questionnaires" });

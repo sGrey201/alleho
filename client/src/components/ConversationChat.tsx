@@ -67,7 +67,9 @@ import {
   type MessageLongPressRefs,
 } from "@/lib/messageLongPress";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
-import { pollPayloadSchema } from "@shared/schema";
+import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
+import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
+import { pollPayloadSchema, voicePayloadSchema } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -149,6 +151,15 @@ function parsePollPayload(
   }
 }
 
+function parseVoiceDurationSec(content: string | null | undefined): number {
+  if (!content?.trim()) return 0;
+  try {
+    return voicePayloadSchema.parse(JSON.parse(content)).durationSec;
+  } catch {
+    return 0;
+  }
+}
+
 function parseQuestionnaireMessageContent(content: string | null | undefined): { instanceId: string; templateName: string } | null {
   if (!content?.trim()) return null;
   try {
@@ -185,6 +196,7 @@ function parseQuestionnaireTemplateMessageContent(
 
 function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["replyTo"]>): string {
   if (reply.deletedAt) return t.messageDeleted;
+  if (reply.messageType === "voice") return t.voiceMessageLabel;
   const poll = parsePollPayload(reply.content ?? undefined);
   if (poll) {
     const q = poll.question.trim();
@@ -487,6 +499,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       messageType?: string;
       templateId?: string;
       replyToMessageId?: string;
+      voiceDurationSec?: number;
       poll?: { question: string; options: string[]; allowMultiple: boolean };
     }) => {
       const body =
@@ -502,6 +515,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               messageType: data.messageType ?? "message",
               templateId: data.templateId,
               replyToMessageId: data.replyToMessageId,
+              voiceDurationSec: data.voiceDurationSec,
             };
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, body);
       return res.json();
@@ -804,6 +818,27 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
   });
 
+  const { uploadFile: uploadVoiceFile, isUploading: isUploadingVoice } = useUpload({
+    onError: (error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSendVoice = async (clip: RecordedVoice) => {
+    if (!canPostToChannel) return;
+    const file = new File([clip.blob], `voice-${Date.now()}.${clip.ext}`, {
+      type: clip.mimeType,
+    });
+    const uploaded = await uploadVoiceFile(file);
+    if (!uploaded) return;
+    await sendMutation.mutateAsync({
+      imageUrl: uploaded.objectPath,
+      messageType: "voice",
+      voiceDurationSec: clip.durationSec,
+      replyToMessageId: replyTo?.id,
+    });
+  };
+
   const addMemberMutation = useMutation({
     mutationFn: async (userId: string) => {
       const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, {
@@ -931,7 +966,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const galleryImages = useMemo(
     () =>
       sortedMessages
-        .filter((m) => m.imageUrl && !m.deletedAt)
+        .filter((m) => m.imageUrl && !m.deletedAt && m.messageType !== "voice")
         .map((m) => m.imageUrl!),
     [sortedMessages]
   );
@@ -1160,6 +1195,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       isOwn &&
       !!msg.content &&
       msg.messageType !== "poll" &&
+      msg.messageType !== "voice" &&
       Date.now() - createdAt < EDIT_WINDOW_MS;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
@@ -1205,7 +1241,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </>
             )}
           </button>
-          {(msg.content || msg.messageType === "poll") && (
+          {((msg.content && msg.messageType !== "voice") || msg.messageType === "poll") && (
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); onDone?.(); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
@@ -1329,7 +1365,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       )}
       {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
       {renderForwardedHeader(msg)}
-      {msg.imageUrl && (
+      {msg.imageUrl && msg.messageType !== "voice" && (
         <img
           src={getThumbUrl(msg.imageUrl)}
           alt=""
@@ -1338,7 +1374,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           onClick={() => setSelectedImage(msg.imageUrl!)}
         />
       )}
-      {msg.messageType === "poll" ? (
+      {msg.messageType === "voice" ? (
+        <VoiceMessagePlayer
+          src={msg.imageUrl ?? ""}
+          durationSec={parseVoiceDurationSec(msg.content)}
+          isOwn={isOwn}
+        />
+      ) : msg.messageType === "poll" ? (
         <PollMessageBlock
           msg={msg}
           disabled={!!msg.deletedAt || !canInteractWithChannel}
@@ -1498,7 +1540,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             <PinnedMessageBanner
               title={t.messagePinnedTitle}
               preview={
-                activePinnedMessage.messageType === "poll"
+                activePinnedMessage.messageType === "voice"
+                  ? t.voiceMessageLabel
+                  : activePinnedMessage.messageType === "poll"
                   ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
                   : activePinnedMessage.messageType === "questionnaire" ||
                       activePinnedMessage.messageType === "questionnaire_template"
@@ -1717,7 +1761,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                       ? parsePollPayload(editing.content)?.question ?? t.pollLabel
                       : editing.content ?? ""
                     : replyTo
-                      ? replyTo.messageType === "poll"
+                      ? replyTo.messageType === "voice"
+                        ? t.voiceMessageLabel
+                        : replyTo.messageType === "poll"
                         ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
                         : replyTo.content
                           ? replyTo.content
@@ -1766,6 +1812,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 disabled={!canPostToChannel}
                 onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
                 isUploadingImages={isUploadingPhoto}
+                onSendVoice={editing || !canPostToChannel ? undefined : handleSendVoice}
+                isSendingVoice={isUploadingVoice || sendMutation.isPending}
                 wrapperClassName="border-0 px-0 py-0"
                 showQuestionnaireAttach={!!user?.isAdmin && !editing && canPostToChannel}
                 onSendQuestionnaire={

@@ -259,6 +259,7 @@ export const conversationMessageTypeEnum = z.enum([
   'poll',
   'questionnaire',
   'questionnaire_template',
+  'voice',
 ]);
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 
@@ -269,6 +270,16 @@ export const pollPayloadSchema = z.object({
   allowMultiple: z.boolean(),
 });
 export type PollPayload = z.infer<typeof pollPayloadSchema>;
+
+/**
+ * JSON stored in conversation_messages.content when message_type is `voice`.
+ * The audio object path itself is stored in the `image_url` column (reused as a
+ * generic attachment URL) so no schema migration is required.
+ */
+export const voicePayloadSchema = z.object({
+  durationSec: z.number().int().min(0).max(36000),
+});
+export type VoicePayload = z.infer<typeof voicePayloadSchema>;
 
 // Messenger: conversation types (doctor-to-doctor, patient chats, groups, consiliums, channels)
 export const conversationTypeEnum = z.enum(["direct", "patient", "group", "consilium", "channel"]);

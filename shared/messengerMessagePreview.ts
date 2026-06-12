@@ -63,6 +63,10 @@ export function formatConversationMessagePreview(
 ): string | null {
   const text = content?.trim();
 
+  if (messageType === "voice") {
+    return "Голосовое сообщение";
+  }
+
   if (messageType === "poll" && text) {
     try {
       const parsed = JSON.parse(text) as { question?: string };

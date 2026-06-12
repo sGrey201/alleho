@@ -87,7 +87,12 @@ export function formatSenderName(user: {
   return user.email?.split("@")[0] ?? "Сообщение";
 }
 
-export function messagePreview(content?: string | null, imageUrl?: string | null): string {
+export function messagePreview(
+  content?: string | null,
+  imageUrl?: string | null,
+  messageType?: string | null,
+): string {
+  if (messageType === "voice") return "Голосовое сообщение";
   if (imageUrl && !content?.trim()) return "Фото";
   const text = (content ?? "").trim();
   if (!text) return "Новое сообщение";
@@ -115,6 +120,7 @@ export async function notifyConversationNewMessage(
     createdAt: string | Date;
     content?: string | null;
     imageUrl?: string | null;
+    messageType?: string | null;
     author: MessageAuthorLike;
   }
 ): Promise<void> {
