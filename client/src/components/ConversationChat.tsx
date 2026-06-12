@@ -56,6 +56,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
+import { useVoiceCall } from "@/hooks/useVoiceCall";
+import { VoiceCallBanner } from "@/components/VoiceCallBanner";
+import { VoiceCallRoom } from "@/components/VoiceCallRoom";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import {
@@ -411,7 +414,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
   const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
 
-  useConversationWs(conversationId, !!conversationId, user?.id);
+  const voiceCall = useVoiceCall(conversationId, user?.id);
+
+  useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent);
 
   useEffect(() => {
     if (!conversationId || !user?.id) return;
@@ -1562,6 +1567,46 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             />
           </div>
         )}
+        {(() => {
+          const vc = voiceCall.call;
+          if (!vc) return null;
+          if (voiceCall.isInRoom || voiceCall.isConnecting) {
+            return (
+              <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
+                <VoiceCallRoom
+                  call={vc}
+                  currentUserId={user?.id}
+                  connectedUserIds={voiceCall.connectedUserIds}
+                  speakingUserIds={voiceCall.speakingUserIds}
+                  micEnabled={voiceCall.micEnabled}
+                  isConnecting={voiceCall.isConnecting}
+                  isInitiator={vc.initiatedByUserId === user?.id}
+                  onToggleMic={() => voiceCall.toggleMic()}
+                  onLeave={() => voiceCall.leaveCall()}
+                  onEnd={() => voiceCall.endCall()}
+                />
+              </div>
+            );
+          }
+          const myStatus = vc.participants.find((p) => p.userId === user?.id)?.status;
+          if (myStatus === "declined" || myStatus === "left") return null;
+          const initiator = vc.participants.find((p) => p.userId === vc.initiatedByUserId)?.user;
+          const initiatorName = initiator
+            ? [initiator.firstName, initiator.lastName].filter(Boolean).join(" ").trim() ||
+              initiator.email?.split("@")[0] ||
+              t.doctor
+            : t.doctor;
+          return (
+            <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
+              <VoiceCallBanner
+                initiatorName={initiatorName}
+                isActive={vc.status === "active"}
+                onAccept={() => voiceCall.acceptCall()}
+                onDecline={() => voiceCall.declineCall()}
+              />
+            </div>
+          );
+        })()}
       </div>
 
       <div
@@ -1824,6 +1869,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 onCreatePoll={
                   !editing && canPostToChannel && !isPatientConv
                     ? () => setPollDialogOpen(true)
+                    : undefined
+                }
+                onStartVoiceCall={
+                  !editing && canPostToChannel && conv.type !== "channel" && !voiceCall.call
+                    ? () => voiceCall.startCall()
                     : undefined
                 }
                 showMessageModeSelector={isPatientConv && !!user?.isAdmin && !editing}

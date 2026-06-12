@@ -134,6 +134,13 @@
       "when": 1774060000000,
       "tag": "0018_questionnaire_hints_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1774070000000,
+      "tag": "0019_conversation_calls",
+      "breakpoints": true
     }
   ]
 }

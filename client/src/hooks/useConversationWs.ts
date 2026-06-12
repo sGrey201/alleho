@@ -124,18 +124,33 @@ type ConversationPollUpdatedPayload = {
   totalVotes: number;
 };
 
+export type ConversationCallWsEvent = {
+  type:
+    | "conversation_call_started"
+    | "conversation_call_accepted"
+    | "conversation_call_declined"
+    | "conversation_call_joined"
+    | "conversation_call_left"
+    | "conversation_call_ended";
+  payload: any;
+};
+
 export function useConversationWs(
   conversationId: string | undefined,
   enabled: boolean,
-  currentUserId?: string
+  currentUserId?: string,
+  onCallEvent?: (event: ConversationCallWsEvent) => void
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationIdRef = useRef(conversationId);
   const currentUserIdRef = useRef(currentUserId);
   const markSeenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Kept in a ref so a changing callback identity does not reconnect the socket.
+  const onCallEventRef = useRef(onCallEvent);
   conversationIdRef.current = conversationId;
   currentUserIdRef.current = currentUserId;
+  onCallEventRef.current = onCallEvent;
 
   useEffect(() => {
     if (!enabled || !conversationId) return;
@@ -200,6 +215,14 @@ export function useConversationWs(
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data as string);
+          if (typeof data.type === "string" && data.type.startsWith("conversation_call_")) {
+            const payload = data.payload as { conversationId?: string } | undefined;
+            if (payload?.conversationId && payload.conversationId !== conversationIdRef.current) {
+              return;
+            }
+            onCallEventRef.current?.(data as ConversationCallWsEvent);
+            return;
+          }
           if (data.type === "conversation_message" && data.payload) {
             const payload = data.payload as ConversationMessageWithAuthor;
             if (payload.conversationId !== conversationIdRef.current) return;

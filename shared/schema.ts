@@ -571,3 +571,68 @@ export const pushSubscriptions = pgTable(
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+// Messenger: voice conferences (LiveKit rooms). One row per call; `id` doubles
+// as the LiveKit room name.
+export const callStatusEnum = z.enum(["ringing", "active", "ended", "cancelled"]);
+export type CallStatus = z.infer<typeof callStatusEnum>;
+
+export const callParticipantStatusEnum = z.enum([
+  "invited",
+  "joined",
+  "declined",
+  "missed",
+  "left",
+]);
+export type CallParticipantStatus = z.infer<typeof callParticipantStatusEnum>;
+
+export const conversationCalls = pgTable(
+  "conversation_calls",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    initiatedByUserId: varchar("initiated_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull().default("ringing"),
+    startedAt: timestamp("started_at"),
+    endedAt: timestamp("ended_at"),
+    ringExpiresAt: timestamp("ring_expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_calls_conversation_idx").on(table.conversationId),
+    index("conversation_calls_status_idx").on(table.status),
+    // At most one live (ringing/active) call per conversation is enforced by a
+    // partial unique index created in migration 0019.
+  ]
+);
+
+export type ConversationCall = typeof conversationCalls.$inferSelect;
+export type InsertConversationCall = typeof conversationCalls.$inferInsert;
+
+export const conversationCallParticipants = pgTable(
+  "conversation_call_participants",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    callId: varchar("call_id")
+      .notNull()
+      .references(() => conversationCalls.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull().default("invited"),
+    respondedAt: timestamp("responded_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("conversation_call_participants_call_idx").on(table.callId),
+    index("conversation_call_participants_user_idx").on(table.userId),
+    sql`CONSTRAINT conversation_call_participants_unique UNIQUE (call_id, user_id)`,
+  ]
+);
+
+export type ConversationCallParticipant = typeof conversationCallParticipants.$inferSelect;
+export type InsertConversationCallParticipant = typeof conversationCallParticipants.$inferInsert;

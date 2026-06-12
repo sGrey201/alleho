@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import { broadcastDoctorChatsUpdated } from "./wsBroadcast";
+import { broadcastDoctorChatsUpdated, broadcastConversationWsEvent } from "./wsBroadcast";
 
 const REDIS_URL =
   process.env.REDIS_URL ??
@@ -404,4 +404,36 @@ export async function publishConversationPollUpdated(
   payload: ConversationPollUpdatedPayload
 ): Promise<void> {
   await publishConversationEvent(conversationId, "conversation_poll_updated", payload);
+}
+
+/**
+ * Voice-conference signaling events. Unlike message events these are not
+ * idempotent, so we publish via Redis when available (the subscriber loops the
+ * event back to local + remote sockets) and only fall back to the in-process
+ * broadcaster when Redis is absent — avoiding double delivery.
+ */
+export async function publishConversationCallEvent(
+  conversationId: string,
+  type:
+    | "conversation_call_started"
+    | "conversation_call_accepted"
+    | "conversation_call_declined"
+    | "conversation_call_joined"
+    | "conversation_call_left"
+    | "conversation_call_ended",
+  payload: unknown
+): Promise<void> {
+  const c = getClient();
+  if (c) {
+    try {
+      await c.publish(
+        CONVERSATION_CHANNEL_PREFIX + conversationId,
+        JSON.stringify({ type, payload })
+      );
+      return;
+    } catch (err) {
+      console.error(`[Redis] ${type} error:`, err);
+    }
+  }
+  broadcastConversationWsEvent(conversationId, type, payload);
 }

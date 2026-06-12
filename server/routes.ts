@@ -50,6 +50,18 @@ import {
   type ConversationCommentWithAuthor,
 } from "./redis";
 import { setupWebSocket } from "./ws";
+import {
+  startCall,
+  acceptCall,
+  declineCall,
+  leaveCall,
+  endCall,
+  getCallStateDto,
+  createCallAccessToken,
+  isCallableConversationType,
+  isLiveKitConfigured,
+  getLiveKitUrl,
+} from "./voiceCall";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyPatientConversationActivity } from "./doctorChatsNotify";
 import {
@@ -1008,6 +1020,18 @@ ${allUrls.map(url => `  <url>
         };
       };
 
+      // Flags conversations that currently have a ringing/active voice call.
+      const annotateActiveCalls = async <T extends { conversationId?: string }>(
+        items: T[]
+      ): Promise<(T & { hasActiveCall: boolean })[]> => {
+        const ids = items.map((i) => i.conversationId).filter((x): x is string => !!x);
+        const activeSet = new Set(await storage.getConversationIdsWithActiveCalls(ids));
+        return items.map((i) => ({
+          ...i,
+          hasActiveCall: !!i.conversationId && activeSet.has(i.conversationId),
+        }));
+      };
+
       if (folder === "personal") {
         if (!currentUser.isAdmin) {
           const patientChats = await storage.getPatientConversationsForUser(currentUserId);
@@ -1034,7 +1058,7 @@ ${allUrls.map(url => `  <url>
               "ru"
             );
           });
-          return res.json(paged(items));
+          return res.json(paged(await annotateActiveCalls(items)));
         }
 
         const [contacts, patientChats] = await Promise.all([
@@ -1086,7 +1110,7 @@ ${allUrls.map(url => `  <url>
               : ("otherParticipantName" in b ? b.otherParticipantName : "") ?? "";
           return aName.localeCompare(bName, "ru");
         });
-        return res.json(paged(items));
+        return res.json(paged(await annotateActiveCalls(items)));
       }
 
       if (!currentUser.isAdmin) {
@@ -1136,7 +1160,7 @@ ${allUrls.map(url => `  <url>
         const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
         return bTime - aTime;
       });
-      return res.json(paged(groups));
+      return res.json(paged(await annotateActiveCalls(groups)));
     } catch (error) {
       console.error("Error fetching /api/me/chats:", error);
       res.status(500).json({ message: "Failed to fetch chats" });
@@ -1814,6 +1838,155 @@ ${allUrls.map(url => `  <url>
         return res.status(400).json({ message: "Invalid message data" });
       }
       res.status(500).json({ message: "Failed to post message" });
+    }
+  });
+
+  // ---- Voice conferences (LiveKit) ----
+
+  // Start a voice conference in a conversation.
+  app.post("/api/conversations/:id/calls", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      if (!isLiveKitConfigured()) {
+        return res.status(503).json({ message: "Voice calls are not configured" });
+      }
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (!isCallableConversationType(conv.type)) {
+        return res.status(400).json({ message: "Calls are not allowed in this chat" });
+      }
+      const existing = await storage.getActiveCallForConversation(id);
+      if (existing) {
+        return res.status(409).json({ message: "A call is already in progress", callId: existing.id });
+      }
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
+
+      let state;
+      try {
+        state = await startCall(id, currentUser);
+      } catch (err) {
+        // Unique partial index race: another call started concurrently.
+        const again = await storage.getActiveCallForConversation(id);
+        if (again) {
+          return res.status(409).json({ message: "A call is already in progress", callId: again.id });
+        }
+        throw err;
+      }
+      const token = await createCallAccessToken(state.id, currentUser);
+      res.status(201).json({ call: state, token, livekitUrl: getLiveKitUrl() });
+    } catch (error) {
+      console.error("Error starting call:", error);
+      res.status(500).json({ message: "Failed to start call" });
+    }
+  });
+
+  // Get the active call for a conversation (UI restore on open).
+  app.get("/api/conversations/:id/calls/active", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const call = await storage.getActiveCallForConversation(id);
+      if (!call) return res.json({ call: null });
+      const state = await getCallStateDto(call.id);
+      res.json({ call: state });
+    } catch (error) {
+      console.error("Error fetching active call:", error);
+      res.status(500).json({ message: "Failed to fetch active call" });
+    }
+  });
+
+  // Accept (join) a call — returns a LiveKit token.
+  app.post("/api/conversations/:id/calls/:callId/accept", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, callId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const call = await storage.getCallById(callId);
+      if (!call || call.conversationId !== id) {
+        return res.status(404).json({ message: "Call not found" });
+      }
+      if (call.status === "ended" || call.status === "cancelled") {
+        return res.status(409).json({ message: "Call has ended" });
+      }
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
+      await acceptCall(call, currentUserId);
+      const token = await createCallAccessToken(call.id, currentUser);
+      const state = await getCallStateDto(call.id);
+      res.json({ call: state, token, livekitUrl: getLiveKitUrl() });
+    } catch (error) {
+      console.error("Error accepting call:", error);
+      res.status(500).json({ message: "Failed to accept call" });
+    }
+  });
+
+  // Decline a call.
+  app.post("/api/conversations/:id/calls/:callId/decline", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, callId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const call = await storage.getCallById(callId);
+      if (!call || call.conversationId !== id) {
+        return res.status(404).json({ message: "Call not found" });
+      }
+      await declineCall(call, currentUserId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error declining call:", error);
+      res.status(500).json({ message: "Failed to decline call" });
+    }
+  });
+
+  // Leave a call (the participant disconnects).
+  app.post("/api/conversations/:id/calls/:callId/leave", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, callId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const call = await storage.getCallById(callId);
+      if (!call || call.conversationId !== id) {
+        return res.status(404).json({ message: "Call not found" });
+      }
+      await leaveCall(call, currentUserId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error leaving call:", error);
+      res.status(500).json({ message: "Failed to leave call" });
+    }
+  });
+
+  // End the whole call (initiator or any joined participant).
+  app.post("/api/conversations/:id/calls/:callId/end", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, callId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const call = await storage.getCallById(callId);
+      if (!call || call.conversationId !== id) {
+        return res.status(404).json({ message: "Call not found" });
+      }
+      await endCall(call, "ended");
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error ending call:", error);
+      res.status(500).json({ message: "Failed to end call" });
     }
   });
 

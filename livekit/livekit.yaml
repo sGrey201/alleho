@@ -1,0 +1,28 @@
+# LiveKit server config (self-hosted, audio conferences).
+# API key/secret are injected via the LIVEKIT_KEYS env var on the container
+# (format: "<key>: <secret>"), so no secrets live in this file.
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  # Single UDP port for ICE/UDP mux — must be open on the host firewall.
+  udp_port: 7882
+  # TCP fallback for clients that cannot use UDP.
+  tcp_port: 7881
+  # On a VPS LiveKit must advertise the public IP for ICE candidates.
+  use_external_ip: true
+
+# Embedded TURN over TLS — required for clients behind strict NAT / mobile
+# networks. Reuses the Let's Encrypt certs mounted into the container.
+# Disable (enabled: false) for local dev where everything is on localhost.
+turn:
+  enabled: true
+  domain: hovial.com
+  tls_port: 5349
+  cert_file: /etc/letsencrypt/live/hovial.com/fullchain.pem
+  key_file: /etc/letsencrypt/live/hovial.com/privkey.pem
+
+logging:
+  level: info
+  json: false

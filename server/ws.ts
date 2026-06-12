@@ -104,6 +104,12 @@ export function setupWebSocket(
             "conversation_comment_deleted",
             "conversation_comment_reaction",
             "conversation_poll_updated",
+            "conversation_call_started",
+            "conversation_call_accepted",
+            "conversation_call_declined",
+            "conversation_call_joined",
+            "conversation_call_left",
+            "conversation_call_ended",
           ]);
           if (
             typeof parsed === "object" &&

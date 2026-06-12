@@ -136,5 +136,14 @@ app.use((req, res, next) => {
     void storage.backfillDefaultQuestionnaireTemplatesForAdmins().then((count) => {
       if (count > 0) log(`backfilled default questionnaire templates for ${count} doctors`);
     }).catch((err) => console.error("[questionnaire] backfill error:", err));
+
+    // Periodically cancel calls nobody answered within the ring window.
+    void import("./voiceCall").then(({ sweepExpiredCalls }) => {
+      setInterval(() => {
+        void sweepExpiredCalls().catch((err) =>
+          console.error("[VoiceCall] sweep error:", err)
+        );
+      }, 15_000);
+    });
   });
 })();

@@ -22,9 +22,13 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-https://hovial.com}
+      LIVEKIT_URL: ${LIVEKIT_URL:-wss://hovial.com/livekit}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
     depends_on:
       - db
       - redis
+      - livekit
 
   db:
     image: postgres:15
@@ -40,6 +44,25 @@ services:
     volumes:
       - redis_data:/data
 
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: always
+    command: --config /etc/livekit.yaml
+    environment:
+      # LiveKit reads its API key/secret pair from this var: "<key>: <secret>"
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    ports:
+      # Signaling (7880) is reverse-proxied by nginx at /livekit, but media
+      # (RTC) cannot pass through an HTTP proxy and must be reachable directly.
+      - "7881:7881"        # RTC over TCP (fallback)
+      - "7882:7882/udp"    # RTC over UDP (primary media transport)
+      - "5349:5349"        # embedded TURN over TLS
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - redis
+
   nginx:
     image: nginx:alpine
     restart: always
@@ -52,6 +75,7 @@ services:
       - ./certbot-webroot:/var/www/certbot
     depends_on:
       - app
+      - livekit
 
 volumes:
   postgres_data:

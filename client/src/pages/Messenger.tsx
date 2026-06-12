@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut, ClipboardList } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut, ClipboardList, Phone } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PatientChatSettings from "@/components/PatientChatSettings";
@@ -74,6 +74,7 @@ export type ChatItem = {
   myRole?: string;
   isMember?: boolean;
   lastVisitedAt?: string | null;
+  hasActiveCall?: boolean;
 };
 
 type PaginatedChatsResponse = {
@@ -941,6 +942,15 @@ export default function Messenger() {
                         <div className={cn("shrink-0 flex flex-col items-end gap-0.5", alignTop && "pt-0.5")}>
                           {chat.lastMessageAt && (
                             <span className="text-xs text-muted-foreground">{formatChatTime(chat.lastMessageAt)}</span>
+                          )}
+                          {chat.hasActiveCall && (
+                            <span
+                              className="flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-white"
+                              title={t.voiceCallOngoing}
+                              data-testid="chat-list-active-call"
+                            >
+                              <Phone className="h-3 w-3 animate-pulse" />
+                            </span>
                           )}
                           {chat.unreadCount != null && chat.unreadCount > 0 && (
                             <span className="rounded-full bg-primary text-primary-foreground text-xs font-medium min-w-5 h-5 flex items-center justify-center px-1.5">

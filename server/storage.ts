@@ -16,6 +16,8 @@ import {
   conversationMessageCommentReactions,
   conversationPollVotes,
   pushSubscriptions,
+  conversationCalls,
+  conversationCallParticipants,
   type User,
   type UpsertUser,
   type Article,
@@ -42,6 +44,9 @@ import {
   type ConversationMessageComment,
   type InsertConversationMessageComment,
   type PushSubscription,
+  type ConversationCall,
+  type ConversationCallParticipant,
+  type CallParticipantStatus,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
@@ -314,6 +319,26 @@ export interface IStorage {
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
 
   // Web Push subscriptions
+  // Messenger voice conferences (LiveKit)
+  createCall(data: {
+    conversationId: string;
+    initiatedByUserId: string;
+    participantUserIds: string[];
+    ringExpiresAt: Date;
+  }): Promise<ConversationCall>;
+  getCallById(callId: string): Promise<ConversationCall | undefined>;
+  getActiveCallForConversation(conversationId: string): Promise<ConversationCall | undefined>;
+  getCallParticipants(callId: string): Promise<ConversationCallParticipant[]>;
+  setCallParticipantStatus(
+    callId: string,
+    userId: string,
+    status: CallParticipantStatus
+  ): Promise<ConversationCallParticipant | undefined>;
+  markCallActive(callId: string): Promise<void>;
+  endCall(callId: string, status: "ended" | "cancelled"): Promise<ConversationCall | undefined>;
+  getExpiredRingingCalls(now: Date): Promise<ConversationCall[]>;
+  getConversationIdsWithActiveCalls(conversationIds: string[]): Promise<string[]>;
+
   upsertPushSubscription(
     userId: string,
     data: { endpoint: string; p256dh: string; auth: string }
@@ -1931,6 +1956,132 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pushSubscriptions)
       .where(inArray(pushSubscriptions.userId, userIds));
+  }
+
+  async createCall(data: {
+    conversationId: string;
+    initiatedByUserId: string;
+    participantUserIds: string[];
+    ringExpiresAt: Date;
+  }): Promise<ConversationCall> {
+    const [call] = await db
+      .insert(conversationCalls)
+      .values({
+        conversationId: data.conversationId,
+        initiatedByUserId: data.initiatedByUserId,
+        status: "ringing",
+        ringExpiresAt: data.ringExpiresAt,
+      })
+      .returning();
+
+    const now = new Date();
+    const rows = data.participantUserIds.map((userId) => ({
+      callId: call.id,
+      userId,
+      // The initiator is considered joined immediately.
+      status: userId === data.initiatedByUserId ? "joined" : "invited",
+      respondedAt: userId === data.initiatedByUserId ? now : null,
+    }));
+    if (rows.length > 0) {
+      await db.insert(conversationCallParticipants).values(rows);
+    }
+    return call;
+  }
+
+  async getCallById(callId: string): Promise<ConversationCall | undefined> {
+    const [c] = await db.select().from(conversationCalls).where(eq(conversationCalls.id, callId));
+    return c;
+  }
+
+  async getActiveCallForConversation(conversationId: string): Promise<ConversationCall | undefined> {
+    const [c] = await db
+      .select()
+      .from(conversationCalls)
+      .where(
+        and(
+          eq(conversationCalls.conversationId, conversationId),
+          inArray(conversationCalls.status, ["ringing", "active"])
+        )
+      )
+      .orderBy(desc(conversationCalls.createdAt))
+      .limit(1);
+    return c;
+  }
+
+  async getCallParticipants(callId: string): Promise<ConversationCallParticipant[]> {
+    return db
+      .select()
+      .from(conversationCallParticipants)
+      .where(eq(conversationCallParticipants.callId, callId));
+  }
+
+  async setCallParticipantStatus(
+    callId: string,
+    userId: string,
+    status: CallParticipantStatus
+  ): Promise<ConversationCallParticipant | undefined> {
+    const [row] = await db
+      .update(conversationCallParticipants)
+      .set({ status, respondedAt: new Date() })
+      .where(
+        and(
+          eq(conversationCallParticipants.callId, callId),
+          eq(conversationCallParticipants.userId, userId)
+        )
+      )
+      .returning();
+    return row;
+  }
+
+  async markCallActive(callId: string): Promise<void> {
+    await db
+      .update(conversationCalls)
+      .set({ status: "active", startedAt: sql`COALESCE(${conversationCalls.startedAt}, now())` })
+      .where(and(eq(conversationCalls.id, callId), eq(conversationCalls.status, "ringing")));
+  }
+
+  async endCall(
+    callId: string,
+    status: "ended" | "cancelled"
+  ): Promise<ConversationCall | undefined> {
+    const [row] = await db
+      .update(conversationCalls)
+      .set({ status, endedAt: new Date() })
+      .where(
+        and(
+          eq(conversationCalls.id, callId),
+          inArray(conversationCalls.status, ["ringing", "active"])
+        )
+      )
+      .returning();
+    return row;
+  }
+
+  async getExpiredRingingCalls(now: Date): Promise<ConversationCall[]> {
+    return db
+      .select()
+      .from(conversationCalls)
+      .where(
+        and(
+          eq(conversationCalls.status, "ringing"),
+          sql`${conversationCalls.ringExpiresAt} IS NOT NULL`,
+          sql`${conversationCalls.ringExpiresAt} <= ${now}`
+        )
+      );
+  }
+
+  async getConversationIdsWithActiveCalls(conversationIds: string[]): Promise<string[]> {
+    if (conversationIds.length === 0) return [];
+    const rows = await db
+      .select({ conversationId: conversationCalls.conversationId })
+      .from(conversationCalls)
+      .where(
+        and(
+          inArray(conversationCalls.conversationId, conversationIds),
+          inArray(conversationCalls.status, ["ringing", "active"])
+        )
+      );
+    return Array.from(new Set(rows.map((r) => r.conversationId)));
   }
 
   async getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]> {
