@@ -53,6 +53,7 @@ type ChatInputBarProps = {
   /** When provided, an empty composer shows a mic button that records & sends voice. */
   onSendVoice?: (clip: RecordedVoice) => Promise<void> | void;
   isSendingVoice?: boolean;
+  onInputFocus?: () => void;
 };
 
 export type ChatInputBarHandle = {
@@ -86,6 +87,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   onMessageModeChange,
   onSendVoice,
   isSendingVoice = false,
+  onInputFocus,
 }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasText = !!value.trim();
@@ -301,6 +303,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             value={value}
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
+            onFocus={onInputFocus}
             rows={1}
             className={cn(
               "min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm",

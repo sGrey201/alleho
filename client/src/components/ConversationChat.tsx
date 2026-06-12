@@ -397,6 +397,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     blinkMessageBubble(el);
   };
 
+  const scrollMessagesForKeyboard = useCallback(() => {
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const scroll = () => scrollChatPaneToBottom(root);
+    scroll();
+    requestAnimationFrame(scroll);
+    window.setTimeout(scroll, 100);
+    window.setTimeout(scroll, 350);
+  }, []);
+
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
     queryKey: ["/api/conversations", conversationId],
     enabled: !!conversationId,
@@ -897,6 +907,22 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     };
   }, [messages?.length, conversationId]);
 
+  // Keep the latest messages visible while the iOS keyboard animates in/out.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onViewportChange = () => {
+      if (!document.activeElement?.closest(".chat-composer-panel")) return;
+      scrollMessagesForKeyboard();
+    };
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+    return () => {
+      vv.removeEventListener("resize", onViewportChange);
+      vv.removeEventListener("scroll", onViewportChange);
+    };
+  }, [conversationId, scrollMessagesForKeyboard]);
+
   useEffect(() => {
     setHideSubscribeButton(false);
   }, [conversationId]);
@@ -1376,7 +1402,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           alt=""
           className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
           data-testid={`image-${msg.id}`}
-          onClick={() => setSelectedImage(msg.imageUrl!)}
+          onClick={() => {
+            setMessageLayer(null);
+            setSelectedImage(msg.imageUrl!);
+          }}
         />
       )}
       {msg.messageType === "voice" ? (
@@ -1879,6 +1908,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 showMessageModeSelector={isPatientConv && !!user?.isAdmin && !editing}
                 messageMode={messageMode}
                 onMessageModeChange={setMessageMode}
+                onInputFocus={scrollMessagesForKeyboard}
               />
             </div>
           )}

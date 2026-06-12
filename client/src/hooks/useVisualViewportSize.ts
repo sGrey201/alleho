@@ -23,6 +23,8 @@ export function useVisualViewportSize(enabled: boolean) {
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
 
+    let focusOutTimer: ReturnType<typeof setTimeout> | null = null;
+
     const apply = () => {
       const vv = window.visualViewport;
       const vvHeight = vv?.height ?? window.innerHeight;
@@ -33,21 +35,16 @@ export function useVisualViewportSize(enabled: boolean) {
       // Skip the stretch in iPad split view / landscape where innerWidth differs.
       const isFullscreenPortrait = window.innerWidth === window.screen.width;
 
-      // While an input is focused the keyboard is (appearing) up. In standalone
-      // PWA the `shortfall > 150` heuristic is unreliable during the open
-      // animation, so stretching to screen height would push the composer under
-      // the keyboard. Anchoring to the real visualViewport height keeps the
-      // composer visible. The stretch only matters for the no-keyboard idle case.
+      const shortfall = window.screen.height - (vvHeight + offsetTop);
       const editableFocused = isEditableElement(document.activeElement);
+      // Treat keyboard as open while an input is focused OR the viewport visibly shrank.
+      const keyboardOpen = editableFocused || shortfall > 150;
+
+      document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
 
       let height = vvHeight;
-      if (isStandaloneIOS && isFullscreenPortrait && !editableFocused) {
-        // Status bar shortfall is ~44-59pt; anything bigger means the keyboard is up.
-        const shortfall = window.screen.height - (vvHeight + offsetTop);
-        const keyboardOpen = shortfall > 150;
-        if (!keyboardOpen) {
-          height = Math.max(vvHeight, window.screen.height);
-        }
+      if (isStandaloneIOS && isFullscreenPortrait && !keyboardOpen) {
+        height = Math.max(vvHeight, window.screen.height);
       }
 
       document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
@@ -61,10 +58,23 @@ export function useVisualViewportSize(enabled: boolean) {
       window.setTimeout(apply, 300);
     };
 
-    // Re-measure when an input gains focus: iOS standalone does not always fire a
-    // `visualViewport` resize as the keyboard animates in.
     const handleFocusIn = (event: FocusEvent) => {
+      if (focusOutTimer) {
+        clearTimeout(focusOutTimer);
+        focusOutTimer = null;
+      }
       if (isEditableElement(event.target)) scheduleApply();
+    };
+
+    // Delay stretch-to-screen until the keyboard finish animation; cancel if focus
+    // returns quickly (common when toggling the keyboard repeatedly).
+    const handleFocusOut = () => {
+      scheduleApply();
+      if (focusOutTimer) clearTimeout(focusOutTimer);
+      focusOutTimer = setTimeout(() => {
+        focusOutTimer = null;
+        scheduleApply();
+      }, 450);
     };
 
     apply();
@@ -74,15 +84,17 @@ export function useVisualViewportSize(enabled: boolean) {
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", scheduleApply);
     document.addEventListener("focusin", handleFocusIn);
-    document.addEventListener("focusout", scheduleApply);
+    document.addEventListener("focusout", handleFocusOut);
 
     return () => {
+      if (focusOutTimer) clearTimeout(focusOutTimer);
       vv?.removeEventListener("resize", apply);
       vv?.removeEventListener("scroll", apply);
       window.removeEventListener("resize", apply);
       window.removeEventListener("orientationchange", scheduleApply);
       document.removeEventListener("focusin", handleFocusIn);
-      document.removeEventListener("focusout", scheduleApply);
+      document.removeEventListener("focusout", handleFocusOut);
+      document.documentElement.classList.remove("keyboard-open");
       document.documentElement.style.removeProperty("--app-height");
       document.documentElement.style.removeProperty("--app-offset-top");
     };
