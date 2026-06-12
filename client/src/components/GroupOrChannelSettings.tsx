@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { ArrowLeft, Loader2, Trash2, UserPlus, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ interface Props {
 
 export default function GroupOrChannelSettings({ conversationId, mode, currentUserId, onBack }: Props) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -118,6 +120,23 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
     },
   });
+
+  const unsubscribeMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/conversations/${conversationId}/subscribe`, {});
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
+      toast({ title: t.channelUnsubscribed });
+      setLocation("/messenger");
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const canUnsubscribeFromChannel = mode === "channel" && !!myRole && !isOwner;
 
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -274,6 +293,21 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               );
             })}
           </div>
+        )}
+
+        {canUnsubscribeFromChannel && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive"
+            disabled={unsubscribeMutation.isPending}
+            onClick={() => unsubscribeMutation.mutate()}
+          >
+            {unsubscribeMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            {t.unsubscribeFromChannel}
+          </Button>
         )}
       </div>
     </div>

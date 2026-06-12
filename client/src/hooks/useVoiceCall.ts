@@ -37,14 +37,6 @@ export type CallStateDto = {
 
 type ConnectionStatus = "idle" | "connecting" | "in-room";
 
-function isIOS(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
-
 function configureRemoteAudioElement(el: HTMLAudioElement) {
   el.style.display = "none";
   el.autoplay = true;
@@ -97,7 +89,6 @@ export function useVoiceCall(
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const conversationIdRef = useRef(conversationId);
   const statusRef = useRef<ConnectionStatus>(status);
-  const backgroundNoticeShownRef = useRef(false);
   conversationIdRef.current = conversationId;
   statusRef.current = status;
 
@@ -148,23 +139,9 @@ export function useVoiceCall(
   const handleAppForeground = useCallback(() => {
     if (document.visibilityState !== "visible") return;
     if (statusRef.current !== "in-room") return;
-    backgroundNoticeShownRef.current = false;
     // Resume remote playback only — restarting the mic track re-prompts for permission.
     resumeRemoteAudio();
   }, [resumeRemoteAudio]);
-
-  const handleAppBackground = useCallback(() => {
-    if (document.visibilityState !== "hidden") return;
-    if (statusRef.current !== "in-room" || backgroundNoticeShownRef.current) return;
-    if (!isIOS()) return;
-    backgroundNoticeShownRef.current = true;
-    toast({
-      title: t.voiceCallMicBackgroundPaused ?? "Микрофон приостановлен",
-      description:
-        t.voiceCallMicBackgroundPausedHint ??
-        "На iOS микрофон не работает, пока приложение свёрнуто или экран заблокирован. Вернитесь в чат, чтобы вас снова было слышно.",
-    });
-  }, [toast]);
 
   const connectToRoom = useCallback(
     async (livekitUrl: string, token: string) => {
@@ -386,22 +363,17 @@ export function useVoiceCall(
     const onVisible = () => {
       handleAppForeground();
     };
-    const onHidden = () => {
-      handleAppBackground();
-    };
 
     document.addEventListener("visibilitychange", onVisible);
-    document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pageshow", onVisible);
     window.addEventListener("focus", onVisible);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pageshow", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [handleAppBackground, handleAppForeground, status]);
+  }, [handleAppForeground, status]);
 
   // Prevent screen lock during a call so the mic is not cut off by iOS.
   useEffect(() => {

@@ -74,6 +74,11 @@ import {
   layoutMessageActionLayer,
   type MessageLongPressRefs,
 } from "@/lib/messageLongPress";
+import {
+  clearChatComposerDraft,
+  getChatComposerDraft,
+  setChatComposerDraft,
+} from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
@@ -323,7 +328,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() =>
+    conversationId ? getChatComposerDraft(conversationId) : ""
+  );
   const [addMembersOpen, setAddMembersOpen] = useState(false);
   const [doctorSearch, setDoctorSearch] = useState("");
   const [forwardSearch, setForwardSearch] = useState("");
@@ -358,6 +365,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     setOpenQuestionnaireTemplateName(null);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
+    if (conversationId) {
+      setMessage(getChatComposerDraft(conversationId));
+    } else {
+      setMessage("");
+    }
   }, [conversationId]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -545,6 +557,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         }
       );
       setMessage("");
+      if (conversationId) clearChatComposerDraft(conversationId);
       setReplyTo(null);
       setPollDialogOpen(false);
       setPollQuestion("");
@@ -1139,6 +1152,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const isOwner = myRole === "owner";
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
   const isChannelReadOnly = conv.type === "channel" && !myRole;
+  const showChannelComposer = !isChannelMemberReadOnly;
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
 
@@ -1504,7 +1518,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const composerValue = isComposerInEditMode ? editText : message;
   const handleComposerChange = (v: string) => {
     if (isComposerInEditMode) setEditText(v);
-    else setMessage(v);
+    else {
+      setMessage(v);
+      if (conversationId) setChatComposerDraft(conversationId, v);
+    }
   };
   const isComposerSending = sendMutation.isPending || editMutation.isPending;
 
@@ -1815,8 +1832,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         </DialogContent>
       </Dialog>
 
+      {showChannelComposer && (
       <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
-          {!isChannelReadOnly && !isChannelMemberReadOnly && (replyTo || editing) && (
+          {!isChannelReadOnly && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
               {editing ? (
                 <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -1881,8 +1899,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 )}
               </Button>
             ) : null
-          ) : isChannelMemberReadOnly ? (
-            <p className="py-2 text-center text-sm text-muted-foreground">{t.channelSubscribedHint}</p>
           ) : (
             <div className="pt-1">
               <ChatInputBar
@@ -1922,6 +1938,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </div>
           )}
         </div>
+      )}
+
       </div>
 
       {!isMobile && questionnairePanelOpen && (

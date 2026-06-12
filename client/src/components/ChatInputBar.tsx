@@ -123,7 +123,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
 
   useEffect(() => {
     const el = textareaRef.current;
-    if (!el || value !== "") return;
+    if (!el) return;
     syncChatTextareaHeight(el);
   }, [value]);
 
