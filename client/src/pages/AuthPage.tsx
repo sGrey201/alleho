@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
 import { RouteSeo } from "@/components/RouteSeo";
+import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 
 const loginSchema = z.object({
@@ -85,13 +86,7 @@ export default function AuthPage() {
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center pb-2">
-          <img
-            src="/auth-logo.png"
-            alt="hovial"
-            className="mx-auto h-auto w-full max-w-[280px] object-contain"
-            loading="eager"
-            decoding="async"
-          />
+          <AuthLogoLink />
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>

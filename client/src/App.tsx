@@ -130,10 +130,12 @@ function AppContent() {
   const isAuthPage = location === "/auth";
   const isInviteAcceptPage = location.startsWith("/invite/accept");
   const isResetPasswordPage = location.startsWith("/reset-password");
+  const isLandingPage = location === "/";
   if (isAuthenticated && isAuthPage) {
     return <Redirect to="/" />;
   }
-  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage) {
+  // Allow the public landing page (logo from invite/auth screens links here).
+  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage && !isLandingPage) {
     return <Redirect to="/auth" />;
   }
 

@@ -15,6 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { profileAvatarSrc } from "@/lib/utils";
 import { RouteSeo } from "@/components/RouteSeo";
+import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 
 const acceptInviteSchema = z.object({
@@ -193,13 +194,7 @@ export default function InviteAccept() {
       <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
-            <img
-              src="/auth-logo.png"
-              alt="hovial"
-              className="mx-auto h-auto w-full max-w-[280px] object-contain"
-              loading="eager"
-              decoding="async"
-            />
+            <AuthLogoLink />
             <CardTitle className="text-2xl pt-4">Недействительная ссылка</CardTitle>
           </CardHeader>
           <CardContent className="text-center text-sm text-muted-foreground">
@@ -219,13 +214,7 @@ export default function InviteAccept() {
     <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center pb-2">
-          <img
-            src="/auth-logo.png"
-            alt="hovial"
-            className="mx-auto h-auto w-full max-w-[280px] object-contain"
-            loading="eager"
-            decoding="async"
-          />
+          <AuthLogoLink />
           <CardTitle className="text-2xl pt-4">Регистрация по приглашению</CardTitle>
           {invitePreview?.inviter?.name && (
             <p className="text-sm text-muted-foreground pt-2">
