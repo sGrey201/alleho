@@ -1452,7 +1452,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col md:flex-row">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="chat-header-panel pointer-events-none z-30 flex w-full min-w-0 max-w-full shrink-0 flex-col gap-1.5 overflow-hidden px-3">
+      <div className="chat-header-panel pointer-events-none absolute inset-x-0 top-0 z-30 flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-hidden px-3">
         <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
             variant="secondary"
@@ -1522,7 +1522,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
       <div
         ref={messagesScrollRef}
-        className="min-h-0 flex-1 overflow-y-auto px-4 pb-20 pt-2"
+        className={cn(
+          "chat-messages-pane min-h-0 flex-1 overflow-y-auto px-4 pb-20",
+          activePinnedMessage && "chat-messages-pane--pinned",
+        )}
       >
         <div ref={messagesContentRef} className="space-y-3">
           {messagesLoading ? (
@@ -1691,7 +1694,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       </Dialog>
 
       {!isChannelMemberReadOnly && (
-        <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 pb-2 space-y-2">
+        <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
           {!isChannelReadOnly && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
               {editing ? (

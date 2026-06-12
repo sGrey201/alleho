@@ -24,6 +24,7 @@ import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
+import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -107,6 +108,7 @@ function AppContent() {
     isQuestionnairesPage;
 
   useImmersiveViewport(isFullscreenPage);
+  useVisualViewportSize(isFullscreenPage);
 
   useEffect(() => {
     if (!isFullscreenPage) {
