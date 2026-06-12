@@ -10,10 +10,7 @@ import {
   Pill,
   FileText,
   Mic,
-  Trash2,
   ArrowUp,
-  Lock,
-  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,10 +56,6 @@ export type ChatInputBarHandle = {
   focusInput: () => void;
 };
 
-const CANCEL_DRAG_PX = 90;
-const LOCK_DRAG_PX = 70;
-const MIN_RECORDING_MS = 700;
-
 function formatRecordTime(ms: number): string {
   const totalCentis = Math.floor(ms / 10);
   const minutes = Math.floor(totalCentis / 6000);
@@ -96,10 +89,6 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
 
   const voiceRecorder = useVoiceRecorder();
   const [voiceSupported] = useState(() => isVoiceRecordingSupported());
-  const [locked, setLocked] = useState(false);
-  const [willCancel, setWillCancel] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const lockedRef = useRef(false);
 
   const canRecordVoice = !!onSendVoice && voiceSupported && !disabled;
   const showMicButton = !hasText && canRecordVoice;
@@ -149,129 +138,53 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     e.target.value = "";
   };
 
-  const resetRecordingUi = () => {
-    setLocked(false);
-    setWillCancel(false);
-    lockedRef.current = false;
-    dragStartRef.current = null;
+  const startRecording = async () => {
+    if (!canRecordVoice || isRecording) return;
+    await voiceRecorder.start();
   };
 
   const finishAndSend = async () => {
-    const tooShort = voiceRecorder.elapsedMs < MIN_RECORDING_MS;
     const clip = await voiceRecorder.stop();
-    resetRecordingUi();
-    if (clip && !tooShort && onSendVoice) {
+    if (clip && onSendVoice) {
       await onSendVoice(clip);
     }
   };
 
   const discardRecording = async () => {
     await voiceRecorder.cancel();
-    resetRecordingUi();
-  };
-
-  const handleMicPointerDown = async (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!canRecordVoice || isRecording) return;
-    e.preventDefault();
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-    await voiceRecorder.start();
-  };
-
-  const handleMicPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!isRecording || lockedRef.current || !dragStartRef.current) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-    if (dx < -CANCEL_DRAG_PX) {
-      void discardRecording();
-      return;
-    }
-    if (dy < -LOCK_DRAG_PX) {
-      lockedRef.current = true;
-      setLocked(true);
-      return;
-    }
-    setWillCancel(dx < -CANCEL_DRAG_PX / 2);
-  };
-
-  const handleMicPointerUp = async (e: React.PointerEvent<HTMLButtonElement>) => {
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-    if (!isRecording || lockedRef.current) return;
-    await finishAndSend();
   };
 
   if (isRecording) {
     return (
       <div className={wrapperClassName}>
         <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-3 rounded-[22px] bg-[#f7f3e8] px-4 py-2.5 shadow-sm dark:bg-muted",
-              willCancel && "opacity-70",
-            )}
-          >
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[22px] bg-[#f7f3e8] px-4 py-2.5 shadow-sm dark:bg-muted">
             <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-red-500" />
             <span className="shrink-0 text-sm tabular-nums text-foreground">
               {formatRecordTime(voiceRecorder.elapsedMs)}
             </span>
-            {locked ? (
-              <button
-                type="button"
-                onClick={discardRecording}
-                className="ml-auto text-sm font-medium text-primary"
-              >
-                {t.voiceRecordCancel}
-              </button>
-            ) : (
-              <span className="ml-auto flex items-center gap-1 text-sm text-muted-foreground">
-                <ChevronLeft className="h-4 w-4" />
-                {t.voiceRecordSlideToCancel}
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={discardRecording}
+              className="ml-auto text-sm font-medium text-primary"
+            >
+              {t.voiceRecordCancel}
+            </button>
           </div>
 
-          {locked ? (
-            <Button
-              size="icon"
-              onClick={finishAndSend}
-              disabled={isSendingVoice}
-              className="h-10 w-10 shrink-0 rounded-full"
-              aria-label={t.voiceRecordSend}
-            >
-              {isSendingVoice ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowUp className="h-5 w-5" />
-              )}
-            </Button>
-          ) : (
-            <div className="relative flex shrink-0 flex-col items-center">
-              <span className="absolute -top-9 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 shadow">
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-              </span>
-              <button
-                type="button"
-                onPointerMove={handleMicPointerMove}
-                onPointerUp={handleMicPointerUp}
-                onPointerCancel={discardRecording}
-                className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full text-white shadow-lg transition-transform",
-                  willCancel ? "bg-red-500 scale-110" : "bg-primary scale-110",
-                )}
-                aria-label={t.voiceRecordSend}
-              >
-                <Mic className="h-5 w-5" />
-              </button>
-            </div>
-          )}
+          <Button
+            size="icon"
+            onClick={finishAndSend}
+            disabled={isSendingVoice}
+            className="h-10 w-10 shrink-0 rounded-full"
+            aria-label={t.voiceRecordSend}
+          >
+            {isSendingVoice ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowUp className="h-5 w-5" />
+            )}
+          </Button>
         </div>
       </div>
     );
@@ -388,11 +301,9 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
           <Button
             size="icon"
             type="button"
-            onPointerDown={handleMicPointerDown}
-            onPointerMove={handleMicPointerMove}
-            onPointerUp={handleMicPointerUp}
+            onClick={startRecording}
             disabled={isSendingVoice}
-            className="h-10 w-10 shrink-0 touch-none select-none rounded-full"
+            className="h-10 w-10 shrink-0 rounded-full"
             data-testid="button-record-voice"
             aria-label={t.voiceRecordStart}
           >
