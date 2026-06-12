@@ -59,7 +59,11 @@ import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
 import { VoiceCallBanner } from "@/components/VoiceCallBanner";
 import { VoiceCallRoom } from "@/components/VoiceCallRoom";
-import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import {
+  CHAT_COMPOSER_INSET_EVENT,
+  scrollChatPaneToBottom,
+  scrollChatPaneToBottomForKeyboard,
+} from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import {
   clearMessageLongPress,
@@ -398,13 +402,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   };
 
   const scrollMessagesForKeyboard = useCallback(() => {
-    const root = messagesScrollRef.current;
-    if (!root) return;
-    const scroll = () => scrollChatPaneToBottom(root);
-    scroll();
-    requestAnimationFrame(scroll);
-    window.setTimeout(scroll, 100);
-    window.setTimeout(scroll, 350);
+    scrollChatPaneToBottomForKeyboard(messagesScrollRef.current);
   }, []);
 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
@@ -908,19 +906,27 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     };
   }, [messages?.length, conversationId]);
 
-  // Keep the latest messages visible while the iOS keyboard animates in/out.
+  // Keep the latest messages visible while the iOS keyboard and composer resize.
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const onViewportChange = () => {
-      if (!document.activeElement?.closest(".chat-composer-panel")) return;
+    const shouldStickToBottom = () =>
+      !!document.activeElement?.closest(".chat-composer-panel");
+
+    const onViewportResize = () => {
+      if (!shouldStickToBottom()) return;
       scrollMessagesForKeyboard();
     };
-    vv.addEventListener("resize", onViewportChange);
-    vv.addEventListener("scroll", onViewportChange);
+
+    const onComposerInset = () => {
+      if (!shouldStickToBottom()) return;
+      scrollMessagesForKeyboard();
+    };
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", onViewportResize);
+    window.addEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
     return () => {
-      vv.removeEventListener("resize", onViewportChange);
-      vv.removeEventListener("scroll", onViewportChange);
+      vv?.removeEventListener("resize", onViewportResize);
+      window.removeEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
     };
   }, [conversationId, scrollMessagesForKeyboard]);
 
@@ -1642,7 +1648,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       <div
         ref={messagesScrollRef}
         className={cn(
-          "chat-messages-pane min-h-0 flex-1 overflow-y-auto px-4 pb-20",
+          "chat-messages-pane min-h-0 flex-1 overflow-y-auto px-4",
           activePinnedMessage && "chat-messages-pane--pinned",
         )}
       >

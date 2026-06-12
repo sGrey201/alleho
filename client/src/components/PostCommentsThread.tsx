@@ -525,7 +525,7 @@ export default function PostCommentsThread({
         </div>
       </div>
 
-      <div ref={messagesScrollRef} className="chat-messages-pane flex-1 overflow-y-auto px-4 pb-20">
+      <div ref={messagesScrollRef} className="chat-messages-pane flex-1 overflow-y-auto px-4">
         <div className="space-y-3">
           {anchorPost && (
             <div className="flex w-full justify-start">

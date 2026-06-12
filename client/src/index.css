@@ -389,8 +389,17 @@ html.app-immersive.app-shell-chat {
 }
 
 html.app-immersive.app-shell-chat.keyboard-open {
-  /* Match chat wallpaper so no theme-color band shows in the keyboard gap. */
+  /* Solid fill only — wallpaper tiles look harsh in the keyboard gap strip. */
   background-color: var(--chat-base, #a8c492);
+  background-image: none;
+}
+
+html.app-immersive.app-shell-chat.keyboard-open body,
+html.app-immersive.app-shell-chat.keyboard-open #root,
+html.app-immersive.app-shell-chat.keyboard-open .app-viewport,
+html.app-immersive.app-shell-chat.keyboard-open .app-viewport-content {
+  background-color: var(--chat-base, #a8c492);
+  background-image: none;
 }
 
 html.app-immersive.app-shell-chat .app-viewport-content {
@@ -420,6 +429,9 @@ html.app-immersive.app-shell-chat .chat-header-panel {
    when scrolled to the very top. Extra room when the pinned banner is shown. */
 .chat-messages-pane {
   padding-top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  /* Tracks the absolute composer height (input + keyboard gap + safe area). */
+  padding-bottom: calc(var(--chat-composer-inset, 5rem) + 0.75rem);
+  scroll-padding-bottom: calc(var(--chat-composer-inset, 5rem) + 0.75rem);
   /* Keep the swipe inside the list: without these, iOS standalone PWA hands the
      gesture to the document and rubber-bands the whole app at the scroll edges. */
   overscroll-behavior: contain;
@@ -436,9 +448,10 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-bottom: max(1.5rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));
 }
 
-/* Keyboard replaces the home-indicator safe area — extra padding only creates a gap. */
+/* Keyboard replaces the home-indicator safe area; fill any Safari accessory strip
+   below the composer with scrim (padding keeps ::before inside overflow-hidden). */
 html.app-immersive.app-shell-chat.keyboard-open .chat-composer-panel {
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--keyboard-gap, 0px);
 }
 
 /* Telegram-style edge scrims: blur + tint fading into the message list so bubbles
