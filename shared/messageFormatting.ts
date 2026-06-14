@@ -79,3 +79,15 @@ export function wrapSelectionWithBold(
   const innerEnd = innerStart + selected.length;
   return { value: next, selectionStart: innerStart, selectionEnd: innerEnd };
 }
+
+/** Insert text at the current selection/caret position. */
+export function insertTextAtCursor(
+  value: string,
+  insert: string,
+  start: number,
+  end: number
+): BoldWrapResult {
+  const next = value.slice(0, start) + insert + value.slice(end);
+  const cursor = start + insert.length;
+  return { value: next, selectionStart: cursor, selectionEnd: cursor };
+}

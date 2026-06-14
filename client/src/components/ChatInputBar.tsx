@@ -28,9 +28,11 @@ import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { ChatFormatToolbar } from "@/components/ChatFormatToolbar";
 import {
+  insertTextAtCursor,
   isSelectionBoldWrapped,
   wrapSelectionWithBold,
 } from "@shared/messageFormatting";
+import { clipboardHtmlToBoldMarkup } from "@/lib/pasteFormatting";
 import {
   useVoiceRecorder,
   isVoiceRecordingSupported,
@@ -214,6 +216,26 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     const end = el.value.length;
     el.setSelectionRange(end, end);
   }, []);
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
+
+    const converted = clipboardHtmlToBoldMarkup(e.clipboardData);
+    if (converted === null) return;
+
+    e.preventDefault();
+    const el = e.currentTarget;
+    const { selectionStart, selectionEnd } = el;
+    const result = insertTextAtCursor(value, converted, selectionStart, selectionEnd);
+    onChange(result.value);
+
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(result.selectionStart, result.selectionEnd);
+      syncChatTextareaHeight(el);
+      updateFormatToolbar();
+    });
+  };
 
   useEffect(() => {
     if (!value) {
@@ -444,6 +466,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             }}
             onBlur={() => setFormatToolbar(null)}
             onInput={updateFormatToolbar}
+            onPaste={handlePaste}
             rows={1}
             className={cn(
               "min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm",
