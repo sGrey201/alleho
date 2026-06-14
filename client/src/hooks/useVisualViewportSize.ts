@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { CHAT_COMPOSER_INSET_EVENT } from "@/lib/chatScroll";
+import { CHAT_COMPOSER_INSET_EVENT, VISUAL_VIEWPORT_REFRESH_EVENT } from "@/lib/chatScroll";
 
 /** True for elements that summon the on-screen keyboard. */
 function isEditableElement(el: EventTarget | null): boolean {
@@ -74,8 +74,11 @@ export function useVisualViewportSize(enabled: boolean) {
 
       const shortfall = window.screen.height - (vvHeight + vvOffsetTop);
       const editableFocused = isEditableElement(document.activeElement);
+      const voiceRecording = document.documentElement.classList.contains("voice-recording");
       // Treat keyboard as open while an input is focused OR the viewport visibly shrank.
-      const keyboardOpen = editableFocused || shortfall > 150;
+      // Ignore shortfall during voice recording — getUserMedia / permission dialogs shrink
+      // visualViewport briefly and would leave keyboard-open stuck with zero keyboard-gap.
+      const keyboardOpen = editableFocused || (!voiceRecording && shortfall > 150);
 
       document.documentElement.classList.toggle("keyboard-open", keyboardOpen);
 
@@ -162,6 +165,7 @@ export function useVisualViewportSize(enabled: boolean) {
     vv?.addEventListener("scroll", onVisualViewportScroll);
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", scheduleApply);
+    window.addEventListener(VISUAL_VIEWPORT_REFRESH_EVENT, scheduleApply);
     document.addEventListener("focusin", handleFocusIn);
     document.addEventListener("focusout", handleFocusOut);
 
@@ -171,8 +175,10 @@ export function useVisualViewportSize(enabled: boolean) {
       vv?.removeEventListener("scroll", onVisualViewportScroll);
       window.removeEventListener("resize", apply);
       window.removeEventListener("orientationchange", scheduleApply);
+      window.removeEventListener(VISUAL_VIEWPORT_REFRESH_EVENT, scheduleApply);
       document.removeEventListener("focusin", handleFocusIn);
       document.removeEventListener("focusout", handleFocusOut);
+      document.documentElement.classList.remove("voice-recording");
       document.documentElement.classList.remove("keyboard-open");
       document.documentElement.style.removeProperty("--app-height");
       document.documentElement.style.removeProperty("--app-offset-top");

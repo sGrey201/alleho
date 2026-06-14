@@ -449,9 +449,13 @@ html.app-immersive.app-shell-chat .chat-header-panel {
 }
 
 /* Keyboard replaces the home-indicator safe area; fill any Safari accessory strip
-   below the composer with scrim (padding keeps ::before inside overflow-hidden). */
+   below the composer with scrim (padding keeps ::before inside overflow-hidden).
+   max() keeps safe-area when keyboard-gap is 0 after a false keyboard-open (mic permission). */
 html.app-immersive.app-shell-chat.keyboard-open .chat-composer-panel {
-  padding-bottom: var(--keyboard-gap, 0px);
+  padding-bottom: max(
+    var(--keyboard-gap, 0px),
+    calc(0.5rem + env(safe-area-inset-bottom, 0px))
+  );
 }
 
 /* Telegram-style edge scrims: blur + tint fading into the message list so bubbles

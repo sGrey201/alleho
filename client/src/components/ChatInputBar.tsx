@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
+import { VISUAL_VIEWPORT_REFRESH_EVENT } from "@/lib/chatScroll";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import {
@@ -127,6 +128,19 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     syncChatTextareaHeight(el);
   }, [value]);
 
+  useEffect(() => {
+    const recording = voiceRecorder.status === "recording" || voiceRecorder.status === "requesting";
+    document.documentElement.classList.toggle("voice-recording", recording);
+    if (!recording) {
+      window.dispatchEvent(new CustomEvent(VISUAL_VIEWPORT_REFRESH_EVENT));
+      const el = textareaRef.current;
+      if (el) syncChatTextareaHeight(el);
+    }
+    return () => {
+      document.documentElement.classList.remove("voice-recording");
+    };
+  }, [voiceRecorder.status]);
+
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const nextValue = e.target.value;
     onChange(nextValue);
@@ -180,7 +194,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   if (isRecording) {
     return (
       <div className={wrapperClassName}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[22px] bg-[#f7f3e8] px-4 py-2.5 shadow-sm dark:bg-muted">
             <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-red-500" />
             <span className="shrink-0 text-sm tabular-nums text-foreground">
