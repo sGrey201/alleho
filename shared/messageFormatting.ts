@@ -7,6 +7,68 @@ export type MessageBoldSegment = {
   text: string;
 };
 
+export const TAG_REGEX = /#([a-zA-Z\u0400-\u04FF0-9_-]+)/g;
+
+export type MessageTagSegment = {
+  type: "text" | "tag";
+  text: string;
+  tag?: string;
+};
+
+/** Split plain text into segments with #hashtags. */
+export function parseMessageTagSegments(text: string): MessageTagSegment[] {
+  const segments: MessageTagSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const re = new RegExp(TAG_REGEX.source, "g");
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: "tag", text: match[0], tag: match[1] });
+    lastIndex = re.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", text }];
+}
+
+export type HighlightSegment = {
+  highlighted: boolean;
+  text: string;
+};
+
+/** Split text into plain and highlighted segments for a case-insensitive query. */
+export function splitByHighlight(text: string, query: string): HighlightSegment[] {
+  const q = query.trim();
+  if (!q) return [{ highlighted: false, text }];
+
+  const lowerText = text.toLowerCase();
+  const lowerQuery = q.toLowerCase();
+  const segments: HighlightSegment[] = [];
+  let lastIndex = 0;
+  let index = lowerText.indexOf(lowerQuery, lastIndex);
+
+  while (index !== -1) {
+    if (index > lastIndex) {
+      segments.push({ highlighted: false, text: text.slice(lastIndex, index) });
+    }
+    segments.push({ highlighted: true, text: text.slice(index, index + q.length) });
+    lastIndex = index + q.length;
+    index = lowerText.indexOf(lowerQuery, lastIndex);
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ highlighted: false, text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ highlighted: false, text }];
+}
+
 /** Remove paired **...** markers, leaving inner text. Unmatched ** are left as-is. */
 export function stripMessageFormatting(text: string): string {
   return text.replace(BOLD_REGEX, "$1");

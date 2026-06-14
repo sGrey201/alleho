@@ -28,6 +28,10 @@ import {
   Pill,
   FileText,
   ClipboardList,
+  Search,
+  ListOrdered,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
@@ -355,6 +359,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
   const [openQuestionnaireTemplateName, setOpenQuestionnaireTemplateName] = useState<string | null>(null);
+  const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [chatSearchMatchIndex, setChatSearchMatchIndex] = useState(0);
   const [templatePreview, setTemplatePreview] = useState<{
     templateId: string;
     templateName: string;
@@ -367,6 +374,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     setOpenQuestionnaireTemplateName(null);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
+    setIsChatSearchOpen(false);
+    setChatSearchQuery("");
+    setChatSearchMatchIndex(0);
     if (conversationId) {
       setMessage(getChatComposerDraft(conversationId));
     } else {
@@ -385,6 +395,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   });
   const deepLinkHandledRef = useRef<string | null>(null);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
+  const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const setMessageRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) {
@@ -1005,6 +1016,65 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     return sortedMessages.filter((m) => m.messageType !== "followup");
   }, [sortedMessages, isPatientConv, user?.isAdmin]);
 
+  const chatSearchMatches = useMemo(() => {
+    const q = chatSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return displayMessages.filter(
+      (m) => !m.deletedAt && m.content?.toLowerCase().includes(q)
+    );
+  }, [displayMessages, chatSearchQuery]);
+
+  const closeChatSearch = useCallback(() => {
+    setIsChatSearchOpen(false);
+    setChatSearchQuery("");
+    setChatSearchMatchIndex(0);
+  }, []);
+
+  const openChatSearch = useCallback((initialQuery = "") => {
+    setIsChatSearchOpen(true);
+    setChatSearchQuery(initialQuery);
+    setChatSearchMatchIndex(0);
+    window.setTimeout(() => chatSearchInputRef.current?.focus(), 50);
+  }, []);
+
+  const handleTagClick = useCallback(
+    (tag: string) => {
+      openChatSearch(tag);
+    },
+    [openChatSearch]
+  );
+
+  const goToChatSearchMatch = useCallback(
+    (delta: number) => {
+      if (chatSearchMatches.length === 0) return;
+      setChatSearchMatchIndex((prev) => {
+        const next = prev + delta;
+        if (next < 0) return chatSearchMatches.length - 1;
+        if (next >= chatSearchMatches.length) return 0;
+        return next;
+      });
+    },
+    [chatSearchMatches.length]
+  );
+
+  useEffect(() => {
+    setChatSearchMatchIndex(0);
+  }, [chatSearchQuery]);
+
+  useEffect(() => {
+    if (!isChatSearchOpen || !chatSearchQuery.trim() || chatSearchMatches.length === 0) return;
+    const idx = Math.min(chatSearchMatchIndex, chatSearchMatches.length - 1);
+    const matchId = chatSearchMatches[idx]?.id;
+    if (!matchId) return;
+    const timer = window.setTimeout(() => scrollToMessage(matchId), 80);
+    return () => window.clearTimeout(timer);
+  }, [isChatSearchOpen, chatSearchQuery, chatSearchMatchIndex, chatSearchMatches]);
+
+  useEffect(() => {
+    if (!isChatSearchOpen) return;
+    window.setTimeout(() => chatSearchInputRef.current?.focus(), 50);
+  }, [isChatSearchOpen]);
+
   useEffect(() => {
     if (sortedMessages.length === 0) return;
     const query = new URLSearchParams(window.location.search);
@@ -1489,7 +1559,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </Badge>
             </div>
           )}
-          {msg.content ? <FormattedMessageText text={msg.content} /> : null}
+          {msg.content ? (
+            <FormattedMessageText
+              text={msg.content}
+              onTagClick={handleTagClick}
+              highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+            />
+          ) : null}
         </>
       )}
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
@@ -1555,6 +1631,51 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     <div className="relative flex h-full min-h-0 min-w-0 flex-col md:flex-row">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="chat-header-panel pointer-events-none absolute inset-x-0 top-0 z-30 flex w-full min-w-0 max-w-full flex-col gap-1.5 px-3">
+        {isChatSearchOpen ? (
+          <div className="pointer-events-auto flex h-12 min-w-0 items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={chatSearchInputRef}
+                value={chatSearchQuery}
+                onChange={(e) => setChatSearchQuery(e.target.value)}
+                placeholder={t.chatSearchPlaceholder}
+                className="h-10 w-full rounded-full border-border bg-card pl-9 pr-9 shadow-sm"
+                data-testid="input-chat-search"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    goToChatSearchMatch(e.shiftKey ? -1 : 1);
+                  }
+                }}
+              />
+              {chatSearchQuery.length > 0 && (
+                <button
+                  type="button"
+                  aria-label={t.clear}
+                  onClick={() => {
+                    setChatSearchQuery("");
+                    chatSearchInputRef.current?.focus();
+                  }}
+                  className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  data-testid="button-chat-search-clear"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={closeChatSearch}
+              className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
+              aria-label={t.search}
+              data-testid="button-chat-search-close"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+        ) : (
         <div className="flex h-12 items-center gap-2.5 pointer-events-auto">
           <Button
             variant="secondary"
@@ -1582,6 +1703,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </p>
             )}
           </button>
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={() => openChatSearch()}
+            className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
+            aria-label={t.search}
+            data-testid="button-chat-search-open"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
           <button
             type="button"
             onClick={handleHeaderProfileClick}
@@ -1595,7 +1726,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </Avatar>
           </button>
         </div>
-        {activePinnedMessage && (
+        )}
+        {activePinnedMessage && !isChatSearchOpen && (
           <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
             <PinnedMessageBanner
               title={t.messagePinnedTitle}
@@ -1668,7 +1800,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         ref={messagesScrollRef}
         className={cn(
           "chat-messages-pane min-h-0 flex-1 overflow-y-auto px-4",
-          activePinnedMessage && "chat-messages-pane--pinned",
+          activePinnedMessage && !isChatSearchOpen && "chat-messages-pane--pinned",
         )}
       >
         <div ref={messagesContentRef} className="space-y-3">
@@ -1833,7 +1965,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
       {showChannelComposer && (
       <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
-          {!isChannelReadOnly && (replyTo || editing) && (
+          {!isChatSearchOpen && !isChannelReadOnly && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
               {editing ? (
                 <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -1902,6 +2034,49 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             ) : null
           ) : (
             <div className="pt-1">
+              {isChatSearchOpen ? (
+                <div className="border-0 px-0 py-0">
+                  <div className="flex items-end gap-2">
+                      <div
+                        className="flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-[22px] bg-background/90 px-3 text-sm font-medium shadow-sm backdrop-blur-md"
+                        data-testid="text-chat-search-count"
+                      >
+                        <ListOrdered className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="whitespace-nowrap tabular-nums leading-none">
+                          {chatSearchQuery.trim()
+                            ? chatSearchMatches.length > 0
+                              ? `${chatSearchMatchIndex + 1} ${t.chatSearchOf} ${chatSearchMatches.length}`
+                              : t.chatSearchNoResults
+                            : t.chatSearchPlaceholder}
+                        </span>
+                      </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => goToChatSearchMatch(-1)}
+                      disabled={chatSearchMatches.length === 0}
+                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
+                      aria-label={t.search}
+                      data-testid="button-chat-search-prev"
+                    >
+                      <ChevronUp className="stroke-[2.5]" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => goToChatSearchMatch(1)}
+                      disabled={chatSearchMatches.length === 0}
+                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
+                      aria-label={t.search}
+                      data-testid="button-chat-search-next"
+                    >
+                      <ChevronDown className="stroke-[2.5]" />
+                    </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
               <ChatInputBar
                 ref={chatInputRef}
                 value={composerValue}
@@ -1936,6 +2111,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 onMessageModeChange={setMessageMode}
                 onInputFocus={scrollMessagesForKeyboard}
               />
+              )}
             </div>
           )}
         </div>
