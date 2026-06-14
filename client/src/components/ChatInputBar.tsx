@@ -267,6 +267,13 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     }
 
     if (e.key !== "Enter" || e.isComposing) return;
+    // На мобильных клавиатурах Shift/Ctrl ненадёжны — отправка только кнопкой.
+    const onMobileKeyboard =
+      isMobile ||
+      (typeof window !== "undefined" &&
+        (window.matchMedia("(max-width: 767px)").matches ||
+          window.matchMedia("(pointer: coarse)").matches));
+    if (onMobileKeyboard) return;
     // Enter — новая строка; Shift+Enter или Ctrl/Cmd+Enter — отправка.
     const shouldSend = e.shiftKey || e.ctrlKey || e.metaKey;
     if (!shouldSend) return;
@@ -456,6 +463,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             ref={textareaRef}
             placeholder={placeholder}
             value={value}
+            enterKeyHint="enter"
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
             onSelect={updateFormatToolbar}
