@@ -1,3 +1,5 @@
+import { stripMessageFormatting } from "./messageFormatting";
+
 const PREVIEW_MAX_LEN = 500;
 
 const LEGACY_TAG_PREFIXES = ["Анкета: ", "Назначение: ", "Follow Up: ", "Опрос: "] as const;
@@ -84,7 +86,7 @@ export function formatConversationMessagePreview(
   }
 
   if (messageType === "prescription" || messageType === "followup") {
-    if (text) return truncate(text);
+    if (text) return truncate(stripMessageFormatting(text));
     return null;
   }
 
@@ -93,7 +95,7 @@ export function formatConversationMessagePreview(
     return truncate(name ?? "Анкета");
   }
 
-  if (text) return truncate(text);
+  if (text) return truncate(stripMessageFormatting(text));
   if (imageUrl) return "Фото";
   return null;
 }

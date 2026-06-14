@@ -6,6 +6,8 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import ChatInputBar from "@/components/ChatInputBar";
+import { FormattedMessageText } from "@/components/FormattedMessageText";
+import { stripMessageFormatting } from "@shared/messageFormatting";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -598,7 +600,7 @@ export default function PostCommentsThread({
                           </a>
                         )}
                         {comment.content ? (
-                          <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{comment.content}</p>
+                          <FormattedMessageText text={comment.content} />
                         ) : null}
                       </>
                     )}
@@ -638,9 +640,11 @@ export default function PostCommentsThread({
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {editing
-                  ? editing.content ?? ""
+                  ? editing.content
+                    ? stripMessageFormatting(editing.content)
+                    : ""
                   : replyTo?.content
-                  ? replyTo.content
+                  ? stripMessageFormatting(replyTo.content)
                   : replyTo?.imageUrl
                   ? "Изображение"
                   : ""}

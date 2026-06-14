@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { storage } from "./storage";
 import { scheduleConversationMessagePush } from "./pushDefer";
+import { stripMessageFormatting } from "../shared/messageFormatting";
 
 export type PushPayload = {
   title: string;
@@ -94,7 +95,7 @@ export function messagePreview(
 ): string {
   if (messageType === "voice") return "Голосовое сообщение";
   if (imageUrl && !content?.trim()) return "Фото";
-  const text = (content ?? "").trim();
+  const text = stripMessageFormatting((content ?? "").trim());
   if (!text) return "Новое сообщение";
   return text.length > 120 ? `${text.slice(0, 117)}…` : text;
 }

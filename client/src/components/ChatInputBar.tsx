@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   Loader2,
   Send,
@@ -23,13 +23,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { syncChatTextareaHeight } from "@/lib/chatTextareaAutosize";
 import { VISUAL_VIEWPORT_REFRESH_EVENT } from "@/lib/chatScroll";
+import { getTextareaSelectionRect } from "@/lib/textareaSelectionRect";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { ChatFormatToolbar } from "@/components/ChatFormatToolbar";
+import {
+  isSelectionBoldWrapped,
+  wrapSelectionWithBold,
+} from "@shared/messageFormatting";
 import {
   useVoiceRecorder,
   isVoiceRecordingSupported,
   type RecordedVoice,
 } from "@/hooks/useVoiceRecorder";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export type ChatMessageMode = "message" | "prescription" | "followup";
 
@@ -94,6 +101,12 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   onInputFocus,
 }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isMobile = useIsMobile();
+  const [formatToolbar, setFormatToolbar] = useState<{
+    top: number;
+    left: number;
+    isActive: boolean;
+  } | null>(null);
   const hasText = !!value.trim();
   const isSendDisabled = disabled || !hasText || isSending;
 
@@ -147,13 +160,97 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     syncChatTextareaHeight(e.target);
   };
 
+  const updateFormatToolbar = useCallback(() => {
+    if (isMobile) {
+      setFormatToolbar(null);
+      return;
+    }
+
+    const el = textareaRef.current;
+    if (!el || document.activeElement !== el || disabled) {
+      setFormatToolbar(null);
+      return;
+    }
+
+    const { selectionStart, selectionEnd } = el;
+    if (selectionStart === selectionEnd) {
+      setFormatToolbar(null);
+      return;
+    }
+
+    const rect = getTextareaSelectionRect(el, selectionStart, selectionEnd);
+    if (!rect) {
+      setFormatToolbar(null);
+      return;
+    }
+
+    setFormatToolbar({
+      top: rect.top,
+      left: rect.left + rect.width / 2,
+      isActive: isSelectionBoldWrapped(value, selectionStart, selectionEnd),
+    });
+  }, [disabled, isMobile, value]);
+
+  const applyBoldFormatting = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const { selectionStart, selectionEnd } = el;
+    const result = wrapSelectionWithBold(value, selectionStart, selectionEnd);
+    onChange(result.value);
+
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(result.selectionStart, result.selectionEnd);
+      syncChatTextareaHeight(el);
+      updateFormatToolbar();
+    });
+  }, [onChange, updateFormatToolbar, value]);
+
+  const hideFormatToolbar = useCallback(() => {
+    setFormatToolbar(null);
+    const el = textareaRef.current;
+    if (!el) return;
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, []);
+
+  useEffect(() => {
+    if (!value) {
+      setFormatToolbar(null);
+      return;
+    }
+    requestAnimationFrame(() => updateFormatToolbar());
+  }, [updateFormatToolbar, value]);
+
+  useEffect(() => {
+    const onViewportChange = () => updateFormatToolbar();
+    window.addEventListener(VISUAL_VIEWPORT_REFRESH_EVENT, onViewportChange);
+    window.visualViewport?.addEventListener("resize", onViewportChange);
+    window.visualViewport?.addEventListener("scroll", onViewportChange);
+    return () => {
+      window.removeEventListener(VISUAL_VIEWPORT_REFRESH_EVENT, onViewportChange);
+      window.visualViewport?.removeEventListener("resize", onViewportChange);
+      window.visualViewport?.removeEventListener("scroll", onViewportChange);
+    };
+  }, [updateFormatToolbar]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      if (!isMobile) {
+        e.preventDefault();
+        applyBoldFormatting();
+      }
+      return;
+    }
+
     if (e.key !== "Enter" || e.isComposing) return;
     // Enter — новая строка; Shift+Enter или Ctrl/Cmd+Enter — отправка.
     const shouldSend = e.shiftKey || e.ctrlKey || e.metaKey;
     if (!shouldSend) return;
     e.preventDefault();
     if (!disabled && value.trim()) {
+      hideFormatToolbar();
       onSend();
     }
   };
@@ -164,7 +261,10 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   };
 
   const handleSendClick = () => {
-    if (!isSendDisabled) onSend();
+    if (!isSendDisabled) {
+      hideFormatToolbar();
+      onSend();
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,7 +436,14 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             value={value}
             onChange={handleTextareaInput}
             onKeyDown={handleKeyDown}
-            onFocus={onInputFocus}
+            onSelect={updateFormatToolbar}
+            onKeyUp={updateFormatToolbar}
+            onFocus={() => {
+              onInputFocus?.();
+              updateFormatToolbar();
+            }}
+            onBlur={() => setFormatToolbar(null)}
+            onInput={updateFormatToolbar}
             rows={1}
             className={cn(
               "min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm",
@@ -345,6 +452,14 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             style={{ maxHeight: "144px" }}
             data-testid="input-message"
           />
+          {!isMobile && formatToolbar && (
+            <ChatFormatToolbar
+              top={formatToolbar.top}
+              left={formatToolbar.left}
+              isActive={formatToolbar.isActive}
+              onBold={applyBoldFormatting}
+            />
+          )}
         </div>
         {showMicButton ? (
           <Button

@@ -55,6 +55,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
+import { FormattedMessageText } from "@/components/FormattedMessageText";
+import { stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
 import { VoiceCallBanner } from "@/components/VoiceCallBanner";
@@ -216,7 +218,7 @@ function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["reply
     return q.length > 80 ? `${q.slice(0, 80)}…` : q;
   }
   if (reply.content && reply.content.trim().length > 0) {
-    const text = reply.content.trim();
+    const text = stripMessageFormatting(reply.content.trim());
     return text.length > 80 ? `${text.slice(0, 80)}…` : text;
   }
   if (reply.imageUrl) return t.messagePhotoLabel;
@@ -1487,9 +1489,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               </Badge>
             </div>
           )}
-          {msg.content ? (
-            <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{msg.content}</p>
-          ) : null}
+          {msg.content ? <FormattedMessageText text={msg.content} /> : null}
         </>
       )}
       {msg.pinnedAt && <Pin className="absolute -left-1 -top-1 h-3.5 w-3.5 text-primary" />}
@@ -1610,7 +1610,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                         parseQuestionnaireTemplateMessageContent(activePinnedMessage.content)?.templateName ??
                         t.questionnaire)
                     : activePinnedMessage.content
-                      ? activePinnedMessage.content
+                      ? stripMessageFormatting(activePinnedMessage.content)
                       : activePinnedMessage.imageUrl
                         ? t.messagePhotoLabel
                         : t.messageDeleted
@@ -1853,14 +1853,16 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               {editing
                     ? editing.messageType === "poll"
                       ? parsePollPayload(editing.content)?.question ?? t.pollLabel
-                      : editing.content ?? ""
+                      : editing.content
+                        ? stripMessageFormatting(editing.content)
+                        : ""
                     : replyTo
                       ? replyTo.messageType === "voice"
                         ? t.voiceMessageLabel
                         : replyTo.messageType === "poll"
                         ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
                         : replyTo.content
-                          ? replyTo.content
+                          ? stripMessageFormatting(replyTo.content)
                           : replyTo.imageUrl
                             ? t.messagePhotoLabel
                             : ""
