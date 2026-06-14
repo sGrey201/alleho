@@ -270,7 +270,17 @@ export interface IStorage {
   getDiscoverableConversations(
     currentUserId: string,
     options: { type: "group" | "channel"; nameFilter?: string }
-  ): Promise<Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }>>;
+  ): Promise<
+    Array<{
+      id: string;
+      name: string | null;
+      avatarUrl: string | null;
+      participantCount: number;
+      isMember: boolean;
+      lastMessagePreview: string | null;
+      lastMessageAt: Date | null;
+    }>
+  >;
   addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
@@ -1167,7 +1177,17 @@ export class DatabaseStorage implements IStorage {
   async getDiscoverableConversations(
     currentUserId: string,
     options: { type: "group" | "channel"; nameFilter?: string }
-  ): Promise<Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      name: string | null;
+      avatarUrl: string | null;
+      participantCount: number;
+      isMember: boolean;
+      lastMessagePreview: string | null;
+      lastMessageAt: Date | null;
+    }>
+  > {
     const conditions = [eq(conversations.type, options.type)];
     if (options.nameFilter?.trim()) {
       conditions.push(ilike(conversations.name, `%${options.nameFilter.trim()}%`));
@@ -1181,7 +1201,15 @@ export class DatabaseStorage implements IStorage {
       .from(conversationParticipants)
       .where(eq(conversationParticipants.userId, currentUserId));
     const myConvIds = new Set(myParticipation.map((p) => p.conversationId));
-    const result: Array<{ id: string; name: string | null; avatarUrl: string | null; participantCount: number; isMember: boolean }> = [];
+    const result: Array<{
+      id: string;
+      name: string | null;
+      avatarUrl: string | null;
+      participantCount: number;
+      isMember: boolean;
+      lastMessagePreview: string | null;
+      lastMessageAt: Date | null;
+    }> = [];
     for (const conv of list) {
       const countRows = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -1194,6 +1222,8 @@ export class DatabaseStorage implements IStorage {
         avatarUrl: conv.avatarUrl ?? null,
         participantCount,
         isMember: myConvIds.has(conv.id),
+        lastMessagePreview: conv.lastMessagePreview ?? null,
+        lastMessageAt: conv.lastMessageAt ?? null,
       });
     }
     return result;

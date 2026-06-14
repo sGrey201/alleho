@@ -1908,7 +1908,7 @@ export const t = {
   messageEditingTitle: 'Редактирование',
   messagePinnedTitle: 'Закреплённое сообщение',
   chatSearchPlaceholder: 'Поиск в чате',
-  chatSearchNoResults: 'Сообщения не найдены',
+  chatSearchFoundNone: 'Найдено: 0',
   chatSearchOf: 'из',
   messageReceiptSent: 'Отправлено',
   messageReceiptDelivered: 'Доставлено',

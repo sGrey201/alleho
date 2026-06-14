@@ -1253,8 +1253,23 @@ ${allUrls.map(url => `  <url>
 
       res.json({
         doctors,
-        groups: groups.map((g) => ({ id: g.id, name: g.name, avatarUrl: g.avatarUrl ?? null, participantCount: g.participantCount, isMember: g.isMember })),
-        channels: channels.map((c) => ({ id: c.id, name: c.name, avatarUrl: c.avatarUrl ?? null, isMember: c.isMember })),
+        groups: groups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          avatarUrl: g.avatarUrl ?? null,
+          participantCount: g.participantCount,
+          isMember: g.isMember,
+          lastMessagePreview: g.lastMessagePreview ?? null,
+          lastMessageAt: g.lastMessageAt?.toISOString() ?? null,
+        })),
+        channels: channels.map((c) => ({
+          id: c.id,
+          name: c.name,
+          avatarUrl: c.avatarUrl ?? null,
+          isMember: c.isMember,
+          lastMessagePreview: c.lastMessagePreview ?? null,
+          lastMessageAt: c.lastMessageAt?.toISOString() ?? null,
+        })),
       });
     } catch (error) {
       console.error("Error fetching /api/messenger/search:", error);

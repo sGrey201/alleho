@@ -98,8 +98,23 @@ export type MessengerSearchDoctor = {
   email?: string;
   conversationId?: string;
 };
-export type MessengerSearchGroup = { id: string; name: string | null; avatarUrl?: string | null; participantCount: number; isMember: boolean };
-export type MessengerSearchChannel = { id: string; name: string | null; avatarUrl?: string | null; isMember: boolean };
+export type MessengerSearchGroup = {
+  id: string;
+  name: string | null;
+  avatarUrl?: string | null;
+  participantCount: number;
+  isMember: boolean;
+  lastMessagePreview?: string | null;
+  lastMessageAt?: string | null;
+};
+export type MessengerSearchChannel = {
+  id: string;
+  name: string | null;
+  avatarUrl?: string | null;
+  isMember: boolean;
+  lastMessagePreview?: string | null;
+  lastMessageAt?: string | null;
+};
 export type MessengerSearchResults = {
   doctors: MessengerSearchDoctor[];
   groups: MessengerSearchGroup[];
@@ -108,6 +123,26 @@ export type MessengerSearchResults = {
 
 function chatInitial(label: string): string {
   return getPersonInitials(null, null, label);
+}
+
+function renderDiscoverSearchSubtitle(
+  item: { isMember: boolean; lastMessagePreview?: string | null },
+  memberFallback: string,
+  nonMemberFallback: string,
+) {
+  if (!item.isMember) {
+    return (
+      <p className="text-[13px] text-muted-foreground truncate mt-0.5">{nonMemberFallback}</p>
+    );
+  }
+  const rawMsgPreview = item.lastMessagePreview?.trim() ?? "";
+  const displayMsgPreview = normalizeMessengerListPreview(rawMsgPreview);
+  if (displayMsgPreview) {
+    return <ChatListMessagePreview preview={rawMsgPreview} />;
+  }
+  return (
+    <p className="text-[13px] text-muted-foreground truncate mt-0.5">{memberFallback}</p>
+  );
 }
 
 function getChatListLabel(chat: ChatItem, isAdminUser: boolean): string {
@@ -858,9 +893,7 @@ export default function Messenger() {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-foreground truncate">{group.name || t.chatGroup}</p>
-                              <p className="text-[13px] text-muted-foreground truncate mt-0.5">
-                                {group.isMember ? t.chatsTab : t.onlyOwnerCanAddMembers}
-                              </p>
+                              {renderDiscoverSearchSubtitle(group, t.chatGroup, t.onlyOwnerCanAddMembers)}
                             </div>
                           </button>
                         ))}
@@ -884,9 +917,7 @@ export default function Messenger() {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-foreground truncate">{channel.name || t.channelSub}</p>
-                              <p className="text-[13px] text-muted-foreground truncate mt-0.5">
-                                {channel.isMember ? t.chatsTab : t.actionSubscribe}
-                              </p>
+                              {renderDiscoverSearchSubtitle(channel, t.channelSub, t.actionSubscribe)}
                             </div>
                           </button>
                         ))}

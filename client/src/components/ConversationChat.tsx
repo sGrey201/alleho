@@ -2035,21 +2035,20 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           ) : (
             <div className="pt-1">
               {isChatSearchOpen ? (
+                chatSearchQuery.trim() ? (
                 <div className="border-0 px-0 py-0">
                   <div className="flex items-end gap-2">
-                      <div
-                        className="flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-[22px] bg-background/90 px-3 text-sm font-medium shadow-sm backdrop-blur-md"
-                        data-testid="text-chat-search-count"
-                      >
-                        <ListOrdered className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="whitespace-nowrap tabular-nums leading-none">
-                          {chatSearchQuery.trim()
-                            ? chatSearchMatches.length > 0
-                              ? `${chatSearchMatchIndex + 1} ${t.chatSearchOf} ${chatSearchMatches.length}`
-                              : t.chatSearchNoResults
-                            : t.chatSearchPlaceholder}
-                        </span>
-                      </div>
+                    <div
+                      className="flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-[22px] bg-background/90 px-3 text-sm font-medium shadow-sm backdrop-blur-md"
+                      data-testid="text-chat-search-count"
+                    >
+                      <ListOrdered className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="whitespace-nowrap tabular-nums leading-none">
+                        {chatSearchMatches.length > 0
+                          ? `${chatSearchMatchIndex + 1} ${t.chatSearchOf} ${chatSearchMatches.length}`
+                          : t.chatSearchFoundNone}
+                      </span>
+                    </div>
                     <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <Button
                       variant="outline"
@@ -2076,6 +2075,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                     </div>
                   </div>
                 </div>
+                ) : null
               ) : (
               <ChatInputBar
                 ref={chatInputRef}
