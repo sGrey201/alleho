@@ -276,7 +276,7 @@ export default function PostCommentsThread({
           : targetType === "channel"
           ? `/messenger/channel/${targetConversationId}`
           : `/messenger/direct/${targetConversationId}`;
-      const forwardToast = toast({
+      toast({
         title: "Переслано",
         description: (
           <span>
@@ -290,7 +290,6 @@ export default function PostCommentsThread({
           </span>
         ),
       });
-      window.setTimeout(() => forwardToast.dismiss(), 3000);
       setForwarding(null);
       setForwardSearch("");
     },

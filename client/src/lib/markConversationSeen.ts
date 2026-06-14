@@ -9,6 +9,7 @@ export function postConversationSeen(conversationId: string): void {
     .then((res) => {
       if (res.ok) {
         void queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/me/chats/unread-summary"] });
       }
     })
     .catch(() => {});

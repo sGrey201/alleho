@@ -18,4 +18,5 @@ export function applyDoctorChatsUpdated(
   _currentUserId: string | undefined
 ): void {
   void queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+  void queryClient.invalidateQueries({ queryKey: ["/api/me/chats/unread-summary"] });
 }

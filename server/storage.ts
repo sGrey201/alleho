@@ -80,7 +80,16 @@ export type MessengerChannelListItem = {
   createdAt: Date | null;
   lastPostAt: Date | null;
   lastMessagePreview: string | null;
+  unreadCount: number;
+  lastVisitedAt: Date | null;
   myRole?: string;
+};
+
+export type MessengerUnreadSummary = {
+  patients: number;
+  doctors: number;
+  groups: number;
+  channels: number;
 };
 
 export type PatientConversationListItem = {
@@ -268,6 +277,8 @@ export interface IStorage {
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
   markConversationSeen(conversationId: string, userId: string): Promise<Date | null>;
   getConversationParticipantLastSeenAt(conversationId: string, userId: string): Promise<Date | null>;
+  getConversationUnreadCount(conversationId: string, userId: string): Promise<number>;
+  getMessengerUnreadSummary(userId: string): Promise<MessengerUnreadSummary>;
   isConversationMessageReadByUser(
     conversationId: string,
     userId: string,
@@ -1281,6 +1292,63 @@ export class DatabaseStorage implements IStorage {
     return row?.lastSeenAt ?? null;
   }
 
+  async getConversationUnreadCount(conversationId: string, userId: string): Promise<number> {
+    const lastSeenAt = await this.getConversationParticipantLastSeenAt(conversationId, userId);
+    const unreadConditions = [
+      eq(conversationMessages.conversationId, conversationId),
+      ne(conversationMessages.authorUserId, userId),
+      sql`${conversationMessages.deletedAt} IS NULL`,
+    ];
+    if (lastSeenAt) {
+      unreadConditions.push(gt(conversationMessages.createdAt, lastSeenAt));
+    }
+    const [unreadRow] = await db
+      .select({ c: count() })
+      .from(conversationMessages)
+      .where(and(...unreadConditions));
+    return Number(unreadRow?.c ?? 0);
+  }
+
+  async getMessengerUnreadSummary(userId: string): Promise<MessengerUnreadSummary> {
+    const [patientChats, contacts, channels, convList] = await Promise.all([
+      this.getPatientConversationsForUser(userId),
+      this.getMessengerPersonalContacts(userId),
+      this.getMessengerChannels(userId),
+      this.getConversationsForUser(userId),
+    ]);
+
+    const patients = patientChats.filter((chat) => chat.unreadCount > 0).length;
+
+    const doctorConvIds = contacts
+      .map((contact) => contact.conversationId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    let doctors = 0;
+    if (doctorConvIds.length > 0) {
+      const unreadCounts = await Promise.all(
+        doctorConvIds.map((conversationId) => this.getConversationUnreadCount(conversationId, userId))
+      );
+      doctors = unreadCounts.filter((count) => count > 0).length;
+    }
+
+    const channelsUnread = channels.filter((channel) => channel.unreadCount > 0).length;
+
+    const groupConvs = convList.filter((conv) => conv.type === "group" || conv.type === "consilium");
+    let groups = 0;
+    if (groupConvs.length > 0) {
+      const unreadCounts = await Promise.all(
+        groupConvs.map((conv) => this.getConversationUnreadCount(conv.id, userId))
+      );
+      groups = unreadCounts.filter((count) => count > 0).length;
+    }
+
+    return {
+      patients,
+      doctors,
+      groups,
+      channels: channelsUnread,
+    };
+  }
+
   async isConversationMessageReadByUser(
     conversationId: string,
     userId: string,
@@ -1885,20 +1953,27 @@ export class DatabaseStorage implements IStorage {
 
     const channels = await Promise.all(
       myChannels.map(async (channel) => {
-        const [participantCountRow] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(conversationParticipants)
-          .where(eq(conversationParticipants.conversationId, channel.id));
+        const [participantCountRow, lastVisitedAt, unreadCount] = await Promise.all([
+          db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(conversationParticipants)
+            .where(eq(conversationParticipants.conversationId, channel.id))
+            .then(([row]) => Number(row?.count ?? 0)),
+          this.getConversationParticipantLastSeenAt(channel.id, currentUserId),
+          this.getConversationUnreadCount(channel.id, currentUserId),
+        ]);
         return {
           id: channel.id,
           name: channel.name,
           avatarUrl: channel.avatarUrl ?? null,
-          participantCount: Number(participantCountRow?.count ?? 0),
+          participantCount: participantCountRow,
           isMember: true,
           myRole: channel.myRole ?? undefined,
           createdAt: channel.createdAt ?? null,
           lastPostAt: channel.lastPostAt ?? null,
           lastMessagePreview: channel.lastMessagePreview ?? null,
+          unreadCount,
+          lastVisitedAt,
         };
       })
     );

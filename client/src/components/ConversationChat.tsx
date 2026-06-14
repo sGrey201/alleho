@@ -751,7 +751,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           : targetType === "channel"
             ? `/messenger/channel/${targetConversationId}`
             : `/messenger/direct/${targetConversationId}`;
-      const forwardToast = toast({
+      toast({
         title: "Переслано",
         description: (
           <span>
@@ -765,7 +765,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           </span>
         ),
       });
-      window.setTimeout(() => forwardToast.dismiss(), 3000);
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });

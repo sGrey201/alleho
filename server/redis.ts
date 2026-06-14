@@ -240,32 +240,14 @@ export async function publishConversationMessage(
   conversationId: string,
   message: ConversationMessageWithAuthor
 ): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_message", payload: message })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationMessage error:", err);
-  }
+  await publishConversationChannelEvent(conversationId, "conversation_message", message);
 }
 
 export async function publishConversationSeen(
   conversationId: string,
   payload: ConversationSeenPayload
 ): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_seen", payload })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationSeen error:", err);
-  }
+  await publishConversationChannelEvent(conversationId, "conversation_seen", payload);
 }
 
 export async function backfillConversationRecent(
@@ -298,77 +280,52 @@ export async function publishConversationMessageEdited(
   conversationId: string,
   payload: ConversationMessageEditedPayload
 ): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_message_edited", payload })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationMessageEdited error:", err);
-  }
+  await publishConversationChannelEvent(conversationId, "conversation_message_edited", payload);
 }
 
 export async function publishConversationMessageDeleted(
   conversationId: string,
   payload: ConversationMessageDeletedPayload
 ): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_message_deleted", payload })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationMessageDeleted error:", err);
-  }
+  await publishConversationChannelEvent(conversationId, "conversation_message_deleted", payload);
 }
 
 export async function publishConversationMessagePinned(
   conversationId: string,
   payload: ConversationMessagePinnedPayload
 ): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_message_pinned", payload })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationMessagePinned error:", err);
-  }
+  await publishConversationChannelEvent(conversationId, "conversation_message_pinned", payload);
 }
 
 export async function publishConversationMessageUnpinned(
   conversationId: string,
   payload: ConversationMessageUnpinnedPayload
 ): Promise<void> {
+  await publishConversationChannelEvent(conversationId, "conversation_message_unpinned", payload);
+}
+
+async function publishConversationChannelEvent(
+  conversationId: string,
+  type: string,
+  payload: unknown
+): Promise<void> {
   const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type: "conversation_message_unpinned", payload })
-    );
-  } catch (err) {
-    console.error("[Redis] publishConversationMessageUnpinned error:", err);
+  if (c) {
+    try {
+      await c.publish(
+        CONVERSATION_CHANNEL_PREFIX + conversationId,
+        JSON.stringify({ type, payload })
+      );
+    } catch (err) {
+      console.error(`[Redis] ${type} error:`, err);
+    }
+    return;
   }
+  broadcastConversationWsEvent(conversationId, type, payload);
 }
 
 async function publishConversationEvent(conversationId: string, type: string, payload: unknown): Promise<void> {
-  const c = getClient();
-  if (!c) return;
-  try {
-    await c.publish(
-      CONVERSATION_CHANNEL_PREFIX + conversationId,
-      JSON.stringify({ type, payload })
-    );
-  } catch (err) {
-    console.error(`[Redis] ${type} error:`, err);
-  }
+  await publishConversationChannelEvent(conversationId, type, payload);
 }
 
 export async function publishConversationComment(

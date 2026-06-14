@@ -84,6 +84,13 @@ type PaginatedChatsResponse = {
   total: number;
 };
 
+type MessengerUnreadSummary = {
+  patients: number;
+  doctors: number;
+  groups: number;
+  channels: number;
+};
+
 export type MessengerSearchDoctor = {
   userId: string;
   firstName?: string;
@@ -177,6 +184,18 @@ const PAGE_SIZE = 20;
 const messengerFolderTabClass =
   "relative !flex w-full min-w-0 items-center justify-center rounded-none border-b-2 border-transparent bg-transparent px-0 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
+const folderUnreadBadgeClass =
+  "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs font-semibold leading-none text-white";
+
+function FolderTabLabel({ label, unread }: { label: string; unread: number }) {
+  return (
+    <span className="flex min-w-0 items-center justify-center gap-1.5 px-1">
+      <span className="truncate">{label}</span>
+      {unread > 0 && <span className={folderUnreadBadgeClass}>{unread}</span>}
+    </span>
+  );
+}
+
 export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [location, setLocation] = useLocation();
@@ -216,6 +235,14 @@ export default function Messenger() {
     isMobileConversationOpen && !isMessengerSettings;
 
   useAppShellTheme(useChatShell ? "chat" : "default");
+
+  useEffect(() => {
+    const isChatConversationOpen = !!conversationId && !isMessengerSettings;
+    document.documentElement.classList.toggle("app-chat-conversation-open", isChatConversationOpen);
+    return () => {
+      document.documentElement.classList.remove("app-chat-conversation-open");
+    };
+  }, [conversationId, isMessengerSettings]);
 
   const isChatSelected = (chat: ChatItem) =>
     !!conversationId && !!chat.conversationId && chat.conversationId === conversationId;
@@ -281,7 +308,23 @@ export default function Messenger() {
     refetchOnWindowFocus: true,
   });
   const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
+
+  const { data: unreadSummary } = useQuery<MessengerUnreadSummary>({
+    queryKey: ["/api/me/chats/unread-summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/me/chats/unread-summary", { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: isAuthenticated && isAdmin,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+
   const unreadChatsByFolder = useMemo(() => {
+    if (isAdmin && unreadSummary) {
+      return unreadSummary;
+    }
     const hasUnread = (chat: ChatItem) => (chat.unreadCount ?? 0) > 0;
     return {
       doctors: chats.filter((chat) => chat.source === "conversation" && chat.type === "direct" && hasUnread(chat)).length,
@@ -289,7 +332,7 @@ export default function Messenger() {
       groups: chats.filter((chat) => chat.source === "conversation" && chat.type === "group" && hasUnread(chat)).length,
       channels: chats.filter((chat) => chat.source === "conversation" && chat.type === "channel" && hasUnread(chat)).length,
     };
-  }, [chats]);
+  }, [chats, isAdmin, unreadSummary]);
   const chatsByFolder = useMemo(() => {
     if (!isAdmin) {
       return chats.filter((chat) => chat.type === "patient");
@@ -674,36 +717,16 @@ export default function Messenger() {
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
               <TabsList className="!grid h-10 w-full grid-cols-4 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
                 <TabsTrigger value="patients" className={messengerFolderTabClass}>
-                  <span className="truncate px-1">{t.folderPatients}</span>
-                  {unreadChatsByFolder.patients > 0 && (
-                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
-                      {unreadChatsByFolder.patients}
-                    </span>
-                  )}
+                  <FolderTabLabel label={t.folderPatients} unread={unreadChatsByFolder.patients} />
                 </TabsTrigger>
                 <TabsTrigger value="doctors" className={messengerFolderTabClass}>
-                  <span className="truncate px-1">{t.folderCommunity}</span>
-                  {unreadChatsByFolder.doctors > 0 && (
-                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
-                      {unreadChatsByFolder.doctors}
-                    </span>
-                  )}
+                  <FolderTabLabel label={t.folderCommunity} unread={unreadChatsByFolder.doctors} />
                 </TabsTrigger>
                 <TabsTrigger value="groups" className={messengerFolderTabClass}>
-                  <span className="truncate px-1">{t.folderGroups}</span>
-                  {unreadChatsByFolder.groups > 0 && (
-                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
-                      {unreadChatsByFolder.groups}
-                    </span>
-                  )}
+                  <FolderTabLabel label={t.folderGroups} unread={unreadChatsByFolder.groups} />
                 </TabsTrigger>
                 <TabsTrigger value="channels" className={messengerFolderTabClass}>
-                  <span className="truncate px-1">{t.folderChannels}</span>
-                  {unreadChatsByFolder.channels > 0 && (
-                    <span className="absolute right-0.5 top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium leading-none text-white">
-                      {unreadChatsByFolder.channels}
-                    </span>
-                  )}
+                  <FolderTabLabel label={t.folderChannels} unread={unreadChatsByFolder.channels} />
                 </TabsTrigger>
               </TabsList>
             </div>

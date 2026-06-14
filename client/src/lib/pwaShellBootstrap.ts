@@ -6,6 +6,7 @@ export function bootstrapPwaShellFromUrl(pathname: string) {
 
   if (!isMobileChatPath(pathname)) return;
   document.documentElement.classList.add("app-shell-chat");
+  document.documentElement.classList.add("app-chat-conversation-open");
 }
 
 function isMobileChatPath(pathname: string): boolean {

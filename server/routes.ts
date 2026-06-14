@@ -63,7 +63,7 @@ import {
   getLiveKitUrl,
 } from "./voiceCall";
 import { notifyConversationSeen } from "./seenNotify";
-import { notifyPatientConversationActivity } from "./doctorChatsNotify";
+import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
   getVapidPublicKey,
   isPushConfigured,
@@ -996,6 +996,18 @@ ${allUrls.map(url => `  <url>
   });
 
   // --- Messenger: paginated chat list ---
+  app.get("/api/me/chats/unread-summary", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const summary = await storage.getMessengerUnreadSummary(currentUserId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching /api/me/chats/unread-summary:", error);
+      res.status(500).json({ message: "Failed to fetch unread summary" });
+    }
+  });
+
   app.get("/api/me/chats", isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
@@ -1067,22 +1079,28 @@ ${allUrls.map(url => `  <url>
           storage.getMessengerPersonalContacts(currentUserId),
           storage.getPatientConversationsForUser(currentUserId),
         ]);
-        const doctorItems = contacts.map((contact) => {
-          const otherParticipantName =
-            [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
-          return {
-            source: "conversation" as const,
-            folder: "personal" as const,
-            type: "direct",
-            conversationId: contact.conversationId,
-            otherParticipantId: contact.userId,
-            otherParticipantName,
-            avatarUrl: contact.profileImageUrl ?? null,
-            lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
-            lastMessagePreview: contact.lastMessagePreview ?? null,
-            lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
-          };
-        });
+        const doctorItems = await Promise.all(
+          contacts.map(async (contact) => {
+            const otherParticipantName =
+              [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.email || "Doctor";
+            const unreadCount = contact.conversationId
+              ? await storage.getConversationUnreadCount(contact.conversationId, currentUserId)
+              : 0;
+            return {
+              source: "conversation" as const,
+              folder: "personal" as const,
+              type: "direct",
+              conversationId: contact.conversationId,
+              otherParticipantId: contact.userId,
+              otherParticipantName,
+              avatarUrl: contact.profileImageUrl ?? null,
+              lastMessageAt: contact.lastMessageAt?.toISOString() ?? null,
+              lastMessagePreview: contact.lastMessagePreview ?? null,
+              lastVisitedAt: contact.lastVisitedAt?.toISOString() ?? null,
+              unreadCount,
+            };
+          })
+        );
         const patientItems = patientChats.map((chat) => ({
           source: "conversation" as const,
           folder: "personal" as const,
@@ -1133,30 +1151,36 @@ ${allUrls.map(url => `  <url>
           isMember: channel.isMember,
           lastMessageAt: channel.lastPostAt?.toISOString() ?? null,
           lastMessagePreview: channel.lastMessagePreview ?? null,
+          lastVisitedAt: channel.lastVisitedAt?.toISOString() ?? null,
+          unreadCount: channel.unreadCount,
         }));
         return res.json(paged(items));
       }
 
       const convList = await storage.getConversationsForUser(currentUserId);
-      const groups = convList
-        .filter((conv) => conv.type === "group" || conv.type === "consilium")
-        .map((conv) => {
-          const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
-          const lm = conv.lastMessageAt;
-          return {
-            source: "conversation" as const,
-            folder: "groups" as const,
-            conversationId: conv.id,
-            type: conv.type,
-            name: conv.name ?? undefined,
-            avatarUrl: conv.avatarUrl ?? null,
-            participantCount: conv.participants.length,
-            patientUserId: conv.patientUserId ?? undefined,
-            myRole,
-            lastMessageAt: lm instanceof Date ? lm.toISOString() : lm ?? null,
-            lastMessagePreview: conv.lastMessagePreview ?? null,
-          };
-        });
+      const groups = await Promise.all(
+        convList
+          .filter((conv) => conv.type === "group" || conv.type === "consilium")
+          .map(async (conv) => {
+            const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
+            const lm = conv.lastMessageAt;
+            const unreadCount = await storage.getConversationUnreadCount(conv.id, currentUserId);
+            return {
+              source: "conversation" as const,
+              folder: "groups" as const,
+              conversationId: conv.id,
+              type: conv.type,
+              name: conv.name ?? undefined,
+              avatarUrl: conv.avatarUrl ?? null,
+              participantCount: conv.participants.length,
+              patientUserId: conv.patientUserId ?? undefined,
+              myRole,
+              lastMessageAt: lm instanceof Date ? lm.toISOString() : lm ?? null,
+              lastMessagePreview: conv.lastMessagePreview ?? null,
+              unreadCount,
+            };
+          })
+      );
       groups.sort((a, b) => {
         const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -1830,8 +1854,8 @@ ${allUrls.map(url => `  <url>
       void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
         console.error("[Push] conversation notify error:", err)
       );
-      void notifyPatientConversationActivity(id, currentUserId).catch((err) =>
-        console.error("[DoctorChats] patient conversation notify error:", err)
+      void notifyMessengerConversationActivity(id, currentUserId).catch((err) =>
+        console.error("[DoctorChats] messenger conversation notify error:", err)
       );
       res.status(201).json(enriched);
     } catch (error) {

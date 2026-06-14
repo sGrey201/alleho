@@ -383,6 +383,19 @@ html.app-immersive [data-radix-toast-viewport] {
   top: max(1rem, env(safe-area-inset-top, 0px));
 }
 
+/* Open chat: keep toasts below the floating header controls (back / title / avatar). */
+html.app-immersive.app-chat-conversation-open [data-radix-toast-viewport] {
+  top: calc(4.5rem + env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 4.5rem - env(safe-area-inset-top, 0px));
+}
+
+@media (min-width: 768px) {
+  html.app-immersive.app-chat-conversation-open:not(.app-shell-chat) [data-radix-toast-viewport] {
+    top: calc(4.5rem + 0.75rem);
+    max-height: calc(100dvh - 5.25rem);
+  }
+}
+
 /* Chat on mobile PWA: viewport-fit=cover + wallpaper edge-to-edge; safe-area on chrome only */
 html.app-immersive.app-shell-chat {
   height: var(--app-height, 100dvh);
