@@ -1,7 +1,14 @@
-import { AccessToken } from "livekit-server-sdk";
+import type { Request, Response } from "express";
+import { AccessToken, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
 import { storage } from "./storage";
 import { publishConversationCallEvent } from "./redis";
 import { sendPushToUsers, formatSenderName, conversationPath } from "./push";
+import {
+  deleteLiveKitRoom,
+  fetchLiveKitRoomSnapshot,
+  getLiveKitParticipantCount,
+  type LiveKitRoomSnapshot,
+} from "./livekitRoom";
 import type {
   ConversationCall,
   CallParticipantStatus,
@@ -11,8 +18,16 @@ import type {
 /** How long an unanswered call keeps ringing before it is auto-cancelled. */
 export const RING_TTL_MS = 60_000;
 
+/** Grace after call creation before treating an empty LiveKit room as abandoned. */
+const CONNECT_GRACE_MS = 20_000;
+
+/** Debounce room-empty webhook reconciliation to batch rapid disconnects. */
+const ROOM_EMPTY_DEBOUNCE_MS = 2_000;
+
 /** Conversation types that support voice conferences (channels are excluded). */
 const CALLABLE_TYPES = new Set(["direct", "patient", "group", "consilium"]);
+
+const roomEmptyTimers = new Map<string, NodeJS.Timeout>();
 
 export function isCallableConversationType(type: string): boolean {
   return CALLABLE_TYPES.has(type);
@@ -113,6 +128,84 @@ export async function createCallAccessToken(callId: string, user: User): Promise
   return at.toJwt();
 }
 
+function participantCountFromSnapshot(
+  callId: string,
+  snapshot: LiveKitRoomSnapshot
+): number {
+  return snapshot.get(callId) ?? 0;
+}
+
+async function resolveParticipantCount(
+  callId: string,
+  snapshot?: LiveKitRoomSnapshot
+): Promise<number | null> {
+  if (snapshot) {
+    return participantCountFromSnapshot(callId, snapshot);
+  }
+  return getLiveKitParticipantCount(callId);
+}
+
+async function cancelUnansweredCall(call: ConversationCall): Promise<void> {
+  const rows = await storage.getCallParticipants(call.id);
+  for (const row of rows) {
+    if (row.status === "invited") {
+      await storage.setCallParticipantStatus(call.id, row.userId, "missed");
+    } else if (row.userId === call.initiatedByUserId && row.status === "joined") {
+      await storage.setCallParticipantStatus(call.id, row.userId, "left");
+    }
+  }
+  await endCall(call, "cancelled");
+  void deleteLiveKitRoom(call.id);
+}
+
+/**
+ * Reconciles a DB call row with LiveKit room occupancy.
+ * Returns true when the call was ended as stale.
+ */
+export async function reconcileStaleCall(
+  call: ConversationCall,
+  snapshot?: LiveKitRoomSnapshot
+): Promise<boolean> {
+  if (!isLiveKitConfigured()) return false;
+
+  const participantCount = await resolveParticipantCount(call.id, snapshot);
+  if (participantCount === null) return false;
+
+  if (participantCount > 0) {
+    if (call.status === "ringing") {
+      await storage.markCallActive(call.id);
+    }
+    return false;
+  }
+
+  const now = Date.now();
+  const createdAt = call.createdAt?.getTime() ?? now;
+  const ringExpiresAt = call.ringExpiresAt?.getTime() ?? 0;
+
+  if (call.status === "ringing") {
+    if (now < ringExpiresAt && now - createdAt < CONNECT_GRACE_MS) {
+      return false;
+    }
+    await cancelUnansweredCall(call);
+    return true;
+  }
+
+  if (call.status === "active") {
+    await endCall(call, "ended");
+    void deleteLiveKitRoom(call.id);
+    return true;
+  }
+
+  return false;
+}
+
+/** Clears zombie calls in a conversation before starting a new one. */
+export async function reconcileConversationCallBeforeStart(conversationId: string): Promise<void> {
+  const existing = await storage.getActiveCallForConversation(conversationId);
+  if (!existing) return;
+  await reconcileStaleCall(existing);
+}
+
 /**
  * Creates a ringing call in a conversation, notifies the other participants
  * over WebSocket, and schedules a push to everyone who is not the initiator.
@@ -198,6 +291,12 @@ export async function endCall(
   call: ConversationCall,
   reason: "ended" | "cancelled" = "ended"
 ): Promise<void> {
+  const timer = roomEmptyTimers.get(call.id);
+  if (timer) {
+    clearTimeout(timer);
+    roomEmptyTimers.delete(call.id);
+  }
+
   const ended = await storage.endCall(call.id, reason);
   if (!ended) return;
   await publishConversationCallEvent(call.conversationId, "conversation_call_ended", {
@@ -207,14 +306,35 @@ export async function endCall(
   });
 }
 
-async function endCallIfEmpty(call: ConversationCall): Promise<void> {
+async function endCallIfEmpty(
+  call: ConversationCall,
+  snapshot?: LiveKitRoomSnapshot
+): Promise<void> {
   const rows = await storage.getCallParticipants(call.id);
   const invited = rows.filter((r) => r.status === "invited");
-  if (invited.length > 0) return;
+
+  if (invited.length > 0) {
+    if (isLiveKitConfigured()) {
+      const participantCount = await resolveParticipantCount(call.id, snapshot);
+      if (participantCount === 0) {
+        for (const row of invited) {
+          await storage.setCallParticipantStatus(call.id, row.userId, "missed");
+        }
+        const joined = rows.filter((r) => r.status === "joined");
+        for (const row of joined) {
+          await storage.setCallParticipantStatus(call.id, row.userId, "left");
+        }
+        await endCall(call, "ended");
+        void deleteLiveKitRoom(call.id);
+      }
+    }
+    return;
+  }
 
   const joined = rows.filter((r) => r.status === "joined");
   if (joined.length === 0) {
     await endCall(call, "ended");
+    void deleteLiveKitRoom(call.id);
     return;
   }
 
@@ -231,43 +351,167 @@ async function endCallIfEmpty(call: ConversationCall): Promise<void> {
     )
   ) {
     await endCall(call, "ended");
+    void deleteLiveKitRoom(call.id);
   }
 }
 
 /**
  * Cleans up calls that are still marked active/ringing but have no one left to
- * invite or join (e.g. initiator alone after everyone else declined).
+ * invite or join. Uses one listRooms call per sweep when LiveKit is configured.
  */
 export async function sweepOrphanedCalls(): Promise<void> {
   const calls = await storage.getActiveCalls();
+  if (calls.length === 0) return;
+
+  const snapshot = isLiveKitConfigured() ? await fetchLiveKitRoomSnapshot() : null;
+
   for (const call of calls) {
-    await endCallIfEmpty(call);
+    if (snapshot) {
+      const ended = await reconcileStaleCall(call, snapshot);
+      if (!ended) {
+        await endCallIfEmpty(call, snapshot);
+      }
+    } else {
+      await endCallIfEmpty(call);
+    }
   }
 }
 
 /**
- * Sweeps calls whose ring window expired without anyone joining and cancels
- * them. Invoked periodically from the server bootstrap.
+ * Sweeps calls whose ring window expired. Uses LiveKit occupancy instead of
+ * trusting the initiator's pre-joined DB status.
  */
 export async function sweepExpiredCalls(): Promise<void> {
   const now = new Date();
   const expired = await storage.getExpiredRingingCalls(now);
+  if (expired.length === 0) return;
+
+  const snapshot = isLiveKitConfigured() ? await fetchLiveKitRoomSnapshot() : null;
+
   for (const call of expired) {
+    if (snapshot) {
+      const participantCount = participantCountFromSnapshot(call.id, snapshot);
+      if (participantCount > 0) {
+        await storage.markCallActive(call.id);
+        continue;
+      }
+      await cancelUnansweredCall(call);
+      continue;
+    }
+
     const rows = await storage.getCallParticipants(call.id);
     const someoneJoinedAfterInitiator = rows.some(
       (r) => r.status === "joined" && r.userId !== call.initiatedByUserId
     );
     if (someoneJoinedAfterInitiator) {
-      // Someone answered; promote to active instead of cancelling.
       await storage.markCallActive(call.id);
       continue;
     }
-    // Mark everyone who never answered as missed, then cancel the call.
-    for (const r of rows) {
-      if (r.status === "invited") {
-        await storage.setCallParticipantStatus(call.id, r.userId, "missed");
+    await cancelUnansweredCall(call);
+  }
+}
+
+function scheduleRoomEmptyReconcile(callId: string): void {
+  const existing = roomEmptyTimers.get(callId);
+  if (existing) clearTimeout(existing);
+
+  roomEmptyTimers.set(
+    callId,
+    setTimeout(() => {
+      roomEmptyTimers.delete(callId);
+      void reconcileEmptyRoom(callId).catch((err) =>
+        console.error("[VoiceCall] room-empty reconcile error:", err)
+      );
+    }, ROOM_EMPTY_DEBOUNCE_MS)
+  );
+}
+
+async function reconcileEmptyRoom(callId: string): Promise<void> {
+  const call = await storage.getCallById(callId);
+  if (!call || call.status === "ended" || call.status === "cancelled") return;
+
+  const participantCount = await getLiveKitParticipantCount(callId);
+  if (participantCount === null || participantCount > 0) return;
+
+  await endCall(call, "ended");
+  void deleteLiveKitRoom(callId);
+}
+
+async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
+  const roomName = event.room?.name;
+  if (!roomName) return;
+
+  const call = await storage.getCallById(roomName);
+  if (!call || (call.status !== "ringing" && call.status !== "active")) return;
+
+  const userId = event.participant?.identity;
+
+  switch (event.event) {
+    case "participant_joined": {
+      if (!userId) return;
+      await storage.setCallParticipantStatus(call.id, userId, "joined");
+      if (call.status === "ringing") {
+        await storage.markCallActive(call.id);
       }
+      await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
+        callId: call.id,
+        conversationId: call.conversationId,
+        userId,
+      });
+      break;
     }
-    await endCall(call, "cancelled");
+    case "participant_left":
+    case "participant_connection_aborted": {
+      if (userId) {
+        await storage.setCallParticipantStatus(call.id, userId, "left");
+        await publishConversationCallEvent(call.conversationId, "conversation_call_left", {
+          callId: call.id,
+          conversationId: call.conversationId,
+          userId,
+        });
+      }
+      const remaining = event.room?.numParticipants ?? 0;
+      if (remaining === 0) {
+        scheduleRoomEmptyReconcile(call.id);
+      } else {
+        await endCallIfEmpty(call);
+      }
+      break;
+    }
+    case "room_finished": {
+      await endCall(call, "ended");
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+/** LiveKit webhook endpoint — must receive the raw POST body for signature verification. */
+export async function handleLiveKitWebhook(req: Request, res: Response): Promise<void> {
+  if (!isLiveKitConfigured()) {
+    res.status(503).json({ message: "LiveKit is not configured" });
+    return;
+  }
+
+  const apiKey = process.env.LIVEKIT_API_KEY!;
+  const apiSecret = process.env.LIVEKIT_API_SECRET!;
+  const receiver = new WebhookReceiver(apiKey, apiSecret);
+
+  try {
+    const body =
+      req.body instanceof Buffer
+        ? req.body.toString("utf8")
+        : typeof req.body === "string"
+          ? req.body
+          : "";
+    const event = await receiver.receive(body, req.get("Authorization") ?? undefined);
+    res.sendStatus(200);
+    void processLiveKitWebhookEvent(event).catch((err) =>
+      console.error("[VoiceCall] webhook process error:", err)
+    );
+  } catch (err) {
+    console.error("[VoiceCall] webhook verify error:", err);
+    res.status(400).json({ message: "Invalid webhook" });
   }
 }

@@ -61,6 +61,8 @@ import {
   isCallableConversationType,
   isLiveKitConfigured,
   getLiveKitUrl,
+  reconcileConversationCallBeforeStart,
+  reconcileStaleCall,
 } from "./voiceCall";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
@@ -1900,6 +1902,9 @@ ${allUrls.map(url => `  <url>
       if (!isCallableConversationType(conv.type)) {
         return res.status(400).json({ message: "Calls are not allowed in this chat" });
       }
+      if (isLiveKitConfigured()) {
+        await reconcileConversationCallBeforeStart(id);
+      }
       const existing = await storage.getActiveCallForConversation(id);
       if (existing) {
         return res.status(409).json({ message: "A call is already in progress", callId: existing.id });
@@ -1934,7 +1939,11 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
       if (!inConv) return res.status(403).json({ message: "Access denied" });
-      const call = await storage.getActiveCallForConversation(id, currentUserId);
+      let call = await storage.getActiveCallForConversation(id, currentUserId);
+      if (call && isLiveKitConfigured()) {
+        const ended = await reconcileStaleCall(call);
+        if (ended) call = undefined;
+      }
       if (!call) return res.json({ call: null });
       const state = await getCallStateDto(call.id);
       res.json({ call: state });

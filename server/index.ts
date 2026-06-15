@@ -17,6 +17,20 @@ app.use((req, _res, next) => {
   next();
 });
 
+// LiveKit webhooks must use the raw body for signature verification.
+app.post(
+  "/api/livekit/webhook",
+  express.raw({ type: "application/webhook+json" }),
+  (req, res) => {
+    void import("./voiceCall")
+      .then(({ handleLiveKitWebhook }) => handleLiveKitWebhook(req, res))
+      .catch((err) => {
+        console.error("[VoiceCall] webhook handler load error:", err);
+        res.status(500).json({ message: "Webhook handler error" });
+      });
+  }
+);
+
 app.use(express.json({
   limit: '50mb',
   verify: (req, _res, buf) => {
@@ -142,6 +156,7 @@ app.use((req, res, next) => {
       void sweepOrphanedCalls().catch((err) =>
         console.error("[VoiceCall] initial orphan sweep error:", err)
       );
+      // Webhooks handle real-time cleanup; sweeps are a batched backup (one listRooms per cycle).
       setInterval(() => {
         void sweepExpiredCalls().catch((err) =>
           console.error("[VoiceCall] sweep error:", err)
@@ -149,7 +164,7 @@ app.use((req, res, next) => {
         void sweepOrphanedCalls().catch((err) =>
           console.error("[VoiceCall] orphan sweep error:", err)
         );
-      }, 15_000);
+      }, 60_000);
     });
   });
 })();

@@ -26,3 +26,11 @@ turn:
 logging:
   level: info
   json: false
+
+# Webhooks keep call state in sync with real LiveKit room occupancy.
+# api_key must match the key name in LIVEKIT_KEYS (the LIVEKIT_API_KEY env var on app).
+# Update api_key below when deploying with a non-dev key pair.
+webhook:
+  api_key: API9826f297bd9f9743
+  urls:
+    - https://hovial.com/api/livekit/webhook
