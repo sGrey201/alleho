@@ -1940,7 +1940,7 @@ export const t = {
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} участника`;
     return `${n} участников`;
   },
-  channelHeaderStats: (subscribers: number) => `Подписчиков:${subscribers}`,
+  channelHeaderStats: (subscribers: number) => `Подписчиков: ${subscribers}`,
   sponsorPaymentSubmitted: 'Чек отправлен. Статус спонсора активирован.',
   sponsorPaymentApprove: 'Утвердить',
   sponsorPaymentDispute: 'Оспорить',
