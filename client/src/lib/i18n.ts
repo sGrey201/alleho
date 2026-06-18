@@ -1887,6 +1887,63 @@ export const t = {
   subscribeToChannel: 'Подписаться на канал',
   unsubscribeFromChannel: 'Отписаться',
   channelUnsubscribed: 'Вы отписались от канала',
+  channelSponsorSectionTitle: 'Спонсорство канала',
+  channelSponsorEnable: 'Монетизация канала',
+  channelSponsorPaymentInstructions: 'Как перевести деньги',
+  channelSponsorPaymentInstructionsPlaceholder: 'Реквизиты, СБП, номер карты и т.д.',
+  channelSponsorSuggestedAmount: 'Минимальная сумма',
+  channelSponsorTier1Amount: 'Сумма 1 — доступ к контенту',
+  channelSponsorTier2Amount: 'Сумма 2 — контент + благодарность',
+  channelSponsorDurationDays: 'Срок доступа (дней)',
+  channelSponsorAttachReceipt: 'Прикрепить чек',
+  channelSponsorPaymentAmount: 'Сумма перевода',
+  channelSponsorPaymentsTitle: 'Подтверждения оплаты',
+  channelSponsorNotEnabled: 'Монетизация канала не включена',
+  sponsorContentLocked: 'Контент для спонсоров',
+  sponsorContentLabel: 'Для спонсоров',
+  sponsorStatusActiveUntil: 'Вы спонсор до',
+  sponsorBecomePrompt: 'Станьте спонсором, чтобы читать платный контент',
+  sponsorBecomeButton: 'Стать спонсором',
+  sponsorTransferInstructionsTitle: 'Переведите деньги одним из следующих способов:',
+  sponsorTierContent: (amount: string, days: number) => {
+    const mod10 = days % 10;
+    const mod100 = days % 100;
+    let dayWord = 'дней';
+    if (mod10 === 1 && mod100 !== 11) dayWord = 'день';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) dayWord = 'дня';
+    return `${amount}₽ — Спасибо🫶 + Весь спонсорский контент на ${days} ${dayWord}`;
+  },
+  sponsorTierContentThanks: (amount: string, days: number) => {
+    const mod10 = days % 10;
+    const mod100 = days % 100;
+    let dayWord = 'дней';
+    if (mod10 === 1 && mod100 !== 11) dayWord = 'день';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) dayWord = 'дня';
+    return `${amount}₽ — Спасибо🫶 + Весь спонсорский контент на ${days} ${dayWord} + Вы или Ваш канал в «Благодарности спонсорам»`;
+  },
+  sponsorDonationTypeContent: 'Контент',
+  sponsorDonationTypeContentThanks: 'Контент + благодарность',
+  sponsorPaymentCollapse: 'Свернуть',
+  sponsorBadge: 'Спонсор',
+  sponsorActiveCount: 'Спонсоров',
+  sponsorThanksTitle: 'Благодарность спонсорам',
+  sponsorThanksEmpty: 'Пока никого',
+  sponsorShowInThanks: 'Показывать меня в благодарности спонсорам',
+  channelParticipantCount: (n: number) => {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${n} участник`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} участника`;
+    return `${n} участников`;
+  },
+  sponsorPaymentSubmitted: 'Чек отправлен. Статус спонсора активирован.',
+  sponsorPaymentApprove: 'Утвердить',
+  sponsorPaymentDispute: 'Оспорить',
+  sponsorPaymentApproved: 'Утверждено',
+  sponsorPaymentDisputed: 'Оспорено',
+  sponsorPaymentPending: 'Ожидает проверки',
+  sponsorDisputeReasonPlaceholder: 'Причина оспаривания (необязательно)',
+  sponsorFormatHint: 'Выделите текст и нажмите $$ — этот фрагмент увидят только спонсоры',
   searchDoctors: 'Врачи',
   searchGroups: 'Группы',
   searchChannels: 'Каналы',

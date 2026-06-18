@@ -59,7 +59,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
-import { FormattedMessageText } from "@/components/FormattedMessageText";
+import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
@@ -98,9 +98,19 @@ interface ConversationInfo {
   name?: string | null;
   avatarUrl?: string | null;
   patientUserId?: string | null;
+  sponsorSettings?: {
+    enabled: boolean;
+    paymentInstructions?: string | null;
+    tier1Amount?: string | null;
+    tier2Amount?: string | null;
+    durationDays?: number;
+  } | null;
+  isSponsor?: boolean;
+  sponsorExpiresAt?: string | null;
   participants?: Array<{
     userId: string;
     role: string;
+    sponsorExpiresAt?: string | null;
     lastSeenAt?: string | null;
     user?: {
       firstName?: string | null;
@@ -448,9 +458,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
   const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
 
+  const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
+  const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
+  const openSponsorSection = useCallback(() => {
+    setLocation(`/messenger/channel/${conversationId}/settings?section=sponsor`);
+  }, [conversationId, setLocation]);
+
   const voiceCall = useVoiceCall(conversationId, user?.id);
 
-  useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent);
+  useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent, {
+    refetchMessagesOnNewMessage:
+      conv?.type === "channel" && channelMonetizationEnabled && !canViewSponsorContent,
+  });
 
   useEffect(() => {
     if (!conversationId || !user?.id) return;
@@ -1560,10 +1579,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </div>
           )}
           {msg.content ? (
-            <FormattedMessageText
+            <SponsorAwareMessageText
               text={msg.content}
+              canViewSponsorContent={canViewSponsorContent}
+              monetizationEnabled={channelMonetizationEnabled}
+              isContentTruncated={msg.isContentTruncated}
               onTagClick={handleTagClick}
               highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+              onSponsorCtaClick={openSponsorSection}
             />
           ) : null}
         </>
@@ -1700,6 +1723,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             {(conv.type === "direct" || conv.type === "patient") && (
               <p className="truncate text-xs leading-tight text-muted-foreground">
                 {formatLastSeen(peerParticipant?.lastSeenAt)}
+              </p>
+            )}
+            {conv.type === "channel" && conv.isSponsor && (
+              <p className="truncate text-xs leading-tight text-amber-700 dark:text-amber-300">
+                {t.sponsorBadge}
               </p>
             )}
           </button>
@@ -2106,6 +2134,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                     ? () => voiceCall.startCall()
                     : undefined
                 }
+                showSponsorFormat={conv.type === "channel" && channelMonetizationEnabled && canPostToChannel}
                 showMessageModeSelector={isPatientConv && !!user?.isAdmin && !editing}
                 messageMode={messageMode}
                 onMessageModeChange={setMessageMode}

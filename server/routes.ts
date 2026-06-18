@@ -70,7 +70,9 @@ import {
   getVapidPublicKey,
   isPushConfigured,
   notifyConversationNewMessage,
+  sendPushToUsers,
 } from "./push";
+import { filterMessageForNonSponsor } from "@shared/messageFormatting";
 
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
 let objectStorageModulePromise: Promise<typeof import("./replit_integrations/object_storage")> | null = null;
@@ -1341,7 +1343,32 @@ ${allUrls.map(url => `  <url>
       const canReadConversation = inConv || conv.type === "channel";
       if (!canReadConversation) return res.status(403).json({ message: "Access denied" });
       const participants = await storage.getConversationParticipants(id);
-      res.json({ ...conv, participants });
+      const sponsorSettings =
+        conv.type === "channel" ? await storage.getChannelSponsorSettings(id) : null;
+      const sponsorExpiresAt =
+        conv.type === "channel"
+          ? await storage.getParticipantSponsorExpiresAt(id, currentUserId)
+          : null;
+      const isSponsor =
+        conv.type === "channel"
+          ? await storage.isActiveChannelSponsor(id, currentUserId)
+          : false;
+      res.json({
+        ...conv,
+        participants,
+        ...(conv.type === "channel" ? { participantCount: participants.length } : {}),
+        sponsorSettings: sponsorSettings
+          ? {
+              enabled: sponsorSettings.enabled,
+              paymentInstructions: sponsorSettings.paymentInstructions,
+              tier1Amount: sponsorSettings.tier1Amount,
+              tier2Amount: sponsorSettings.tier2Amount,
+              durationDays: sponsorSettings.durationDays,
+            }
+          : null,
+        isSponsor,
+        sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+      });
     } catch (error) {
       console.error("Error fetching conversation:", error);
       res.status(500).json({ message: "Failed to fetch conversation" });
@@ -1491,6 +1518,294 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Channel sponsor settings
+  app.get("/api/conversations/:id/sponsor-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      const settings = await storage.getChannelSponsorSettings(id);
+      const isSponsor = await storage.isActiveChannelSponsor(id, currentUserId);
+      const sponsorExpiresAt = await storage.getParticipantSponsorExpiresAt(id, currentUserId);
+      const durationDays = settings?.durationDays ?? 30;
+      const tiers = [
+        ...(settings?.tier1Amount?.trim()
+          ? [{ type: "content" as const, amount: settings.tier1Amount.trim(), durationDays }]
+          : []),
+        ...(settings?.tier2Amount?.trim()
+          ? [{ type: "content_thanks" as const, amount: settings.tier2Amount.trim(), durationDays }]
+          : []),
+      ];
+      res.json({
+        enabled: settings?.enabled ?? false,
+        paymentInstructions: settings?.paymentInstructions ?? null,
+        tier1Amount: settings?.tier1Amount ?? null,
+        tier2Amount: settings?.tier2Amount ?? null,
+        durationDays,
+        tiers,
+        isSponsor,
+        sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+      });
+    } catch (error) {
+      console.error("Error fetching sponsor settings:", error);
+      res.status(500).json({ message: "Failed to fetch sponsor settings" });
+    }
+  });
+
+  app.patch("/api/conversations/:id/sponsor-settings", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner") {
+        return res.status(403).json({ message: "only_owner_can_edit_sponsor_settings" });
+      }
+      const body = req.body as {
+        enabled?: boolean;
+        paymentInstructions?: string | null;
+        tier1Amount?: string | null;
+        tier2Amount?: string | null;
+        durationDays?: number;
+      };
+      const durationDays =
+        typeof body.durationDays === "number" && body.durationDays > 0
+          ? Math.floor(body.durationDays)
+          : undefined;
+      const settings = await storage.upsertChannelSponsorSettings(id, {
+        ...(body.enabled !== undefined ? { enabled: !!body.enabled } : {}),
+        ...(body.paymentInstructions !== undefined
+          ? { paymentInstructions: body.paymentInstructions }
+          : {}),
+        ...(body.tier1Amount !== undefined ? { tier1Amount: body.tier1Amount } : {}),
+        ...(body.tier2Amount !== undefined ? { tier2Amount: body.tier2Amount } : {}),
+        ...(durationDays !== undefined ? { durationDays } : {}),
+      });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating sponsor settings:", error);
+      res.status(500).json({ message: "Failed to update sponsor settings" });
+    }
+  });
+
+  app.get("/api/conversations/:id/sponsor-payments", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      const role = await storage.getParticipantRole(id, currentUserId);
+      const isOwner = role === "owner";
+      const payments = await storage.getChannelSponsorPayments(
+        id,
+        isOwner ? undefined : { userId: currentUserId }
+      );
+      res.json(
+        payments.map((p) => ({
+          ...p,
+          submittedAt: p.submittedAt?.toISOString() ?? null,
+          validFrom: p.validFrom?.toISOString() ?? null,
+          validUntil: p.validUntil?.toISOString() ?? null,
+          reviewedAt: p.reviewedAt?.toISOString() ?? null,
+          createdAt: p.createdAt?.toISOString() ?? null,
+          updatedAt: p.updatedAt?.toISOString() ?? null,
+          user: p.user
+            ? {
+                id: p.user.id,
+                firstName: p.user.firstName,
+                lastName: p.user.lastName,
+                email: p.user.email,
+              }
+            : undefined,
+        }))
+      );
+    } catch (error) {
+      console.error("Error fetching sponsor payments:", error);
+      res.status(500).json({ message: "Failed to fetch sponsor payments" });
+    }
+  });
+
+  app.post("/api/conversations/:id/sponsor-payments", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      const body = req.body as {
+        receiptUrl?: string;
+        donationType?: string;
+      };
+      if (!body.receiptUrl?.trim()) {
+        return res.status(400).json({ message: "receipt_required" });
+      }
+      if (body.donationType !== "content" && body.donationType !== "content_thanks") {
+        return res.status(400).json({ message: "donation_type_required" });
+      }
+      const payment = await storage.submitChannelSponsorPayment(id, currentUserId, {
+        receiptUrl: body.receiptUrl.trim(),
+        donationType: body.donationType,
+      });
+      const payer = await storage.getUser(currentUserId);
+      const participants = await storage.getConversationParticipants(id);
+      const owner = participants.find((p) => p.role === "owner");
+      if (owner) {
+        const payerName = payer
+          ? [payer.firstName, payer.lastName].filter(Boolean).join(" ").trim() || payer.email
+          : "Пользователь";
+        await sendPushToUsers([owner.userId], {
+          title: conv.name ?? "Канал",
+          body: `${payerName} прикрепил чек об оплате`,
+          url: `/messenger/channel/${id}/settings?section=sponsor`,
+          tag: `sponsor-payment-${payment.id}`,
+        });
+      }
+      const sponsorExpiresAt = await storage.getParticipantSponsorExpiresAt(id, currentUserId);
+      res.status(201).json({
+        ...payment,
+        submittedAt: payment.submittedAt?.toISOString() ?? null,
+        validFrom: payment.validFrom?.toISOString() ?? null,
+        validUntil: payment.validUntil?.toISOString() ?? null,
+        sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to submit payment";
+      if (message === "sponsor_monetization_disabled") {
+        return res.status(400).json({ message });
+      }
+      if (message === "sponsor_tier_amount_not_configured") {
+        return res.status(400).json({ message });
+      }
+      console.error("Error submitting sponsor payment:", error);
+      res.status(500).json({ message: "Failed to submit payment" });
+    }
+  });
+
+  app.post(
+    "/api/conversations/:id/sponsor-payments/:paymentId/approve",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, paymentId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const role = await storage.getParticipantRole(id, currentUserId);
+        if (role !== "owner") {
+          return res.status(403).json({ message: "only_owner_can_review_payments" });
+        }
+        const updated = await storage.approveChannelSponsorPayment(paymentId, currentUserId);
+        if (!updated || updated.conversationId !== id) {
+          return res.status(404).json({ message: "Payment not found" });
+        }
+        res.json(updated);
+      } catch (error) {
+        console.error("Error approving sponsor payment:", error);
+        res.status(500).json({ message: "Failed to approve payment" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/conversations/:id/sponsor-payments/:paymentId/dispute",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, paymentId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const role = await storage.getParticipantRole(id, currentUserId);
+        if (role !== "owner") {
+          return res.status(403).json({ message: "only_owner_can_review_payments" });
+        }
+        const body = req.body as { reason?: string | null };
+        const updated = await storage.disputeChannelSponsorPayment(
+          paymentId,
+          currentUserId,
+          body.reason ?? null
+        );
+        if (!updated || updated.conversationId !== id) {
+          return res.status(404).json({ message: "Payment not found" });
+        }
+        const conv = await storage.getConversation(id);
+        await sendPushToUsers([updated.userId], {
+          title: conv?.name ?? "Канал",
+          body: "Оплата оспорена. Статус спонсора снят.",
+          url: `/messenger/channel/${id}/settings?section=sponsor`,
+          tag: `sponsor-dispute-${paymentId}`,
+        });
+        res.json(updated);
+      } catch (error) {
+        console.error("Error disputing sponsor payment:", error);
+        res.status(500).json({ message: "Failed to dispute payment" });
+      }
+    }
+  );
+
+  app.get("/api/conversations/:id/sponsor-thanks", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      const settings = await storage.getChannelSponsorSettings(id);
+      if (!settings?.enabled) {
+        return res.json([]);
+      }
+      const thanks = await storage.getChannelSponsorThanks(id);
+      res.json(thanks);
+    } catch (error) {
+      console.error("Error fetching sponsor thanks:", error);
+      res.status(500).json({ message: "Failed to fetch sponsor thanks" });
+    }
+  });
+
+  app.patch(
+    "/api/conversations/:id/sponsor-thanks-visibility",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const conv = await storage.getConversation(id);
+        if (!conv || conv.type !== "channel") {
+          return res.status(404).json({ message: "Channel not found" });
+        }
+        const body = req.body as { showInSponsorThanks?: boolean };
+        if (typeof body.showInSponsorThanks !== "boolean") {
+          return res.status(400).json({ message: "showInSponsorThanks_required" });
+        }
+        const ok = await storage.setShowInSponsorThanks(id, currentUserId, body.showInSponsorThanks);
+        if (!ok) {
+          return res.status(403).json({ message: "not_active_sponsor" });
+        }
+        res.json({ showInSponsorThanks: body.showInSponsorThanks });
+      } catch (error) {
+        console.error("Error updating sponsor thanks visibility:", error);
+        res.status(500).json({ message: "Failed to update visibility" });
+      }
+    }
+  );
+
   // Conversation message helpers
   const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
   const RECENT_MESSAGES_LIMIT = 100;
@@ -1530,7 +1845,8 @@ ${allUrls.map(url => `  <url>
 
   async function enrichConversationMessages(
     messages: ConversationMessage[],
-    currentUserId: string
+    currentUserId: string,
+    sponsorFilter?: { monetizationEnabled: boolean; filterContent: boolean }
   ): Promise<ConversationMessageWithAuthor[]> {
     const userIds = new Set<string>();
     messages.forEach((m) => {
@@ -1569,15 +1885,32 @@ ${allUrls.map(url => `  <url>
       currentUserId
     );
     const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
+    const applySponsorFilter = (content: string | null | undefined) => {
+      if (!content || !sponsorFilter?.filterContent) {
+        return { content: content ?? null, hasSponsorContent: false, isContentTruncated: false };
+      }
+      const filtered = filterMessageForNonSponsor(content, {
+        monetizationEnabled: sponsorFilter.monetizationEnabled,
+      });
+      return {
+        content: filtered.content,
+        hasSponsorContent: filtered.hasSponsorContent,
+        isContentTruncated: filtered.isTruncated,
+      };
+    };
     const base = messages.map((m) => {
       const replyTarget = m.replyToMessageId ? replyMap.get(m.replyToMessageId) : null;
       const replyAuthor = replyTarget ? userMap.get(replyTarget.authorUserId) : null;
+      const mainContent = applySponsorFilter(m.content);
+      const replyContent = replyTarget ? applySponsorFilter(replyTarget.content) : null;
       return {
         id: m.id,
         conversationId: m.conversationId,
         authorUserId: m.authorUserId,
         messageType: m.messageType,
-        content: m.content ?? null,
+        content: mainContent.content,
+        hasSponsorContent: mainContent.hasSponsorContent,
+        isContentTruncated: mainContent.isContentTruncated,
         imageUrl: m.imageUrl ?? null,
         createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
         editedAt: m.editedAt ? (m.editedAt instanceof Date ? m.editedAt.toISOString() : String(m.editedAt)) : null,
@@ -1591,7 +1924,7 @@ ${allUrls.map(url => `  <url>
           ? {
               id: replyTarget.id,
               authorUserId: replyTarget.authorUserId,
-              content: replyTarget.content ?? null,
+              content: replyContent?.content ?? null,
               imageUrl: replyTarget.imageUrl ?? null,
               messageType: replyTarget.messageType,
               deletedAt: replyTarget.deletedAt
@@ -1611,6 +1944,23 @@ ${allUrls.map(url => `  <url>
       };
     });
     return mergeConversationPollResults(base, currentUserId);
+  }
+
+  async function getChannelSponsorFilterContext(
+    conversationId: string,
+    userId: string,
+    convType: string
+  ): Promise<{ monetizationEnabled: boolean; filterContent: boolean }> {
+    if (convType !== "channel") {
+      return { monetizationEnabled: false, filterContent: false };
+    }
+    const settings = await storage.getChannelSponsorSettings(conversationId);
+    const monetizationEnabled = settings?.enabled ?? false;
+    if (!monetizationEnabled) {
+      return { monetizationEnabled: false, filterContent: false };
+    }
+    const isSponsor = await storage.isActiveChannelSponsor(conversationId, userId);
+    return { monetizationEnabled: true, filterContent: !isSponsor };
   }
 
   async function syncConversationRecentCache(
@@ -1648,8 +1998,9 @@ ${allUrls.map(url => `  <url>
       const inConv = await storage.isUserInConversation(currentUserId, id);
       const canReadMessages = inConv || conv.type === "channel";
       if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
+      const sponsorFilter = await getChannelSponsorFilterContext(id, currentUserId, conv.type);
       const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
-      const withAuthors = await enrichConversationMessages(messages, currentUserId);
+      const withAuthors = await enrichConversationMessages(messages, currentUserId, sponsorFilter);
       res.json(withAuthors);
       backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
     } catch (error) {
@@ -1865,9 +2216,14 @@ ${allUrls.map(url => `  <url>
         }
       }
 
-      const [enriched] = await enrichConversationMessages([finalMessage], currentUserId);
-      await pushConversationRecentMessage(id, enriched);
-      await publishConversationMessage(id, enriched);
+      const sponsorFilter = await getChannelSponsorFilterContext(id, currentUserId, conv.type);
+      const [enriched] = await enrichConversationMessages([finalMessage], currentUserId, sponsorFilter);
+      const [wsPayload] = await enrichConversationMessages([finalMessage], currentUserId, {
+        monetizationEnabled: sponsorFilter.monetizationEnabled,
+        filterContent: sponsorFilter.monetizationEnabled,
+      });
+      await pushConversationRecentMessage(id, wsPayload);
+      await publishConversationMessage(id, wsPayload);
       void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
         console.error("[Push] conversation notify error:", err)
       );

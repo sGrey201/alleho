@@ -1,4 +1,4 @@
-import { stripMessageFormatting } from "./messageFormatting";
+import { stripMessageFormatting, stripSponsorSections } from "./messageFormatting";
 
 const PREVIEW_MAX_LEN = 500;
 
@@ -95,7 +95,7 @@ export function formatConversationMessagePreview(
     return truncate(name ?? "Анкета");
   }
 
-  if (text) return truncate(stripMessageFormatting(text));
+  if (text) return truncate(stripSponsorSections(stripMessageFormatting(text)));
   if (imageUrl) return "Фото";
   return null;
 }

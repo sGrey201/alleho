@@ -30,7 +30,9 @@ import { ChatFormatToolbar } from "@/components/ChatFormatToolbar";
 import {
   insertTextAtCursor,
   isSelectionBoldWrapped,
+  isSelectionSponsorWrapped,
   wrapSelectionWithBold,
+  wrapSelectionWithSponsor,
 } from "@shared/messageFormatting";
 import { clipboardHtmlToBoldMarkup } from "@/lib/pasteFormatting";
 import {
@@ -64,6 +66,7 @@ type ChatInputBarProps = {
   onSendVoice?: (clip: RecordedVoice) => Promise<void> | void;
   isSendingVoice?: boolean;
   onInputFocus?: () => void;
+  showSponsorFormat?: boolean;
 };
 
 export type ChatInputBarHandle = {
@@ -101,13 +104,15 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   onSendVoice,
   isSendingVoice = false,
   onInputFocus,
+  showSponsorFormat = false,
 }, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isMobile = useIsMobile();
   const [formatToolbar, setFormatToolbar] = useState<{
     top: number;
     left: number;
-    isActive: boolean;
+    isBoldActive: boolean;
+    isSponsorActive: boolean;
   } | null>(null);
   const hasText = !!value.trim();
   const isSendDisabled = disabled || !hasText || isSending;
@@ -189,7 +194,8 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     setFormatToolbar({
       top: rect.top,
       left: rect.left + rect.width / 2,
-      isActive: isSelectionBoldWrapped(value, selectionStart, selectionEnd),
+      isBoldActive: isSelectionBoldWrapped(value, selectionStart, selectionEnd),
+      isSponsorActive: isSelectionSponsorWrapped(value, selectionStart, selectionEnd),
     });
   }, [disabled, isMobile, value]);
 
@@ -199,6 +205,22 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
 
     const { selectionStart, selectionEnd } = el;
     const result = wrapSelectionWithBold(value, selectionStart, selectionEnd);
+    onChange(result.value);
+
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(result.selectionStart, result.selectionEnd);
+      syncChatTextareaHeight(el);
+      updateFormatToolbar();
+    });
+  }, [onChange, updateFormatToolbar, value]);
+
+  const applySponsorFormatting = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const { selectionStart, selectionEnd } = el;
+    const result = wrapSelectionWithSponsor(value, selectionStart, selectionEnd);
     onChange(result.value);
 
     requestAnimationFrame(() => {
@@ -487,8 +509,11 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             <ChatFormatToolbar
               top={formatToolbar.top}
               left={formatToolbar.left}
-              isActive={formatToolbar.isActive}
+              isBoldActive={formatToolbar.isBoldActive}
+              isSponsorActive={formatToolbar.isSponsorActive}
+              showSponsor={showSponsorFormat}
               onBold={applyBoldFormatting}
+              onSponsor={applySponsorFormatting}
             />
           )}
         </div>

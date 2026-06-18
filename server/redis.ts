@@ -114,6 +114,8 @@ export type ConversationMessageWithAuthor = {
     totalVotes: number;
     selectedOptionIndices: number[];
   };
+  hasSponsorContent?: boolean;
+  isContentTruncated?: boolean;
   author: ConversationMessageAuthor;
 };
 

@@ -324,6 +324,8 @@ export const conversationParticipants = pgTable(
     conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"),
+    sponsorExpiresAt: timestamp("sponsor_expires_at"),
+    showInSponsorThanks: boolean("show_in_sponsor_thanks").notNull().default(false),
     lastSeenAt: timestamp("last_seen_at"),
     joinedAt: timestamp("joined_at").defaultNow(),
   },
@@ -636,3 +638,59 @@ export const conversationCallParticipants = pgTable(
 
 export type ConversationCallParticipant = typeof conversationCallParticipants.$inferSelect;
 export type InsertConversationCallParticipant = typeof conversationCallParticipants.$inferInsert;
+
+// Channel sponsor monetization
+export const channelSponsorPaymentStatusEnum = z.enum(["granted", "approved", "disputed"]);
+export type ChannelSponsorPaymentStatus = z.infer<typeof channelSponsorPaymentStatusEnum>;
+
+export const channelSponsorDonationTypeEnum = z.enum(["content", "content_thanks"]);
+export type ChannelSponsorDonationType = z.infer<typeof channelSponsorDonationTypeEnum>;
+
+export const channelSponsorSettings = pgTable("channel_sponsor_settings", {
+  conversationId: varchar("conversation_id")
+    .primaryKey()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  paymentInstructions: text("payment_instructions"),
+  tier1Amount: varchar("tier1_amount", { length: 64 }),
+  tier2Amount: varchar("tier2_amount", { length: 64 }),
+  durationDays: integer("duration_days").notNull().default(30),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type ChannelSponsorSettings = typeof channelSponsorSettings.$inferSelect;
+export type InsertChannelSponsorSettings = typeof channelSponsorSettings.$inferInsert;
+
+export const channelSponsorPayments = pgTable(
+  "channel_sponsor_payments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    receiptUrl: text("receipt_url").notNull(),
+    amount: varchar("amount", { length: 64 }),
+    donationType: varchar("donation_type", { length: 32 }).notNull().default("content"),
+    status: varchar("status", { length: 20 }).notNull().default("granted"),
+    durationDays: integer("duration_days").notNull(),
+    validFrom: timestamp("valid_from").notNull(),
+    validUntil: timestamp("valid_until").notNull(),
+    submittedAt: timestamp("submitted_at").defaultNow(),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    disputeReason: text("dispute_reason"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("channel_sponsor_payments_conversation_idx").on(table.conversationId),
+    index("channel_sponsor_payments_user_idx").on(table.userId),
+    index("channel_sponsor_payments_status_idx").on(table.status),
+  ]
+);
+
+export type ChannelSponsorPayment = typeof channelSponsorPayments.$inferSelect;
+export type InsertChannelSponsorPayment = typeof channelSponsorPayments.$inferInsert;

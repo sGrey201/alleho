@@ -44,6 +44,8 @@ export interface ConversationMessageWithAuthor {
     totalVotes: number;
     selectedOptionIndices: number[];
   };
+  hasSponsorContent?: boolean;
+  isContentTruncated?: boolean;
   author: ConversationMessageAuthor;
 }
 
@@ -139,17 +141,20 @@ export function useConversationWs(
   conversationId: string | undefined,
   enabled: boolean,
   currentUserId?: string,
-  onCallEvent?: (event: ConversationCallWsEvent) => void
+  onCallEvent?: (event: ConversationCallWsEvent) => void,
+  options?: { refetchMessagesOnNewMessage?: boolean }
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationIdRef = useRef(conversationId);
   const currentUserIdRef = useRef(currentUserId);
+  const refetchMessagesRef = useRef(options?.refetchMessagesOnNewMessage ?? false);
   const markSeenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Kept in a ref so a changing callback identity does not reconnect the socket.
   const onCallEventRef = useRef(onCallEvent);
   conversationIdRef.current = conversationId;
   currentUserIdRef.current = currentUserId;
+  refetchMessagesRef.current = options?.refetchMessagesOnNewMessage ?? false;
   onCallEventRef.current = onCallEvent;
 
   useEffect(() => {
@@ -226,14 +231,18 @@ export function useConversationWs(
           if (data.type === "conversation_message" && data.payload) {
             const payload = data.payload as ConversationMessageWithAuthor;
             if (payload.conversationId !== conversationIdRef.current) return;
-            queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-              messagesKey(),
-              (old) => {
-                const list = old ?? [];
-                if (list.some((m) => m.id === payload.id)) return old;
-                return [...list, payload];
-              }
-            );
+            if (refetchMessagesRef.current) {
+              void queryClient.invalidateQueries({ queryKey: messagesKey() });
+            } else {
+              queryClient.setQueryData<ConversationMessageWithAuthor[]>(
+                messagesKey(),
+                (old) => {
+                  const list = old ?? [];
+                  if (list.some((m) => m.id === payload.id)) return old;
+                  return [...list, payload];
+                }
+              );
+            }
             if (payload.authorUserId !== currentUserIdRef.current) {
               scheduleMarkSeen();
             }

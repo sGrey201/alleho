@@ -3,11 +3,22 @@ import { cn } from "@/lib/utils";
 type ChatFormatToolbarProps = {
   top: number;
   left: number;
-  isActive: boolean;
+  isBoldActive: boolean;
+  isSponsorActive?: boolean;
+  showSponsor?: boolean;
   onBold: () => void;
+  onSponsor?: () => void;
 };
 
-export function ChatFormatToolbar({ top, left, isActive, onBold }: ChatFormatToolbarProps) {
+export function ChatFormatToolbar({
+  top,
+  left,
+  isBoldActive,
+  isSponsorActive = false,
+  showSponsor = false,
+  onBold,
+  onSponsor,
+}: ChatFormatToolbarProps) {
   return (
     <div
       className="pointer-events-none fixed z-[150]"
@@ -25,12 +36,27 @@ export function ChatFormatToolbar({ top, left, isActive, onBold }: ChatFormatToo
           onClick={onBold}
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-md text-sm font-bold transition-colors hover:bg-muted",
-            isActive && "bg-muted text-foreground"
+            isBoldActive && "bg-muted text-foreground"
           )}
           data-testid="button-format-bold"
         >
           B
         </button>
+        {showSponsor && onSponsor && (
+          <button
+            type="button"
+            aria-label="Контент для спонсоров"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={onSponsor}
+            className={cn(
+              "flex h-8 min-w-8 items-center justify-center rounded-md px-1 text-xs font-bold transition-colors hover:bg-muted",
+              isSponsorActive && "bg-muted text-foreground"
+            )}
+            data-testid="button-format-sponsor"
+          >
+            $$
+          </button>
+        )}
       </div>
     </div>
   );

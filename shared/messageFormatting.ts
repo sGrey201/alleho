@@ -1,9 +1,19 @@
 export const BOLD_MARKER = "**";
+export const SPONSOR_MARKER = "$$";
 
 const BOLD_REGEX = /\*\*([^*\n]+)\*\*/g;
+const SPONSOR_REGEX = /\$\$([^$\n]+)\$\$/g;
+const SPONSOR_PLACEHOLDER = "[[SPONSOR]]";
+
+export const SPONSOR_CONTENT_MAX_LINES = 30;
 
 export type MessageBoldSegment = {
   bold: boolean;
+  text: string;
+};
+
+export type MessageSponsorSegment = {
+  sponsor: boolean;
   text: string;
 };
 
@@ -73,6 +83,138 @@ export function splitByHighlight(text: string, query: string): HighlightSegment[
 export function stripMessageFormatting(text: string): string {
   return text.replace(BOLD_REGEX, "$1");
 }
+
+/** Remove paired $$...$$ sponsor sections entirely. */
+export function stripSponsorSections(text: string): string {
+  return text.replace(SPONSOR_REGEX, "");
+}
+
+/** Replace $$...$$ with a placeholder for non-sponsor rendering. */
+export function replaceSponsorSectionsWithPlaceholder(text: string): string {
+  return text.replace(SPONSOR_REGEX, SPONSOR_PLACEHOLDER);
+}
+
+export function hasSponsorSections(text: string): boolean {
+  return new RegExp(SPONSOR_REGEX.source).test(text);
+}
+
+export function countContentLines(text: string): number {
+  if (!text) return 0;
+  return text.split("\n").length;
+}
+
+/** Truncate to maxLines; returns truncated text and whether truncation occurred. */
+export function truncateToLines(
+  text: string,
+  maxLines: number
+): { text: string; truncated: boolean } {
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) return { text, truncated: false };
+  return { text: lines.slice(0, maxLines).join("\n"), truncated: true };
+}
+
+/** Filter message content for non-sponsor viewers when monetization is enabled. */
+export function filterMessageForNonSponsor(
+  content: string,
+  options: { monetizationEnabled: boolean }
+): {
+  content: string;
+  hasSponsorContent: boolean;
+  isTruncated: boolean;
+} {
+  if (!content || !options.monetizationEnabled) {
+    return { content, hasSponsorContent: false, isTruncated: false };
+  }
+
+  const hadSponsor = hasSponsorSections(content);
+  let filtered = replaceSponsorSectionsWithPlaceholder(content);
+  const { text: truncated, truncated: isTruncated } = truncateToLines(
+    filtered,
+    SPONSOR_CONTENT_MAX_LINES
+  );
+  filtered = truncated;
+
+  return {
+    content: filtered,
+    hasSponsorContent: hadSponsor,
+    isTruncated,
+  };
+}
+
+/** Split text into sponsor and public segments for rendering. */
+export function parseMessageSponsorSegments(text: string): MessageSponsorSegment[] {
+  const segments: MessageSponsorSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const re = new RegExp(SPONSOR_REGEX.source, "g");
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ sponsor: false, text: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ sponsor: true, text: match[1] });
+    lastIndex = re.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ sponsor: false, text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ sponsor: false, text }];
+}
+
+export function isSelectionSponsorWrapped(value: string, start: number, end: number): boolean {
+  return (
+    value.slice(start - SPONSOR_MARKER.length, start) === SPONSOR_MARKER &&
+    value.slice(end, end + SPONSOR_MARKER.length) === SPONSOR_MARKER
+  );
+}
+
+/** Wrap selection in $$...$$ or unwrap if already wrapped. */
+export function wrapSelectionWithSponsor(
+  value: string,
+  start: number,
+  end: number
+): BoldWrapResult {
+  if (start === end) {
+    const placeholder = "текст";
+    const wrapped = `${SPONSOR_MARKER}${placeholder}${SPONSOR_MARKER}`;
+    const next = value.slice(0, start) + wrapped + value.slice(end);
+    const innerStart = start + SPONSOR_MARKER.length;
+    const innerEnd = innerStart + placeholder.length;
+    return { value: next, selectionStart: innerStart, selectionEnd: innerEnd };
+  }
+
+  if (isSelectionSponsorWrapped(value, start, end)) {
+    const next =
+      value.slice(0, start - SPONSOR_MARKER.length) +
+      value.slice(start, end) +
+      value.slice(end + SPONSOR_MARKER.length);
+    const newStart = start - SPONSOR_MARKER.length;
+    const newEnd = end - SPONSOR_MARKER.length;
+    return { value: next, selectionStart: newStart, selectionEnd: newEnd };
+  }
+
+  const selected = value.slice(start, end);
+  const next =
+    value.slice(0, start) + SPONSOR_MARKER + selected + SPONSOR_MARKER + value.slice(end);
+  const innerStart = start + SPONSOR_MARKER.length;
+  const innerEnd = innerStart + selected.length;
+  return { value: next, selectionStart: innerStart, selectionEnd: innerEnd };
+}
+
+/** Parse text containing [[SPONSOR]] placeholders (server-filtered content). */
+export function parseSponsorPlaceholderSegments(text: string): MessageSponsorSegment[] {
+  const parts = text.split(SPONSOR_PLACEHOLDER);
+  const segments: MessageSponsorSegment[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i]) segments.push({ sponsor: false, text: parts[i] });
+    if (i < parts.length - 1) segments.push({ sponsor: true, text: "" });
+  }
+  return segments.length > 0 ? segments : [{ sponsor: false, text }];
+}
+
+export const SPONSOR_PLACEHOLDER_MARKER = SPONSOR_PLACEHOLDER;
 
 /** Split text into plain and bold segments for rendering. */
 export function parseMessageBoldSegments(text: string): MessageBoldSegment[] {

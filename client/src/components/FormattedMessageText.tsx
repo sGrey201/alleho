@@ -10,6 +10,7 @@ type FormattedMessageTextProps = {
   className?: string;
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
+  as?: "p" | "span";
 };
 
 const tagClassName = "font-normal text-blue-600 hover:underline dark:text-blue-400";
@@ -81,11 +82,13 @@ export function FormattedMessageText({
   className,
   onTagClick,
   highlightQuery,
+  as = "p",
 }: FormattedMessageTextProps) {
   const segments = parseMessageBoldSegments(text);
+  const Tag = as;
 
   return (
-    <p className={cn("whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug", className)}>
+    <Tag className={cn("whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug", className)}>
       {segments.map((seg, i) =>
         seg.bold ? (
           <strong key={i}>{renderPlainWithTags(seg.text, `b${i}`, onTagClick, highlightQuery)}</strong>
@@ -93,6 +96,6 @@ export function FormattedMessageText({
           <span key={i}>{renderPlainWithTags(seg.text, `p${i}`, onTagClick, highlightQuery)}</span>
         )
       )}
-    </p>
+    </Tag>
   );
 }

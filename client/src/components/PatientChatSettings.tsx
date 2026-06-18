@@ -80,7 +80,7 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
       await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       setIsEditingName(false);
-      toast({ title: t.save });
+      toast({ title: t.saved });
     },
     onError: () => toast({ title: t.error, variant: "destructive" }),
   });

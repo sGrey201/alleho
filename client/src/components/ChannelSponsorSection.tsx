@@ -1,0 +1,478 @@
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+import { Check, Loader2, Paperclip, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useUpload } from "@/hooks/use-upload";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { t } from "@/lib/i18n";
+import { profileAvatarSrc } from "@/lib/utils";
+
+type DonationType = "content" | "content_thanks";
+
+type SponsorTier = {
+  type: DonationType;
+  amount: string;
+  durationDays: number;
+};
+
+type SponsorSettings = {
+  enabled: boolean;
+  paymentInstructions: string | null;
+  tier1Amount: string | null;
+  tier2Amount: string | null;
+  durationDays: number;
+  tiers: SponsorTier[];
+  isSponsor: boolean;
+  sponsorExpiresAt: string | null;
+};
+
+type SponsorPayment = {
+  id: string;
+  userId: string;
+  receiptUrl: string;
+  amount: string | null;
+  donationType: DonationType;
+  status: string;
+  submittedAt: string | null;
+  validUntil: string | null;
+  disputeReason: string | null;
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  };
+};
+
+type Props = {
+  conversationId: string;
+  isOwner: boolean;
+  scrollOnMount?: boolean;
+  embedded?: boolean;
+};
+
+function displayUserName(user?: SponsorPayment["user"]) {
+  if (!user) return "—";
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return name || user.email || user.id;
+}
+
+function paymentStatusLabel(status: string) {
+  if (status === "approved") return t.sponsorPaymentApproved;
+  if (status === "disputed") return t.sponsorPaymentDisputed;
+  return t.sponsorPaymentPending;
+}
+
+function donationTypeLabel(type: DonationType) {
+  return type === "content_thanks" ? t.sponsorDonationTypeContentThanks : t.sponsorDonationTypeContent;
+}
+
+function tierLabel(tier: SponsorTier) {
+  if (tier.type === "content_thanks") {
+    return t.sponsorTierContentThanks(tier.amount, tier.durationDays);
+  }
+  return t.sponsorTierContent(tier.amount, tier.durationDays);
+}
+
+export default function ChannelSponsorSection({
+  conversationId,
+  isOwner,
+  scrollOnMount,
+  embedded = false,
+}: Props) {
+  const { toast } = useToast();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading } = useUpload();
+  const [enabled, setEnabled] = useState(false);
+  const [paymentInstructions, setPaymentInstructions] = useState("");
+  const [tier1Amount, setTier1Amount] = useState("");
+  const [tier2Amount, setTier2Amount] = useState("");
+  const [durationDays, setDurationDays] = useState("30");
+  const [selectedTier, setSelectedTier] = useState<DonationType | null>(null);
+  const [disputePaymentId, setDisputePaymentId] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
+
+  const settingsKey = ["/api/conversations", conversationId, "sponsor-settings"] as const;
+  const paymentsKey = ["/api/conversations", conversationId, "sponsor-payments"] as const;
+  const thanksKey = ["/api/conversations", conversationId, "sponsor-thanks"] as const;
+
+  const { data: settings, isLoading } = useQuery<SponsorSettings>({
+    queryKey: settingsKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations/${conversationId}/sponsor-settings`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!conversationId,
+  });
+
+  const { data: payments = [], refetch: refetchPayments } = useQuery<SponsorPayment[]>({
+    queryKey: paymentsKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations/${conversationId}/sponsor-payments`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!conversationId && (isOwner || settings?.enabled),
+  });
+
+  useEffect(() => {
+    if (!settings) return;
+    setEnabled(settings.enabled);
+    setPaymentInstructions(settings.paymentInstructions ?? "");
+    setTier1Amount(settings.tier1Amount ?? "");
+    setTier2Amount(settings.tier2Amount ?? "");
+    setDurationDays(String(settings.durationDays ?? 30));
+  }, [settings]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    setSelectedTier(null);
+  }, [embedded, conversationId]);
+
+  useEffect(() => {
+    if (!scrollOnMount || !sectionRef.current) return;
+    sectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [scrollOnMount, isLoading]);
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/conversations/${conversationId}/sponsor-settings`, {
+        enabled,
+        paymentInstructions: paymentInstructions.trim() || null,
+        tier1Amount: tier1Amount.trim() || null,
+        tier2Amount: tier2Amount.trim() || null,
+        durationDays: Math.max(1, parseInt(durationDays, 10) || 30),
+      });
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: settingsKey });
+      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      toast({ title: t.saved });
+    },
+    onError: () => toast({ title: t.error, variant: "destructive" }),
+  });
+
+  const submitReceiptMutation = useMutation({
+    mutationFn: async ({ receiptUrl, donationType }: { receiptUrl: string; donationType: DonationType }) => {
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/sponsor-payments`, {
+        receiptUrl,
+        donationType,
+      });
+      return res.json();
+    },
+    onSuccess: async () => {
+      setSelectedTier(null);
+      await queryClient.invalidateQueries({ queryKey: settingsKey });
+      await queryClient.invalidateQueries({ queryKey: paymentsKey });
+      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId, "messages"],
+      });
+      toast({ title: t.sponsorPaymentSubmitted });
+    },
+    onError: (err: Error) =>
+      toast({ title: t.error, description: err.message, variant: "destructive" }),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (paymentId: string) => {
+      await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/sponsor-payments/${paymentId}/approve`,
+        {}
+      );
+    },
+    onSuccess: async () => {
+      await refetchPayments();
+      toast({ title: t.sponsorPaymentApproved });
+    },
+  });
+
+  const disputeMutation = useMutation({
+    mutationFn: async ({ paymentId, reason }: { paymentId: string; reason: string }) => {
+      await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/sponsor-payments/${paymentId}/dispute`,
+        { reason: reason.trim() || null }
+      );
+    },
+    onSuccess: async () => {
+      setDisputePaymentId(null);
+      setDisputeReason("");
+      await queryClient.invalidateQueries({ queryKey: settingsKey });
+      await queryClient.invalidateQueries({ queryKey: paymentsKey });
+      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId, "messages"],
+      });
+      toast({ title: t.sponsorPaymentDisputed });
+    },
+  });
+
+  const handleReceiptChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTier) return;
+    const uploadResponse = await uploadFile(file);
+    if (uploadResponse?.objectPath) {
+      submitReceiptMutation.mutate({ receiptUrl: uploadResponse.objectPath, donationType: selectedTier });
+    }
+    e.target.value = "";
+  };
+
+  if (isLoading) {
+    return (
+      <div className={embedded ? "flex justify-center py-2" : "flex justify-center py-4"}>
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isOwner && !settings?.enabled) {
+    return null;
+  }
+
+  const sponsorUntil = settings?.sponsorExpiresAt
+    ? format(new Date(settings.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
+    : null;
+  const tiers = settings?.tiers ?? [];
+
+  return (
+    <div
+      id={embedded ? undefined : "channel-sponsor-payment"}
+      ref={sectionRef}
+      className={
+        embedded
+          ? "space-y-3 pt-3 border-t"
+          : "space-y-4 rounded-lg border p-4"
+      }
+    >
+      {!embedded && <p className="text-sm font-medium">{t.channelSponsorSectionTitle}</p>}
+
+      {isOwner ? (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="sponsor-enabled">{t.channelSponsorEnable}</Label>
+            <Switch
+              id="sponsor-enabled"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="payment-instructions">{t.channelSponsorPaymentInstructions}</Label>
+            <Textarea
+              id="payment-instructions"
+              value={paymentInstructions}
+              onChange={(e) => setPaymentInstructions(e.target.value)}
+              placeholder={t.channelSponsorPaymentInstructionsPlaceholder}
+              rows={4}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tier1-amount">{t.channelSponsorTier1Amount}</Label>
+              <Input
+                id="tier1-amount"
+                value={tier1Amount}
+                onChange={(e) => setTier1Amount(e.target.value)}
+                placeholder="1000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tier2-amount">{t.channelSponsorTier2Amount}</Label>
+              <Input
+                id="tier2-amount"
+                value={tier2Amount}
+                onChange={(e) => setTier2Amount(e.target.value)}
+                placeholder="3000"
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="duration-days">{t.channelSponsorDurationDays}</Label>
+              <Input
+                id="duration-days"
+                type="number"
+                min={1}
+                value={durationDays}
+                onChange={(e) => setDurationDays(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button
+            onClick={() => saveSettingsMutation.mutate()}
+            disabled={saveSettingsMutation.isPending}
+          >
+            {saveSettingsMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            {t.save}
+          </Button>
+        </>
+      ) : (
+        settings?.enabled && (
+          <div className="space-y-3">
+            {settings?.isSponsor && sponsorUntil ? (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                {t.sponsorStatusActiveUntil} {sponsorUntil}
+              </p>
+            ) : (
+              <>
+                {!selectedTier && (
+                  <div className="space-y-2">
+                    {tiers.map((tier) => (
+                      <button
+                        key={tier.type}
+                        type="button"
+                        className="w-full rounded-md border px-3 py-3 text-left text-sm hover:bg-muted/40 transition-colors"
+                        onClick={() => setSelectedTier(tier.type)}
+                      >
+                        {tierLabel(tier)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedTier && (
+                  <>
+                    <p className="text-sm font-medium">{t.sponsorTransferInstructionsTitle}</p>
+                    {settings?.paymentInstructions?.trim() ? (
+                      <div className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
+                        {settings.paymentInstructions.trim()}
+                      </div>
+                    ) : null}
+                    <input
+                      ref={receiptInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*,application/pdf"
+                      onChange={handleReceiptChange}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={isUploading || submitReceiptMutation.isPending}
+                      onClick={() => receiptInputRef.current?.click()}
+                    >
+                      {isUploading || submitReceiptMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Paperclip className="mr-2 h-4 w-4" />
+                      )}
+                      {t.channelSponsorAttachReceipt}
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )
+      )}
+
+      {isOwner && enabled && payments.length > 0 && (
+        <div className="space-y-2 border-t pt-4">
+          <p className="text-sm font-medium">{t.channelSponsorPaymentsTitle}</p>
+          {payments.map((payment) => (
+            <div key={payment.id} className="rounded-md border px-3 py-2 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{displayUserName(payment.user)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {payment.submittedAt
+                      ? format(new Date(payment.submittedAt), "d MMM yyyy, HH:mm", { locale: ru })
+                      : "—"}
+                    {payment.amount ? ` · ${payment.amount}` : ""}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <Badge variant="outline">{paymentStatusLabel(payment.status)}</Badge>
+                    {payment.donationType && (
+                      <Badge variant="secondary">{donationTypeLabel(payment.donationType)}</Badge>
+                    )}
+                  </div>
+                </div>
+                <a
+                  href={profileAvatarSrc(payment.receiptUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0"
+                >
+                  <img
+                    src={profileAvatarSrc(payment.receiptUrl)}
+                    alt=""
+                    className="h-14 w-14 rounded object-cover border"
+                  />
+                </a>
+              </div>
+              {payment.status === "granted" && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={approveMutation.isPending}
+                    onClick={() => approveMutation.mutate(payment.id)}
+                  >
+                    <Check className="mr-1 h-3.5 w-3.5" />
+                    {t.sponsorPaymentApprove}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive"
+                    onClick={() => {
+                      setDisputePaymentId(payment.id);
+                      setDisputeReason("");
+                    }}
+                  >
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    {t.sponsorPaymentDispute}
+                  </Button>
+                </div>
+              )}
+              {disputePaymentId === payment.id && (
+                <div className="space-y-2">
+                  <Input
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                    placeholder={t.sponsorDisputeReasonPlaceholder}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={disputeMutation.isPending}
+                      onClick={() =>
+                        disputeMutation.mutate({ paymentId: payment.id, reason: disputeReason })
+                      }
+                    >
+                      {t.sponsorPaymentDispute}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setDisputePaymentId(null)}>
+                      {t.cancel}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

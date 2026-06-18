@@ -18,6 +18,8 @@ import {
   pushSubscriptions,
   conversationCalls,
   conversationCallParticipants,
+  channelSponsorSettings,
+  channelSponsorPayments,
   type User,
   type UpsertUser,
   type Article,
@@ -47,6 +49,9 @@ import {
   type ConversationCall,
   type ConversationCallParticipant,
   type CallParticipantStatus,
+  type ChannelSponsorSettings,
+  type ChannelSponsorPayment,
+  type ChannelSponsorDonationType,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
@@ -338,6 +343,42 @@ export interface IStorage {
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
+
+  // Channel sponsor monetization
+  getChannelSponsorSettings(conversationId: string): Promise<ChannelSponsorSettings | undefined>;
+  upsertChannelSponsorSettings(
+    conversationId: string,
+    data: {
+      enabled?: boolean;
+      paymentInstructions?: string | null;
+      tier1Amount?: string | null;
+      tier2Amount?: string | null;
+      durationDays?: number;
+    }
+  ): Promise<ChannelSponsorSettings>;
+  getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
+  isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean>;
+  ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant>;
+  submitChannelSponsorPayment(
+    conversationId: string,
+    userId: string,
+    data: { receiptUrl: string; donationType: ChannelSponsorDonationType }
+  ): Promise<ChannelSponsorPayment>;
+  getChannelSponsorPayments(
+    conversationId: string,
+    options?: { userId?: string }
+  ): Promise<(ChannelSponsorPayment & { user?: User })[]>;
+  getChannelSponsorThanks(
+    conversationId: string
+  ): Promise<Array<{ userId: string; firstName: string | null; lastName: string | null }>>;
+  getParticipantShowInSponsorThanks(conversationId: string, userId: string): Promise<boolean>;
+  setShowInSponsorThanks(conversationId: string, userId: string, value: boolean): Promise<boolean>;
+  approveChannelSponsorPayment(paymentId: string, reviewerId: string): Promise<ChannelSponsorPayment | undefined>;
+  disputeChannelSponsorPayment(
+    paymentId: string,
+    reviewerId: string,
+    disputeReason?: string | null
+  ): Promise<ChannelSponsorPayment | undefined>;
 
   // Web Push subscriptions
   // Messenger voice conferences (LiveKit)
@@ -2323,6 +2364,316 @@ export class DatabaseStorage implements IStorage {
     });
 
     return items;
+  }
+
+  async getChannelSponsorSettings(conversationId: string): Promise<ChannelSponsorSettings | undefined> {
+    const [row] = await db
+      .select()
+      .from(channelSponsorSettings)
+      .where(eq(channelSponsorSettings.conversationId, conversationId));
+    return row;
+  }
+
+  async upsertChannelSponsorSettings(
+    conversationId: string,
+    data: {
+      enabled?: boolean;
+      paymentInstructions?: string | null;
+      tier1Amount?: string | null;
+      tier2Amount?: string | null;
+      durationDays?: number;
+    }
+  ): Promise<ChannelSponsorSettings> {
+    const existing = await this.getChannelSponsorSettings(conversationId);
+    const now = new Date();
+    if (existing) {
+      const [row] = await db
+        .update(channelSponsorSettings)
+        .set({
+          ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+          ...(data.paymentInstructions !== undefined
+            ? { paymentInstructions: data.paymentInstructions }
+            : {}),
+          ...(data.tier1Amount !== undefined ? { tier1Amount: data.tier1Amount } : {}),
+          ...(data.tier2Amount !== undefined ? { tier2Amount: data.tier2Amount } : {}),
+          ...(data.durationDays !== undefined ? { durationDays: data.durationDays } : {}),
+          updatedAt: now,
+        })
+        .where(eq(channelSponsorSettings.conversationId, conversationId))
+        .returning();
+      return row;
+    }
+    const [row] = await db
+      .insert(channelSponsorSettings)
+      .values({
+        conversationId,
+        enabled: data.enabled ?? false,
+        paymentInstructions: data.paymentInstructions ?? null,
+        tier1Amount: data.tier1Amount ?? null,
+        tier2Amount: data.tier2Amount ?? null,
+        durationDays: data.durationDays ?? 30,
+        updatedAt: now,
+      })
+      .returning();
+    return row;
+  }
+
+  async getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null> {
+    const [p] = await db
+      .select({ sponsorExpiresAt: conversationParticipants.sponsorExpiresAt })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return p?.sponsorExpiresAt ?? null;
+  }
+
+  async isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean> {
+    const role = await this.getParticipantRole(conversationId, userId);
+    if (role === "owner" || role === "admin") return true;
+    const expiresAt = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    if (!expiresAt) return false;
+    return expiresAt.getTime() > Date.now();
+  }
+
+  async ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant> {
+    const inConv = await this.isUserInConversation(userId, conversationId);
+    if (inConv) {
+      const [p] = await db
+        .select()
+        .from(conversationParticipants)
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, conversationId),
+            eq(conversationParticipants.userId, userId)
+          )
+        );
+      return p;
+    }
+    return this.addConversationParticipant(conversationId, userId, "member");
+  }
+
+  async submitChannelSponsorPayment(
+    conversationId: string,
+    userId: string,
+    data: { receiptUrl: string; donationType: ChannelSponsorDonationType }
+  ): Promise<ChannelSponsorPayment> {
+    const settings = await this.getChannelSponsorSettings(conversationId);
+    if (!settings?.enabled) {
+      throw new Error("sponsor_monetization_disabled");
+    }
+
+    const tierAmount =
+      data.donationType === "content_thanks"
+        ? settings.tier2Amount?.trim()
+        : settings.tier1Amount?.trim();
+    if (!tierAmount) {
+      throw new Error("sponsor_tier_amount_not_configured");
+    }
+
+    await this.ensureConversationMember(conversationId, userId);
+
+    const now = new Date();
+    const currentExpires = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    const validFrom =
+      currentExpires && currentExpires.getTime() > now.getTime() ? currentExpires : now;
+    const validUntil = new Date(validFrom);
+    validUntil.setDate(validUntil.getDate() + settings.durationDays);
+
+    const showInSponsorThanks = data.donationType === "content_thanks";
+
+    const [payment] = await db
+      .insert(channelSponsorPayments)
+      .values({
+        conversationId,
+        userId,
+        receiptUrl: data.receiptUrl,
+        amount: tierAmount,
+        donationType: data.donationType,
+        status: "granted",
+        durationDays: settings.durationDays,
+        validFrom,
+        validUntil,
+        submittedAt: now,
+      })
+      .returning();
+
+    await db
+      .update(conversationParticipants)
+      .set({
+        sponsorExpiresAt: validUntil,
+        showInSponsorThanks,
+      })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+
+    return payment;
+  }
+
+  async getChannelSponsorThanks(
+    conversationId: string
+  ): Promise<Array<{ userId: string; firstName: string | null; lastName: string | null }>> {
+    const now = new Date();
+    const parts = await db
+      .select({
+        userId: conversationParticipants.userId,
+        showInSponsorThanks: conversationParticipants.showInSponsorThanks,
+        sponsorExpiresAt: conversationParticipants.sponsorExpiresAt,
+      })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.showInSponsorThanks, true),
+          gt(conversationParticipants.sponsorExpiresAt, now)
+        )
+      );
+
+    const result: Array<{ userId: string; firstName: string | null; lastName: string | null }> = [];
+    for (const p of parts) {
+      const user = await this.getUser(p.userId);
+      if (!user) continue;
+      result.push({
+        userId: user.id,
+        firstName: user.firstName ?? null,
+        lastName: user.lastName ?? null,
+      });
+    }
+
+    result.sort((a, b) => {
+      const nameA = [a.firstName, a.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+      const nameB = [b.firstName, b.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+      return nameA.localeCompare(nameB, "ru");
+    });
+
+    return result;
+  }
+
+  async getParticipantShowInSponsorThanks(conversationId: string, userId: string): Promise<boolean> {
+    const [p] = await db
+      .select({ showInSponsorThanks: conversationParticipants.showInSponsorThanks })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return p?.showInSponsorThanks ?? false;
+  }
+
+  async setShowInSponsorThanks(
+    conversationId: string,
+    userId: string,
+    value: boolean
+  ): Promise<boolean> {
+    const isSponsor = await this.isActiveChannelSponsor(conversationId, userId);
+    const role = await this.getParticipantRole(conversationId, userId);
+    if (!isSponsor || role === "owner" || role === "admin") {
+      return false;
+    }
+    const expiresAt = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+      return false;
+    }
+
+    await db
+      .update(conversationParticipants)
+      .set({ showInSponsorThanks: value })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return true;
+  }
+
+  async getChannelSponsorPayments(
+    conversationId: string,
+    options?: { userId?: string }
+  ): Promise<(ChannelSponsorPayment & { user?: User })[]> {
+    const conditions = [eq(channelSponsorPayments.conversationId, conversationId)];
+    if (options?.userId) {
+      conditions.push(eq(channelSponsorPayments.userId, options.userId));
+    }
+    const rows = await db
+      .select()
+      .from(channelSponsorPayments)
+      .where(and(...conditions))
+      .orderBy(desc(channelSponsorPayments.submittedAt));
+    const result: (ChannelSponsorPayment & { user?: User })[] = [];
+    for (const row of rows) {
+      const user = await this.getUser(row.userId);
+      result.push({ ...row, user: user ?? undefined });
+    }
+    return result;
+  }
+
+  async approveChannelSponsorPayment(
+    paymentId: string,
+    reviewerId: string
+  ): Promise<ChannelSponsorPayment | undefined> {
+    const [payment] = await db
+      .select()
+      .from(channelSponsorPayments)
+      .where(eq(channelSponsorPayments.id, paymentId));
+    if (!payment || payment.status === "disputed") return undefined;
+
+    const [updated] = await db
+      .update(channelSponsorPayments)
+      .set({
+        status: "approved",
+        reviewedAt: new Date(),
+        reviewedByUserId: reviewerId,
+        updatedAt: new Date(),
+      })
+      .where(eq(channelSponsorPayments.id, paymentId))
+      .returning();
+    return updated;
+  }
+
+  async disputeChannelSponsorPayment(
+    paymentId: string,
+    reviewerId: string,
+    disputeReason?: string | null
+  ): Promise<ChannelSponsorPayment | undefined> {
+    const [payment] = await db
+      .select()
+      .from(channelSponsorPayments)
+      .where(eq(channelSponsorPayments.id, paymentId));
+    if (!payment) return undefined;
+
+    const [updated] = await db
+      .update(channelSponsorPayments)
+      .set({
+        status: "disputed",
+        reviewedAt: new Date(),
+        reviewedByUserId: reviewerId,
+        disputeReason: disputeReason ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(channelSponsorPayments.id, paymentId))
+      .returning();
+
+    await db
+      .update(conversationParticipants)
+      .set({ sponsorExpiresAt: null, showInSponsorThanks: false })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, payment.conversationId),
+          eq(conversationParticipants.userId, payment.userId)
+        )
+      );
+
+    return updated;
   }
 }
 

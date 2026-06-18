@@ -6,6 +6,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import ChatInputBar from "@/components/ChatInputBar";
+import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { FormattedMessageText } from "@/components/FormattedMessageText";
 import { stripMessageFormatting } from "@shared/messageFormatting";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -83,6 +84,21 @@ export default function PostCommentsThread({
     if (!conversationId) return;
     postConversationSeen(conversationId);
   }, [conversationId]);
+
+  const { data: conv } = useQuery<{
+    type: string;
+    sponsorSettings?: { enabled: boolean } | null;
+    isSponsor?: boolean;
+  }>({
+    queryKey: ["/api/conversations", conversationId],
+    enabled: !!conversationId,
+  });
+
+  const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
+  const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
+  const openSponsorSection = () => {
+    setLocation(`/messenger/channel/${conversationId}/settings?section=sponsor`);
+  };
 
   const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
@@ -539,7 +555,13 @@ export default function PostCommentsThread({
                   </a>
                 )}
                 {anchorPost.content ? (
-                  <p className="whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug">{anchorPost.content}</p>
+                  <SponsorAwareMessageText
+                    text={anchorPost.content}
+                    canViewSponsorContent={canViewSponsorContent}
+                    monetizationEnabled={channelMonetizationEnabled}
+                    isContentTruncated={anchorPost.isContentTruncated}
+                    onSponsorCtaClick={openSponsorSection}
+                  />
                 ) : null}
                 <span className="mt-1 block text-right text-[10px] leading-none text-muted-foreground">
                   {formatBubbleTime(anchorPost.createdAt)}

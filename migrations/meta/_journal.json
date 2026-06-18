@@ -141,6 +141,27 @@
       "when": 1774070000000,
       "tag": "0019_conversation_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1774080000000,
+      "tag": "0020_channel_sponsors",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1774090000000,
+      "tag": "0021_sponsor_thanks_opt_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1774100000000,
+      "tag": "0022_sponsor_tiers",
+      "breakpoints": true
     }
   ]
 }
