@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { t } from "@/lib/i18n";
 
-type SponsorThanksEntry = {
+type ChannelSponsorEntry = {
   userId: string;
   firstName: string | null;
   lastName: string | null;
@@ -14,18 +14,18 @@ type Props = {
   monetizationEnabled: boolean;
 };
 
-function displayName(entry: SponsorThanksEntry) {
+function displayName(entry: ChannelSponsorEntry) {
   const name = [entry.firstName, entry.lastName].filter(Boolean).join(" ").trim();
   return name || entry.userId;
 }
 
-export default function ChannelSponsorThanks({ conversationId, monetizationEnabled }: Props) {
+export default function ChannelSponsorsList({ conversationId, monetizationEnabled }: Props) {
   const [, setLocation] = useLocation();
 
-  const { data: sponsors = [], isLoading } = useQuery<SponsorThanksEntry[]>({
-    queryKey: ["/api/conversations", conversationId, "sponsor-thanks"],
+  const { data: sponsors = [], isLoading } = useQuery<ChannelSponsorEntry[]>({
+    queryKey: ["/api/conversations", conversationId, "channel-sponsors"],
     queryFn: async () => {
-      const res = await fetch(`/api/conversations/${conversationId}/sponsor-thanks`, {
+      const res = await fetch(`/api/conversations/${conversationId}/channel-sponsors`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error(await res.text());
@@ -48,9 +48,9 @@ export default function ChannelSponsorThanks({ conversationId, monetizationEnabl
 
   return (
     <div className="space-y-2 rounded-lg border p-4">
-      <p className="text-sm font-medium">{t.sponsorThanksTitle}</p>
+      <p className="text-sm font-medium">{t.channelSponsorsTitle}</p>
       {sponsors.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t.sponsorThanksEmpty}</p>
+        <p className="text-sm text-muted-foreground">{t.channelSponsorsEmpty}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {sponsors.map((sponsor) => (

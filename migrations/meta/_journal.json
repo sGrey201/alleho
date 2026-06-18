@@ -162,6 +162,13 @@
       "when": 1774100000000,
       "tag": "0022_sponsor_tiers",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774110000000,
+      "tag": "0023_split_content_and_sponsors",
+      "breakpoints": true
     }
   ]
 }

@@ -325,6 +325,7 @@ export const conversationParticipants = pgTable(
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"),
     sponsorExpiresAt: timestamp("sponsor_expires_at"),
+    sponsorListingExpiresAt: timestamp("sponsor_listing_expires_at"),
     showInSponsorThanks: boolean("show_in_sponsor_thanks").notNull().default(false),
     lastSeenAt: timestamp("last_seen_at"),
     joinedAt: timestamp("joined_at").defaultNow(),
@@ -655,6 +656,8 @@ export const channelSponsorSettings = pgTable("channel_sponsor_settings", {
   tier1Amount: varchar("tier1_amount", { length: 64 }),
   tier2Amount: varchar("tier2_amount", { length: 64 }),
   durationDays: integer("duration_days").notNull().default(30),
+  contentDurationDays: integer("content_duration_days").notNull().default(30),
+  sponsorDurationDays: integer("sponsor_duration_days").notNull().default(30),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import ChannelSponsorSection from "@/components/ChannelSponsorSection";
-import ChannelSponsorThanks from "@/components/ChannelSponsorThanks";
+import ChannelSponsorsList from "@/components/ChannelSponsorsList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
@@ -452,7 +452,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
         {mode === "channel" && (
           <>
             {sponsorMonetizationEnabled && (
-              <ChannelSponsorThanks
+              <ChannelSponsorsList
                 conversationId={conversationId}
                 monetizationEnabled={sponsorMonetizationEnabled}
               />

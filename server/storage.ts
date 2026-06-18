@@ -355,11 +355,16 @@ export interface IStorage {
       tier1Amount?: string | null;
       tier2Amount?: string | null;
       durationDays?: number;
+      contentDurationDays?: number;
+      sponsorDurationDays?: number;
     }
   ): Promise<ChannelSponsorSettings>;
   getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
+  getParticipantSponsorListingExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
   isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean>;
+  isActiveChannelSponsorListing(conversationId: string, userId: string): Promise<boolean>;
   countActiveChannelSponsors(conversationId: string): Promise<number>;
+  hasActiveMonetizationParticipants(conversationId: string): Promise<boolean>;
   ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant>;
   submitChannelSponsorPayment(
     conversationId: string,
@@ -370,6 +375,9 @@ export interface IStorage {
     conversationId: string,
     options?: { userId?: string }
   ): Promise<(ChannelSponsorPayment & { user?: User })[]>;
+  getChannelSponsors(
+    conversationId: string
+  ): Promise<Array<{ userId: string; firstName: string | null; lastName: string | null }>>;
   getChannelSponsorThanks(
     conversationId: string
   ): Promise<Array<{ userId: string; firstName: string | null; lastName: string | null }>>;
@@ -2384,23 +2392,33 @@ export class DatabaseStorage implements IStorage {
       tier1Amount?: string | null;
       tier2Amount?: string | null;
       durationDays?: number;
+      contentDurationDays?: number;
+      sponsorDurationDays?: number;
     }
   ): Promise<ChannelSponsorSettings> {
     const existing = await this.getChannelSponsorSettings(conversationId);
     const now = new Date();
+    const contentDurationDays =
+      data.contentDurationDays ?? data.durationDays ?? existing?.contentDurationDays ?? existing?.durationDays;
+    const sponsorDurationDays =
+      data.sponsorDurationDays ?? data.durationDays ?? existing?.sponsorDurationDays ?? existing?.durationDays;
+    const patch = {
+      ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+      ...(data.paymentInstructions !== undefined
+        ? { paymentInstructions: data.paymentInstructions }
+        : {}),
+      ...(data.tier1Amount !== undefined ? { tier1Amount: data.tier1Amount } : {}),
+      ...(data.tier2Amount !== undefined ? { tier2Amount: data.tier2Amount } : {}),
+      ...(contentDurationDays !== undefined
+        ? { contentDurationDays, durationDays: contentDurationDays }
+        : {}),
+      ...(sponsorDurationDays !== undefined ? { sponsorDurationDays } : {}),
+      updatedAt: now,
+    };
     if (existing) {
       const [row] = await db
         .update(channelSponsorSettings)
-        .set({
-          ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
-          ...(data.paymentInstructions !== undefined
-            ? { paymentInstructions: data.paymentInstructions }
-            : {}),
-          ...(data.tier1Amount !== undefined ? { tier1Amount: data.tier1Amount } : {}),
-          ...(data.tier2Amount !== undefined ? { tier2Amount: data.tier2Amount } : {}),
-          ...(data.durationDays !== undefined ? { durationDays: data.durationDays } : {}),
-          updatedAt: now,
-        })
+        .set(patch)
         .where(eq(channelSponsorSettings.conversationId, conversationId))
         .returning();
       return row;
@@ -2413,7 +2431,9 @@ export class DatabaseStorage implements IStorage {
         paymentInstructions: data.paymentInstructions ?? null,
         tier1Amount: data.tier1Amount ?? null,
         tier2Amount: data.tier2Amount ?? null,
-        durationDays: data.durationDays ?? 30,
+        durationDays: contentDurationDays ?? 30,
+        contentDurationDays: contentDurationDays ?? 30,
+        sponsorDurationDays: sponsorDurationDays ?? 30,
         updatedAt: now,
       })
       .returning();
@@ -2433,10 +2453,32 @@ export class DatabaseStorage implements IStorage {
     return p?.sponsorExpiresAt ?? null;
   }
 
+  async getParticipantSponsorListingExpiresAt(
+    conversationId: string,
+    userId: string
+  ): Promise<Date | null> {
+    const [p] = await db
+      .select({ sponsorListingExpiresAt: conversationParticipants.sponsorListingExpiresAt })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    return p?.sponsorListingExpiresAt ?? null;
+  }
+
   async isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean> {
     const role = await this.getParticipantRole(conversationId, userId);
     if (role === "owner" || role === "admin") return true;
     const expiresAt = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    if (!expiresAt) return false;
+    return expiresAt.getTime() > Date.now();
+  }
+
+  async isActiveChannelSponsorListing(conversationId: string, userId: string): Promise<boolean> {
+    const expiresAt = await this.getParticipantSponsorListingExpiresAt(conversationId, userId);
     if (!expiresAt) return false;
     return expiresAt.getTime() > Date.now();
   }
@@ -2450,10 +2492,76 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(conversationParticipants.conversationId, conversationId),
           eq(conversationParticipants.role, "member"),
-          gt(conversationParticipants.sponsorExpiresAt, now)
+          eq(conversationParticipants.showInSponsorThanks, true),
+          gt(conversationParticipants.sponsorListingExpiresAt, now)
         )
       );
     return Number(row?.c ?? 0);
+  }
+
+  async hasActiveMonetizationParticipants(conversationId: string): Promise<boolean> {
+    const now = new Date();
+    const [row] = await db
+      .select({ c: count() })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.role, "member"),
+          or(
+            gt(conversationParticipants.sponsorExpiresAt, now),
+            gt(conversationParticipants.sponsorListingExpiresAt, now)
+          )
+        )
+      );
+    return Number(row?.c ?? 0) > 0;
+  }
+
+  private async recalculateParticipantExpiry(
+    conversationId: string,
+    userId: string,
+    donationType: ChannelSponsorDonationType
+  ): Promise<void> {
+    const rows = await db
+      .select({ validUntil: channelSponsorPayments.validUntil })
+      .from(channelSponsorPayments)
+      .where(
+        and(
+          eq(channelSponsorPayments.conversationId, conversationId),
+          eq(channelSponsorPayments.userId, userId),
+          eq(channelSponsorPayments.donationType, donationType),
+          ne(channelSponsorPayments.status, "disputed")
+        )
+      )
+      .orderBy(desc(channelSponsorPayments.validUntil));
+
+    const latest = rows[0]?.validUntil ?? null;
+
+    if (donationType === "content") {
+      await db
+        .update(conversationParticipants)
+        .set({ sponsorExpiresAt: latest })
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, conversationId),
+            eq(conversationParticipants.userId, userId)
+          )
+        );
+      return;
+    }
+
+    await db
+      .update(conversationParticipants)
+      .set({
+        sponsorListingExpiresAt: latest,
+        showInSponsorThanks: latest ? true : false,
+      })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
   }
 
   async ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant> {
@@ -2494,13 +2602,18 @@ export class DatabaseStorage implements IStorage {
     await this.ensureConversationMember(conversationId, userId);
 
     const now = new Date();
-    const currentExpires = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    const isContent = data.donationType === "content";
+    const durationDays = isContent
+      ? (settings.contentDurationDays ?? settings.durationDays)
+      : (settings.sponsorDurationDays ?? settings.durationDays);
+
+    const currentExpires = isContent
+      ? await this.getParticipantSponsorExpiresAt(conversationId, userId)
+      : await this.getParticipantSponsorListingExpiresAt(conversationId, userId);
     const validFrom =
       currentExpires && currentExpires.getTime() > now.getTime() ? currentExpires : now;
     const validUntil = new Date(validFrom);
-    validUntil.setDate(validUntil.getDate() + settings.durationDays);
-
-    const showInSponsorThanks = data.donationType === "content_thanks";
+    validUntil.setDate(validUntil.getDate() + durationDays);
 
     const [payment] = await db
       .insert(channelSponsorPayments)
@@ -2511,30 +2624,42 @@ export class DatabaseStorage implements IStorage {
         amount: tierAmount,
         donationType: data.donationType,
         status: "granted",
-        durationDays: settings.durationDays,
+        durationDays,
         validFrom,
         validUntil,
         submittedAt: now,
       })
       .returning();
 
-    await db
-      .update(conversationParticipants)
-      .set({
-        sponsorExpiresAt: validUntil,
-        showInSponsorThanks,
-      })
-      .where(
-        and(
-          eq(conversationParticipants.conversationId, conversationId),
-          eq(conversationParticipants.userId, userId)
-        )
-      );
+    if (isContent) {
+      await db
+        .update(conversationParticipants)
+        .set({ sponsorExpiresAt: validUntil })
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, conversationId),
+            eq(conversationParticipants.userId, userId)
+          )
+        );
+    } else {
+      await db
+        .update(conversationParticipants)
+        .set({
+          sponsorListingExpiresAt: validUntil,
+          showInSponsorThanks: true,
+        })
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, conversationId),
+            eq(conversationParticipants.userId, userId)
+          )
+        );
+    }
 
     return payment;
   }
 
-  async getChannelSponsorThanks(
+  async getChannelSponsors(
     conversationId: string
   ): Promise<Array<{ userId: string; firstName: string | null; lastName: string | null }>> {
     const now = new Date();
@@ -2542,14 +2667,14 @@ export class DatabaseStorage implements IStorage {
       .select({
         userId: conversationParticipants.userId,
         showInSponsorThanks: conversationParticipants.showInSponsorThanks,
-        sponsorExpiresAt: conversationParticipants.sponsorExpiresAt,
+        sponsorListingExpiresAt: conversationParticipants.sponsorListingExpiresAt,
       })
       .from(conversationParticipants)
       .where(
         and(
           eq(conversationParticipants.conversationId, conversationId),
           eq(conversationParticipants.showInSponsorThanks, true),
-          gt(conversationParticipants.sponsorExpiresAt, now)
+          gt(conversationParticipants.sponsorListingExpiresAt, now)
         )
       );
 
@@ -2573,6 +2698,10 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getChannelSponsorThanks(conversationId: string) {
+    return this.getChannelSponsors(conversationId);
+  }
+
   async getParticipantShowInSponsorThanks(conversationId: string, userId: string): Promise<boolean> {
     const [p] = await db
       .select({ showInSponsorThanks: conversationParticipants.showInSponsorThanks })
@@ -2591,13 +2720,9 @@ export class DatabaseStorage implements IStorage {
     userId: string,
     value: boolean
   ): Promise<boolean> {
-    const isSponsor = await this.isActiveChannelSponsor(conversationId, userId);
+    const isListingActive = await this.isActiveChannelSponsorListing(conversationId, userId);
     const role = await this.getParticipantRole(conversationId, userId);
-    if (!isSponsor || role === "owner" || role === "admin") {
-      return false;
-    }
-    const expiresAt = await this.getParticipantSponsorExpiresAt(conversationId, userId);
-    if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+    if (!isListingActive || role === "owner" || role === "admin") {
       return false;
     }
 
@@ -2680,15 +2805,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(channelSponsorPayments.id, paymentId))
       .returning();
 
-    await db
-      .update(conversationParticipants)
-      .set({ sponsorExpiresAt: null, showInSponsorThanks: false })
-      .where(
-        and(
-          eq(conversationParticipants.conversationId, payment.conversationId),
-          eq(conversationParticipants.userId, payment.userId)
-        )
-      );
+    await this.recalculateParticipantExpiry(
+      payment.conversationId,
+      payment.userId,
+      payment.donationType as ChannelSponsorDonationType
+    );
 
     return updated;
   }

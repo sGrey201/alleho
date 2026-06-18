@@ -1350,9 +1350,17 @@ ${allUrls.map(url => `  <url>
         conv.type === "channel"
           ? await storage.getParticipantSponsorExpiresAt(id, currentUserId)
           : null;
+      const channelSponsorExpiresAt =
+        conv.type === "channel"
+          ? await storage.getParticipantSponsorListingExpiresAt(id, currentUserId)
+          : null;
       const isSponsor =
         conv.type === "channel"
           ? await storage.isActiveChannelSponsor(id, currentUserId)
+          : false;
+      const isChannelSponsor =
+        conv.type === "channel"
+          ? await storage.isActiveChannelSponsorListing(id, currentUserId)
           : false;
       const sponsorCount =
         conv.type === "channel" ? await storage.countActiveChannelSponsors(id) : undefined;
@@ -1369,10 +1377,15 @@ ${allUrls.map(url => `  <url>
               tier1Amount: sponsorSettings.tier1Amount,
               tier2Amount: sponsorSettings.tier2Amount,
               durationDays: sponsorSettings.durationDays,
+              contentDurationDays: sponsorSettings.contentDurationDays,
+              sponsorDurationDays: sponsorSettings.sponsorDurationDays,
             }
           : null,
         isSponsor,
         sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+        isChannelSponsor,
+        channelSponsorExpiresAt: channelSponsorExpiresAt?.toISOString() ?? null,
+        hasContentAccess: isSponsor,
       });
     } catch (error) {
       console.error("Error fetching conversation:", error);
@@ -1534,20 +1547,34 @@ ${allUrls.map(url => `  <url>
         return res.status(404).json({ message: "Channel not found" });
       }
       const settings = await storage.getChannelSponsorSettings(id);
-      const isSponsor = await storage.isActiveChannelSponsor(id, currentUserId);
-      const sponsorExpiresAt = await storage.getParticipantSponsorExpiresAt(id, currentUserId);
+      const hasContentAccess = await storage.isActiveChannelSponsor(id, currentUserId);
+      const isChannelSponsor = await storage.isActiveChannelSponsorListing(id, currentUserId);
+      const contentExpiresAt = await storage.getParticipantSponsorExpiresAt(id, currentUserId);
+      const channelSponsorExpiresAt = await storage.getParticipantSponsorListingExpiresAt(
+        id,
+        currentUserId
+      );
       const role = await storage.getParticipantRole(id, currentUserId);
       const hasActiveSponsors =
-        role === "owner" ? (await storage.countActiveChannelSponsors(id)) > 0 : undefined;
-      const durationDays = settings?.durationDays ?? 30;
+        role === "owner" ? await storage.hasActiveMonetizationParticipants(id) : undefined;
+      const contentDurationDays =
+        settings?.contentDurationDays ?? settings?.durationDays ?? 30;
+      const sponsorDurationDays =
+        settings?.sponsorDurationDays ?? settings?.durationDays ?? 30;
       const tier1 = settings?.tier1Amount?.trim();
       const tier2 = settings?.tier2Amount?.trim();
       const tiers = [
         ...(isPositiveTierAmount(tier1)
-          ? [{ type: "content" as const, amount: tier1!, durationDays }]
+          ? [{ type: "content" as const, amount: tier1!, durationDays: contentDurationDays }]
           : []),
         ...(isPositiveTierAmount(tier2)
-          ? [{ type: "content_thanks" as const, amount: tier2!, durationDays }]
+          ? [
+              {
+                type: "content_thanks" as const,
+                amount: tier2!,
+                durationDays: sponsorDurationDays,
+              },
+            ]
           : []),
       ];
       res.json({
@@ -1555,10 +1582,15 @@ ${allUrls.map(url => `  <url>
         paymentInstructions: settings?.paymentInstructions ?? null,
         tier1Amount: settings?.tier1Amount ?? null,
         tier2Amount: settings?.tier2Amount ?? null,
-        durationDays,
+        durationDays: contentDurationDays,
+        contentDurationDays,
+        sponsorDurationDays,
         tiers,
-        isSponsor,
-        sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+        isSponsor: hasContentAccess,
+        sponsorExpiresAt: contentExpiresAt?.toISOString() ?? null,
+        hasContentAccess,
+        isChannelSponsor,
+        channelSponsorExpiresAt: channelSponsorExpiresAt?.toISOString() ?? null,
         ...(hasActiveSponsors !== undefined ? { hasActiveSponsors } : {}),
       });
     } catch (error) {
@@ -1586,14 +1618,17 @@ ${allUrls.map(url => `  <url>
         tier1Amount?: string | null;
         tier2Amount?: string | null;
         durationDays?: number;
+        contentDurationDays?: number;
+        sponsorDurationDays?: number;
       };
-      if (body.enabled === false && (await storage.countActiveChannelSponsors(id)) > 0) {
+      if (body.enabled === false && (await storage.hasActiveMonetizationParticipants(id))) {
         return res.status(400).json({ message: "cannot_disable_sponsor_monetization_with_active_sponsors" });
       }
-      const durationDays =
-        typeof body.durationDays === "number" && body.durationDays > 0
-          ? Math.floor(body.durationDays)
-          : undefined;
+      const parseDays = (value: unknown) =>
+        typeof value === "number" && value > 0 ? Math.floor(value) : undefined;
+      const contentDurationDays =
+        parseDays(body.contentDurationDays) ?? parseDays(body.durationDays);
+      const sponsorDurationDays = parseDays(body.sponsorDurationDays) ?? parseDays(body.durationDays);
       const settings = await storage.upsertChannelSponsorSettings(id, {
         ...(body.enabled !== undefined ? { enabled: !!body.enabled } : {}),
         ...(body.paymentInstructions !== undefined
@@ -1601,7 +1636,8 @@ ${allUrls.map(url => `  <url>
           : {}),
         ...(body.tier1Amount !== undefined ? { tier1Amount: body.tier1Amount } : {}),
         ...(body.tier2Amount !== undefined ? { tier2Amount: body.tier2Amount } : {}),
-        ...(durationDays !== undefined ? { durationDays } : {}),
+        ...(contentDurationDays !== undefined ? { contentDurationDays } : {}),
+        ...(sponsorDurationDays !== undefined ? { sponsorDurationDays } : {}),
       });
       res.json(settings);
     } catch (error) {
@@ -1770,7 +1806,7 @@ ${allUrls.map(url => `  <url>
     }
   );
 
-  app.get("/api/conversations/:id/sponsor-thanks", isAuthenticated, async (req: any, res) => {
+  const fetchChannelSponsors = async (req: any, res: any) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
@@ -1783,13 +1819,16 @@ ${allUrls.map(url => `  <url>
       if (!settings?.enabled) {
         return res.json([]);
       }
-      const thanks = await storage.getChannelSponsorThanks(id);
-      res.json(thanks);
+      const sponsors = await storage.getChannelSponsors(id);
+      res.json(sponsors);
     } catch (error) {
-      console.error("Error fetching sponsor thanks:", error);
-      res.status(500).json({ message: "Failed to fetch sponsor thanks" });
+      console.error("Error fetching channel sponsors:", error);
+      res.status(500).json({ message: "Failed to fetch channel sponsors" });
     }
-  });
+  };
+
+  app.get("/api/conversations/:id/channel-sponsors", isAuthenticated, fetchChannelSponsors);
+  app.get("/api/conversations/:id/sponsor-thanks", isAuthenticated, fetchChannelSponsors);
 
   app.patch(
     "/api/conversations/:id/sponsor-thanks-visibility",

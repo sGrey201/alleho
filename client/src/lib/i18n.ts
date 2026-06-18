@@ -1895,7 +1895,9 @@ export const t = {
   channelSponsorPaymentInstructionsPlaceholder: 'Реквизиты, СБП, номер карты и т.д.',
   channelSponsorSuggestedAmount: 'Минимальная сумма',
   channelSponsorTier1Amount: 'Стоимость доступа к закрытому контенту',
-  channelSponsorTier2Amount: 'Стоимость контента + размещение в спонсорах',
+  channelSponsorTier2Amount: 'Стоимость спонсорства канала',
+  channelSponsorContentDurationDays: 'Срок доступа к контенту (дней)',
+  channelSponsorListingDurationDays: 'Срок спонсорства канала (дней)',
   channelSponsorDurationDays: 'Срок доступа (дней)',
   channelSponsorAttachReceipt: 'Прикрепить чек',
   channelSponsorPaymentAmount: 'Сумма перевода',
@@ -1916,23 +1918,25 @@ export const t = {
     else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) dayWord = 'дня';
     return `Весь контент на ${days} ${dayWord}`;
   },
-  sponsorTierContentThanksTitle: (days: number) => {
+  sponsorTierChannelSponsorTitle: (days: number) => {
     const mod10 = days % 10;
     const mod100 = days % 100;
     let dayWord = 'дней';
     if (mod10 === 1 && mod100 !== 11) dayWord = 'день';
     else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) dayWord = 'дня';
-    return `Весь контент на ${days} ${dayWord} + Вы или Ваш канал в «Благодарности спонсорам»`;
+    return `Размещение в списке спонсоров канала на ${days} ${dayWord}`;
   },
   sponsorTierOpenFor: (amount: string) => `Открыть за ${amount}р`,
   sponsorDonationTypeContent: 'Контент',
-  sponsorDonationTypeContentThanks: 'Контент + благодарность',
+  sponsorDonationTypeContentThanks: 'Спонсор канала',
   sponsorPaymentCollapse: 'Свернуть',
   sponsorBadge: 'Спонсор',
   sponsorActiveCount: 'Спонсоров',
-  sponsorThanksTitle: 'Спасибо спонсорам:',
-  sponsorThanksEmpty: 'Пока никого',
-  sponsorShowInThanks: 'Показывать меня в благодарности спонсорам',
+  channelSponsorsTitle: 'Спонсоры канала:',
+  channelSponsorsEmpty: 'Пока нет спонсоров',
+  sponsorShowInListing: 'Показывать меня в списке спонсоров канала',
+  contentPaidUntil: (date: string) => `Контент оплачен до ${date}`,
+  channelSponsorPaidUntil: (date: string) => `Спонсор канала до ${date}`,
   channelParticipantCount: (n: number) => {
     const mod10 = n % 10;
     const mod100 = n % 100;
@@ -1941,7 +1945,7 @@ export const t = {
     return `${n} участников`;
   },
   channelHeaderStats: (subscribers: number) => `Подписчиков: ${subscribers}`,
-  sponsorPaymentSubmitted: 'Чек отправлен. Статус спонсора активирован.',
+  sponsorPaymentSubmitted: 'Чек отправлен.',
   sponsorPaymentApprove: 'Утвердить',
   sponsorPaymentDispute: 'Оспорить',
   sponsorPaymentApproved: 'Утверждено',

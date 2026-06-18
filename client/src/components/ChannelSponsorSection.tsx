@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
-import { profileAvatarSrc } from "@/lib/utils";
+import { profileAvatarSrc, cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { normalizeTierAmountInput } from "@shared/sponsorTiers";
 
 type DonationType = "content" | "content_thanks";
@@ -31,9 +32,14 @@ type SponsorSettings = {
   tier1Amount: string | null;
   tier2Amount: string | null;
   durationDays: number;
+  contentDurationDays?: number;
+  sponsorDurationDays?: number;
   tiers: SponsorTier[];
   isSponsor: boolean;
   sponsorExpiresAt: string | null;
+  hasContentAccess?: boolean;
+  isChannelSponsor?: boolean;
+  channelSponsorExpiresAt?: string | null;
   hasActiveSponsors?: boolean;
 };
 
@@ -80,9 +86,20 @@ function donationTypeLabel(type: DonationType) {
 
 function tierTitle(tier: SponsorTier) {
   if (tier.type === "content_thanks") {
-    return t.sponsorTierContentThanksTitle(tier.durationDays);
+    return t.sponsorTierChannelSponsorTitle(tier.durationDays);
   }
   return t.sponsorTierContentTitle(tier.durationDays);
+}
+
+function formatExpiryDate(iso: string) {
+  return format(new Date(iso), "d MMMM yyyy", { locale: ru });
+}
+
+function isTierActive(settings: SponsorSettings, type: DonationType) {
+  if (type === "content") {
+    return settings.hasContentAccess ?? settings.isSponsor;
+  }
+  return settings.isChannelSponsor ?? false;
 }
 
 export default function ChannelSponsorSection({
@@ -99,16 +116,23 @@ export default function ChannelSponsorSection({
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [tier1Amount, setTier1Amount] = useState("0");
   const [tier2Amount, setTier2Amount] = useState("0");
-  const [durationDays, setDurationDays] = useState("30");
+  const [contentDurationDays, setContentDurationDays] = useState("30");
+  const [sponsorDurationDays, setSponsorDurationDays] = useState("30");
   const [selectedTier, setSelectedTier] = useState<DonationType | null>(null);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [disputePaymentId, setDisputePaymentId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
+  const selectedTierRef = useRef<DonationType | null>(null);
+  const receiptInputId = `receipt-input-${conversationId}`;
+
+  useEffect(() => {
+    selectedTierRef.current = selectedTier;
+  }, [selectedTier]);
 
   const settingsKey = ["/api/conversations", conversationId, "sponsor-settings"] as const;
   const paymentsKey = ["/api/conversations", conversationId, "sponsor-payments"] as const;
-  const thanksKey = ["/api/conversations", conversationId, "sponsor-thanks"] as const;
+  const sponsorsKey = ["/api/conversations", conversationId, "channel-sponsors"] as const;
 
   const { data: settings, isLoading } = useQuery<SponsorSettings>({
     queryKey: settingsKey,
@@ -140,13 +164,13 @@ export default function ChannelSponsorSection({
     setPaymentInstructions(settings.paymentInstructions ?? "");
     setTier1Amount(normalizeTierAmountInput(settings.tier1Amount));
     setTier2Amount(normalizeTierAmountInput(settings.tier2Amount));
-    setDurationDays(String(settings.durationDays ?? 30));
+    setContentDurationDays(String(settings.contentDurationDays ?? settings.durationDays ?? 30));
+    setSponsorDurationDays(String(settings.sponsorDurationDays ?? settings.durationDays ?? 30));
   }, [settings]);
 
   useEffect(() => {
-    if (!embedded) return;
     setSelectedTier(null);
-  }, [embedded, conversationId]);
+  }, [conversationId]);
 
   useEffect(() => {
     if (scrollOnMount) setSettingsExpanded(true);
@@ -164,13 +188,14 @@ export default function ChannelSponsorSection({
         paymentInstructions: paymentInstructions.trim() || null,
         tier1Amount: normalizeTierAmountInput(tier1Amount),
         tier2Amount: normalizeTierAmountInput(tier2Amount),
-        durationDays: Math.max(1, parseInt(durationDays, 10) || 30),
+        contentDurationDays: Math.max(1, parseInt(contentDurationDays, 10) || 30),
+        sponsorDurationDays: Math.max(1, parseInt(sponsorDurationDays, 10) || 30),
       });
       return res.json();
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: settingsKey });
-      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: sponsorsKey });
       await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       toast({ title: t.saved });
     },
@@ -189,7 +214,7 @@ export default function ChannelSponsorSection({
       setSelectedTier(null);
       await queryClient.invalidateQueries({ queryKey: settingsKey });
       await queryClient.invalidateQueries({ queryKey: paymentsKey });
-      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: sponsorsKey });
       await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       await queryClient.invalidateQueries({
         queryKey: ["/api/conversations", conversationId, "messages"],
@@ -227,7 +252,7 @@ export default function ChannelSponsorSection({
       setDisputeReason("");
       await queryClient.invalidateQueries({ queryKey: settingsKey });
       await queryClient.invalidateQueries({ queryKey: paymentsKey });
-      await queryClient.invalidateQueries({ queryKey: thanksKey });
+      await queryClient.invalidateQueries({ queryKey: sponsorsKey });
       await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       await queryClient.invalidateQueries({
         queryKey: ["/api/conversations", conversationId, "messages"],
@@ -237,13 +262,31 @@ export default function ChannelSponsorSection({
   });
 
   const handleReceiptChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedTier) return;
-    const uploadResponse = await uploadFile(file);
-    if (uploadResponse?.objectPath) {
-      submitReceiptMutation.mutate({ receiptUrl: uploadResponse.objectPath, donationType: selectedTier });
+    const input = e.target;
+    const file = input.files?.[0];
+    const tier = selectedTierRef.current;
+    if (!file) return;
+    if (!tier) {
+      toast({ title: t.error, variant: "destructive" });
+      input.value = "";
+      return;
     }
-    e.target.value = "";
+
+    try {
+      const uploadResponse = await uploadFile(file);
+      if (!uploadResponse?.objectPath) {
+        toast({ title: t.error, variant: "destructive" });
+        return;
+      }
+      await submitReceiptMutation.mutateAsync({
+        receiptUrl: uploadResponse.objectPath,
+        donationType: tier,
+      });
+    } catch {
+      // mutateAsync / upload errors surfaced via onError or toast above
+    } finally {
+      input.value = "";
+    }
   };
 
   if (isLoading) {
@@ -258,11 +301,15 @@ export default function ChannelSponsorSection({
     return null;
   }
 
-  const sponsorUntil = settings?.sponsorExpiresAt
-    ? format(new Date(settings.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
-    : null;
   const tiers = settings?.tiers ?? [];
   const selectedTierAmount = tiers.find((tier) => tier.type === selectedTier)?.amount;
+  const hasContentAccess = settings ? isTierActive(settings, "content") : false;
+  const hasChannelSponsor = settings ? isTierActive(settings, "content_thanks") : false;
+  const contentUntil = settings?.sponsorExpiresAt ? formatExpiryDate(settings.sponsorExpiresAt) : null;
+  const channelSponsorUntil = settings?.channelSponsorExpiresAt
+    ? formatExpiryDate(settings.channelSponsorExpiresAt)
+    : null;
+  const purchasableTiers = tiers.filter((tier) => !settings || !isTierActive(settings, tier.type));
   const pendingPaymentCount = payments.filter((p) => p.status === "granted").length;
   const sortedPayments = [...payments].sort((a, b) => {
     const aNeedsReview = a.status === "granted" ? 0 : 1;
@@ -344,6 +391,14 @@ export default function ChannelSponsorSection({
                     value={tier1Amount}
                     onChange={(e) => setTier1Amount(e.target.value)}
                   />
+                  <Label htmlFor="content-duration-days">{t.channelSponsorContentDurationDays}</Label>
+                  <Input
+                    id="content-duration-days"
+                    type="number"
+                    min={1}
+                    value={contentDurationDays}
+                    onChange={(e) => setContentDurationDays(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tier2-amount">{t.channelSponsorTier2Amount}</Label>
@@ -354,15 +409,13 @@ export default function ChannelSponsorSection({
                     value={tier2Amount}
                     onChange={(e) => setTier2Amount(e.target.value)}
                   />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="duration-days">{t.channelSponsorDurationDays}</Label>
+                  <Label htmlFor="sponsor-duration-days">{t.channelSponsorListingDurationDays}</Label>
                   <Input
-                    id="duration-days"
+                    id="sponsor-duration-days"
                     type="number"
                     min={1}
-                    value={durationDays}
-                    onChange={(e) => setDurationDays(e.target.value)}
+                    value={sponsorDurationDays}
+                    onChange={(e) => setSponsorDurationDays(e.target.value)}
                   />
                 </div>
               </div>
@@ -399,7 +452,9 @@ export default function ChannelSponsorSection({
                         <button
                           type="button"
                           className="shrink-0 cursor-pointer rounded border transition-opacity hover:opacity-90"
-                          onClick={() => setReceiptPreviewUrl(profileAvatarSrc(payment.receiptUrl))}
+                          onClick={() =>
+                            setReceiptPreviewUrl(profileAvatarSrc(payment.receiptUrl) ?? null)
+                          }
                           aria-label={t.sponsorReceiptPreview}
                         >
                           <img
@@ -468,63 +523,80 @@ export default function ChannelSponsorSection({
       ) : (
         settings?.enabled && (
           <div className="space-y-3">
-            {settings?.isSponsor && sponsorUntil ? (
-              <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                {t.sponsorStatusActiveUntil} {sponsorUntil}
-              </p>
-            ) : (
+            {(hasContentAccess || hasChannelSponsor) && (
+              <div className="flex flex-wrap gap-2">
+                {hasContentAccess && contentUntil && (
+                  <Badge variant="secondary">{t.contentPaidUntil(contentUntil)}</Badge>
+                )}
+                {hasChannelSponsor && channelSponsorUntil && (
+                  <Badge variant="secondary">{t.channelSponsorPaidUntil(channelSponsorUntil)}</Badge>
+                )}
+              </div>
+            )}
+            {selectedTier ? (
               <>
-                {!selectedTier && (
-                  <div className="space-y-2">
-                    {tiers.map((tier) => (
-                      <button
-                        key={tier.type}
-                        type="button"
-                        className="flex w-full flex-col items-center gap-2 rounded-md border px-4 py-4 text-center hover:bg-muted/40 transition-colors"
-                        onClick={() => setSelectedTier(tier.type)}
-                      >
-                        <span className="text-sm leading-snug text-muted-foreground">
-                          {tierTitle(tier)}
-                        </span>
-                        <span className="text-lg font-semibold">{t.sponsorTierOpenFor(tier.amount)}</span>
-                      </button>
-                    ))}
+                <p className="text-sm font-medium">
+                  {t.sponsorTransferInstructionsTitle(selectedTierAmount ?? "0")}
+                </p>
+                {settings?.paymentInstructions?.trim() ? (
+                  <div className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
+                    {settings.paymentInstructions.trim()}
                   </div>
-                )}
-                {selectedTier && (
-                  <>
-                    <p className="text-sm font-medium">
-                      {t.sponsorTransferInstructionsTitle(selectedTierAmount ?? "0")}
-                    </p>
-                    {settings?.paymentInstructions?.trim() ? (
-                      <div className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
-                        {settings.paymentInstructions.trim()}
-                      </div>
-                    ) : null}
-                    <input
-                      ref={receiptInputRef}
-                      type="file"
-                      className="hidden"
-                      accept="image/*,application/pdf"
-                      onChange={handleReceiptChange}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      disabled={isUploading || submitReceiptMutation.isPending}
-                      onClick={() => receiptInputRef.current?.click()}
-                    >
-                      {isUploading || submitReceiptMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Paperclip className="mr-2 h-4 w-4" />
-                      )}
-                      {t.channelSponsorAttachReceipt}
-                    </Button>
-                  </>
-                )}
+                ) : null}
+                <input
+                  id={receiptInputId}
+                  ref={receiptInputRef}
+                  type="file"
+                  className="sr-only"
+                  accept="image/*,application/pdf"
+                  onChange={handleReceiptChange}
+                />
+                <div className="flex gap-2">
+                  <label
+                    htmlFor={receiptInputId}
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "flex-1 cursor-pointer",
+                      (isUploading || submitReceiptMutation.isPending) &&
+                        "pointer-events-none opacity-50"
+                    )}
+                  >
+                    {isUploading || submitReceiptMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Paperclip className="h-4 w-4" />
+                    )}
+                    {t.channelSponsorAttachReceipt}
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={isUploading || submitReceiptMutation.isPending}
+                    onClick={() => setSelectedTier(null)}
+                  >
+                    {t.cancel}
+                  </Button>
+                </div>
               </>
+            ) : (
+              purchasableTiers.length > 0 && (
+                <div className="space-y-2">
+                  {purchasableTiers.map((tier) => (
+                    <button
+                      key={tier.type}
+                      type="button"
+                      className="flex w-full flex-col items-center gap-2 rounded-md border px-4 py-4 text-center hover:bg-muted/40 transition-colors"
+                      onClick={() => setSelectedTier(tier.type)}
+                    >
+                      <span className="text-sm leading-snug text-muted-foreground">
+                        {tierTitle(tier)}
+                      </span>
+                      <span className="text-lg font-semibold">{t.sponsorTierOpenFor(tier.amount)}</span>
+                    </button>
+                  ))}
+                </div>
+              )
             )}
           </div>
         )
