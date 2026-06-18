@@ -1848,6 +1848,7 @@ export const t = {
 
   // Messenger (doctors)
   messenger: 'Мессенджер',
+  startChat: 'Начать чат',
   chatsTab: 'Чаты',
   messengerDescription: 'Чаты с пациентами, врачами, группы и каналы',
   folderPersonal: 'Личные',
@@ -1887,6 +1888,7 @@ export const t = {
   subscribeToChannel: 'Подписаться на канал',
   unsubscribeFromChannel: 'Отписаться',
   channelUnsubscribed: 'Вы отписались от канала',
+  channelOwnerLabel: 'Владелец',
   channelSponsorSectionTitle: 'Спонсорство канала',
   channelSponsorEnable: 'Монетизация канала',
   channelSponsorPaymentInstructions: 'Как перевести деньги',

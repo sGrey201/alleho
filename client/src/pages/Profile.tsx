@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye } from "lucide-react";
+import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye, MessageCircle } from "lucide-react";
 import { format } from "date-fns";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -340,6 +340,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
 
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
   const [previewTemplateMeta, setPreviewTemplateMeta] = useState<{ name: string } | null>(null);
+  const [openingChat, setOpeningChat] = useState(false);
 
   const { data: previewTemplate } = useQuery({
     queryKey: ["/api/questionnaire-templates", previewTemplateId],
@@ -557,19 +558,23 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
     inviteSummary?.inviter?.email ||
     "Нет данных";
 
-  const openInviterChat = async () => {
-    const inviterId = inviteSummary?.inviter?.id;
-    if (!inviterId) return;
+  const openDirectChat = async (partnerUserId: string) => {
+    setOpeningChat(true);
     try {
-      const res = await fetch(`/api/messenger/direct/${inviterId}`, { credentials: "include" });
+      const res = await fetch(`/api/messenger/direct/${partnerUserId}`, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as { conversationId?: string };
       if (!data.conversationId) throw new Error("Нет id чата");
       setLocation(`/messenger/direct/${data.conversationId}`);
     } catch {
       toast({ title: t.error, description: "Не удалось открыть чат", variant: "destructive" });
+    } finally {
+      setOpeningChat(false);
     }
   };
+
+  const canStartChat =
+    !isOwnProfile && !!user?.isAdmin && !!profileUser?.isAdmin && !!profileUserId;
 
   if (!isOwnProfile) {
     return (
@@ -604,6 +609,21 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         </div>
 
         <div className="p-4 space-y-3">
+          {canStartChat && (
+            <Button
+              type="button"
+              className="w-full"
+              disabled={openingChat}
+              onClick={() => void openDirectChat(profileUserId!)}
+            >
+              {openingChat ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="mr-2 h-4 w-4" />
+              )}
+              {t.startChat}
+            </Button>
+          )}
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1">Страна, город</p>
             <p className="text-base text-foreground">{locationLabel}</p>
@@ -615,7 +635,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
                 inviteSummary.inviter.id ? (
                   <button
                     type="button"
-                    onClick={() => void openInviterChat()}
+                    onClick={() => void openDirectChat(inviteSummary.inviter.id!)}
                     className="text-primary hover:underline"
                   >
                     {inviterName}

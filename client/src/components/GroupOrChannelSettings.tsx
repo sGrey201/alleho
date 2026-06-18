@@ -198,6 +198,12 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       ? (conv.participantCount ?? conv.participants?.length ?? 0)
       : 0;
   const sponsorMonetizationEnabled = conv.sponsorSettings?.enabled ?? false;
+  const channelOwner = conv.participants?.find((p) => p.role === "owner");
+  const ownerDisplayName = channelOwner
+    ? [channelOwner.user?.firstName, channelOwner.user?.lastName].filter(Boolean).join(" ").trim() ||
+      channelOwner.user?.email ||
+      channelOwner.userId
+    : null;
 
   const openAvatarUpload = () => avatarInputRef.current?.click();
 
@@ -473,6 +479,19 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               />
             )}
           </>
+        )}
+
+        {mode === "channel" && channelOwner && ownerDisplayName && (
+          <div className="rounded-lg border px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{t.channelOwnerLabel}</p>
+            <button
+              type="button"
+              className="text-sm font-medium text-primary hover:underline truncate max-w-full"
+              onClick={() => setLocation(`/profile/${channelOwner.userId}`)}
+            >
+              {ownerDisplayName}
+            </button>
+          </div>
         )}
 
         {canUnsubscribeFromChannel && (
