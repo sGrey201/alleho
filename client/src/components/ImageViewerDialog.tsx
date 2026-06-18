@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
+import { t } from "@/lib/i18n";
 
 interface ImageViewerDialogProps {
   open: boolean;
@@ -10,6 +12,7 @@ interface ImageViewerDialogProps {
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
+  allowZoom?: boolean;
 }
 
 export function ImageViewerDialog({
@@ -19,7 +22,18 @@ export function ImageViewerDialog({
   onClose,
   onPrevious,
   onNext,
+  allowZoom = false,
 }: ImageViewerDialogProps) {
+  const [nativeSize, setNativeSize] = useState(false);
+
+  useEffect(() => {
+    if (!open) setNativeSize(false);
+  }, [open]);
+
+  useEffect(() => {
+    setNativeSize(false);
+  }, [imageUrl]);
+
   return (
     <Dialog
       open={open}
@@ -37,9 +51,31 @@ export function ImageViewerDialog({
           <DialogTitle className="sr-only">Просмотр фото</DialogTitle>
 
           <div
-            className="pointer-events-auto absolute right-4 z-20"
+            className="pointer-events-auto absolute right-4 z-20 flex gap-2"
             style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
           >
+            {allowZoom ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 rounded-full border border-white/20 bg-white px-4 text-foreground shadow-lg hover:bg-white/90"
+                onClick={() => setNativeSize((value) => !value)}
+                aria-label={nativeSize ? t.imageViewerZoomFit : t.imageViewerZoom100}
+                data-testid="button-image-viewer-zoom"
+              >
+                {nativeSize ? (
+                  <>
+                    <ZoomOut className="mr-2 h-5 w-5" />
+                    {t.imageViewerZoomFit}
+                  </>
+                ) : (
+                  <>
+                    <ZoomIn className="mr-2 h-5 w-5" />
+                    {t.imageViewerZoom100}
+                  </>
+                )}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"
@@ -70,12 +106,22 @@ export function ImageViewerDialog({
               <div className="w-11 shrink-0 sm:w-11" aria-hidden />
             )}
 
-            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
+            <div
+              className={
+                nativeSize
+                  ? "pointer-events-auto flex min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-8"
+                  : "flex min-h-0 min-w-0 flex-1 items-center justify-center"
+              }
+            >
               {imageUrl ? (
                 <img
                   src={imageUrl}
-                  alt="Full size"
-                  className="pointer-events-auto max-h-[calc(100vh-8rem)] max-w-full object-contain select-none"
+                  alt=""
+                  className={
+                    nativeSize
+                      ? "mx-auto block max-h-none max-w-none select-none"
+                      : "pointer-events-auto max-h-[calc(100vh-8rem)] max-w-full object-contain select-none"
+                  }
                   draggable={false}
                 />
               ) : null}

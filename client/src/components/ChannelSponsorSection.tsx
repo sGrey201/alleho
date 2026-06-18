@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
+import { normalizeTierAmountInput } from "@shared/sponsorTiers";
 
 type DonationType = "content" | "content_thanks";
 
@@ -32,6 +34,7 @@ type SponsorSettings = {
   tiers: SponsorTier[];
   isSponsor: boolean;
   sponsorExpiresAt: string | null;
+  hasActiveSponsors?: boolean;
 };
 
 type SponsorPayment = {
@@ -75,11 +78,11 @@ function donationTypeLabel(type: DonationType) {
   return type === "content_thanks" ? t.sponsorDonationTypeContentThanks : t.sponsorDonationTypeContent;
 }
 
-function tierLabel(tier: SponsorTier) {
+function tierTitle(tier: SponsorTier) {
   if (tier.type === "content_thanks") {
-    return t.sponsorTierContentThanks(tier.amount, tier.durationDays);
+    return t.sponsorTierContentThanksTitle(tier.durationDays);
   }
-  return t.sponsorTierContent(tier.amount, tier.durationDays);
+  return t.sponsorTierContentTitle(tier.durationDays);
 }
 
 export default function ChannelSponsorSection({
@@ -94,10 +97,12 @@ export default function ChannelSponsorSection({
   const { uploadFile, isUploading } = useUpload();
   const [enabled, setEnabled] = useState(false);
   const [paymentInstructions, setPaymentInstructions] = useState("");
-  const [tier1Amount, setTier1Amount] = useState("");
-  const [tier2Amount, setTier2Amount] = useState("");
+  const [tier1Amount, setTier1Amount] = useState("0");
+  const [tier2Amount, setTier2Amount] = useState("0");
   const [durationDays, setDurationDays] = useState("30");
   const [selectedTier, setSelectedTier] = useState<DonationType | null>(null);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [disputePaymentId, setDisputePaymentId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
 
@@ -133,8 +138,8 @@ export default function ChannelSponsorSection({
     if (!settings) return;
     setEnabled(settings.enabled);
     setPaymentInstructions(settings.paymentInstructions ?? "");
-    setTier1Amount(settings.tier1Amount ?? "");
-    setTier2Amount(settings.tier2Amount ?? "");
+    setTier1Amount(normalizeTierAmountInput(settings.tier1Amount));
+    setTier2Amount(normalizeTierAmountInput(settings.tier2Amount));
     setDurationDays(String(settings.durationDays ?? 30));
   }, [settings]);
 
@@ -142,6 +147,10 @@ export default function ChannelSponsorSection({
     if (!embedded) return;
     setSelectedTier(null);
   }, [embedded, conversationId]);
+
+  useEffect(() => {
+    if (scrollOnMount) setSettingsExpanded(true);
+  }, [scrollOnMount]);
 
   useEffect(() => {
     if (!scrollOnMount || !sectionRef.current) return;
@@ -153,8 +162,8 @@ export default function ChannelSponsorSection({
       const res = await apiRequest("PATCH", `/api/conversations/${conversationId}/sponsor-settings`, {
         enabled,
         paymentInstructions: paymentInstructions.trim() || null,
-        tier1Amount: tier1Amount.trim() || null,
-        tier2Amount: tier2Amount.trim() || null,
+        tier1Amount: normalizeTierAmountInput(tier1Amount),
+        tier2Amount: normalizeTierAmountInput(tier2Amount),
         durationDays: Math.max(1, parseInt(durationDays, 10) || 30),
       });
       return res.json();
@@ -253,6 +262,15 @@ export default function ChannelSponsorSection({
     ? format(new Date(settings.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
     : null;
   const tiers = settings?.tiers ?? [];
+  const pendingPaymentCount = payments.filter((p) => p.status === "granted").length;
+  const sortedPayments = [...payments].sort((a, b) => {
+    const aNeedsReview = a.status === "granted" ? 0 : 1;
+    const bNeedsReview = b.status === "granted" ? 0 : 1;
+    if (aNeedsReview !== bNeedsReview) return aNeedsReview - bNeedsReview;
+    const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    return bTime - aTime;
+  });
 
   return (
     <div
@@ -260,71 +278,191 @@ export default function ChannelSponsorSection({
       ref={sectionRef}
       className={
         embedded
-          ? "space-y-3 pt-3 border-t"
+          ? "space-y-3"
           : "space-y-4 rounded-lg border p-4"
       }
     >
-      {!embedded && <p className="text-sm font-medium">{t.channelSponsorSectionTitle}</p>}
-
       {isOwner ? (
         <>
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="sponsor-enabled">{t.channelSponsorEnable}</Label>
-            <Switch
-              id="sponsor-enabled"
-              checked={enabled}
-              onCheckedChange={setEnabled}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="payment-instructions">{t.channelSponsorPaymentInstructions}</Label>
-            <Textarea
-              id="payment-instructions"
-              value={paymentInstructions}
-              onChange={(e) => setPaymentInstructions(e.target.value)}
-              placeholder={t.channelSponsorPaymentInstructionsPlaceholder}
-              rows={4}
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="tier1-amount">{t.channelSponsorTier1Amount}</Label>
-              <Input
-                id="tier1-amount"
-                value={tier1Amount}
-                onChange={(e) => setTier1Amount(e.target.value)}
-                placeholder="1000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tier2-amount">{t.channelSponsorTier2Amount}</Label>
-              <Input
-                id="tier2-amount"
-                value={tier2Amount}
-                onChange={(e) => setTier2Amount(e.target.value)}
-                placeholder="3000"
-              />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="duration-days">{t.channelSponsorDurationDays}</Label>
-              <Input
-                id="duration-days"
-                type="number"
-                min={1}
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-              />
-            </div>
-          </div>
-          <Button
-            onClick={() => saveSettingsMutation.mutate()}
-            disabled={saveSettingsMutation.isPending}
+          <div
+            className="flex items-center justify-between gap-3 cursor-pointer select-none"
+            onClick={() => setSettingsExpanded((value) => !value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setSettingsExpanded((value) => !value);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-expanded={settingsExpanded}
           >
-            {saveSettingsMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {t.save}
-          </Button>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-medium">{t.channelSponsorEnable}</span>
+              {pendingPaymentCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 min-w-5 shrink-0 justify-center px-1.5 text-xs tabular-nums"
+                  title={t.sponsorPaymentPending}
+                >
+                  {pendingPaymentCount}
+                </Badge>
+              )}
+            </div>
+            <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <Switch
+                id="sponsor-enabled"
+                checked={enabled}
+                disabled={settings?.hasActiveSponsors}
+                onCheckedChange={(value) => {
+                  setEnabled(value);
+                  if (value) setSettingsExpanded(true);
+                }}
+              />
+            </div>
+          </div>
+          {settingsExpanded && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="payment-instructions">{t.channelSponsorPaymentInstructions}</Label>
+                <Textarea
+                  id="payment-instructions"
+                  value={paymentInstructions}
+                  onChange={(e) => setPaymentInstructions(e.target.value)}
+                  placeholder={t.channelSponsorPaymentInstructionsPlaceholder}
+                  rows={4}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="tier1-amount">{t.channelSponsorTier1Amount}</Label>
+                  <Input
+                    id="tier1-amount"
+                    type="number"
+                    min={0}
+                    value={tier1Amount}
+                    onChange={(e) => setTier1Amount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tier2-amount">{t.channelSponsorTier2Amount}</Label>
+                  <Input
+                    id="tier2-amount"
+                    type="number"
+                    min={0}
+                    value={tier2Amount}
+                    onChange={(e) => setTier2Amount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="duration-days">{t.channelSponsorDurationDays}</Label>
+                  <Input
+                    id="duration-days"
+                    type="number"
+                    min={1}
+                    value={durationDays}
+                    onChange={(e) => setDurationDays(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={() => saveSettingsMutation.mutate()}
+                disabled={saveSettingsMutation.isPending}
+              >
+                {saveSettingsMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t.save}
+              </Button>
+              {enabled && payments.length > 0 && (
+                <div className="space-y-2 border-t pt-4">
+                  <p className="text-sm font-medium">{t.channelSponsorPaymentsTitle}</p>
+                  {sortedPayments.map((payment) => (
+                    <div key={payment.id} className="rounded-md border px-3 py-2 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{displayUserName(payment.user)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {payment.submittedAt
+                              ? format(new Date(payment.submittedAt), "d MMM yyyy, HH:mm", { locale: ru })
+                              : "—"}
+                            {payment.amount ? ` · ${payment.amount}` : ""}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <Badge variant="outline">{paymentStatusLabel(payment.status)}</Badge>
+                            {payment.donationType && (
+                              <Badge variant="secondary">{donationTypeLabel(payment.donationType)}</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 cursor-pointer rounded border transition-opacity hover:opacity-90"
+                          onClick={() => setReceiptPreviewUrl(profileAvatarSrc(payment.receiptUrl))}
+                          aria-label={t.sponsorReceiptPreview}
+                        >
+                          <img
+                            src={profileAvatarSrc(payment.receiptUrl)}
+                            alt=""
+                            className="h-14 w-14 rounded object-cover"
+                          />
+                        </button>
+                      </div>
+                      {payment.status === "granted" && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={approveMutation.isPending}
+                            onClick={() => approveMutation.mutate(payment.id)}
+                          >
+                            <Check className="mr-1 h-3.5 w-3.5" />
+                            {t.sponsorPaymentApprove}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={() => {
+                              setDisputePaymentId(payment.id);
+                              setDisputeReason("");
+                            }}
+                          >
+                            <X className="mr-1 h-3.5 w-3.5" />
+                            {t.sponsorPaymentDispute}
+                          </Button>
+                        </div>
+                      )}
+                      {disputePaymentId === payment.id && (
+                        <div className="space-y-2">
+                          <Input
+                            value={disputeReason}
+                            onChange={(e) => setDisputeReason(e.target.value)}
+                            placeholder={t.sponsorDisputeReasonPlaceholder}
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={disputeMutation.isPending}
+                              onClick={() =>
+                                disputeMutation.mutate({ paymentId: payment.id, reason: disputeReason })
+                              }
+                            >
+                              {t.sponsorPaymentDispute}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setDisputePaymentId(null)}>
+                              {t.cancel}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </>
       ) : (
         settings?.enabled && (
@@ -341,10 +479,13 @@ export default function ChannelSponsorSection({
                       <button
                         key={tier.type}
                         type="button"
-                        className="w-full rounded-md border px-3 py-3 text-left text-sm hover:bg-muted/40 transition-colors"
+                        className="flex w-full flex-col items-center gap-2 rounded-md border px-4 py-4 text-center hover:bg-muted/40 transition-colors"
                         onClick={() => setSelectedTier(tier.type)}
                       >
-                        {tierLabel(tier)}
+                        <span className="text-sm leading-snug text-muted-foreground">
+                          {tierTitle(tier)}
+                        </span>
+                        <span className="text-lg font-semibold">{t.sponsorTierOpenFor(tier.amount)}</span>
                       </button>
                     ))}
                   </div>
@@ -386,93 +527,15 @@ export default function ChannelSponsorSection({
         )
       )}
 
-      {isOwner && enabled && payments.length > 0 && (
-        <div className="space-y-2 border-t pt-4">
-          <p className="text-sm font-medium">{t.channelSponsorPaymentsTitle}</p>
-          {payments.map((payment) => (
-            <div key={payment.id} className="rounded-md border px-3 py-2 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{displayUserName(payment.user)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {payment.submittedAt
-                      ? format(new Date(payment.submittedAt), "d MMM yyyy, HH:mm", { locale: ru })
-                      : "—"}
-                    {payment.amount ? ` · ${payment.amount}` : ""}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    <Badge variant="outline">{paymentStatusLabel(payment.status)}</Badge>
-                    {payment.donationType && (
-                      <Badge variant="secondary">{donationTypeLabel(payment.donationType)}</Badge>
-                    )}
-                  </div>
-                </div>
-                <a
-                  href={profileAvatarSrc(payment.receiptUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <img
-                    src={profileAvatarSrc(payment.receiptUrl)}
-                    alt=""
-                    className="h-14 w-14 rounded object-cover border"
-                  />
-                </a>
-              </div>
-              {payment.status === "granted" && (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={approveMutation.isPending}
-                    onClick={() => approveMutation.mutate(payment.id)}
-                  >
-                    <Check className="mr-1 h-3.5 w-3.5" />
-                    {t.sponsorPaymentApprove}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-destructive"
-                    onClick={() => {
-                      setDisputePaymentId(payment.id);
-                      setDisputeReason("");
-                    }}
-                  >
-                    <X className="mr-1 h-3.5 w-3.5" />
-                    {t.sponsorPaymentDispute}
-                  </Button>
-                </div>
-              )}
-              {disputePaymentId === payment.id && (
-                <div className="space-y-2">
-                  <Input
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value)}
-                    placeholder={t.sponsorDisputeReasonPlaceholder}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={disputeMutation.isPending}
-                      onClick={() =>
-                        disputeMutation.mutate({ paymentId: payment.id, reason: disputeReason })
-                      }
-                    >
-                      {t.sponsorPaymentDispute}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setDisputePaymentId(null)}>
-                      {t.cancel}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <ImageViewerDialog
+        open={!!receiptPreviewUrl}
+        imageUrl={receiptPreviewUrl}
+        hasMultiple={false}
+        allowZoom
+        onClose={() => setReceiptPreviewUrl(null)}
+        onPrevious={() => {}}
+        onNext={() => {}}
+      />
     </div>
   );
 }

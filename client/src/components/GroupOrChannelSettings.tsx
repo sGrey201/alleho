@@ -61,11 +61,6 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [avatarDraft, setAvatarDraft] = useState<string>("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
-  const [paymentExpanded, setPaymentExpanded] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("section") === "sponsor"
-  );
 
   const { uploadFile, isUploading } = useUpload();
 
@@ -456,21 +451,20 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
 
         {mode === "channel" && (
           <>
-            <ChannelSponsorThanks
-              conversationId={conversationId}
-              monetizationEnabled={sponsorMonetizationEnabled}
-              isOwner={isOwner}
-              isSponsor={conv.isSponsor ?? false}
-              paymentExpanded={paymentExpanded}
-              onPaymentOpenChange={setPaymentExpanded}
-            >
+            {sponsorMonetizationEnabled && (
+              <ChannelSponsorThanks
+                conversationId={conversationId}
+                monetizationEnabled={sponsorMonetizationEnabled}
+              />
+            )}
+            {!isOwner && sponsorMonetizationEnabled && (
               <ChannelSponsorSection
                 conversationId={conversationId}
                 isOwner={false}
                 embedded
                 scrollOnMount={scrollSponsorSection}
               />
-            </ChannelSponsorThanks>
+            )}
             {isOwner && (
               <ChannelSponsorSection
                 conversationId={conversationId}

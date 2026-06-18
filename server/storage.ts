@@ -63,6 +63,7 @@ import {
   getDefaultQuestionnaireStructure,
 } from "./questionnaireDefaults";
 import { emptyQuestionnaireInstanceData } from "@shared/questionnaireTypes";
+import { isPositiveTierAmount } from "@shared/sponsorTiers";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 export type MessengerPersonalContact = {
@@ -358,6 +359,7 @@ export interface IStorage {
   ): Promise<ChannelSponsorSettings>;
   getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
   isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean>;
+  countActiveChannelSponsors(conversationId: string): Promise<number>;
   ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant>;
   submitChannelSponsorPayment(
     conversationId: string,
@@ -2439,6 +2441,21 @@ export class DatabaseStorage implements IStorage {
     return expiresAt.getTime() > Date.now();
   }
 
+  async countActiveChannelSponsors(conversationId: string): Promise<number> {
+    const now = new Date();
+    const [row] = await db
+      .select({ c: count() })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.role, "member"),
+          gt(conversationParticipants.sponsorExpiresAt, now)
+        )
+      );
+    return Number(row?.c ?? 0);
+  }
+
   async ensureConversationMember(conversationId: string, userId: string): Promise<ConversationParticipant> {
     const inConv = await this.isUserInConversation(userId, conversationId);
     if (inConv) {
@@ -2470,7 +2487,7 @@ export class DatabaseStorage implements IStorage {
       data.donationType === "content_thanks"
         ? settings.tier2Amount?.trim()
         : settings.tier1Amount?.trim();
-    if (!tierAmount) {
+    if (!isPositiveTierAmount(tierAmount)) {
       throw new Error("sponsor_tier_amount_not_configured");
     }
 

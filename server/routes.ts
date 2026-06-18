@@ -11,6 +11,7 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
+import { isPositiveTierAmount } from "@shared/sponsorTiers";
 import { tagCategoryEnum } from "@shared/schema";
 import {
   questionnaireInstanceDataSchema,
@@ -1531,13 +1532,18 @@ ${allUrls.map(url => `  <url>
       const settings = await storage.getChannelSponsorSettings(id);
       const isSponsor = await storage.isActiveChannelSponsor(id, currentUserId);
       const sponsorExpiresAt = await storage.getParticipantSponsorExpiresAt(id, currentUserId);
+      const role = await storage.getParticipantRole(id, currentUserId);
+      const hasActiveSponsors =
+        role === "owner" ? (await storage.countActiveChannelSponsors(id)) > 0 : undefined;
       const durationDays = settings?.durationDays ?? 30;
+      const tier1 = settings?.tier1Amount?.trim();
+      const tier2 = settings?.tier2Amount?.trim();
       const tiers = [
-        ...(settings?.tier1Amount?.trim()
-          ? [{ type: "content" as const, amount: settings.tier1Amount.trim(), durationDays }]
+        ...(isPositiveTierAmount(tier1)
+          ? [{ type: "content" as const, amount: tier1!, durationDays }]
           : []),
-        ...(settings?.tier2Amount?.trim()
-          ? [{ type: "content_thanks" as const, amount: settings.tier2Amount.trim(), durationDays }]
+        ...(isPositiveTierAmount(tier2)
+          ? [{ type: "content_thanks" as const, amount: tier2!, durationDays }]
           : []),
       ];
       res.json({
@@ -1549,6 +1555,7 @@ ${allUrls.map(url => `  <url>
         tiers,
         isSponsor,
         sponsorExpiresAt: sponsorExpiresAt?.toISOString() ?? null,
+        ...(hasActiveSponsors !== undefined ? { hasActiveSponsors } : {}),
       });
     } catch (error) {
       console.error("Error fetching sponsor settings:", error);
@@ -1576,6 +1583,9 @@ ${allUrls.map(url => `  <url>
         tier2Amount?: string | null;
         durationDays?: number;
       };
+      if (body.enabled === false && (await storage.countActiveChannelSponsors(id)) > 0) {
+        return res.status(400).json({ message: "cannot_disable_sponsor_monetization_with_active_sponsors" });
+      }
       const durationDays =
         typeof body.durationDays === "number" && body.durationDays > 0
           ? Math.floor(body.durationDays)

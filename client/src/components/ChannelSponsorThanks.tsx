@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 
 type SponsorThanksEntry = {
@@ -14,11 +12,6 @@ type SponsorThanksEntry = {
 type Props = {
   conversationId: string;
   monetizationEnabled: boolean;
-  isOwner?: boolean;
-  isSponsor?: boolean;
-  paymentExpanded?: boolean;
-  onPaymentOpenChange?: (open: boolean) => void;
-  children?: ReactNode;
 };
 
 function displayName(entry: SponsorThanksEntry) {
@@ -26,15 +19,7 @@ function displayName(entry: SponsorThanksEntry) {
   return name || entry.userId;
 }
 
-export default function ChannelSponsorThanks({
-  conversationId,
-  monetizationEnabled,
-  isOwner = false,
-  isSponsor = false,
-  paymentExpanded = false,
-  onPaymentOpenChange,
-  children,
-}: Props) {
+export default function ChannelSponsorThanks({ conversationId, monetizationEnabled }: Props) {
   const [, setLocation] = useLocation();
 
   const { data: sponsors = [], isLoading } = useQuery<SponsorThanksEntry[]>({
@@ -79,21 +64,6 @@ export default function ChannelSponsorThanks({
             </button>
           ))}
         </div>
-      )}
-      {!isOwner && onPaymentOpenChange && (
-        <>
-          {!paymentExpanded && (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => onPaymentOpenChange(true)}
-            >
-              {isSponsor ? t.channelSponsorSectionTitle : t.sponsorBecomeButton}
-            </Button>
-          )}
-          {paymentExpanded && children}
-        </>
       )}
     </div>
   );
