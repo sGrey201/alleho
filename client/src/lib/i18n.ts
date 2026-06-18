@@ -1906,7 +1906,8 @@ export const t = {
   sponsorStatusActiveUntil: 'Вы спонсор до',
   sponsorBecomePrompt: 'Станьте спонсором, чтобы читать платный контент',
   sponsorBecomeButton: 'Стать спонсором',
-  sponsorTransferInstructionsTitle: 'Переведите деньги одним из следующих способов:',
+  sponsorTransferInstructionsTitle: (amount: string) =>
+    `Переведите ${amount}р одним из следующих способов:`,
   sponsorTierContentTitle: (days: number) => {
     const mod10 = days % 10;
     const mod100 = days % 100;
@@ -1939,6 +1940,7 @@ export const t = {
     if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} участника`;
     return `${n} участников`;
   },
+  channelHeaderStats: (subscribers: number) => `Подписчиков:${subscribers}`,
   sponsorPaymentSubmitted: 'Чек отправлен. Статус спонсора активирован.',
   sponsorPaymentApprove: 'Утвердить',
   sponsorPaymentDispute: 'Оспорить',

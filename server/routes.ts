@@ -1354,10 +1354,14 @@ ${allUrls.map(url => `  <url>
         conv.type === "channel"
           ? await storage.isActiveChannelSponsor(id, currentUserId)
           : false;
+      const sponsorCount =
+        conv.type === "channel" ? await storage.countActiveChannelSponsors(id) : undefined;
       res.json({
         ...conv,
         participants,
-        ...(conv.type === "channel" ? { participantCount: participants.length } : {}),
+        ...(conv.type === "channel"
+          ? { participantCount: participants.length, sponsorCount }
+          : {}),
         sponsorSettings: sponsorSettings
           ? {
               enabled: sponsorSettings.enabled,

@@ -107,6 +107,8 @@ interface ConversationInfo {
   } | null;
   isSponsor?: boolean;
   sponsorExpiresAt?: string | null;
+  participantCount?: number;
+  sponsorCount?: number;
   participants?: Array<{
     userId: string;
     role: string;
@@ -1725,9 +1727,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 {formatLastSeen(peerParticipant?.lastSeenAt)}
               </p>
             )}
-            {conv.type === "channel" && conv.isSponsor && (
-              <p className="truncate text-xs leading-tight text-amber-700 dark:text-amber-300">
-                {t.sponsorBadge}
+            {conv.type === "channel" && (
+              <p className="truncate text-xs leading-tight text-muted-foreground">
+                {t.channelHeaderStats(conv.participantCount ?? conv.participants?.length ?? 0)}
               </p>
             )}
           </button>

@@ -262,6 +262,7 @@ export default function ChannelSponsorSection({
     ? format(new Date(settings.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
     : null;
   const tiers = settings?.tiers ?? [];
+  const selectedTierAmount = tiers.find((tier) => tier.type === selectedTier)?.amount;
   const pendingPaymentCount = payments.filter((p) => p.status === "granted").length;
   const sortedPayments = [...payments].sort((a, b) => {
     const aNeedsReview = a.status === "granted" ? 0 : 1;
@@ -492,7 +493,9 @@ export default function ChannelSponsorSection({
                 )}
                 {selectedTier && (
                   <>
-                    <p className="text-sm font-medium">{t.sponsorTransferInstructionsTitle}</p>
+                    <p className="text-sm font-medium">
+                      {t.sponsorTransferInstructionsTitle(selectedTierAmount ?? "0")}
+                    </p>
                     {settings?.paymentInstructions?.trim() ? (
                       <div className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
                         {settings.paymentInstructions.trim()}
