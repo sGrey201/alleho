@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye, MessageCircle } from "lucide-react";
+import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye, MessageCircle, Flag } from "lucide-react";
 import { format } from "date-fns";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,6 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import type { QuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import { DEFAULT_QUESTIONNAIRE_HINTS_MODE } from "@shared/questionnaireTypes";
+import type { AccountReportCategory } from "@shared/schema";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 
@@ -341,6 +343,9 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
   const [previewTemplateMeta, setPreviewTemplateMeta] = useState<{ name: string } | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState<AccountReportCategory>("spam");
+  const [reportDetails, setReportDetails] = useState("");
 
   const { data: previewTemplate } = useQuery({
     queryKey: ["/api/questionnaire-templates", previewTemplateId],
@@ -362,6 +367,31 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
     },
   });
+
+  const reportMutation = useMutation({
+    mutationFn: async (payload: { category: AccountReportCategory; details?: string }) => {
+      const res = await apiRequest("POST", `/api/users/${targetUserId}/report`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      setReportDialogOpen(false);
+      setReportCategory("spam");
+      setReportDetails("");
+      toast({ title: t.reportSubmitted });
+    },
+    onError: (error: Error) => {
+      const statusMatch = /^(\d+):/.exec(error.message);
+      const status = statusMatch ? Number(statusMatch[1]) : null;
+      let title = t.reportSubmitError;
+      if (status === 409) {
+        title = t.reportAlreadySubmitted;
+      } else if (error.message.includes("Details required")) {
+        title = t.reportDetailsRequired;
+      }
+      toast({ title, variant: "destructive" });
+    },
+  });
+
   const inviteSummary: InviteProfileSummary | undefined = isOwnProfile
     ? ownInviteSummary
     : viewedProfile
@@ -576,6 +606,20 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   const canStartChat =
     !isOwnProfile && !!user?.isAdmin && !!profileUser?.isAdmin && !!profileUserId;
 
+  const canReportUser =
+    !isOwnProfile && !!profileUser?.isAdmin && !!profileUserId;
+
+  const handleSubmitReport = () => {
+    if (reportCategory === "other" && reportDetails.trim().length < 3) {
+      toast({ title: t.reportDetailsRequired, variant: "destructive" });
+      return;
+    }
+    reportMutation.mutate({
+      category: reportCategory,
+      details: reportDetails.trim() || undefined,
+    });
+  };
+
   if (!isOwnProfile) {
     return (
       <>
@@ -635,7 +679,10 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
                 inviteSummary.inviter.id ? (
                   <button
                     type="button"
-                    onClick={() => void openDirectChat(inviteSummary.inviter.id!)}
+                    onClick={() => {
+                      const inviterId = inviteSummary.inviter?.id;
+                      if (inviterId) void openDirectChat(inviterId);
+                    }}
                     className="text-primary hover:underline"
                   >
                     {inviterName}
@@ -649,7 +696,71 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
             </p>
           </div>
           <AcceptedInvitesStats counts={acceptedInvites} />
+          {canReportUser && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setReportDialogOpen(true)}
+            >
+              <Flag className="mr-2 h-4 w-4" />
+              {t.reportUser}
+            </Button>
+          )}
         </div>
+
+        <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t.reportUser}</DialogTitle>
+            </DialogHeader>
+            <RadioGroup
+              value={reportCategory}
+              onValueChange={(value) => setReportCategory(value as AccountReportCategory)}
+              className="space-y-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="spam" id="report-spam" />
+                <Label htmlFor="report-spam" className="font-normal cursor-pointer">
+                  {t.reportCategorySpam}
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="profanity" id="report-profanity" />
+                <Label htmlFor="report-profanity" className="font-normal cursor-pointer">
+                  {t.reportCategoryProfanity}
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="other" id="report-other" />
+                <Label htmlFor="report-other" className="font-normal cursor-pointer">
+                  {t.reportCategoryOther}
+                </Label>
+              </div>
+            </RadioGroup>
+            <Textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              placeholder={t.reportDetailsPlaceholder}
+              rows={3}
+            />
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setReportDialogOpen(false)}>
+                {t.cancel}
+              </Button>
+              <Button
+                type="button"
+                disabled={reportMutation.isPending}
+                onClick={handleSubmitReport}
+              >
+                {reportMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t.reportSubmit}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       </>
     );
