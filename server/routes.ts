@@ -5,6 +5,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 import { canUserReadChannel, canUserSubscribeToChannel } from "./channelAccess";
+import { canUserJoinGroup, canUserReadGroup } from "./groupAccess";
 import { db } from "./db";
 import { users, payments } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
@@ -20,6 +21,8 @@ import {
   validateQuestionnaireStructureDepth,
   questionnaireMessageContentSchema,
   questionnaireTemplateMessageContentSchema,
+  parseQuestionnaireHintsMode,
+  type QuestionnaireHintsMode,
   type QuestionnaireTemplateStructure,
 } from "@shared/questionnaireTypes";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
@@ -117,7 +120,6 @@ function toAuthUserResponse(user: any) {
     weight: user.weight,
     country: user.country,
     city: user.city,
-    questionnaireHintsMode: user.questionnaireHintsMode ?? "icon",
     subscriptionExpiresAt: user.subscriptionExpiresAt,
     isAdmin: user.isAdmin,
     authType: "email",
@@ -442,7 +444,6 @@ ${allUrls.map(url => `  <url>
       let conversationId: string | undefined;
       if (effectiveInviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true });
-        await storage.ensureDefaultQuestionnaireTemplate(targetUser.id);
       } else {
         if (!firstName || !lastName) {
           return res.status(400).json({ message: "first_name_and_last_name_required" });
@@ -722,7 +723,7 @@ ${allUrls.map(url => `  <url>
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, country, city, profileImageUrl, questionnaireHintsMode } = req.body;
+      const { firstName, lastName, gender, birthMonth, birthYear, height, weight, country, city, profileImageUrl } = req.body;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -752,9 +753,6 @@ ${allUrls.map(url => `  <url>
         country: country || null,
         city: city || null,
         profileImageUrl: profileImageUrlToSave,
-        ...(questionnaireHintsMode === "always" || questionnaireHintsMode === "icon"
-          ? { questionnaireHintsMode }
-          : {}),
       });
       
       res.json(updatedUser);
@@ -797,21 +795,6 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  app.post("/api/questionnaire-templates/restore-default", isAuthenticated, isAdmin, async (req: any, res) => {
-    try {
-      const userId = await getCurrentUserId(req);
-      if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const template = await storage.ensureDefaultQuestionnaireTemplate(userId);
-      if (!template) {
-        return res.status(409).json({ message: "Default template already exists" });
-      }
-      res.status(201).json(template);
-    } catch (error) {
-      console.error("Error restoring default questionnaire template:", error);
-      res.status(500).json({ message: "Failed to restore default template" });
-    }
-  });
-
   app.get("/api/questionnaire-templates/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
@@ -832,7 +815,7 @@ ${allUrls.map(url => `  <url>
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const patch: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }> = {};
+      const patch: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean; hintsMode: QuestionnaireHintsMode }> = {};
       if (req.body?.name !== undefined) {
         const name = String(req.body.name).trim();
         if (!name) return res.status(400).json({ message: "Name cannot be empty" });
@@ -846,6 +829,9 @@ ${allUrls.map(url => `  <url>
         patch.structure = structure;
       }
       if (req.body?.isShared !== undefined) patch.isShared = !!req.body.isShared;
+      if (req.body?.hintsMode === "always" || req.body?.hintsMode === "icon") {
+        patch.hintsMode = req.body.hintsMode;
+      }
       const updated = await storage.updateQuestionnaireTemplate(req.params.id, userId, patch);
       if (!updated) return res.status(404).json({ message: "Template not found" });
       res.json(updated);
@@ -1212,36 +1198,51 @@ ${allUrls.map(url => `  <url>
         return res.json(paged([]));
       }
 
-      const convList = await storage.getConversationsForUser(currentUserId);
-      const groups = await Promise.all(
-        convList
-          .filter((conv) => conv.type === "group" || conv.type === "consilium")
-          .map(async (conv) => {
-            const myRole = conv.participants.find((p) => p.userId === currentUserId)?.role ?? "member";
-            const lm = conv.lastMessageAt;
-            const unreadCount = await storage.getConversationUnreadCount(conv.id, currentUserId);
-            return {
-              source: "conversation" as const,
-              folder: "groups" as const,
-              conversationId: conv.id,
-              type: conv.type,
-              name: conv.name ?? undefined,
-              avatarUrl: conv.avatarUrl ?? null,
-              participantCount: conv.participants.length,
-              patientUserId: conv.patientUserId ?? undefined,
-              myRole,
-              lastMessageAt: lm instanceof Date ? lm.toISOString() : lm ?? null,
-              lastMessagePreview: conv.lastMessagePreview ?? null,
-              unreadCount,
-            };
-          })
-      );
-      groups.sort((a, b) => {
-        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        return bTime - aTime;
-      });
-      return res.json(paged(await annotateActiveCalls(groups)));
+      const browse = await storage.getMessengerGroupBrowseList(currentUserId);
+      const items: Array<Record<string, unknown>> = [];
+      for (const group of browse.subscriptions) {
+        items.push({
+          source: "conversation" as const,
+          folder: "groups" as const,
+          section: "subscriptions" as const,
+          conversationId: group.id,
+          type: group.type,
+          name: group.name ?? undefined,
+          avatarUrl: group.avatarUrl ?? null,
+          participantCount: group.participantCount,
+          patientUserId: group.patientUserId ?? undefined,
+          myRole: group.myRole,
+          isMember: true,
+          lastMessageAt: group.lastMessageAt?.toISOString() ?? null,
+          lastMessagePreview: group.lastMessagePreview ?? null,
+          unreadCount: group.unreadCount,
+        });
+      }
+      if (browse.subscriptions.length > 0 && browse.discover.length > 0) {
+        items.push({
+          source: "conversation" as const,
+          folder: "groups" as const,
+          type: "divider",
+          dividerKey: "groups-split",
+        });
+      }
+      for (const group of browse.discover) {
+        items.push({
+          source: "conversation" as const,
+          folder: "groups" as const,
+          section: "discover" as const,
+          conversationId: group.id,
+          type: "group",
+          name: group.name ?? undefined,
+          avatarUrl: group.avatarUrl ?? null,
+          participantCount: group.participantCount,
+          isMember: false,
+          lastMessageAt: group.lastMessageAt?.toISOString() ?? null,
+          lastMessagePreview: group.lastMessagePreview ?? null,
+          unreadCount: 0,
+        });
+      }
+      return res.json(paged(await annotateActiveCalls(items)));
     } catch (error) {
       console.error("Error fetching /api/me/chats:", error);
       res.status(500).json({ message: "Failed to fetch chats" });
@@ -1300,6 +1301,7 @@ ${allUrls.map(url => `  <url>
       const groups = await storage.getDiscoverableConversations(currentUserId, {
         type: "group",
         nameFilter: q || undefined,
+        excludeClosed: true,
       });
       const channels = await storage.getDiscoverableConversations(currentUserId, {
         type: "channel",
@@ -1365,16 +1367,24 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Join group (self-join disabled; owner adds members)
+  // Join public group (self-join)
   app.post("/api/conversations/:id/join", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
       if (conv.type !== "group") return res.status(400).json({ message: "Not a group" });
-      return res.status(403).json({ message: "only_owner_can_add_members" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!canUserJoinGroup(conv, inConv, !!currentUser.isAdmin)) {
+        return res.status(403).json({ message: "only_owner_can_add_members" });
+      }
+      await storage.addConversationParticipant(id, currentUserId, "member");
+      await publishDoctorChatsUpdated(currentUserId);
+      res.json({ success: true });
     } catch (error) {
       console.error("Error joining conversation:", error);
       res.status(500).json({ message: "Failed to join" });
@@ -1393,6 +1403,9 @@ ${allUrls.map(url => `  <url>
         patientUserId: body.patientUserId ?? null,
       });
       const conv = await storage.createConversation(validated);
+      if (validated.type === "group") {
+        await storage.updateConversation(conv.id, { isClosed: true });
+      }
       await storage.addConversationParticipant(conv.id, currentUserId, "owner");
       const participantIds = body.participantUserIds ?? [];
       for (const uid of participantIds) {
@@ -1429,7 +1442,9 @@ ${allUrls.map(url => `  <url>
       const canReadConversation =
         conv.type === "channel"
           ? canUserReadChannel(conv, inConv, !!currentUser.isAdmin)
-          : inConv;
+          : conv.type === "group"
+            ? canUserReadGroup(conv, inConv, !!currentUser.isAdmin)
+            : inConv;
       if (!canReadConversation) return res.status(403).json({ message: "Access denied" });
       const participants = await storage.getConversationParticipants(id);
       const sponsorSettings =
@@ -1549,6 +1564,10 @@ ${allUrls.map(url => `  <url>
           ...(body.patientAvailable !== undefined ? { patientAvailable: body.patientAvailable } : {}),
           ...(body.isClosed !== undefined ? { isClosed: body.isClosed } : {}),
         });
+      }
+      if (conv.type === "group" && body.isClosed !== undefined) {
+        if (role !== "owner") return res.status(403).json({ message: "only_owner_can_edit_conversation" });
+        await storage.updateConversation(id, { isClosed: body.isClosed });
       }
       if (Array.isArray(body.addParticipantIds)) {
         if (role !== "owner") return res.status(403).json({ message: "only_owner_can_add_members" });
@@ -2183,7 +2202,9 @@ ${allUrls.map(url => `  <url>
       const canReadMessages =
         conv.type === "channel"
           ? canUserReadChannel(conv, inConv, !!currentUser.isAdmin)
-          : inConv;
+          : conv.type === "group"
+            ? canUserReadGroup(conv, inConv, !!currentUser.isAdmin)
+            : inConv;
       if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
       const sponsorFilter = await getChannelSponsorFilterContext(id, currentUserId, conv.type);
       const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
@@ -2351,6 +2372,7 @@ ${allUrls.map(url => `  <url>
           templateId: template.id,
           templateName: template.name,
           snapshot: deepCloneQuestionnaireStructure(template.structure as QuestionnaireTemplateStructure),
+          hintsMode: parseQuestionnaireHintsMode(template.hintsMode),
         });
         content = JSON.stringify(payload);
       }
@@ -2380,6 +2402,7 @@ ${allUrls.map(url => `  <url>
             structureSnapshot: deepCloneQuestionnaireStructure(
               template.structure as QuestionnaireTemplateStructure
             ),
+            hintsModeSnapshot: parseQuestionnaireHintsMode(template.hintsMode),
           });
           const payload = questionnaireMessageContentSchema.parse({
             instanceId: instance.id,

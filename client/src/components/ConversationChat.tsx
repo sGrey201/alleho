@@ -209,19 +209,26 @@ function parseQuestionnaireMessageContent(content: string | null | undefined): {
 
 function parseQuestionnaireTemplateMessageContent(
   content: string | null | undefined
-): { templateId: string; templateName: string; snapshot?: { root: unknown[] } } | null {
+): {
+  templateId: string;
+  templateName: string;
+  snapshot?: { root: unknown[] };
+  hintsMode?: import("@shared/questionnaireTypes").QuestionnaireHintsMode;
+} | null {
   if (!content?.trim()) return null;
   try {
     const parsed = JSON.parse(content) as {
       templateId?: string;
       templateName?: string;
       snapshot?: { root: unknown[] };
+      hintsMode?: import("@shared/questionnaireTypes").QuestionnaireHintsMode;
     };
     if (parsed.templateId && parsed.templateName) {
       return {
         templateId: parsed.templateId,
         templateName: parsed.templateName,
         snapshot: parsed.snapshot,
+        hintsMode: parsed.hintsMode,
       };
     }
     return null;
@@ -362,6 +369,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [editText, setEditText] = useState("");
   const [forwarding, setForwarding] = useState<ConversationMessageWithAuthor | null>(null);
   const [hideSubscribeButton, setHideSubscribeButton] = useState(false);
+  const [hideJoinButton, setHideJoinButton] = useState(false);
   const [inlineContentPayment, setInlineContentPayment] = useState<{
     messageId: string;
     segmentIndex: number;
@@ -387,6 +395,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     templateId: string;
     templateName: string;
     snapshot: { root: import("@shared/questionnaireTypes").QuestionnaireNode[] };
+    hintsMode?: import("@shared/questionnaireTypes").QuestionnaireHintsMode;
   } | null>(null);
   const [questionnairePickerOpen, setQuestionnairePickerOpen] = useState(false);
 
@@ -493,10 +502,17 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   const myChannelRole = conv?.participants?.find((p) => p.userId === user?.id)?.role;
   const canPostToChannel =
-    conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
+    (conv?.type === "group" && !myChannelRole)
+      ? false
+      : conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
   const canReplyToChannel =
-    conv?.type !== "channel" || myChannelRole === "owner" || myChannelRole === "admin";
-  const canInteractWithChannel = conv?.type !== "channel" || !!myChannelRole;
+    conv?.type === "channel"
+      ? myChannelRole === "owner" || myChannelRole === "admin"
+      : conv?.type === "group"
+        ? !!myChannelRole
+        : true;
+  const canInteractWithChannel =
+    conv?.type === "channel" || conv?.type === "group" ? !!myChannelRole : true;
 
   const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
   const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
@@ -769,6 +785,23 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
   });
 
+  const joinGroupMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/conversations/${conversationId}/join`, {});
+    },
+    onSuccess: () => {
+      setHideJoinButton(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({ title: t.joinGroup });
+    },
+    onError: (err: Error) => {
+      setHideJoinButton(false);
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
   const subscribeMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", `/api/conversations/${conversationId}/subscribe`, {});
@@ -1031,6 +1064,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   useEffect(() => {
     setHideSubscribeButton(false);
+    setHideJoinButton(false);
   }, [conversationId]);
 
   const handleSend = () => {
@@ -1294,6 +1328,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const isOwner = myRole === "owner";
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
   const isChannelReadOnly = conv.type === "channel" && !myRole;
+  const isGroupReadOnly = conv.type === "group" && !myRole;
+  const showGuestAction = isChannelReadOnly || isGroupReadOnly;
   const showChannelComposer = !isChannelMemberReadOnly;
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
@@ -1548,6 +1584,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           templateId: payload.templateId,
           templateName: payload.templateName,
           snapshot: payload.snapshot as { root: import("@shared/questionnaireTypes").QuestionnaireNode[] },
+          hintsMode: payload.hintsMode,
         });
       }
     }
@@ -2056,7 +2093,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
       {showChannelComposer && (
       <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
-          {!isChatSearchOpen && !isChannelReadOnly && (replyTo || editing) && (
+          {!isChatSearchOpen && !showGuestAction && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
               {editing ? (
                 <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -2105,8 +2142,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </div>
           )}
 
-          {isChannelReadOnly ? (
-            !hideSubscribeButton ? (
+          {showGuestAction ? (
+            isChannelReadOnly && !hideSubscribeButton ? (
               <Button
                 type="button"
                 className="w-full"
@@ -2120,6 +2157,22 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                   </>
                 ) : (
                   t.subscribeToChannel
+                )}
+              </Button>
+            ) : isGroupReadOnly && !hideJoinButton ? (
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => joinGroupMutation.mutate()}
+                disabled={joinGroupMutation.isPending}
+              >
+                {joinGroupMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t.actionJoinGroup}
+                  </>
+                ) : (
+                  t.joinGroup
                 )}
               </Button>
             ) : null
@@ -2225,6 +2278,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 structure={templatePreview.snapshot}
                 templateName={templatePreview.templateName}
                 templateId={templatePreview.templateId}
+                hintsMode={templatePreview.hintsMode}
                 onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
                 isCopying={copyTemplateMutation.isPending}
               />
@@ -2516,6 +2570,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                   structure={templatePreview.snapshot}
                   templateName={templatePreview.templateName}
                   templateId={templatePreview.templateId}
+                  hintsMode={templatePreview.hintsMode}
                   onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
                   isCopying={copyTemplateMutation.isPending}
                 />

@@ -57,12 +57,12 @@ import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, isNull } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
+import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
 import {
-  DEFAULT_QUESTIONNAIRE_TEMPLATE_NAME,
-  deepCloneQuestionnaireStructure,
-  getDefaultQuestionnaireStructure,
-} from "./questionnaireDefaults";
-import { emptyQuestionnaireInstanceData } from "@shared/questionnaireTypes";
+  emptyQuestionnaireInstanceData,
+  parseQuestionnaireHintsMode,
+  type QuestionnaireHintsMode,
+} from "@shared/questionnaireTypes";
 import { isPositiveTierAmount } from "@shared/sponsorTiers";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
@@ -106,6 +106,37 @@ export type MessengerChannelDiscoverItem = {
 export type MessengerChannelBrowseList = {
   subscriptions: MessengerChannelListItem[];
   discover: MessengerChannelDiscoverItem[];
+};
+
+export type MessengerGroupListItem = {
+  id: string;
+  type: "group" | "consilium";
+  name: string | null;
+  avatarUrl: string | null;
+  participantCount: number;
+  isMember: boolean;
+  myRole?: string;
+  patientUserId?: string | null;
+  lastMessagePreview: string | null;
+  lastMessageAt: Date | null;
+  unreadCount: number;
+  isClosed?: boolean;
+};
+
+export type MessengerGroupDiscoverItem = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+  participantCount: number;
+  isMember: boolean;
+  lastMessagePreview: string | null;
+  lastMessageAt: Date | null;
+  isClosed: boolean;
+};
+
+export type MessengerGroupBrowseList = {
+  subscriptions: MessengerGroupListItem[];
+  discover: MessengerGroupDiscoverItem[];
 };
 
 export type MessengerUnreadSummary = {
@@ -238,11 +269,12 @@ export interface IStorage {
     name: string;
     structure: QuestionnaireTemplateStructure;
     isShared?: boolean;
+    hintsMode?: QuestionnaireHintsMode;
   }): Promise<QuestionnaireTemplate>;
   updateQuestionnaireTemplate(
     id: string,
     ownerUserId: string,
-    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }>
+    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean; hintsMode: QuestionnaireHintsMode }>
   ): Promise<QuestionnaireTemplate | undefined>;
   deleteQuestionnaireTemplate(id: string, ownerUserId: string): Promise<boolean>;
   duplicateQuestionnaireTemplate(id: string, ownerUserId: string): Promise<QuestionnaireTemplate | undefined>;
@@ -252,8 +284,6 @@ export interface IStorage {
     name?: string
   ): Promise<QuestionnaireTemplate | undefined>;
   incrementTemplatePatientSendCount(templateId: string): Promise<void>;
-  ensureDefaultQuestionnaireTemplate(userId: string): Promise<QuestionnaireTemplate | undefined>;
-  backfillDefaultQuestionnaireTemplatesForAdmins(): Promise<number>;
   listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]>;
   getQuestionnaireInstance(id: string): Promise<QuestionnaireInstance | undefined>;
   createQuestionnaireInstance(data: {
@@ -263,6 +293,7 @@ export interface IStorage {
     patientUserId: string;
     doctorUserId: string;
     structureSnapshot: QuestionnaireTemplateStructure;
+    hintsModeSnapshot: QuestionnaireHintsMode;
   }): Promise<QuestionnaireInstance>;
   updateQuestionnaireInstanceData(
     id: string,
@@ -383,6 +414,7 @@ export interface IStorage {
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
   getMessengerChannelBrowseList(userId: string, isAdmin: boolean): Promise<MessengerChannelBrowseList>;
+  getMessengerGroupBrowseList(userId: string): Promise<MessengerGroupBrowseList>;
 
   // Channel sponsor monetization
   getChannelSponsorSettings(conversationId: string): Promise<ChannelSponsorSettings | undefined>;
@@ -948,6 +980,7 @@ export class DatabaseStorage implements IStorage {
     name: string;
     structure: QuestionnaireTemplateStructure;
     isShared?: boolean;
+    hintsMode?: QuestionnaireHintsMode;
   }): Promise<QuestionnaireTemplate> {
     const [created] = await db
       .insert(questionnaireTemplates)
@@ -955,6 +988,7 @@ export class DatabaseStorage implements IStorage {
         ownerUserId: data.ownerUserId,
         name: data.name.trim(),
         structure: data.structure,
+        hintsMode: data.hintsMode ?? "icon",
         isShared: data.isShared ?? false,
       })
       .returning();
@@ -964,12 +998,13 @@ export class DatabaseStorage implements IStorage {
   async updateQuestionnaireTemplate(
     id: string,
     ownerUserId: string,
-    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean }>
+    data: Partial<{ name: string; structure: QuestionnaireTemplateStructure; isShared: boolean; hintsMode: QuestionnaireHintsMode }>
   ): Promise<QuestionnaireTemplate | undefined> {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (data.name !== undefined) patch.name = data.name.trim();
     if (data.structure !== undefined) patch.structure = data.structure;
     if (data.isShared !== undefined) patch.isShared = data.isShared;
+    if (data.hintsMode !== undefined) patch.hintsMode = data.hintsMode;
     const [updated] = await db
       .update(questionnaireTemplates)
       .set(patch)
@@ -996,6 +1031,7 @@ export class DatabaseStorage implements IStorage {
       ownerUserId,
       name: `${source.name} (копия)`,
       structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
+      hintsMode: parseQuestionnaireHintsMode(source.hintsMode),
       isShared: false,
     });
   }
@@ -1014,6 +1050,7 @@ export class DatabaseStorage implements IStorage {
       ownerUserId: newOwnerUserId,
       name: name?.trim() || `${source.name} (копия)`,
       structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
+      hintsMode: parseQuestionnaireHintsMode(source.hintsMode),
       isShared: false,
     });
 
@@ -1039,34 +1076,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(questionnaireTemplates.id, templateId));
   }
 
-  async ensureDefaultQuestionnaireTemplate(userId: string): Promise<QuestionnaireTemplate | undefined> {
-    const [existing] = await db
-      .select({ id: questionnaireTemplates.id })
-      .from(questionnaireTemplates)
-      .where(eq(questionnaireTemplates.ownerUserId, userId))
-      .limit(1);
-    if (existing) return undefined;
-    return this.createQuestionnaireTemplate({
-      ownerUserId: userId,
-      name: DEFAULT_QUESTIONNAIRE_TEMPLATE_NAME,
-      structure: getDefaultQuestionnaireStructure(),
-      isShared: false,
-    });
-  }
-
-  async backfillDefaultQuestionnaireTemplatesForAdmins(): Promise<number> {
-    const admins = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.isAdmin, true));
-    let count = 0;
-    for (const admin of admins) {
-      const created = await this.ensureDefaultQuestionnaireTemplate(admin.id);
-      if (created) count += 1;
-    }
-    return count;
-  }
-
   async listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]> {
     return db
       .select()
@@ -1087,6 +1096,7 @@ export class DatabaseStorage implements IStorage {
     patientUserId: string;
     doctorUserId: string;
     structureSnapshot: QuestionnaireTemplateStructure;
+    hintsModeSnapshot: QuestionnaireHintsMode;
   }): Promise<QuestionnaireInstance> {
     const [created] = await db
       .insert(questionnaireInstances)
@@ -1097,6 +1107,7 @@ export class DatabaseStorage implements IStorage {
         patientUserId: data.patientUserId,
         doctorUserId: data.doctorUserId,
         structureSnapshot: data.structureSnapshot,
+        hintsModeSnapshot: data.hintsModeSnapshot,
         data: emptyQuestionnaireInstanceData(),
       })
       .returning();
@@ -1337,7 +1348,7 @@ export class DatabaseStorage implements IStorage {
         isMember: myConvIds.has(conv.id),
         lastMessagePreview: conv.lastMessagePreview ?? null,
         lastMessageAt: conv.lastMessageAt ?? null,
-        ...(options.type === "channel"
+        ...(options.type === "channel" || options.type === "group"
           ? { patientAvailable: conv.patientAvailable, isClosed: conv.isClosed }
           : {}),
       });
@@ -2234,6 +2245,65 @@ export class DatabaseStorage implements IStorage {
       if (aTime !== bTime) return bTime - aTime;
       return (a.name ?? "").localeCompare(b.name ?? "", "ru");
     });
+    return { subscriptions, discover };
+  }
+
+  async getMessengerGroupBrowseList(userId: string): Promise<MessengerGroupBrowseList> {
+    const convList = await this.getConversationsForUser(userId);
+    const memberGroups = convList.filter((conv) => conv.type === "group" || conv.type === "consilium");
+
+    const subscriptions: MessengerGroupListItem[] = await Promise.all(
+      memberGroups.map(async (conv) => {
+        const myRole = conv.participants.find((p) => p.userId === userId)?.role ?? "member";
+        const unreadCount = await this.getConversationUnreadCount(conv.id, userId);
+        return {
+          id: conv.id,
+          type: conv.type as "group" | "consilium",
+          name: conv.name,
+          avatarUrl: conv.avatarUrl ?? null,
+          participantCount: conv.participants.length,
+          isMember: true,
+          myRole,
+          patientUserId: conv.patientUserId ?? null,
+          lastMessagePreview: conv.lastMessagePreview ?? null,
+          lastMessageAt: conv.lastMessageAt ?? null,
+          unreadCount,
+          ...(conv.type === "group" ? { isClosed: conv.isClosed ?? false } : {}),
+        };
+      })
+    );
+
+    subscriptions.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    const subscriptionGroupIds = subscriptions
+      .filter((item) => item.type === "group")
+      .map((item) => item.id);
+    const discoverRaw = await this.getDiscoverableConversations(userId, {
+      type: "group",
+      excludeClosed: true,
+      excludeConversationIds: subscriptionGroupIds,
+    });
+    const discover: MessengerGroupDiscoverItem[] = discoverRaw.map((group) => ({
+      id: group.id,
+      name: group.name,
+      avatarUrl: group.avatarUrl,
+      participantCount: group.participantCount,
+      isMember: false,
+      lastMessagePreview: group.lastMessagePreview,
+      lastMessageAt: group.lastMessageAt,
+      isClosed: group.isClosed ?? false,
+    }));
+    discover.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+
     return { subscriptions, discover };
   }
 

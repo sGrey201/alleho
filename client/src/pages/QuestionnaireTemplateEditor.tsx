@@ -34,13 +34,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useQuestionnaireHintsMode } from "@/hooks/useQuestionnaireHintsMode";
 import { QuestionnaireHintPopover, QuestionnaireHintText } from "@/components/QuestionnaireHintPopover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import type { QuestionnaireTemplate } from "@shared/schema";
 import {
   MAX_QUESTIONNAIRE_DEPTH,
+  DEFAULT_QUESTIONNAIRE_HINTS_MODE,
+  parseQuestionnaireHintsMode,
   getQuestionnaireNodeDepth,
   type QuestionnaireHintsMode,
   type QuestionnaireNode,
@@ -431,9 +433,8 @@ export function QuestionnaireTemplateEditor({
   onBack?: () => void;
 }) {
   const { toast } = useToast();
-  const hintsMode = useQuestionnaireHintsMode();
-  const showHintsAsIcon = hintsMode === "icon";
   const [name, setName] = useState("");
+  const [hintsMode, setHintsMode] = useState<QuestionnaireHintsMode>(DEFAULT_QUESTIONNAIRE_HINTS_MODE);
   const [structure, setStructure] = useState<QuestionnaireTemplateStructure>({ root: [] });
   const [dirty, setDirty] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
@@ -452,6 +453,7 @@ export function QuestionnaireTemplateEditor({
   useEffect(() => {
     if (data) {
       setName(data.name);
+      setHintsMode(parseQuestionnaireHintsMode(data.hintsMode));
       setStructure(data.structure as QuestionnaireTemplateStructure);
       setDirty(false);
     }
@@ -471,6 +473,7 @@ export function QuestionnaireTemplateEditor({
       const res = await apiRequest("PATCH", `/api/questionnaire-templates/${templateId}`, {
         name: trimmed,
         structure,
+        hintsMode,
       });
       return res.json();
     },
@@ -576,6 +579,8 @@ export function QuestionnaireTemplateEditor({
     markDirty();
   };
 
+  const showHintsAsIcon = hintsMode === "icon";
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -616,6 +621,30 @@ export function QuestionnaireTemplateEditor({
           }}
           required
         />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border/60 p-4">
+        <Label className="text-base font-medium">{t.questionnaireHintsSetting}</Label>
+        <RadioGroup
+          value={hintsMode}
+          onValueChange={(value) => {
+            setHintsMode(value as QuestionnaireHintsMode);
+            markDirty();
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="always" id="template-hints-always" />
+            <Label htmlFor="template-hints-always" className="cursor-pointer font-normal">
+              {t.questionnaireHintsAlways}
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="icon" id="template-hints-icon" />
+            <Label htmlFor="template-hints-icon" className="cursor-pointer font-normal">
+              {t.questionnaireHintsIcon}
+            </Label>
+          </div>
+        </RadioGroup>
       </div>
 
       <Accordion type="multiple" defaultValue={[]} className="rounded-lg border px-4">

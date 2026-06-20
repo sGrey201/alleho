@@ -577,13 +577,10 @@ export default function Messenger() {
     void openDirectChat({ userId: doctor.userId, conversationId: doctor.conversationId });
   };
 
-  const handleSelectGroup = async (group: MessengerSearchGroup) => {
-    if (group.isMember) {
-      setFolder("groups");
-      setLocation(`/messenger/group/${group.id}`);
-      return;
-    }
-    toast({ title: t.onlyOwnerCanAddMembers, variant: "destructive" });
+  const handleSelectGroup = (group: MessengerSearchGroup) => {
+    setSearchQuery("");
+    setFolder("groups");
+    setLocation(`/messenger/group/${group.id}`);
   };
 
   const createInviteLinkMutation = useMutation({
@@ -918,7 +915,7 @@ export default function Messenger() {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-foreground truncate">{group.name || t.chatGroup}</p>
-                              {renderDiscoverSearchSubtitle(group, t.chatGroup, t.onlyOwnerCanAddMembers)}
+                              {renderDiscoverSearchSubtitle(group, t.chatGroup, t.actionJoinGroup)}
                             </div>
                           </button>
                         ))}
@@ -965,14 +962,25 @@ export default function Messenger() {
                 <div className="pt-1">
                   {listToShow.map((chat) => {
                     if (chat.type === "divider") {
+                      const isGroupsDivider = chat.dividerKey === "groups-split";
                       return (
                         <div
                           key={chat.dividerKey ?? "channels-split"}
                           className="px-3 py-2 text-center text-xs text-muted-foreground border-y border-border/60 bg-muted/20"
                         >
-                          <span>{t.channelSubscriptionsDivider}</span>
-                          <span className="mx-1.5">|</span>
-                          <span>{t.channelAllDivider}</span>
+                          {isGroupsDivider ? (
+                            <>
+                              <span>{t.groupMyDivider}</span>
+                              <span className="mx-1.5">|</span>
+                              <span>{t.groupPublicDivider}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{t.channelSubscriptionsDivider}</span>
+                              <span className="mx-1.5">|</span>
+                              <span>{t.channelAllDivider}</span>
+                            </>
+                          )}
                         </div>
                       );
                     }
@@ -980,6 +988,8 @@ export default function Messenger() {
                     const label = getChatListLabel(chat, !!isAdmin);
                     const isDiscoverChannel =
                       chat.type === "channel" && (chat.section === "discover" || chat.isMember === false);
+                    const isDiscoverGroup =
+                      chat.type === "group" && (chat.section === "discover" || chat.isMember === false);
                     const badge =
                       chat.type === "patient"
                         ? isAdmin
@@ -995,7 +1005,11 @@ export default function Messenger() {
                                 : chat.myRole === "owner"
                                   ? t.channelOwn
                                   : t.channelSub
-                              : t.chatGroup;
+                              : chat.type === "group"
+                                ? isDiscoverGroup && !chat.isMember
+                                  ? t.actionJoinGroup
+                                  : t.chatGroup
+                                : t.chatGroup;
                     const isPatientRow = chat.type === "patient";
                     const rawMsgPreview = chat.lastMessagePreview?.trim() ?? "";
                     const displayMsgPreview = normalizeMessengerListPreview(rawMsgPreview);
@@ -1011,6 +1025,16 @@ export default function Messenger() {
                               id: chat.conversationId,
                               name: chat.name ?? null,
                               avatarUrl: chat.avatarUrl ?? null,
+                              isMember: chat.isMember ?? chat.section !== "discover",
+                            });
+                            return;
+                          }
+                          if (chat.type === "group" && chat.conversationId) {
+                            handleSelectGroup({
+                              id: chat.conversationId,
+                              name: chat.name ?? null,
+                              avatarUrl: chat.avatarUrl ?? null,
+                              participantCount: chat.participantCount ?? 0,
                               isMember: chat.isMember ?? chat.section !== "discover",
                             });
                             return;

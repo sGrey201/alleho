@@ -147,9 +147,6 @@ app.use((req, res, next) => {
 
   server.listen(listenOptions, () => {
     log(`serving on port ${port}`);
-    void storage.backfillDefaultQuestionnaireTemplatesForAdmins().then((count) => {
-      if (count > 0) log(`backfilled default questionnaire templates for ${count} doctors`);
-    }).catch((err) => console.error("[questionnaire] backfill error:", err));
 
     // Periodically cancel unanswered calls and clean up orphaned active calls.
     void import("./voiceCall").then(({ sweepExpiredCalls, sweepOrphanedCalls }) => {

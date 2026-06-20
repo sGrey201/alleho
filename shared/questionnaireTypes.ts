@@ -4,6 +4,12 @@ export const QUESTIONNAIRE_HINTS_MODES = ["always", "icon"] as const;
 export type QuestionnaireHintsMode = (typeof QUESTIONNAIRE_HINTS_MODES)[number];
 export const DEFAULT_QUESTIONNAIRE_HINTS_MODE: QuestionnaireHintsMode = "icon";
 
+export function parseQuestionnaireHintsMode(value: unknown): QuestionnaireHintsMode {
+  return value === "always" || value === "icon" ? value : DEFAULT_QUESTIONNAIRE_HINTS_MODE;
+}
+
+export const questionnaireHintsModeSchema = z.enum(QUESTIONNAIRE_HINTS_MODES);
+
 export const MAX_QUESTIONNAIRE_DEPTH = 3;
 
 export const questionnaireTagSchema = z.object({
@@ -110,6 +116,7 @@ export const questionnaireTemplateMessageContentSchema = z.object({
   templateId: z.string().min(1),
   templateName: z.string().min(1),
   snapshot: questionnaireTemplateStructureSchema.optional(),
+  hintsMode: questionnaireHintsModeSchema.optional(),
 });
 
 export type QuestionnaireMessageContent = z.infer<typeof questionnaireMessageContentSchema>;

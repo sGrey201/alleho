@@ -178,10 +178,10 @@
       "breakpoints": true
     },
     {
-      "idx": 26,
+      "idx": 28,
       "version": "7",
-      "when": 1774140000000,
-      "tag": "0026_conversation_soft_delete",
+      "when": 1774160000000,
+      "tag": "0028_group_default_closed",
       "breakpoints": true
     }
   ]

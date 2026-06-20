@@ -17,8 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
-import type { QuestionnaireHintsMode } from "@shared/questionnaireTypes";
-import { DEFAULT_QUESTIONNAIRE_HINTS_MODE } from "@shared/questionnaireTypes";
+import { parseQuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import type { AccountReportCategory } from "@shared/schema";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
@@ -297,9 +296,6 @@ export default function Profile({
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showChangePasswordForm, setShowChangePasswordForm] = useState(false);
-  const [questionnaireHintsMode, setQuestionnaireHintsMode] = useState<QuestionnaireHintsMode>(
-    DEFAULT_QUESTIONNAIRE_HINTS_MODE
-  );
   const hasPassword = (user as { hasPassword?: boolean } | undefined)?.hasPassword !== false;
   const { data: ownInviteSummary } = useQuery<InviteProfileSummary>({
     queryKey: ["/api/invites/profile-summary"],
@@ -423,10 +419,6 @@ export default function Profile({
       setCountry(profileUser.country || "");
       setCity(profileUser.city || "");
       setProfileImageUrl(profileUser.profileImageUrl || "");
-      setQuestionnaireHintsMode(
-        (profileUser as { questionnaireHintsMode?: QuestionnaireHintsMode }).questionnaireHintsMode ??
-          DEFAULT_QUESTIONNAIRE_HINTS_MODE
-      );
     }
   }, [profileUser]);
 
@@ -475,7 +467,6 @@ export default function Profile({
       country: string | null;
       city: string | null;
       profileImageUrl: string | null;
-      questionnaireHintsMode?: QuestionnaireHintsMode;
     }) => {
       return apiRequest('PUT', '/api/user/profile', data);
     },
@@ -499,7 +490,6 @@ export default function Profile({
         country: country || null,
         city: city || null,
         profileImageUrl: profileImageUrl || null,
-        questionnaireHintsMode,
       });
 
       toast({
@@ -559,7 +549,6 @@ export default function Profile({
           country: country || null,
           city: city || null,
           profileImageUrl: newAvatarPath,
-          questionnaireHintsMode,
         });
         toast({ title: "Аватар сохранен" });
       } catch {
@@ -695,6 +684,7 @@ export default function Profile({
               structure={previewTemplate.structure}
               templateName={previewTemplate.name}
               templateId={previewTemplate.id}
+              hintsMode={parseQuestionnaireHintsMode(previewTemplate.hintsMode)}
               onCopy={
                 user?.isAdmin && !isOwnProfile
                   ? () => previewTemplateId && copyTemplateMutation.mutate(previewTemplateId)
@@ -789,7 +779,7 @@ export default function Profile({
               )}
             </p>
           </div>
-          <AcceptedInvitesStats counts={acceptedInvites} />
+          {profileUser.isAdmin && <AcceptedInvitesStats counts={acceptedInvites} />}
           {sharedQuestionnairesSection}
           {canReportUser && (
             <Button
@@ -985,28 +975,6 @@ export default function Profile({
           />
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border/60 p-4">
-          <Label className="text-base font-medium">{t.questionnaireHintsSetting}</Label>
-          <RadioGroup
-            value={questionnaireHintsMode}
-            onValueChange={(value) => setQuestionnaireHintsMode(value as QuestionnaireHintsMode)}
-            disabled={!isOwnProfile}
-          >
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="always" id="questionnaire-hints-always" />
-              <Label htmlFor="questionnaire-hints-always" className="cursor-pointer font-normal">
-                {t.questionnaireHintsAlways}
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="icon" id="questionnaire-hints-icon" />
-              <Label htmlFor="questionnaire-hints-icon" className="cursor-pointer font-normal">
-                {t.questionnaireHintsIcon}
-              </Label>
-            </div>
-          </RadioGroup>
-        </div>
-
         {hasPassword && (
           <div>
             {!showChangePasswordForm ? (
@@ -1117,9 +1085,11 @@ export default function Profile({
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <AcceptedInvitesStats counts={acceptedInvites} />
-        </div>
+        {profileUser.isAdmin && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AcceptedInvitesStats counts={acceptedInvites} />
+          </div>
+        )}
 
         {sharedQuestionnairesSection}
 

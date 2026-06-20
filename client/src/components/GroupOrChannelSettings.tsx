@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, Loader2, Trash2, UserPlus, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, UserPlus, Pencil, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -25,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { t } from "@/lib/i18n";
-import { messengerProfilePath } from "@/lib/messengerPaths";
+import { messengerProfilePath, shareMessengerConversation } from "@/lib/messengerPaths";
 import { profileAvatarSrc } from "@/lib/utils";
 
 type Participant = {
@@ -42,6 +43,7 @@ type ConversationInfo = {
   avatarUrl?: string | null;
   participantCount?: number;
   patientAvailable?: boolean;
+  isClosed?: boolean;
   sponsorSettings?: { enabled: boolean } | null;
   isSponsor?: boolean;
   participants?: Participant[];
@@ -76,6 +78,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [isEditingName, setIsEditingName] = useState(false);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [patientAvailable, setPatientAvailable] = useState(false);
+  const [isClosed, setIsClosed] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { uploadFile, isUploading } = useUpload();
@@ -90,7 +93,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     setNameDraft(conv.name ?? "");
     setAvatarDraft(conv.avatarUrl ?? "");
     setPatientAvailable(!!conv.patientAvailable);
-  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable]);
+    setIsClosed(conv.isClosed ?? true);
+  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed]);
 
   const myRole = conv?.participants?.find((p) => p.userId === currentUserId)?.role;
   const isOwner = myRole === "owner";
@@ -128,7 +132,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   });
 
   const saveVisibilityMutation = useMutation({
-    mutationFn: async (flags: { patientAvailable: boolean }) => {
+    mutationFn: async (flags: { patientAvailable?: boolean; isClosed?: boolean }) => {
       const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, flags);
       return res.json();
     },
@@ -196,6 +200,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   });
 
   const canUnsubscribeFromChannel = mode === "channel" && !!myRole && !isOwner;
+  const isPublicProfile = !isClosed;
 
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -258,6 +263,25 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       setAvatarViewerOpen(true);
     }
   };
+
+  const handleShareConversation = async () => {
+    const title = displayName || (mode === "group" ? t.chatGroup : t.channelSub);
+    const result = await shareMessengerConversation({
+      mode,
+      conversationId,
+      title,
+    });
+    if (result === "copied") {
+      toast({ title: t.conversationLinkCopied });
+    }
+  };
+
+  const shareConversationButton = isPublicProfile ? (
+    <Button type="button" variant="outline" className="w-full" onClick={() => void handleShareConversation()}>
+      <Share2 className="mr-2 h-4 w-4" />
+      {t.shareConversation}
+    </Button>
+  ) : null;
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -451,6 +475,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
+        {mode === "group" && shareConversationButton}
+
         {mode === "group" && (
           <div className="space-y-2">
             <p className="text-sm font-medium">{t.participants}</p>
@@ -496,6 +522,41 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
+        {mode === "group" && isOwner && (
+          <div className="space-y-3 rounded-lg border px-4 py-3">
+            <p className="text-sm font-medium">{t.groupVisibilityTitle}</p>
+            <RadioGroup
+              value={isClosed ? "closed" : "public"}
+              onValueChange={(value) => {
+                const nextIsClosed = value === "closed";
+                setIsClosed(nextIsClosed);
+                saveVisibilityMutation.mutate({ isClosed: nextIsClosed });
+              }}
+              disabled={saveVisibilityMutation.isPending}
+              className="space-y-2"
+            >
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="public" id="group-visibility-public" className="mt-0.5" />
+                <div>
+                  <Label htmlFor="group-visibility-public" className="cursor-pointer font-normal">
+                    {t.groupVisibilityPublic}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t.groupVisibilityPublicHint}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="closed" id="group-visibility-closed" className="mt-0.5" />
+                <div>
+                  <Label htmlFor="group-visibility-closed" className="cursor-pointer font-normal">
+                    {t.groupVisibilityClosed}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t.groupVisibilityClosedHint}</p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+        )}
+
         {mode === "channel" && isOwner && (
           <div className="space-y-3 rounded-lg border px-4 py-3">
             <p className="text-sm font-medium">{t.channelVisibilityTitle}</p>
@@ -516,6 +577,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
             </div>
           </div>
         )}
+
+        {mode === "channel" && shareConversationButton}
 
         {mode === "channel" && (
           <>

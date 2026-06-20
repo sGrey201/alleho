@@ -21,18 +21,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { QuestionnaireTemplate } from "@shared/schema";
 import { QuestionnaireTemplateEditor } from "@/pages/QuestionnaireTemplateEditor";
+import { QuestionnaireTemplatesEmptyState } from "@/components/QuestionnaireTemplatesEmptyState";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 
 export default function QuestionnaireTemplates() {
-  const { toast } = useToast();
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   const [, editParams] = useRoute("/questionnaires/:id/edit");
@@ -73,21 +72,6 @@ export default function QuestionnaireTemplates() {
     },
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/questionnaire-templates/restore-default");
-      return res.json() as Promise<QuestionnaireTemplate>;
-    },
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
-      toast({ title: t.standardQuestionnaireName });
-      if (created?.id) {
-        setLocation(`/questionnaires/${created.id}/edit`);
-      }
-    },
-    onError: () => toast({ title: t.error, variant: "destructive" }),
-  });
-
   const duplicateMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("POST", `/api/questionnaire-templates/${id}/duplicate`);
@@ -123,6 +107,7 @@ export default function QuestionnaireTemplates() {
   const showList = isMobile ? !selectedId : true;
   const showEditor = !!selectedId;
   const isMobileEditorOpen = isMobile && showEditor;
+  const isEmpty = !isLoading && templates.length === 0;
 
   const handleBackFromSection = () => {
     setLocation("/messenger");
@@ -163,14 +148,14 @@ export default function QuestionnaireTemplates() {
         <div className="flex flex-1 items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : templates.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-sm text-muted-foreground">{t.noDataAvailable}</p>
-          <Button variant="outline" onClick={() => restoreMutation.mutate()} disabled={restoreMutation.isPending}>
-            {restoreMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {t.restoreStandardQuestionnaire}
-          </Button>
-        </div>
+      ) : isEmpty ? (
+        isMobile ? (
+          <QuestionnaireTemplatesEmptyState />
+        ) : (
+          <p className="px-4 py-8 text-center text-xs leading-relaxed text-muted-foreground">
+            {t.questionnaireTemplatesEmptyTitle}
+          </p>
+        )
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="py-1">
@@ -250,25 +235,33 @@ export default function QuestionnaireTemplates() {
         />
       </div>
     ) : !isMobile ? (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : t.noDataAvailable}
+      <div className="flex min-h-0 flex-1 flex-col bg-muted/15">
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : isEmpty ? (
+          <QuestionnaireTemplatesEmptyState />
+        ) : (
+          <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+            {t.selectQuestionnaireToSend}
+          </div>
+        )}
       </div>
     ) : null;
 
   return (
     <>
       <RouteSeo {...(selectedId ? pageMeta.questionnaireEdit : pageMeta.questionnaires)} />
-    <div className="flex h-full min-h-0 flex-col md:flex-row">
-      {showList && (
-        <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-b md:w-80 md:max-w-sm md:border-b-0 md:border-r">
-          {listPanel}
-        </aside>
-      )}
-      {!isMobile && <div className="flex min-h-0 min-w-0 flex-1 flex-col">{editorPanel}</div>}
-      {isMobileEditorOpen && (
-        <div className="flex min-h-0 flex-1 flex-col">{editorPanel}</div>
-      )}
-    </div>
+      <div className="flex h-full min-h-0 flex-col md:flex-row">
+        {showList && (
+          <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-b md:w-80 md:max-w-sm md:border-b-0 md:border-r">
+            {listPanel}
+          </aside>
+        )}
+        {!isMobile && <div className="flex min-h-0 min-w-0 flex-1 flex-col">{editorPanel}</div>}
+        {isMobileEditorOpen && <div className="flex min-h-0 flex-1 flex-col">{editorPanel}</div>}
+      </div>
     </>
   );
 }

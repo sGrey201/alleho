@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuestionnaireHintsMode } from "@/hooks/useQuestionnaireHintsMode";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { QuestionnaireTagSelector } from "@/components/QuestionnaireTagSelector";
@@ -20,8 +19,9 @@ import type {
   QuestionnaireTagEntry,
   QuestionnaireTemplateStructure,
   PatientProfileBlock,
+  QuestionnaireHintsMode,
 } from "@shared/questionnaireTypes";
-import { emptyQuestionnaireInstanceData } from "@shared/questionnaireTypes";
+import { emptyQuestionnaireInstanceData, parseQuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import { cn } from "@/lib/utils";
 
 const months = [
@@ -44,6 +44,7 @@ type InstanceResponse = {
   structureSnapshot: QuestionnaireTemplateStructure;
   data: QuestionnaireInstanceData;
   templateName: string;
+  hintsModeSnapshot?: QuestionnaireHintsMode;
 };
 
 type Props = {
@@ -60,6 +61,7 @@ type Props = {
       structure: QuestionnaireTemplateStructure;
       templateName: string;
       templateId?: string;
+      hintsMode?: QuestionnaireHintsMode;
       onCopy?: () => void;
       isCopying?: boolean;
     }
@@ -108,7 +110,10 @@ export default function DynamicQuestionnaireForm(props: Props) {
   const templateName = props.mode === "instance" ? instanceQuery.data?.templateName ?? "" : props.templateName;
   const readOnly = props.mode === "preview" ? true : !!props.readOnly;
   const canEditNotes = props.mode === "instance" && !readOnly && !!user?.isAdmin;
-  const hintsMode = useQuestionnaireHintsMode();
+  const hintsMode =
+    props.mode === "instance"
+      ? parseQuestionnaireHintsMode(instanceQuery.data?.hintsModeSnapshot)
+      : parseQuestionnaireHintsMode(props.hintsMode);
   const showHintsAsIcon = hintsMode === "icon";
 
   const renderSectionHint = (hint?: string) => {

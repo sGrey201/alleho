@@ -13,6 +13,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import {
   questionnaireInstanceDataSchema,
+  questionnaireHintsModeSchema,
   questionnaireTemplateStructureSchema,
   type QuestionnaireInstanceData,
   type QuestionnaireTemplateStructure,
@@ -228,6 +229,7 @@ export const questionnaireTemplates = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 255 }).notNull(),
     structure: jsonb("structure").notNull().default({ root: [] }),
+    hintsMode: varchar("hints_mode", { length: 20 }).default("icon").notNull(),
     isShared: boolean("is_shared").notNull().default(false),
     patientSendCount: integer("patient_send_count").notNull().default(0),
     copyCount: integer("copy_count").notNull().default(0),
@@ -246,6 +248,7 @@ export const insertQuestionnaireTemplateSchema = createInsertSchema(questionnair
 }).extend({
   name: z.string().trim().min(1).max(255),
   structure: questionnaireTemplateStructureSchema,
+  hintsMode: questionnaireHintsModeSchema.optional(),
 });
 
 export type QuestionnaireTemplate = typeof questionnaireTemplates.$inferSelect;
@@ -405,6 +408,7 @@ export const questionnaireInstances = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     structureSnapshot: jsonb("structure_snapshot").notNull(),
+    hintsModeSnapshot: varchar("hints_mode_snapshot", { length: 20 }).default("icon").notNull(),
     data: jsonb("data").notNull().default({}),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
