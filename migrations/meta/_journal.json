@@ -171,10 +171,31 @@
       "breakpoints": true
     },
     {
+      "idx": 24,
+      "version": "7",
+      "when": 1774120000000,
+      "tag": "0024_account_reports",
+      "breakpoints": true
+    },
+    {
       "idx": 25,
       "version": "7",
       "when": 1774130000000,
       "tag": "0025_channel_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1774140000000,
+      "tag": "0026_conversation_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1774150000000,
+      "tag": "0027_questionnaire_template_hints_mode",
       "breakpoints": true
     },
     {
