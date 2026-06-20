@@ -371,6 +371,14 @@ html.app-immersive #root {
   padding-left: env(safe-area-inset-left, 0px);
 }
 
+/* Profile panel inside messenger (overflow-y-auto utility loses to overflow:hidden above) */
+.app-profile-panel-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* Profile: scrollable main (overflow-y-auto utility loses to overflow:hidden above) */
 .app-viewport-content--scroll {
   overflow-x: hidden;

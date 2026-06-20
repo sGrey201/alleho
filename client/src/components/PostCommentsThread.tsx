@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
-import { scrollChatPaneToBottom } from "@/lib/chatScroll";
+import { scrollChatPaneToBottom, scrollChatElementIntoView } from "@/lib/chatScroll";
 import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
@@ -74,6 +74,7 @@ export default function PostCommentsThread({
     rect: { top: number; left: number; width: number; height: number };
   } | null>(null);
   const [inlineContentPaymentSegment, setInlineContentPaymentSegment] = useState<number | null>(null);
+  const paymentSegmentRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const longPressRefs = useRef<MessageLongPressRefs>({
@@ -105,6 +106,11 @@ export default function PostCommentsThread({
   useEffect(() => {
     if (canViewSponsorContent) setInlineContentPaymentSegment(null);
   }, [canViewSponsorContent]);
+
+  useEffect(() => {
+    if (inlineContentPaymentSegment == null) return;
+    scrollChatElementIntoView(paymentSegmentRef.current);
+  }, [inlineContentPaymentSegment]);
 
   const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
@@ -573,6 +579,9 @@ export default function PostCommentsThread({
                     activePaymentSegmentIndex={inlineContentPaymentSegment}
                     onPaymentSegmentOpen={setInlineContentPaymentSegment}
                     onPaymentFlowClose={() => setInlineContentPaymentSegment(null)}
+                    onPaymentSegmentRef={(_segmentIndex, el) => {
+                      paymentSegmentRef.current = el;
+                    }}
                   />
                 ) : null}
                 <span className="mt-1 block text-right text-[10px] leading-none text-muted-foreground">

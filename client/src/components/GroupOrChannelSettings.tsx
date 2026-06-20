@@ -14,7 +14,18 @@ import { useUpload } from "@/hooks/use-upload";
 import ChannelSponsorSection from "@/components/ChannelSponsorSection";
 import ChannelSponsorsList from "@/components/ChannelSponsorsList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { t } from "@/lib/i18n";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { profileAvatarSrc } from "@/lib/utils";
 
 type Participant = {
@@ -65,6 +76,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [isEditingName, setIsEditingName] = useState(false);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [patientAvailable, setPatientAvailable] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { uploadFile, isUploading } = useUpload();
 
@@ -159,6 +171,23 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
       toast({ title: t.channelUnsubscribed });
+      setLocation("/messenger");
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/conversations/${conversationId}`, {});
+    },
+    onSuccess: async () => {
+      setDeleteDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/messenger/search"] });
+      await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
+      toast({ title: t.conversationDeleted });
       setLocation("/messenger");
     },
     onError: (err: Error) => {
@@ -496,6 +525,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 monetizationEnabled={sponsorMonetizationEnabled}
                 isOwner={isOwner}
                 scrollPaymentOnMount={scrollSponsorSection}
+                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
               />
             )}
             {isOwner && (
@@ -514,7 +544,14 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
             <button
               type="button"
               className="text-sm font-medium text-primary hover:underline truncate max-w-full"
-              onClick={() => setLocation(`/profile/${channelOwner.userId}`)}
+              onClick={() =>
+                setLocation(
+                  messengerProfilePath(
+                    channelOwner.userId,
+                    `/messenger/${mode}/${conversationId}/settings`
+                  )
+                )
+              }
             >
               {ownerDisplayName}
             </button>
@@ -535,7 +572,49 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
             {t.unsubscribeFromChannel}
           </Button>
         )}
+
+        {isOwner && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            disabled={deleteMutation.isPending}
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            {mode === "group" ? t.deleteGroup : t.deleteChannel}
+          </Button>
+        )}
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {mode === "group" ? t.deleteGroupConfirmTitle : t.deleteChannelConfirmTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t.deleteGroupOrChannelConfirmDescription}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteMutation.mutate();
+              }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

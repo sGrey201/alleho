@@ -20,6 +20,7 @@ type SponsorAwareMessageTextProps = {
   activePaymentSegmentIndex?: number | null;
   onPaymentSegmentOpen?: (segmentIndex: number) => void;
   onPaymentFlowClose?: () => void;
+  onPaymentSegmentRef?: (segmentIndex: number, el: HTMLDivElement | null) => void;
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
 };
@@ -65,6 +66,7 @@ export function SponsorAwareMessageText({
   activePaymentSegmentIndex = null,
   onPaymentSegmentOpen,
   onPaymentFlowClose,
+  onPaymentSegmentRef,
   onTagClick,
   highlightQuery,
 }: SponsorAwareMessageTextProps) {
@@ -96,6 +98,7 @@ export function SponsorAwareMessageText({
             return (
               <div
                 key={i}
+                ref={(el) => onPaymentSegmentRef?.(i, el)}
                 className="my-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-2"
               >
                 <ChannelSponsorSection

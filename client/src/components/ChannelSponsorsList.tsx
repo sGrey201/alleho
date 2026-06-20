@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Heart, Loader2 } from "lucide-react";
 import ChannelSponsorSection from "@/components/ChannelSponsorSection";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
 
 type ChannelSponsorEntry = {
@@ -16,6 +17,7 @@ type Props = {
   monetizationEnabled: boolean;
   isOwner?: boolean;
   scrollPaymentOnMount?: boolean;
+  profileReturnTo?: string;
 };
 
 function displayName(entry: ChannelSponsorEntry) {
@@ -28,6 +30,7 @@ export default function ChannelSponsorsList({
   monetizationEnabled,
   isOwner = false,
   scrollPaymentOnMount = false,
+  profileReturnTo,
 }: Props) {
   const [, setLocation] = useLocation();
   const blockRef = useRef<HTMLDivElement>(null);
@@ -79,7 +82,7 @@ export default function ChannelSponsorsList({
                 key={sponsor.userId}
                 type="button"
                 className="text-sm text-primary hover:underline"
-                onClick={() => setLocation(`/profile/${sponsor.userId}`)}
+                onClick={() => setLocation(messengerProfilePath(sponsor.userId, profileReturnTo))}
               >
                 {displayName(sponsor)}
               </button>

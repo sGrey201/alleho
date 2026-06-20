@@ -31,7 +31,7 @@ export const pageMeta = {
   profile: {
     title: "Профиль",
     description: "Настройки профиля и параметры работы в hovial.",
-    url: "/profile",
+    url: "/messenger/profile",
   },
   questionnaires: {
     title: "Анкеты",

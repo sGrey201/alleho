@@ -29,6 +29,7 @@ export const t = {
   clear: 'Очистить',
   
   // Landing Page
+  landingInviteOnly: 'Только по приглашению',
   welcomeTitle: 'Профессиональная платформа по гомеопатии',
   welcomeSubtitle: 'Специализированные статьи о пациентах и препаратах',
   loginToStart: 'Войдите, чтобы начать',
@@ -1906,6 +1907,12 @@ export const t = {
   subscribeToChannel: 'Подписаться на канал',
   unsubscribeFromChannel: 'Отписаться',
   channelUnsubscribed: 'Вы отписались от канала',
+  deleteGroup: 'Удалить группу',
+  deleteChannel: 'Удалить канал',
+  deleteGroupConfirmTitle: 'Удалить группу?',
+  deleteChannelConfirmTitle: 'Удалить канал?',
+  deleteGroupOrChannelConfirmDescription: 'Вы уверены, что хотите это сделать?',
+  conversationDeleted: 'Удалено',
   channelOwnerLabel: 'Владелец',
   channelSponsorSectionTitle: 'Спонсорство канала',
   channelSponsorEnable: 'Монетизация канала',
@@ -1929,7 +1936,7 @@ export const t = {
   sponsorChannelPaymentIntro: (days: number) =>
     `Чтобы стать спонсором на ${formatDurationDays(days)}:`,
   sponsorContentPaymentIntro: (days: number) =>
-    `Чтобы получить доступ к контенту на ${formatDurationDays(days)}:`,
+    `Чтобы открыть доступ ко всему платному контенту канала на ${formatDurationDays(days)}:`,
   sponsorPaymentStepTransfer: (amount: string) =>
     `1. Переведите ${amount} рублей одним из следующих способов:`,
   sponsorPaymentStepReceipt: '2. Прикрепите чек',

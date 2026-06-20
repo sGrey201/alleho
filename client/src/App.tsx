@@ -19,7 +19,6 @@ import InviteAccept from "@/pages/InviteAccept";
 import ResetPassword from "@/pages/ResetPassword";
 import About from "@/pages/About";
 import Messenger from "@/pages/Messenger";
-import Profile from "@/pages/Profile";
 import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
@@ -63,8 +62,10 @@ function Router() {
       <Route path="/messenger/channel/:conversationId/post/:messageId/comments" component={Messenger} />
       <Route path="/messenger/group/:conversationId/settings" component={Messenger} />
       <Route path="/messenger/channel/:conversationId/settings" component={Messenger} />
-      <Route path="/profile/:userId">{() => <Profile />}</Route>
-      <Route path="/profile">{() => <Profile />}</Route>
+      <Route path="/messenger/profile/:userId" component={Messenger} />
+      <Route path="/messenger/profile" component={Messenger} />
+      <Route path="/profile/:userId">{(params) => <Redirect to={`/messenger/profile/${params.userId}`} />}</Route>
+      <Route path="/profile"><Redirect to="/messenger/profile" /></Route>
       <Route path="/payment/success" component={PaymentSuccess} />
       <Route path="/payment/fail" component={PaymentFail} />
       {isAdmin && (
@@ -88,7 +89,7 @@ function ScrollToTop() {
   return null;
 }
 
-/** Locks document scroll and enables safe-area insets on notched phones (Health Wall, Messenger, Profile). */
+/** Locks document scroll and enables safe-area insets on notched phones (Messenger, Questionnaires). */
 function useImmersiveViewport(enabled: boolean) {
   useEffect(() => {
     document.documentElement.classList.toggle("app-immersive", enabled);
@@ -100,11 +101,9 @@ function AppContent() {
   const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
-  const isProfilePage = location.startsWith("/profile");
   const isQuestionnairesPage = location.startsWith("/questionnaires");
   const isFullscreenPage =
     location.startsWith("/messenger") ||
-    isProfilePage ||
     isQuestionnairesPage;
 
   useImmersiveViewport(isFullscreenPage);
@@ -144,17 +143,6 @@ function AppContent() {
     (location.startsWith("/health-wall") || location.startsWith("/messenger"));
 
   if (isFullscreenPage) {
-    if (isProfilePage) {
-      return (
-        <div className="app-viewport">
-          <ScrollToTop />
-          <main className="app-viewport-content app-viewport-content--scroll">
-            <Router />
-          </main>
-        </div>
-      );
-    }
-
     return (
       <div className="app-viewport">
         <ScrollToTop />

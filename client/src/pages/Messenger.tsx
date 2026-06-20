@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { useLocation, useRoute, Link, Redirect } from "wouter";
+import { useLocation, useRoute, Link, Redirect, useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
+import { messengerProfileReturnPath } from "@/lib/messengerPaths";
 import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut, ClipboardList, Phone } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PatientChatSettings from "@/components/PatientChatSettings";
 import PostCommentsThread from "@/components/PostCommentsThread";
+import Profile from "@/pages/Profile";
 import ChatListMessagePreview from "@/components/ChatListMessagePreview";
 import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
 import { RouteSeo } from "@/components/RouteSeo";
@@ -237,6 +239,7 @@ function FolderTabLabel({ label, unread }: { label: string; unread: number }) {
 export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
   const [location, setLocation] = useLocation();
+  const profileSearch = useSearch();
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
   const [, channelParams] = useRoute("/messenger/channel/:conversationId");
   const [, directParams] = useRoute("/messenger/direct/:conversationId");
@@ -245,6 +248,10 @@ export default function Messenger() {
   const [, channelSettingsParams] = useRoute("/messenger/channel/:conversationId/settings");
   const [, patientChatSettingsParams] = useRoute("/messenger/chat/:conversationId/settings");
   const [, patientChatParams] = useRoute("/messenger/chat/:conversationId");
+  const [, profileUserParams] = useRoute("/messenger/profile/:userId");
+  const [, ownProfileRoute] = useRoute("/messenger/profile");
+  const profileUserId = profileUserParams?.userId;
+  const isProfileOpen = !!ownProfileRoute || !!profileUserParams;
   const conversationId =
     commentThreadParams?.conversationId ||
     groupParams?.conversationId ||
@@ -266,7 +273,7 @@ export default function Messenger() {
   const [isMobileView, setIsMobileView] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
   );
-  const isMobileConversationOpen = !!conversationId && isMobileView;
+  const isMobileConversationOpen = (!!conversationId || isProfileOpen) && isMobileView;
   const isMessengerSettings =
     isGroupSettings || isChannelSettings || isPatientChatSettings;
   const useChatShell =
@@ -669,7 +676,7 @@ export default function Messenger() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
                 <DropdownMenuItem asChild>
-                  <Link href="/profile" className="cursor-pointer flex items-center">
+                  <Link href="/messenger/profile" className="cursor-pointer flex items-center">
                     <User className="h-4 w-4 mr-2" />
                     {t.profile}
                   </Link>
@@ -1062,7 +1069,15 @@ export default function Messenger() {
       )}
 
       <div className="flex-1 flex flex-col min-h-0 bg-muted/20">
-        {(isGroupSettings || isChannelSettings) && conversationId ? (
+        {isProfileOpen ? (
+          <div className="app-profile-panel-scroll flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+            <Profile
+              embedded={!isMobileView}
+              profileUserId={profileUserId}
+              onBack={() => setLocation(messengerProfileReturnPath(profileSearch))}
+            />
+          </div>
+        ) : (isGroupSettings || isChannelSettings) && conversationId ? (
           <div className="flex-1 flex flex-col min-h-0">
             <GroupOrChannelSettings
               conversationId={conversationId}

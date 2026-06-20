@@ -301,12 +301,14 @@ export const conversations = pgTable(
     lastMessagePreview: text("last_message_preview"),
     patientAvailable: boolean("patient_available").notNull().default(false),
     isClosed: boolean("is_closed").notNull().default(false),
+    deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
     index("conversations_type_idx").on(table.type),
     index("conversations_patient_idx").on(table.patientUserId),
+    index("conversations_deleted_at_idx").on(table.deletedAt),
   ]
 );
 

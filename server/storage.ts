@@ -54,7 +54,7 @@ import {
   type ChannelSponsorDonationType,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, isNull } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
 import {
@@ -377,6 +377,7 @@ export interface IStorage {
       isClosed?: boolean;
     }
   ): Promise<Conversation | undefined>;
+  markConversationDeleted(id: string): Promise<Conversation | undefined>;
   searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
@@ -1212,7 +1213,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConversation(id: string): Promise<Conversation | undefined> {
-    const [c] = await db.select().from(conversations).where(eq(conversations.id, id));
+    const [c] = await db
+      .select()
+      .from(conversations)
+      .where(and(eq(conversations.id, id), isNull(conversations.deletedAt)));
     return c;
   }
 
@@ -1226,7 +1230,7 @@ export class DatabaseStorage implements IStorage {
     const list = await db
       .select()
       .from(conversations)
-      .where(inArray(conversations.id, convIds));
+      .where(and(inArray(conversations.id, convIds), isNull(conversations.deletedAt)));
     const result: (Conversation & { participants: (ConversationParticipant & { user: User })[] })[] = [];
     for (const conv of list) {
       const participants = await this.getConversationParticipants(conv.id);
@@ -1287,7 +1291,7 @@ export class DatabaseStorage implements IStorage {
       isClosed?: boolean;
     }>
   > {
-    const conditions = [eq(conversations.type, options.type)];
+    const conditions = [eq(conversations.type, options.type), isNull(conversations.deletedAt)];
     if (options.nameFilter?.trim()) {
       conditions.push(ilike(conversations.name, `%${options.nameFilter.trim()}%`));
     }
@@ -2042,6 +2046,21 @@ export class DatabaseStorage implements IStorage {
     return c;
   }
 
+  async markConversationDeleted(id: string): Promise<Conversation | undefined> {
+    const [c] = await db
+      .update(conversations)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(conversations.id, id),
+          inArray(conversations.type, ["group", "channel"]),
+          isNull(conversations.deletedAt)
+        )
+      )
+      .returning();
+    return c;
+  }
+
   async searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]> {
     const conditions = [ne(users.id, excludeUserId)];
     if (nameFilter?.trim()) {
@@ -2138,7 +2157,8 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(conversationParticipants.userId, currentUserId),
-          eq(conversations.type, "channel")
+          eq(conversations.type, "channel"),
+          isNull(conversations.deletedAt)
         )
       )
       .orderBy(desc(conversations.createdAt));

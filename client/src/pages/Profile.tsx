@@ -4,7 +4,7 @@ import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye, MessageCircle, 
 import { format } from "date-fns";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useLocation, useRoute, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,9 +22,14 @@ import { DEFAULT_QUESTIONNAIRE_HINTS_MODE } from "@shared/questionnaireTypes";
 import type { AccountReportCategory } from "@shared/schema";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
+import { messengerProfilePath, getMessengerProfileFromSearch } from "@/lib/messengerPaths";
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
+  /** Render inside messenger right panel (desktop split layout). */
+  embedded?: boolean;
+  onBack?: () => void;
+  profileUserId?: string;
 };
 
 type AcceptedInviteCounts = { homeopath: number; patient: number };
@@ -265,11 +270,20 @@ const COUNTRIES_RU = [
   "Япония",
 ];
 
-export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
+export default function Profile({
+  onSaveSuccess,
+  embedded = false,
+  onBack,
+  profileUserId: profileUserIdProp,
+}: ProfileProps = {}) {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const profileSearch = useSearch();
+  const profileReturnTo = getMessengerProfileFromSearch(profileSearch);
   const [, profileParams] = useRoute("/profile/:userId");
-  const targetUserId = profileParams?.userId;
+  const [, messengerProfileParams] = useRoute("/messenger/profile/:userId");
+  const targetUserId = profileUserIdProp ?? profileParams?.userId ?? messengerProfileParams?.userId;
+  const handleBack = () => (onBack ? onBack() : window.history.back());
   const isOwnProfile = !targetUserId || targetUserId === user?.id;
   const { toast } = useToast();
 
@@ -620,12 +634,92 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
     });
   };
 
+  const sharedQuestionnairesSection =
+    showSharedQuestionnaires && sharedQuestionnaireTemplates.length > 0 ? (
+      <div className="space-y-3 rounded-lg border p-4">
+        <h3 className="flex items-center gap-2 font-semibold">
+          <ClipboardList className="h-5 w-5" />
+          {t.questionnaires}
+        </h3>
+        <div className="space-y-2">
+          {sharedQuestionnaireTemplates.map((tpl) => (
+            <div key={tpl.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+              <div>
+                <p className="font-medium">{tpl.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t.patientSendCount}: {tpl.patientSendCount} · {t.copyCount}: {tpl.copyCount}
+                  {tpl.updatedAt ? ` · ${format(new Date(tpl.updatedAt), "dd.MM.yyyy")}` : ""}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPreviewTemplateId(tpl.id);
+                    setPreviewTemplateMeta({ name: tpl.name });
+                  }}
+                >
+                  <Eye className="mr-1 h-4 w-4" />
+                  {t.viewQuestionnaire}
+                </Button>
+                {user?.isAdmin && !isOwnProfile && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={copyTemplateMutation.isPending}
+                    onClick={() => copyTemplateMutation.mutate(tpl.id)}
+                  >
+                    {t.copyQuestionnaireTemplate}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  const questionnairePreviewSheet = (
+    <Sheet open={!!previewTemplateId} onOpenChange={(open) => !open && setPreviewTemplateId(null)}>
+      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+        <SheetHeader className="sr-only">
+          <SheetTitle>{previewTemplateMeta?.name ?? t.questionnaireTitle}</SheetTitle>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {previewTemplate?.structure && (
+            <DynamicQuestionnaireForm
+              hideTitle
+              mode="preview"
+              structure={previewTemplate.structure}
+              templateName={previewTemplate.name}
+              templateId={previewTemplate.id}
+              onCopy={
+                user?.isAdmin && !isOwnProfile
+                  ? () => previewTemplateId && copyTemplateMutation.mutate(previewTemplateId)
+                  : undefined
+              }
+              isCopying={copyTemplateMutation.isPending}
+            />
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
   if (!isOwnProfile) {
     return (
       <>
         <RouteSeo {...pageMeta.profile} />
-      <div className="min-h-screen bg-background">
-        <div className="relative h-[50vh] min-h-[280px] max-h-[520px] w-full bg-muted">
+      <div className={embedded ? "flex h-full min-h-0 flex-col bg-background" : "bg-background"}>
+        <div
+          className={
+            embedded
+              ? "relative h-48 w-full shrink-0 bg-muted md:h-56"
+              : "relative h-[50vh] min-h-[280px] max-h-[520px] w-full bg-muted"
+          }
+        >
           {profileImageUrl ? (
             <img src={profileImageUrl} alt={displayName} className="h-full w-full object-cover" />
           ) : (
@@ -640,7 +734,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
               variant="ghost"
               size="icon"
               className="rounded-full bg-black/35 text-white hover:bg-black/50"
-              onClick={() => window.history.back()}
+              onClick={handleBack}
               aria-label="Назад"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -696,6 +790,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
             </p>
           </div>
           <AcceptedInvitesStats counts={acceptedInvites} />
+          {sharedQuestionnairesSection}
           {canReportUser && (
             <Button
               type="button"
@@ -761,6 +856,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {questionnairePreviewSheet}
       </div>
       </>
     );
@@ -769,21 +865,29 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
   return (
     <>
       <RouteSeo {...pageMeta.profile} />
-    <div className="container max-w-2xl mx-auto py-4 px-4 pb-8">
+    <div
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-y-auto px-4 py-4 pb-8"
+          : "px-4 py-4 pb-8"
+      }
+    >
       <div className="space-y-6">
+        {!embedded && (
         <div className="flex items-center">
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="-ml-2 rounded-full"
-            onClick={() => window.history.back()}
+            onClick={handleBack}
             aria-label="Назад"
             data-testid="button-profile-back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </div>
+        )}
         <div className="flex flex-col items-center text-center">
           <button
             type="button"
@@ -994,7 +1098,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
               {inviteSummary?.inviter ? (
                 inviteSummary.inviter.id ? (
                   <Link
-                    href={`/profile/${inviteSummary.inviter.id}`}
+                    href={messengerProfilePath(inviteSummary.inviter.id, profileReturnTo)}
                     className="text-primary hover:underline"
                   >
                     {[inviteSummary.inviter.firstName, inviteSummary.inviter.lastName].filter(Boolean).join(" ") ||
@@ -1017,51 +1121,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
           <AcceptedInvitesStats counts={acceptedInvites} />
         </div>
 
-        {showSharedQuestionnaires && sharedQuestionnaireTemplates.length > 0 && (
-          <div className="space-y-3 rounded-lg border p-4">
-            <h3 className="flex items-center gap-2 font-semibold">
-              <ClipboardList className="h-5 w-5" />
-              {t.questionnaires}
-            </h3>
-            <div className="space-y-2">
-              {sharedQuestionnaireTemplates.map((tpl) => (
-                <div key={tpl.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
-                  <div>
-                    <p className="font-medium">{tpl.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {t.patientSendCount}: {tpl.patientSendCount} · {t.copyCount}: {tpl.copyCount}
-                      {tpl.updatedAt ? ` · ${format(new Date(tpl.updatedAt), "dd.MM.yyyy")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setPreviewTemplateId(tpl.id);
-                        setPreviewTemplateMeta({ name: tpl.name });
-                      }}
-                    >
-                      <Eye className="mr-1 h-4 w-4" />
-                      {t.viewQuestionnaire}
-                    </Button>
-                    {user?.isAdmin && !isOwnProfile && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={copyTemplateMutation.isPending}
-                        onClick={() => copyTemplateMutation.mutate(tpl.id)}
-                      >
-                        {t.copyQuestionnaireTemplate}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {sharedQuestionnairesSection}
 
         {isOwnProfile && (
           <Button
@@ -1105,30 +1165,7 @@ export default function Profile({ onSaveSuccess }: ProfileProps = {}) {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={!!previewTemplateId} onOpenChange={(open) => !open && setPreviewTemplateId(null)}>
-        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
-          <SheetHeader className="sr-only">
-            <SheetTitle>{previewTemplateMeta?.name ?? t.questionnaireTitle}</SheetTitle>
-          </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {previewTemplate?.structure && (
-              <DynamicQuestionnaireForm
-                hideTitle
-                mode="preview"
-                structure={previewTemplate.structure}
-                templateName={previewTemplate.name}
-                templateId={previewTemplate.id}
-                onCopy={
-                  user?.isAdmin && !isOwnProfile
-                    ? () => previewTemplateId && copyTemplateMutation.mutate(previewTemplateId)
-                    : undefined
-                }
-                isCopying={copyTemplateMutation.isPending}
-              />
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      {questionnairePreviewSheet}
     </div>
     </>
   );

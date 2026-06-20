@@ -12,6 +12,7 @@ import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { postConversationSeen } from "@/lib/markConversationSeen";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -72,6 +73,7 @@ import {
   CHAT_COMPOSER_INSET_EVENT,
   scrollChatPaneToBottom,
   scrollChatPaneToBottomForKeyboard,
+  scrollChatElementIntoView,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import {
@@ -346,7 +348,7 @@ function PollMessageBlock({
 
 export default function ConversationChat({ conversationId, onBack, onTitleClick }: ConversationChatProps) {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [message, setMessage] = useState(() =>
@@ -407,6 +409,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const paymentSegmentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const inlineContentPaymentRef = useRef(inlineContentPayment);
   const longPressRefs = useRef<MessageLongPressRefs>({
     timer: null,
     guardTimer: null,
@@ -446,6 +450,31 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     blinkMessageBubble(el);
   };
 
+  const paymentSegmentKey = (messageId: string, segmentIndex: number) =>
+    `${messageId}:${segmentIndex}`;
+
+  const scrollToInlinePayment = useCallback(
+    (target: { messageId: string; segmentIndex: number }) => {
+      const el =
+        paymentSegmentRefs.current.get(
+          paymentSegmentKey(target.messageId, target.segmentIndex)
+        ) ?? messageRefs.current.get(target.messageId) ?? null;
+      scrollChatElementIntoView(el);
+    },
+    []
+  );
+
+  const setPaymentSegmentRef = useCallback(
+    (messageId: string) => (segmentIndex: number, el: HTMLDivElement | null) => {
+      const key = paymentSegmentKey(messageId, segmentIndex);
+      if (el) paymentSegmentRefs.current.set(key, el);
+      else paymentSegmentRefs.current.delete(key);
+    },
+    []
+  );
+
+  inlineContentPaymentRef.current = inlineContentPayment;
+
   const scrollMessagesForKeyboard = useCallback(() => {
     scrollChatPaneToBottomForKeyboard(messagesScrollRef.current);
   }, []);
@@ -475,6 +504,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   useEffect(() => {
     if (canViewSponsorContent) setInlineContentPayment(null);
   }, [canViewSponsorContent]);
+
+  useEffect(() => {
+    if (!inlineContentPayment) return;
+    scrollToInlinePayment(inlineContentPayment);
+  }, [inlineContentPayment, scrollToInlinePayment]);
 
   const voiceCall = useVoiceCall(conversationId, user?.id);
   const inboxUnreadMessages = useInboxUnreadMessages();
@@ -955,6 +989,11 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     const ro =
       contentEl &&
       new ResizeObserver(() => {
+        const inlinePayment = inlineContentPaymentRef.current;
+        if (inlinePayment) {
+          scrollToInlinePayment(inlinePayment);
+          return;
+        }
         scrollChatPaneToBottom(root);
       });
     if (contentEl && ro) ro.observe(contentEl);
@@ -964,7 +1003,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       clearTimeout(t2);
       ro?.disconnect();
     };
-  }, [messages?.length, conversationId]);
+  }, [messages?.length, conversationId, scrollToInlinePayment]);
 
   // Keep the latest messages visible while the iOS keyboard and composer resize.
   useEffect(() => {
@@ -1232,7 +1271,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       return;
     }
     if (conv.type === "direct" && directProfileUserId) {
-      setLocation(`/profile/${directProfileUserId}`);
+      setLocation(messengerProfilePath(directProfileUserId, location));
       return;
     }
     onTitleClick?.();
@@ -1607,6 +1646,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                 setInlineContentPayment({ messageId: msg.id, segmentIndex })
               }
               onPaymentFlowClose={() => setInlineContentPayment(null)}
+              onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
               onTagClick={handleTagClick}
               highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
             />

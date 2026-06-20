@@ -10,6 +10,19 @@ export function scrollChatPaneToBottom(scrollRoot: HTMLElement | null): void {
   scrollRoot.scrollTop = scrollRoot.scrollHeight;
 }
 
+/** Keep a chat element visible while nested content height changes (e.g. inline payment forms). */
+export function scrollChatElementIntoView(
+  el: HTMLElement | null,
+  options: ScrollIntoViewOptions = { behavior: "smooth", block: "nearest" }
+): void {
+  if (!el) return;
+  const run = () => el.scrollIntoView(options);
+  run();
+  requestAnimationFrame(run);
+  window.setTimeout(run, 80);
+  window.setTimeout(run, 350);
+}
+
 /** Re-scroll while the iOS keyboard and composer padding settle. */
 export function scrollChatPaneToBottomForKeyboard(scrollRoot: HTMLElement | null): void {
   if (!scrollRoot) return;

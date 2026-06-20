@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import { profileAvatarSrc } from "@/lib/utils";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
 
 type ConversationInfo = {
@@ -204,7 +205,10 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1">{t.contactPersonLabel}</p>
             <Link
-              href={`/profile/${patientProfileId}`}
+              href={messengerProfilePath(
+                patientProfileId,
+                `/messenger/chat/${conversationId}/settings`
+              )}
               className="text-base font-medium text-primary hover:underline"
               data-testid="link-contact-person-profile"
             >

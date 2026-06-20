@@ -1575,6 +1575,23 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Soft-delete group or channel (owner only)
+  app.delete("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner") return res.status(403).json({ message: "only_owner_can_delete_conversation" });
+      const deleted = await storage.markConversationDeleted(id);
+      if (!deleted) return res.status(404).json({ message: "Conversation not found" });
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      res.status(500).json({ message: "Failed to delete conversation" });
+    }
+  });
+
   // Remove participant from group (owner only; owner cannot remove self)
   app.delete("/api/conversations/:id/participants/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
