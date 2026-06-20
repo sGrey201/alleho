@@ -64,6 +64,7 @@ import {
   type QuestionnaireHintsMode,
 } from "@shared/questionnaireTypes";
 import { isPositiveTierAmount } from "@shared/sponsorTiers";
+import { canUserReadChannel, canUserSubscribeToChannel } from "./channelAccess";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 export type MessengerPersonalContact = {
@@ -2809,8 +2810,24 @@ export class DatabaseStorage implements IStorage {
             eq(conversationParticipants.userId, userId)
           )
         );
+      if (!p) {
+        throw new Error("participant_not_found");
+      }
       return p;
     }
+
+    const conv = await this.getConversation(conversationId);
+    if (conv?.type === "channel") {
+      const user = await this.getUser(userId);
+      const isAdmin = !!user?.isAdmin;
+      const mayJoin =
+        canUserSubscribeToChannel(conv, false, isAdmin) ||
+        canUserReadChannel(conv, false, isAdmin);
+      if (!user || !mayJoin) {
+        throw new Error("cannot_join_channel");
+      }
+    }
+
     return this.addConversationParticipant(conversationId, userId, "member");
   }
 

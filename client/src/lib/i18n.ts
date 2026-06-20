@@ -1947,13 +1947,16 @@ export const t = {
   sponsorStatusActiveUntil: 'Вы спонсор до',
   sponsorBecomePrompt: 'Спонсоры могут размещать тут ссылку на свой профиль или канал',
   sponsorBecomeButton: 'Стать спонсором',
+  sponsorPayTitle: 'Д-Pay',
   sponsorChannelPaymentIntro: (days: number) =>
-    `Чтобы стать спонсором на ${formatDurationDays(days)}:`,
+    `Станьте спонсором канала на ${formatDurationDays(days)} прямо сейчас`,
   sponsorContentPaymentIntro: (days: number) =>
-    `Чтобы открыть доступ ко всему платному контенту канала на ${formatDurationDays(days)}:`,
+    `Откройте все платные материалы этого канала на ${formatDurationDays(days)} прямо сейчас`,
   sponsorPaymentStepTransfer: (amount: string) =>
-    `1. Переведите ${amount} рублей одним из следующих способов:`,
+    `1. Переведите ${amount} ₽ одним из способов:`,
   sponsorPaymentStepReceipt: '2. Прикрепите чек',
+  sponsorPaymentOutro: 'И всё! Читайте контент сразу, а мы проверим транзакцию позже.',
+  sponsorTrustAccessTagline: 'Д — Доверие 🤝',
   sponsorTierContentTitle: (days: number) => {
     const mod10 = days % 10;
     const mod100 = days % 100;

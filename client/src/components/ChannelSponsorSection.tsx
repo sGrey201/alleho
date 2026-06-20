@@ -566,6 +566,7 @@ export default function ChannelSponsorSection({
             {selectedTierVisible && selectedTier ? (
               <>
                 <div className="space-y-2 text-sm">
+                  <p className="font-semibold">{t.sponsorPayTitle}</p>
                   <p className="font-medium">
                     {selectedTier === "content_thanks"
                       ? t.sponsorChannelPaymentIntro(selectedTierDurationDays)
@@ -578,6 +579,8 @@ export default function ChannelSponsorSection({
                     </div>
                   ) : null}
                   <p>{t.sponsorPaymentStepReceipt}</p>
+                  <p>{t.sponsorPaymentOutro}</p>
+                  <p>{t.sponsorTrustAccessTagline}</p>
                 </div>
                 <input
                   id={receiptInputId}

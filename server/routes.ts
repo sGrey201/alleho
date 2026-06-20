@@ -1834,14 +1834,20 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  app.post("/api/conversations/:id/sponsor-payments", isAuthenticated, isAdmin, async (req: any, res) => {
+  app.post("/api/conversations/:id/sponsor-payments", isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const conv = await storage.getConversation(id);
       if (!conv || conv.type !== "channel") {
         return res.status(404).json({ message: "Channel not found" });
+      }
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!canUserReadChannel(conv, inConv, !!currentUser.isAdmin)) {
+        return res.status(403).json({ message: "Access denied" });
       }
       const body = req.body as {
         receiptUrl?: string;
@@ -1857,6 +1863,9 @@ ${allUrls.map(url => `  <url>
         receiptUrl: body.receiptUrl.trim(),
         donationType: body.donationType,
       });
+      if (!inConv) {
+        await publishDoctorChatsUpdated(currentUserId);
+      }
       const payer = await storage.getUser(currentUserId);
       const participants = await storage.getConversationParticipants(id);
       const owner = participants.find((p) => p.role === "owner");
@@ -1886,6 +1895,9 @@ ${allUrls.map(url => `  <url>
       }
       if (message === "sponsor_tier_amount_not_configured") {
         return res.status(400).json({ message });
+      }
+      if (message === "cannot_join_channel") {
+        return res.status(403).json({ message });
       }
       console.error("Error submitting sponsor payment:", error);
       res.status(500).json({ message: "Failed to submit payment" });
