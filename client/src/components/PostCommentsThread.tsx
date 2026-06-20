@@ -17,6 +17,9 @@ import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
 import { scrollChatPaneToBottom } from "@/lib/chatScroll";
 import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
+import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
+import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import {
   clearMessageLongPress,
@@ -60,6 +63,7 @@ export default function PostCommentsThread({
 }: PostCommentsThreadProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const inboxUnreadMessages = useInboxUnreadMessages();
   const [message, setMessage] = useState("");
   const [replyTo, setReplyTo] = useState<ConversationCommentWithAuthor | null>(null);
   const [editing, setEditing] = useState<ConversationCommentWithAuthor | null>(null);
@@ -103,6 +107,7 @@ export default function PostCommentsThread({
   const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
     enabled: !!conversationId,
+    ...liveConversationQueryOptions,
   });
 
   const anchorPost = useMemo(
@@ -118,6 +123,7 @@ export default function PostCommentsThread({
   const { data: comments = [], isLoading } = useQuery<ConversationCommentWithAuthor[]>({
     queryKey: commentsQueryKey,
     enabled: !!conversationId && !!messageId,
+    ...liveConversationQueryOptions,
   });
 
   const sortedComments = useMemo(
@@ -533,9 +539,10 @@ export default function PostCommentsThread({
             variant="secondary"
             size="icon"
             onClick={onBack}
-            className="h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
+            className="relative h-10 w-10 rounded-full border border-border/40 bg-background/55 text-black backdrop-blur-md"
           >
             <ArrowLeft className="h-5 w-5" />
+            <ChatBackUnreadBadge count={inboxUnreadMessages} />
           </Button>
           <div className="flex-1 rounded-full border border-border/40 bg-background/55 px-4 py-2 backdrop-blur-md">
             <p className="text-sm font-semibold truncate">Комментарии</p>

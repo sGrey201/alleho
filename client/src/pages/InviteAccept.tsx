@@ -17,6 +17,7 @@ import { profileAvatarSrc } from "@/lib/utils";
 import { RouteSeo } from "@/components/RouteSeo";
 import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
+import { t } from "@/lib/i18n";
 
 const acceptInviteSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -26,7 +27,7 @@ const acceptInviteSchema = z.object({
 
 type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
 type InvitePreview = {
-  inviteType: "patient" | "homeopath";
+  inviteType: "patient" | "homeopath" | "open";
   inviter: {
     id: string | null;
     name: string;
@@ -34,7 +35,7 @@ type InvitePreview = {
   };
 };
 
-type Step = "account" | "email" | "patientNames";
+type Step = "account" | "email" | "roleSelection" | "patientNames";
 
 function userDisplayName(firstName?: string | null, lastName?: string | null, email?: string | null): string {
   const name = [lastName, firstName].filter(Boolean).join(" ").trim();
@@ -52,6 +53,7 @@ export default function InviteAccept() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState<Step | null>(null);
+  const [isHomeopath, setIsHomeopath] = useState<boolean | null>(null);
 
   const token = useMemo(() => new URLSearchParams(window.location.search).get("token") || "", []);
   const initialEmail = useMemo(() => new URLSearchParams(window.location.search).get("email") || "", []);
@@ -74,7 +76,8 @@ export default function InviteAccept() {
     retry: false,
   });
 
-  const isPatientInvite = invitePreview?.inviteType === "patient";
+  const isOpenInvite = invitePreview?.inviteType === "open";
+  const isTypedPatientInvite = invitePreview?.inviteType === "patient";
 
   useEffect(() => {
     if (authLoading) return;
@@ -91,13 +94,20 @@ export default function InviteAccept() {
   }, [user?.email, form]);
 
   const acceptInviteMutation = useMutation({
-    mutationFn: async (data: AcceptInviteFormData) => {
-      const res = await apiRequest("POST", "/api/invites/accept", {
+    mutationFn: async (data: AcceptInviteFormData & { isHomeopath?: boolean }) => {
+      const payload: Record<string, unknown> = {
         email: data.email.trim().toLowerCase(),
         token,
         firstName: data.firstName?.trim() ?? "",
         lastName: data.lastName?.trim() ?? "",
-      });
+      };
+      if (isOpenInvite) {
+        if (typeof data.isHomeopath !== "boolean") {
+          throw new Error("role_selection_required");
+        }
+        payload.isHomeopath = data.isHomeopath;
+      }
+      const res = await apiRequest("POST", "/api/invites/accept", payload);
       return res.json();
     },
     onSuccess: async (data: { joinedAsExistingUser?: boolean }) => {
@@ -119,15 +129,17 @@ export default function InviteAccept() {
       else if (msg.includes("invalid_invite_email")) title = "Этот email не подходит для данной ссылки";
       else if (msg.includes("user_exists")) title = "Пользователь с таким email уже зарегистрирован";
       else if (msg.includes("first_name_and_last_name_required")) title = "Укажите имя и фамилию пациента";
+      else if (msg.includes("role_selection_required")) title = "Укажите, являетесь ли вы гомеопатом";
       toast({ title, variant: "destructive" });
     },
   });
 
-  const submitAccept = (payload: AcceptInviteFormData) => {
+  const submitAccept = (payload: AcceptInviteFormData, options?: { isHomeopath?: boolean }) => {
     acceptInviteMutation.mutate({
       email: payload.email,
       firstName: payload.firstName?.trim() ?? "",
       lastName: payload.lastName?.trim() ?? "",
+      isHomeopath: options?.isHomeopath,
     });
   };
 
@@ -152,27 +164,47 @@ export default function InviteAccept() {
     form.setValue("email", initialEmail);
     form.setValue("firstName", "");
     form.setValue("lastName", "");
+    setIsHomeopath(null);
     setStep("email");
+  };
+
+  const goAfterAccountOrEmail = () => {
+    if (isOpenInvite) {
+      setStep("roleSelection");
+      return;
+    }
+    if (isTypedPatientInvite) {
+      setStep("patientNames");
+      return;
+    }
+    submitAccept(form.getValues());
   };
 
   const handleAccountNext = () => {
     if (!user?.email) return;
     form.setValue("email", user.email);
-    if (isPatientInvite) {
-      setStep("patientNames");
-      return;
-    }
-    submitAccept({ email: user.email, firstName: "", lastName: "" });
+    goAfterAccountOrEmail();
   };
 
   const handleEmailNext = async () => {
     const valid = await form.trigger("email");
     if (!valid) return;
-    if (isPatientInvite) {
-      setStep("patientNames");
+    goAfterAccountOrEmail();
+  };
+
+  const handleSelectHomeopath = () => {
+    setIsHomeopath(true);
+    const email = form.getValues("email");
+    if (!email?.trim()) {
+      form.setError("email", { message: "Укажите email" });
       return;
     }
-    submitAccept(form.getValues());
+    submitAccept(form.getValues(), { isHomeopath: true });
+  };
+
+  const handleSelectPatient = () => {
+    setIsHomeopath(false);
+    setStep("patientNames");
   };
 
   const handlePatientNamesSubmit = () => {
@@ -182,7 +214,7 @@ export default function InviteAccept() {
       form.setError("email", { message: "Укажите email" });
       return;
     }
-    submitAccept(form.getValues());
+    submitAccept(form.getValues(), isOpenInvite ? { isHomeopath: false } : undefined);
   };
 
   const inviteSeo = <RouteSeo {...pageMeta.inviteAccept} />;
@@ -306,6 +338,39 @@ export default function InviteAccept() {
                 </div>
               )}
 
+              {step === "roleSelection" && (
+                <div className="space-y-4">
+                  <p className="text-center text-base font-medium">{t.registrationAreYouHomeopath}</p>
+                  <p className="text-center text-sm text-muted-foreground">
+                    Этот шаг обязателен для завершения регистрации
+                  </p>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleSelectHomeopath}
+                    disabled={acceptInviteMutation.isPending}
+                  >
+                    {acceptInviteMutation.isPending && isHomeopath === true ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Завершение...
+                      </>
+                    ) : (
+                      t.registrationYesHomeopath
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleSelectPatient}
+                    disabled={acceptInviteMutation.isPending}
+                  >
+                    {t.registrationNoPatient}
+                  </Button>
+                </div>
+              )}
+
               {step === "patientNames" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
@@ -346,7 +411,7 @@ export default function InviteAccept() {
                     >
                       {acceptInviteMutation.isPending ? "Завершение регистрации..." : "Завершить регистрацию"}
                     </Button>
-                    {!isAuthenticated && (
+                    {!isAuthenticated && !isOpenInvite && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -357,7 +422,7 @@ export default function InviteAccept() {
                         Назад
                       </Button>
                     )}
-                    {isAuthenticated && (
+                    {isAuthenticated && !isOpenInvite && (
                       <Button
                         type="button"
                         variant="ghost"

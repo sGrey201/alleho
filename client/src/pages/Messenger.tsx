@@ -57,6 +57,8 @@ function formatChatTime(dateStr: string | null | undefined): string {
 export type ChatItem = {
   source: "conversation";
   folder: "personal" | "groups" | "channels";
+  section?: "subscriptions" | "discover";
+  dividerKey?: string;
   patientUserId?: string;
   patientName?: string;
   patientEmail?: string;
@@ -89,6 +91,7 @@ type MessengerUnreadSummary = {
   doctors: number;
   groups: number;
   channels: number;
+  inboxUnreadMessages: number;
 };
 
 export type MessengerSearchDoctor = {
@@ -314,18 +317,22 @@ export default function Messenger() {
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteLinkData, setInviteLinkData] = useState<{
     open: boolean;
-    inviteType: "patient" | "homeopath";
     inviteUrl: string;
     expiresAt: string;
-  }>({ open: false, inviteType: "patient", inviteUrl: "", expiresAt: "" });
+  }>({ open: false, inviteUrl: "", expiresAt: "" });
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const prevLocationRef = useRef(location);
 
-  const activeFolder = isAdmin ? folder : "patients";
-  const apiFolder = activeFolder === "doctors" || activeFolder === "patients" ? "personal" : activeFolder;
+  const activeFolder = isAdmin ? folder : folder === "channels" ? "channels" : "patients";
+  const apiFolder =
+    activeFolder === "doctors" || activeFolder === "patients"
+      ? "personal"
+      : activeFolder === "channels"
+        ? "channels"
+        : activeFolder;
 
   const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
     queryKey: ["/api/me/chats", apiFolder, activeFolder],
@@ -351,13 +358,13 @@ export default function Messenger() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: isAuthenticated && isAdmin,
+    enabled: isAuthenticated,
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
 
   const unreadChatsByFolder = useMemo(() => {
-    if (isAdmin && unreadSummary) {
+    if (unreadSummary) {
       return unreadSummary;
     }
     const hasUnread = (chat: ChatItem) => (chat.unreadCount ?? 0) > 0;
@@ -367,9 +374,12 @@ export default function Messenger() {
       groups: chats.filter((chat) => chat.source === "conversation" && chat.type === "group" && hasUnread(chat)).length,
       channels: chats.filter((chat) => chat.source === "conversation" && chat.type === "channel" && hasUnread(chat)).length,
     };
-  }, [chats, isAdmin, unreadSummary]);
+  }, [chats, unreadSummary]);
   const chatsByFolder = useMemo(() => {
     if (!isAdmin) {
+      if (activeFolder === "channels") {
+        return chats.filter((chat) => chat.type === "channel" || chat.type === "divider");
+      }
       return chats.filter((chat) => chat.type === "patient");
     }
     if (activeFolder === "patients") {
@@ -377,6 +387,9 @@ export default function Messenger() {
     }
     if (activeFolder === "doctors") {
       return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
+    }
+    if (activeFolder === "channels") {
+      return chats.filter((chat) => chat.type === "channel" || chat.type === "divider");
     }
     return chats;
   }, [chats, activeFolder, isAdmin]);
@@ -392,7 +405,7 @@ export default function Messenger() {
     enabled: isAuthenticated && isAdmin && searchQuery.trim().length > 0,
   });
 
-  useDoctorChatsWs(isAuthenticated && isAdmin);
+  useDoctorChatsWs(isAuthenticated);
 
   function filterChatsBySearch(items: ChatItem[], query: string): ChatItem[] {
     const q = query.trim().toLowerCase();
@@ -469,22 +482,22 @@ export default function Messenger() {
   }, [isSearching, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
 
   useEffect(() => {
-    if (!isAuthenticated || authLoading) return;
-    if (!isAdmin) {
+    if (!isAuthenticated || authLoading || isAdmin) return;
+    if (folder !== "channels" && folder !== "patients") {
       setFolder("patients");
     }
-  }, [isAuthenticated, authLoading, isAdmin]);
+  }, [isAuthenticated, authLoading, isAdmin, folder]);
 
   useEffect(() => {
     if (isPatientChat) setFolder("patients");
     else if (isDirectChat) setFolder("doctors");
     else if (isGroupChat || isGroupSettings) setFolder("groups");
     else if (isChannelChat || isChannelSettings || isCommentThread) setFolder("channels");
-  }, [isPatientChat, isDirectChat, isGroupChat, isGroupSettings, isChannelChat, isChannelSettings, isCommentThread]);
+  }, [isPatientChat, isDirectChat, isGroupChat, isGroupSettings, isChannelChat, isChannelSettings, isCommentThread, isAdmin]);
 
   useEffect(() => {
     if (!isAuthenticated || authLoading) return;
-    const effectiveFolder = isAdmin ? folder : "patients";
+    const effectiveFolder = isAdmin ? folder : folder === "channels" ? "channels" : "patients";
     writeMessengerUiState({ folder: effectiveFolder, path: location });
   }, [location, folder, isAuthenticated, authLoading, isAdmin]);
 
@@ -567,14 +580,13 @@ export default function Messenger() {
   };
 
   const createInviteLinkMutation = useMutation({
-    mutationFn: async (inviteType: "patient" | "homeopath") => {
-      const res = await apiRequest("POST", "/api/invites", { inviteType });
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/invites", { inviteType: "open" });
       return res.json();
     },
-    onSuccess: (data, inviteType) => {
+    onSuccess: (data) => {
       setInviteLinkData({
         open: true,
-        inviteType,
         inviteUrl: data.inviteUrl,
         expiresAt: data.expiresAt,
       });
@@ -634,10 +646,9 @@ export default function Messenger() {
         <Tabs
           value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
           onValueChange={(v) => {
-            if (!isAdmin) return;
             const nextFolder = v as typeof folder;
             setFolder(nextFolder);
-            if (isSearching) {
+            if (isAdmin && isSearching) {
               setSearchScope(nextFolder);
             }
           }}
@@ -687,17 +698,10 @@ export default function Messenger() {
                   <>
                     <DropdownMenuItem
                       onSelect={() => {
-                        createInviteLinkMutation.mutate("patient");
+                        createInviteLinkMutation.mutate();
                       }}
                     >
-                      {t.messengerInvitePatient}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        createInviteLinkMutation.mutate("homeopath");
-                      }}
-                    >
-                      {t.messengerInviteHomeopath}
+                      {t.messengerSendInvite}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={() => {
@@ -759,6 +763,20 @@ export default function Messenger() {
                 </TabsTrigger>
                 <TabsTrigger value="groups" className={messengerFolderTabClass}>
                   <FolderTabLabel label={t.folderGroups} unread={unreadChatsByFolder.groups} />
+                </TabsTrigger>
+                <TabsTrigger value="channels" className={messengerFolderTabClass}>
+                  <FolderTabLabel label={t.folderChannels} unread={unreadChatsByFolder.channels} />
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
+          )}
+          {!isAdmin && (
+          <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
+            <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
+              <TabsList className="!grid h-10 w-full grid-cols-2 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
+                <TabsTrigger value="patients" className={messengerFolderTabClass}>
+                  <FolderTabLabel label={t.folderCommunity} unread={unreadChatsByFolder.patients} />
                 </TabsTrigger>
                 <TabsTrigger value="channels" className={messengerFolderTabClass}>
                   <FolderTabLabel label={t.folderChannels} unread={unreadChatsByFolder.channels} />
@@ -939,8 +957,22 @@ export default function Messenger() {
               <ScrollArea ref={listScrollRef} className="h-full">
                 <div className="pt-1">
                   {listToShow.map((chat) => {
+                    if (chat.type === "divider") {
+                      return (
+                        <div
+                          key={chat.dividerKey ?? "channels-split"}
+                          className="px-3 py-2 text-center text-xs text-muted-foreground border-y border-border/60 bg-muted/20"
+                        >
+                          <span>{t.channelSubscriptionsDivider}</span>
+                          <span className="mx-1.5">|</span>
+                          <span>{t.channelAllDivider}</span>
+                        </div>
+                      );
+                    }
                     const isSelected = isChatSelected(chat);
                     const label = getChatListLabel(chat, !!isAdmin);
+                    const isDiscoverChannel =
+                      chat.type === "channel" && (chat.section === "discover" || chat.isMember === false);
                     const badge =
                       chat.type === "patient"
                         ? isAdmin
@@ -951,7 +983,11 @@ export default function Messenger() {
                           : chat.type === "consilium"
                             ? t.chatConsilium
                             : chat.type === "channel"
-                              ? (chat.myRole === "owner" ? t.channelOwn : t.channelSub)
+                              ? isDiscoverChannel && !chat.isMember
+                                ? t.actionSubscribe
+                                : chat.myRole === "owner"
+                                  ? t.channelOwn
+                                  : t.channelSub
                               : t.chatGroup;
                     const isPatientRow = chat.type === "patient";
                     const rawMsgPreview = chat.lastMessagePreview?.trim() ?? "";
@@ -968,7 +1004,7 @@ export default function Messenger() {
                               id: chat.conversationId,
                               name: chat.name ?? null,
                               avatarUrl: chat.avatarUrl ?? null,
-                              isMember: chat.isMember ?? true,
+                              isMember: chat.isMember ?? chat.section !== "discover",
                             });
                             return;
                           }
@@ -1070,9 +1106,7 @@ export default function Messenger() {
       <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {inviteLinkData.inviteType === "homeopath" ? t.messengerInviteHomeopath : t.messengerInvitePatient}
-            </DialogTitle>
+            <DialogTitle>{t.messengerSendInvite}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-md border bg-muted/40 p-3">

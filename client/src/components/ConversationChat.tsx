@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
+import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
+import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { postConversationSeen } from "@/lib/markConversationSeen";
@@ -446,11 +449,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
     queryKey: ["/api/conversations", conversationId],
     enabled: !!conversationId,
+    ...liveConversationQueryOptions,
   });
 
   const { data: messages, isLoading: messagesLoading } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
     enabled: !!conversationId,
+    ...liveConversationQueryOptions,
   });
 
   const myChannelRole = conv?.participants?.find((p) => p.userId === user?.id)?.role;
@@ -467,6 +472,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   }, [conversationId, setLocation]);
 
   const voiceCall = useVoiceCall(conversationId, user?.id);
+  const inboxUnreadMessages = useInboxUnreadMessages();
 
   useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent, {
     refetchMessagesOnNewMessage:
@@ -1707,12 +1713,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             size="icon"
             onClick={onBack}
             className={cn(
-              "h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50",
+              "relative h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50",
               user?.isAdmin && "md:hidden",
             )}
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
+            <ChatBackUnreadBadge count={inboxUnreadMessages} />
           </Button>
           <button
             type="button"

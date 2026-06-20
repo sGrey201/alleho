@@ -5,6 +5,8 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Loader2, Trash2, UserPlus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -28,6 +30,8 @@ type ConversationInfo = {
   name?: string | null;
   avatarUrl?: string | null;
   participantCount?: number;
+  patientAvailable?: boolean;
+  isClosed?: boolean;
   sponsorSettings?: { enabled: boolean } | null;
   isSponsor?: boolean;
   participants?: Participant[];
@@ -40,7 +44,10 @@ type SearchDoctor = {
   email?: string;
 };
 
+type SearchUser = SearchDoctor & { isAdmin?: boolean };
+
 type SearchResponse = { doctors: SearchDoctor[]; groups: unknown[]; channels: unknown[] };
+type UserSearchResponse = { users: SearchUser[] };
 
 interface Props {
   conversationId: string;
@@ -61,6 +68,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [avatarDraft, setAvatarDraft] = useState<string>("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
+  const [patientAvailable, setPatientAvailable] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
 
   const { uploadFile, isUploading } = useUpload();
 
@@ -73,7 +82,9 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     if (!conv) return;
     setNameDraft(conv.name ?? "");
     setAvatarDraft(conv.avatarUrl ?? "");
-  }, [conv?.id, conv?.name, conv?.avatarUrl]);
+    setPatientAvailable(!!conv.patientAvailable);
+    setIsClosed(!!conv.isClosed);
+  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed]);
 
   const myRole = conv?.participants?.find((p) => p.userId === currentUserId)?.role;
   const isOwner = myRole === "owner";
@@ -88,10 +99,27 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     enabled: mode === "group" && !!conv && isOwner,
   });
 
+  const { data: userSearchData } = useQuery<UserSearchResponse>({
+    queryKey: ["/api/users/search", conversationId, search],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/users/search?q=${encodeURIComponent(search.trim())}&conversationId=${encodeURIComponent(conversationId)}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: mode === "channel" && !!conv && isOwner && isClosed && search.trim().length > 0,
+  });
+
   const participantIds = useMemo(() => new Set((conv?.participants ?? []).map((p) => p.userId)), [conv?.participants]);
   const candidates = useMemo(
     () => (searchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId)),
     [searchData, participantIds]
+  );
+  const closedChannelCandidates = useMemo(
+    () => (userSearchData?.users ?? []).filter((u) => !participantIds.has(u.userId)),
+    [userSearchData, participantIds]
   );
 
   const saveMutation = useMutation({
@@ -108,6 +136,19 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       toast({ title: t.saved });
     },
     onError: () => toast({ title: t.onlyOwnerCanAddMembers, variant: "destructive" }),
+  });
+
+  const saveVisibilityMutation = useMutation({
+    mutationFn: async (flags: { patientAvailable: boolean; isClosed: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, flags);
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({ title: t.saved });
+    },
+    onError: () => toast({ title: t.error, variant: "destructive" }),
   });
 
   const addMemberMutation = useMutation({
@@ -443,6 +484,86 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 >
                   <span className="truncate">{displayName}</span>
                   <UserPlus className="h-4 w-4 text-primary" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {mode === "channel" && isOwner && (
+          <div className="space-y-3 rounded-lg border px-4 py-3">
+            <p className="text-sm font-medium">{t.channelVisibilityTitle}</p>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="channel-patient-available"
+                checked={patientAvailable}
+                onCheckedChange={(checked) => {
+                  const next = checked === true;
+                  setPatientAvailable(next);
+                  saveVisibilityMutation.mutate({ patientAvailable: next, isClosed });
+                }}
+                disabled={saveVisibilityMutation.isPending}
+              />
+              <Label htmlFor="channel-patient-available" className="text-sm font-normal cursor-pointer">
+                {t.channelPatientAvailable}
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="channel-closed"
+                checked={isClosed}
+                onCheckedChange={(checked) => {
+                  const next = checked === true;
+                  setIsClosed(next);
+                  saveVisibilityMutation.mutate({ patientAvailable, isClosed: next });
+                }}
+                disabled={saveVisibilityMutation.isPending}
+              />
+              <Label htmlFor="channel-closed" className="text-sm font-normal cursor-pointer">
+                {t.channelClosed}
+              </Label>
+            </div>
+          </div>
+        )}
+
+        {mode === "channel" && isClosed && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t.participants}</p>
+            {(conv.participants ?? []).map((p) => {
+              const memberDisplayName =
+                [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ").trim() || p.user?.email || p.userId;
+              return (
+                <div key={p.userId} className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm truncate">{memberDisplayName}</p>
+                    <p className="text-xs text-muted-foreground">{p.role}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {mode === "channel" && isOwner && isClosed && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t.channelAddMember}</p>
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchUsersToAdd} />
+            {closedChannelCandidates.map((user) => {
+              const displayName =
+                [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email || user.userId;
+              const roleLabel = user.isAdmin ? t.chatWithDoctor : t.chatWithPatient;
+              return (
+                <button
+                  key={user.userId}
+                  type="button"
+                  onClick={() => addMemberMutation.mutate(user.userId)}
+                  className="w-full text-left flex items-center justify-between rounded-md border px-3 py-2 hover:bg-muted/40"
+                >
+                  <div className="min-w-0">
+                    <span className="truncate block">{displayName}</span>
+                    <span className="text-xs text-muted-foreground">{roleLabel}</span>
+                  </div>
+                  <UserPlus className="h-4 w-4 text-primary shrink-0" />
                 </button>
               );
             })}

@@ -91,11 +91,30 @@ export type MessengerChannelListItem = {
   myRole?: string;
 };
 
+export type MessengerChannelDiscoverItem = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+  participantCount: number;
+  isMember: boolean;
+  lastMessagePreview: string | null;
+  lastMessageAt: Date | null;
+  patientAvailable: boolean;
+  isClosed: boolean;
+};
+
+export type MessengerChannelBrowseList = {
+  subscriptions: MessengerChannelListItem[];
+  discover: MessengerChannelDiscoverItem[];
+};
+
 export type MessengerUnreadSummary = {
   patients: number;
   doctors: number;
   groups: number;
   channels: number;
+  /** Unread messages in direct, patient, and group chats (excludes channels). */
+  inboxUnreadMessages: number;
 };
 
 export type PatientConversationListItem = {
@@ -261,7 +280,8 @@ export interface IStorage {
     inviteId: string,
     acceptedUserId: string,
     acceptedEmail?: string,
-    conversationId?: string
+    conversationId?: string,
+    options?: { inviteType?: "patient" | "homeopath" }
   ): Promise<Invite>;
   markInviteExpired(inviteId: string): Promise<Invite>;
   getInviterOfUser(userId: string): Promise<User | undefined>;
@@ -275,7 +295,13 @@ export interface IStorage {
   getDirectConversationBetween(userId1: string, userId2: string): Promise<string | undefined>;
   getDiscoverableConversations(
     currentUserId: string,
-    options: { type: "group" | "channel"; nameFilter?: string }
+    options: {
+      type: "group" | "channel";
+      nameFilter?: string;
+      excludeClosed?: boolean;
+      patientAvailableOnly?: boolean;
+      excludeConversationIds?: string[];
+    }
   ): Promise<
     Array<{
       id: string;
@@ -285,6 +311,8 @@ export interface IStorage {
       isMember: boolean;
       lastMessagePreview: string | null;
       lastMessageAt: Date | null;
+      patientAvailable?: boolean;
+      isClosed?: boolean;
     }>
   >;
   addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
@@ -340,10 +368,20 @@ export interface IStorage {
   ): Promise<Map<string, ConversationPollResults>>;
   getConversationPinnedMessages(conversationId: string): Promise<ConversationMessage[]>;
   getLastConversationMessage(conversationId: string): Promise<ConversationMessage | null>;
-  updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined>;
+  updateConversation(
+    id: string,
+    data: {
+      name?: string;
+      avatarUrl?: string | null;
+      patientAvailable?: boolean;
+      isClosed?: boolean;
+    }
+  ): Promise<Conversation | undefined>;
+  searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
+  getMessengerChannelBrowseList(userId: string, isAdmin: boolean): Promise<MessengerChannelBrowseList>;
 
   // Channel sponsor monetization
   getChannelSponsorSettings(conversationId: string): Promise<ChannelSponsorSettings | undefined>;
@@ -1107,7 +1145,8 @@ export class DatabaseStorage implements IStorage {
     inviteId: string,
     acceptedUserId: string,
     acceptedEmail?: string,
-    conversationId?: string
+    conversationId?: string,
+    options?: { inviteType?: "patient" | "homeopath" }
   ): Promise<Invite> {
     const [updated] = await db
       .update(invites)
@@ -1118,6 +1157,7 @@ export class DatabaseStorage implements IStorage {
         conversationId: conversationId ?? undefined,
         acceptedAt: new Date(),
         updatedAt: new Date(),
+        ...(options?.inviteType ? { inviteType: options.inviteType } : {}),
       })
       .where(eq(invites.id, inviteId))
       .returning();
@@ -1227,7 +1267,13 @@ export class DatabaseStorage implements IStorage {
 
   async getDiscoverableConversations(
     currentUserId: string,
-    options: { type: "group" | "channel"; nameFilter?: string }
+    options: {
+      type: "group" | "channel";
+      nameFilter?: string;
+      excludeClosed?: boolean;
+      patientAvailableOnly?: boolean;
+      excludeConversationIds?: string[];
+    }
   ): Promise<
     Array<{
       id: string;
@@ -1237,16 +1283,25 @@ export class DatabaseStorage implements IStorage {
       isMember: boolean;
       lastMessagePreview: string | null;
       lastMessageAt: Date | null;
+      patientAvailable?: boolean;
+      isClosed?: boolean;
     }>
   > {
     const conditions = [eq(conversations.type, options.type)];
     if (options.nameFilter?.trim()) {
       conditions.push(ilike(conversations.name, `%${options.nameFilter.trim()}%`));
     }
+    if (options.excludeClosed) {
+      conditions.push(eq(conversations.isClosed, false));
+    }
+    if (options.patientAvailableOnly) {
+      conditions.push(eq(conversations.patientAvailable, true));
+    }
     const list = await db
       .select()
       .from(conversations)
       .where(and(...conditions));
+    const excludeIds = new Set(options.excludeConversationIds ?? []);
     const myParticipation = await db
       .select({ conversationId: conversationParticipants.conversationId })
       .from(conversationParticipants)
@@ -1260,8 +1315,11 @@ export class DatabaseStorage implements IStorage {
       isMember: boolean;
       lastMessagePreview: string | null;
       lastMessageAt: Date | null;
+      patientAvailable?: boolean;
+      isClosed?: boolean;
     }> = [];
     for (const conv of list) {
+      if (excludeIds.has(conv.id)) continue;
       const countRows = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(conversationParticipants)
@@ -1275,6 +1333,9 @@ export class DatabaseStorage implements IStorage {
         isMember: myConvIds.has(conv.id),
         lastMessagePreview: conv.lastMessagePreview ?? null,
         lastMessageAt: conv.lastMessageAt ?? null,
+        ...(options.type === "channel"
+          ? { patientAvailable: conv.patientAvailable, isClosed: conv.isClosed }
+          : {}),
       });
     }
     return result;
@@ -1391,35 +1452,55 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessengerUnreadSummary(userId: string): Promise<MessengerUnreadSummary> {
-    const [patientChats, contacts, channels, convList] = await Promise.all([
-      this.getPatientConversationsForUser(userId),
+    const currentUser = await this.getUser(userId);
+    const isDoctor = !!currentUser?.isAdmin;
+
+    const patientChats = await this.getPatientConversationsForUser(userId);
+    const patientMessageUnread = patientChats.reduce((sum, chat) => sum + chat.unreadCount, 0);
+    const patients = patientChats.filter((chat) => chat.unreadCount > 0).length;
+
+    if (!isDoctor) {
+      const channels = await this.getMessengerChannels(userId);
+      const channelsUnread = channels.filter((channel) => channel.unreadCount > 0).length;
+      return {
+        patients,
+        doctors: 0,
+        groups: 0,
+        channels: channelsUnread,
+        inboxUnreadMessages: patientMessageUnread,
+      };
+    }
+
+    const [contacts, channels, convList] = await Promise.all([
       this.getMessengerPersonalContacts(userId),
       this.getMessengerChannels(userId),
       this.getConversationsForUser(userId),
     ]);
 
-    const patients = patientChats.filter((chat) => chat.unreadCount > 0).length;
-
     const doctorConvIds = contacts
       .map((contact) => contact.conversationId)
       .filter((id): id is string => typeof id === "string" && id.length > 0);
     let doctors = 0;
+    let doctorMessageUnread = 0;
     if (doctorConvIds.length > 0) {
       const unreadCounts = await Promise.all(
         doctorConvIds.map((conversationId) => this.getConversationUnreadCount(conversationId, userId))
       );
       doctors = unreadCounts.filter((count) => count > 0).length;
+      doctorMessageUnread = unreadCounts.reduce((sum, count) => sum + count, 0);
     }
 
     const channelsUnread = channels.filter((channel) => channel.unreadCount > 0).length;
 
     const groupConvs = convList.filter((conv) => conv.type === "group" || conv.type === "consilium");
     let groups = 0;
+    let groupMessageUnread = 0;
     if (groupConvs.length > 0) {
       const unreadCounts = await Promise.all(
         groupConvs.map((conv) => this.getConversationUnreadCount(conv.id, userId))
       );
       groups = unreadCounts.filter((count) => count > 0).length;
+      groupMessageUnread = unreadCounts.reduce((sum, count) => sum + count, 0);
     }
 
     return {
@@ -1427,6 +1508,7 @@ export class DatabaseStorage implements IStorage {
       doctors,
       groups,
       channels: channelsUnread,
+      inboxUnreadMessages: patientMessageUnread + doctorMessageUnread + groupMessageUnread,
     };
   }
 
@@ -1943,13 +2025,42 @@ export class DatabaseStorage implements IStorage {
     return m || null;
   }
 
-  async updateConversation(id: string, data: { name?: string; avatarUrl?: string | null }): Promise<Conversation | undefined> {
+  async updateConversation(
+    id: string,
+    data: {
+      name?: string;
+      avatarUrl?: string | null;
+      patientAvailable?: boolean;
+      isClosed?: boolean;
+    }
+  ): Promise<Conversation | undefined> {
     const [c] = await db
       .update(conversations)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(conversations.id, id))
       .returning();
     return c;
+  }
+
+  async searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]> {
+    const conditions = [ne(users.id, excludeUserId)];
+    if (nameFilter?.trim()) {
+      const pattern = `%${nameFilter.trim()}%`;
+      conditions.push(
+        or(
+          ilike(users.firstName, pattern),
+          ilike(users.lastName, pattern),
+          ilike(users.email, pattern),
+          sql`(COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')) ILIKE ${pattern}`
+        )!
+      );
+    }
+    return await db
+      .select()
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.lastName, users.firstName)
+      .limit(30);
   }
 
   async getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]> {
@@ -2072,6 +2183,38 @@ export class DatabaseStorage implements IStorage {
     });
 
     return channels;
+  }
+
+  async getMessengerChannelBrowseList(
+    userId: string,
+    isAdmin: boolean
+  ): Promise<MessengerChannelBrowseList> {
+    const subscriptions = await this.getMessengerChannels(userId);
+    const subscriptionIds = subscriptions.map((channel) => channel.id);
+    const discoverRaw = await this.getDiscoverableConversations(userId, {
+      type: "channel",
+      excludeClosed: true,
+      patientAvailableOnly: !isAdmin,
+      excludeConversationIds: subscriptionIds,
+    });
+    const discover: MessengerChannelDiscoverItem[] = discoverRaw.map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      avatarUrl: channel.avatarUrl,
+      participantCount: channel.participantCount,
+      isMember: false,
+      lastMessagePreview: channel.lastMessagePreview,
+      lastMessageAt: channel.lastMessageAt,
+      patientAvailable: channel.patientAvailable ?? false,
+      isClosed: channel.isClosed ?? false,
+    }));
+    discover.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+    return { subscriptions, discover };
   }
 
   async upsertPushSubscription(

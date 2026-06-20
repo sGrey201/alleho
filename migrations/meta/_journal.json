@@ -169,6 +169,13 @@
       "when": 1774110000000,
       "tag": "0023_split_content_and_sponsors",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1774130000000,
+      "tag": "0025_channel_visibility",
+      "breakpoints": true
     }
   ]
 }

@@ -58,7 +58,7 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-export const inviteTypeEnum = z.enum(["patient", "homeopath"]);
+export const inviteTypeEnum = z.enum(["patient", "homeopath", "open"]);
 export type InviteType = z.infer<typeof inviteTypeEnum>;
 
 export const inviteStatusEnum = z.enum(["pending", "accepted", "expired", "revoked"]);
@@ -299,6 +299,8 @@ export const conversations = pgTable(
     /** Denormalized from latest conversation_messages row — avoids list queries on messages table */
     lastMessageAt: timestamp("last_message_at"),
     lastMessagePreview: text("last_message_preview"),
+    patientAvailable: boolean("patient_available").notNull().default(false),
+    isClosed: boolean("is_closed").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

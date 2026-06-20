@@ -112,7 +112,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string) {
 export async function sendInviteEmail(
   to: string,
   inviteUrl: string,
-  inviteType: "patient" | "homeopath",
+  inviteType: "patient" | "homeopath" | "open",
   doctorName: string,
   doctorEmail?: string | null
 ) {
@@ -120,9 +120,20 @@ export async function sendInviteEmail(
 
   const inviterLine =
     doctorEmail && doctorEmail.trim()
-      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу ${SITE_TITLE} для ведения вашей истории здоровья.`
-      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу ${SITE_TITLE} для ведения вашей истории здоровья.`;
-  const inviteTitle = inviteType === "homeopath" ? "Приглашение в сообщество гомеопатов" : "Приглашение на Стену здоровья";
+      ? `Гомеопат <strong>${doctorName}</strong> <span style="color:#555">(${doctorEmail.trim()})</span> приглашает вас на платформу ${SITE_TITLE}.`
+      : `Гомеопат <strong>${doctorName}</strong> приглашает вас на платформу ${SITE_TITLE}.`;
+  const inviteTitle =
+    inviteType === "homeopath"
+      ? "Приглашение в сообщество гомеопатов"
+      : inviteType === "patient"
+        ? "Приглашение на Стену здоровья"
+        : "Приглашение на платформу";
+  const inviteBody =
+    inviteType === "homeopath"
+      ? "Перейдите по ссылке, чтобы завершить регистрацию в сообществе гомеопатов."
+      : inviteType === "patient"
+        ? "Перейдите по ссылке, чтобы завершить регистрацию и начать вести историю здоровья."
+        : "Перейдите по ссылке, чтобы завершить регистрацию. При регистрации вам будет предложено указать, являетесь ли вы гомеопатом.";
   
   await client.emails.send({
     from: fromEmail,
@@ -138,7 +149,7 @@ export async function sendInviteEmail(
           ${inviterLine}
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Перейдите по ссылке, чтобы завершить регистрацию. Ссылка действует 24 часа и может быть использована только один раз:
+          ${inviteBody} Ссылка действует 24 часа и может быть использована только один раз:
         </p>
         <a href="${inviteUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
           Перейти к регистрации

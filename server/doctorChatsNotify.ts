@@ -23,6 +23,7 @@ export async function notifyMessengerConversationActivity(
       .filter((participant) => {
         if (participant.userId === authorUserId) return false;
         if (conv.type === "patient") return participant.user.isAdmin;
+        if (conv.type === "channel") return true;
         return !!participant.user.isAdmin;
       })
       .map((participant) => publishDoctorChatsUpdated(participant.userId))

@@ -170,6 +170,14 @@ export function useConversationWs(
       "comments",
     ];
 
+    const refetchMessages = () => {
+      const convId = conversationIdRef.current;
+      if (!convId) return;
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", convId, "messages"],
+      });
+    };
+
     const updateMessages = (
       updater: (
         list: ConversationMessageWithAuthor[]
@@ -215,6 +223,7 @@ export function useConversationWs(
             conversationId: activeConversationId,
           })
         );
+        refetchMessages();
       };
 
       ws.onmessage = (event) => {
@@ -416,7 +425,15 @@ export function useConversationWs(
 
     connect();
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (conversationIdRef.current !== activeConversationId) return;
+      refetchMessages();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       disposed = true;
       if (markSeenTimeoutRef.current) {
         clearTimeout(markSeenTimeoutRef.current);

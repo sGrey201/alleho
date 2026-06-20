@@ -6,12 +6,12 @@ import {
   type DoctorChatsUpdatedPayload,
 } from "@/lib/doctorChatsRealtime";
 
-/** Personal channel for doctors: chat list updates. */
+/** Personal channel for messenger chat list updates (doctors and patients). */
 export function useDoctorChatsWs(enabled: boolean): void {
-  const { isAuthenticated, isAdmin, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   useEffect(() => {
-    if (!enabled || !isAuthenticated || !isAdmin) return;
+    if (!enabled || !isAuthenticated) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -33,5 +33,5 @@ export function useDoctorChatsWs(enabled: boolean): void {
     return () => {
       ws.close();
     };
-  }, [enabled, isAuthenticated, isAdmin, user?.id]);
+  }, [enabled, isAuthenticated, user?.id]);
 }
