@@ -1,4 +1,13 @@
 // Russian-only translations
+function formatDurationDays(days: number): string {
+  const mod10 = days % 10;
+  const mod100 = days % 100;
+  let dayWord = 'дней';
+  if (mod10 === 1 && mod100 !== 11) dayWord = 'день';
+  else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) dayWord = 'дня';
+  return `${days} ${dayWord}`;
+}
+
 export const t = {
   // Navigation & Common
   home: 'Главная',
@@ -1862,13 +1871,10 @@ export const t = {
   chatConsilium: 'Консилиум',
   channelOwn: 'Веду',
   channelSub: 'Подписка',
-  channelPatientAvailable: 'Доступно пациентам',
-  channelClosed: 'Закрытый канал',
+  channelHomeopathOnly: 'Только гомеопатам',
   channelVisibilityTitle: 'Видимость канала',
   channelSubscriptionsDivider: 'Подписки 👆',
   channelAllDivider: 'Все каналы 👇',
-  channelAddMember: 'Добавить участника',
-  searchUsersToAdd: 'Найдите пользователя по имени или email',
   channelAccessDenied: 'Нет доступа к этому каналу',
   noChats: 'Нет чатов',
   selectChat: 'Выберите чат',
@@ -1915,13 +1921,18 @@ export const t = {
   channelSponsorPaymentAmount: 'Сумма перевода',
   channelSponsorPaymentsTitle: 'Оплаты',
   channelSponsorNotEnabled: 'Монетизация канала не включена',
-  sponsorContentLocked: 'Контент для спонсоров',
-  sponsorContentLabel: 'Для спонсоров',
+  sponsorContentLocked: 'Платный контент',
+  sponsorContentLabel: 'Платный контент',
   sponsorStatusActiveUntil: 'Вы спонсор до',
-  sponsorBecomePrompt: 'Станьте спонсором, чтобы читать платный контент',
+  sponsorBecomePrompt: 'Спонсоры могут размещать тут ссылку на свой профиль или канал',
   sponsorBecomeButton: 'Стать спонсором',
-  sponsorTransferInstructionsTitle: (amount: string) =>
-    `Переведите ${amount}р одним из следующих способов:`,
+  sponsorChannelPaymentIntro: (days: number) =>
+    `Чтобы стать спонсором на ${formatDurationDays(days)}:`,
+  sponsorContentPaymentIntro: (days: number) =>
+    `Чтобы получить доступ к контенту на ${formatDurationDays(days)}:`,
+  sponsorPaymentStepTransfer: (amount: string) =>
+    `1. Переведите ${amount} рублей одним из следующих способов:`,
+  sponsorPaymentStepReceipt: '2. Прикрепите чек',
   sponsorTierContentTitle: (days: number) => {
     const mod10 = days % 10;
     const mod100 = days % 100;
@@ -1944,7 +1955,7 @@ export const t = {
   sponsorPaymentCollapse: 'Свернуть',
   sponsorBadge: 'Спонсор',
   sponsorActiveCount: 'Спонсоров',
-  channelSponsorsTitle: 'Спонсоры канала:',
+  channelSponsorsTitle: 'Спонсоры канала',
   channelSponsorsEmpty: 'Пока нет спонсоров',
   sponsorShowInListing: 'Показывать меня в списке спонсоров канала',
   contentPaidUntil: (date: string) => `Контент оплачен до ${date}`,

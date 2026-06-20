@@ -2,7 +2,7 @@ export const BOLD_MARKER = "**";
 export const SPONSOR_MARKER = "$$";
 
 const BOLD_REGEX = /\*\*([^*\n]+)\*\*/g;
-const SPONSOR_REGEX = /\$\$([^$\n]+)\$\$/g;
+const SPONSOR_REGEX = /\$\$([^$]+?)\$\$/g;
 const SPONSOR_PLACEHOLDER = "[[SPONSOR]]";
 
 export const SPONSOR_CONTENT_MAX_LINES = 30;

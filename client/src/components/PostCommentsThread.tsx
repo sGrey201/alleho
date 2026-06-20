@@ -73,6 +73,7 @@ export default function PostCommentsThread({
     comment: ConversationCommentWithAuthor;
     rect: { top: number; left: number; width: number; height: number };
   } | null>(null);
+  const [inlineContentPaymentSegment, setInlineContentPaymentSegment] = useState<number | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const longPressRefs = useRef<MessageLongPressRefs>({
@@ -100,9 +101,10 @@ export default function PostCommentsThread({
 
   const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
   const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
-  const openSponsorSection = () => {
-    setLocation(`/messenger/channel/${conversationId}/settings?section=sponsor`);
-  };
+
+  useEffect(() => {
+    if (canViewSponsorContent) setInlineContentPaymentSegment(null);
+  }, [canViewSponsorContent]);
 
   const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
     queryKey: ["/api/conversations", conversationId, "messages"],
@@ -567,7 +569,10 @@ export default function PostCommentsThread({
                     canViewSponsorContent={canViewSponsorContent}
                     monetizationEnabled={channelMonetizationEnabled}
                     isContentTruncated={anchorPost.isContentTruncated}
-                    onSponsorCtaClick={openSponsorSection}
+                    conversationId={conversationId}
+                    activePaymentSegmentIndex={inlineContentPaymentSegment}
+                    onPaymentSegmentOpen={setInlineContentPaymentSegment}
+                    onPaymentFlowClose={() => setInlineContentPaymentSegment(null)}
                   />
                 ) : null}
                 <span className="mt-1 block text-right text-[10px] leading-none text-muted-foreground">

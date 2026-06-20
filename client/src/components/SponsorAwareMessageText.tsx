@@ -6,6 +6,7 @@ import {
 } from "@shared/messageFormatting";
 import { FormattedMessageText } from "@/components/FormattedMessageText";
 import { SponsorLockedBlock } from "@/components/SponsorLockedBlock";
+import ChannelSponsorSection from "@/components/ChannelSponsorSection";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -15,9 +16,12 @@ type SponsorAwareMessageTextProps = {
   canViewSponsorContent: boolean;
   monetizationEnabled?: boolean;
   isContentTruncated?: boolean;
+  conversationId?: string;
+  activePaymentSegmentIndex?: number | null;
+  onPaymentSegmentOpen?: (segmentIndex: number) => void;
+  onPaymentFlowClose?: () => void;
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
-  onSponsorCtaClick?: () => void;
 };
 
 function renderSegmentContent(
@@ -57,9 +61,12 @@ export function SponsorAwareMessageText({
   canViewSponsorContent,
   monetizationEnabled = false,
   isContentTruncated = false,
+  conversationId,
+  activePaymentSegmentIndex = null,
+  onPaymentSegmentOpen,
+  onPaymentFlowClose,
   onTagClick,
   highlightQuery,
-  onSponsorCtaClick,
 }: SponsorAwareMessageTextProps) {
   if (!monetizationEnabled) {
     return (
@@ -79,11 +86,35 @@ export function SponsorAwareMessageText({
       ? parseSponsorPlaceholderSegments(text)
       : parseMessageSponsorSegments(text);
 
+  const firstSponsorSegmentIndex = segments.findIndex((seg) => seg.sponsor);
+
   return (
     <div className={cn("text-sm leading-snug", className)}>
       {segments.map((seg, i) => {
         if (seg.sponsor && !canViewSponsorContent) {
-          return <SponsorLockedBlock key={i} onClick={onSponsorCtaClick} />;
+          if (activePaymentSegmentIndex === i && conversationId) {
+            return (
+              <div
+                key={i}
+                className="my-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-2"
+              >
+                <ChannelSponsorSection
+                  conversationId={conversationId}
+                  isOwner={false}
+                  embedded
+                  tierTypes={["content"]}
+                  initialSelectedTier="content"
+                  onPaymentFlowClose={onPaymentFlowClose}
+                />
+              </div>
+            );
+          }
+          return (
+            <SponsorLockedBlock
+              key={i}
+              onClick={() => onPaymentSegmentOpen?.(i)}
+            />
+          );
         }
         if (!seg.text) return null;
         if (seg.sponsor && canViewSponsorContent) {
@@ -110,7 +141,11 @@ export function SponsorAwareMessageText({
       {!canViewSponsorContent && isContentTruncated && (
         <button
           type="button"
-          onClick={onSponsorCtaClick}
+          onClick={() =>
+            onPaymentSegmentOpen?.(
+              firstSponsorSegmentIndex >= 0 ? firstSponsorSegmentIndex : 0
+            )
+          }
           className="mt-1 text-sm font-medium text-primary hover:underline"
         >
           {t.readMore}

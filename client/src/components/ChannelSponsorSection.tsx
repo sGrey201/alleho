@@ -66,6 +66,11 @@ type Props = {
   isOwner: boolean;
   scrollOnMount?: boolean;
   embedded?: boolean;
+  /** When set, only these donation tiers are shown (non-owner purchase UI). */
+  tierTypes?: DonationType[];
+  /** Opens the payment flow immediately for the given tier. */
+  initialSelectedTier?: DonationType;
+  onPaymentFlowClose?: () => void;
 };
 
 function displayUserName(user?: SponsorPayment["user"]) {
@@ -107,6 +112,9 @@ export default function ChannelSponsorSection({
   isOwner,
   scrollOnMount,
   embedded = false,
+  tierTypes,
+  initialSelectedTier,
+  onPaymentFlowClose,
 }: Props) {
   const { toast } = useToast();
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -169,8 +177,8 @@ export default function ChannelSponsorSection({
   }, [settings]);
 
   useEffect(() => {
-    setSelectedTier(null);
-  }, [conversationId]);
+    setSelectedTier(initialSelectedTier ?? null);
+  }, [conversationId, initialSelectedTier]);
 
   useEffect(() => {
     if (scrollOnMount) setSettingsExpanded(true);
@@ -212,6 +220,7 @@ export default function ChannelSponsorSection({
     },
     onSuccess: async () => {
       setSelectedTier(null);
+      onPaymentFlowClose?.();
       await queryClient.invalidateQueries({ queryKey: settingsKey });
       await queryClient.invalidateQueries({ queryKey: paymentsKey });
       await queryClient.invalidateQueries({ queryKey: sponsorsKey });
@@ -303,6 +312,8 @@ export default function ChannelSponsorSection({
 
   const tiers = settings?.tiers ?? [];
   const selectedTierAmount = tiers.find((tier) => tier.type === selectedTier)?.amount;
+  const selectedTierDurationDays =
+    tiers.find((tier) => tier.type === selectedTier)?.durationDays ?? 30;
   const hasContentAccess = settings ? isTierActive(settings, "content") : false;
   const hasChannelSponsor = settings ? isTierActive(settings, "content_thanks") : false;
   const contentUntil = settings?.sponsorExpiresAt ? formatExpiryDate(settings.sponsorExpiresAt) : null;
@@ -310,6 +321,13 @@ export default function ChannelSponsorSection({
     ? formatExpiryDate(settings.channelSponsorExpiresAt)
     : null;
   const purchasableTiers = tiers.filter((tier) => !settings || !isTierActive(settings, tier.type));
+  const visibleTierTypes = tierTypes ?? (["content", "content_thanks"] as DonationType[]);
+  const visiblePurchasableTiers = purchasableTiers.filter((tier) =>
+    visibleTierTypes.includes(tier.type)
+  );
+  const showContentStatus = visibleTierTypes.includes("content");
+  const showChannelSponsorStatus = visibleTierTypes.includes("content_thanks");
+  const selectedTierVisible = selectedTier ? visibleTierTypes.includes(selectedTier) : false;
   const pendingPaymentCount = payments.filter((p) => p.status === "granted").length;
   const sortedPayments = [...payments].sort((a, b) => {
     const aNeedsReview = a.status === "granted" ? 0 : 1;
@@ -319,6 +337,17 @@ export default function ChannelSponsorSection({
     const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
     return bTime - aTime;
   });
+
+  if (
+    embedded &&
+    !isOwner &&
+    !selectedTierVisible &&
+    visiblePurchasableTiers.length === 0 &&
+    !(showContentStatus && hasContentAccess && contentUntil) &&
+    !(showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil)
+  ) {
+    return null;
+  }
 
   return (
     <div
@@ -523,26 +552,33 @@ export default function ChannelSponsorSection({
       ) : (
         settings?.enabled && (
           <div className="space-y-3">
-            {(hasContentAccess || hasChannelSponsor) && (
+            {((showContentStatus && hasContentAccess && contentUntil) ||
+              (showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil)) && (
               <div className="flex flex-wrap gap-2">
-                {hasContentAccess && contentUntil && (
+                {showContentStatus && hasContentAccess && contentUntil && (
                   <Badge variant="secondary">{t.contentPaidUntil(contentUntil)}</Badge>
                 )}
-                {hasChannelSponsor && channelSponsorUntil && (
+                {showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil && (
                   <Badge variant="secondary">{t.channelSponsorPaidUntil(channelSponsorUntil)}</Badge>
                 )}
               </div>
             )}
-            {selectedTier ? (
+            {selectedTierVisible && selectedTier ? (
               <>
-                <p className="text-sm font-medium">
-                  {t.sponsorTransferInstructionsTitle(selectedTierAmount ?? "0")}
-                </p>
-                {settings?.paymentInstructions?.trim() ? (
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-wrap">
-                    {settings.paymentInstructions.trim()}
-                  </div>
-                ) : null}
+                <div className="space-y-2 text-sm">
+                  <p className="font-medium">
+                    {selectedTier === "content_thanks"
+                      ? t.sponsorChannelPaymentIntro(selectedTierDurationDays)
+                      : t.sponsorContentPaymentIntro(selectedTierDurationDays)}
+                  </p>
+                  <p>{t.sponsorPaymentStepTransfer(selectedTierAmount ?? "0")}</p>
+                  {settings?.paymentInstructions?.trim() ? (
+                    <div className="rounded-md bg-muted/50 px-3 py-2 whitespace-pre-wrap">
+                      {settings.paymentInstructions.trim()}
+                    </div>
+                  ) : null}
+                  <p>{t.sponsorPaymentStepReceipt}</p>
+                </div>
                 <input
                   id={receiptInputId}
                   ref={receiptInputRef}
@@ -573,28 +609,61 @@ export default function ChannelSponsorSection({
                     variant="outline"
                     className="flex-1"
                     disabled={isUploading || submitReceiptMutation.isPending}
-                    onClick={() => setSelectedTier(null)}
+                    onClick={() => {
+                      setSelectedTier(null);
+                      onPaymentFlowClose?.();
+                    }}
                   >
                     {t.cancel}
                   </Button>
                 </div>
               </>
             ) : (
-              purchasableTiers.length > 0 && (
+              visiblePurchasableTiers.length > 0 && (
                 <div className="space-y-2">
-                  {purchasableTiers.map((tier) => (
-                    <button
-                      key={tier.type}
-                      type="button"
-                      className="flex w-full flex-col items-center gap-2 rounded-md border px-4 py-4 text-center hover:bg-muted/40 transition-colors"
-                      onClick={() => setSelectedTier(tier.type)}
-                    >
-                      <span className="text-sm leading-snug text-muted-foreground">
-                        {tierTitle(tier)}
-                      </span>
-                      <span className="text-lg font-semibold">{t.sponsorTierOpenFor(tier.amount)}</span>
-                    </button>
-                  ))}
+                  {visiblePurchasableTiers.map((tier) =>
+                    embedded && tier.type === "content_thanks" ? (
+                      <button
+                        key={tier.type}
+                        type="button"
+                        className="mx-auto block text-sm font-medium text-primary hover:underline"
+                        onClick={() => setSelectedTier(tier.type)}
+                      >
+                        {t.sponsorBecomeButton}
+                      </button>
+                    ) : (
+                      <button
+                        key={tier.type}
+                        type="button"
+                        className={cn(
+                          "flex w-full flex-col items-center gap-2 rounded-md border px-4 py-4 text-center transition-colors",
+                          embedded && tier.type === "content"
+                            ? "border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20"
+                            : "hover:bg-muted/40"
+                        )}
+                        onClick={() => setSelectedTier(tier.type)}
+                      >
+                        <span
+                          className={cn(
+                            "text-sm leading-snug",
+                            embedded && tier.type === "content"
+                              ? "text-amber-900/80 dark:text-amber-100/80"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {tierTitle(tier)}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-lg font-semibold",
+                            embedded && tier.type === "content" && "text-amber-900 dark:text-amber-50"
+                          )}
+                        >
+                          {t.sponsorTierOpenFor(tier.amount)}
+                        </span>
+                      </button>
+                    )
+                  )}
                 </div>
               )
             )}

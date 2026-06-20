@@ -360,6 +360,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const [editText, setEditText] = useState("");
   const [forwarding, setForwarding] = useState<ConversationMessageWithAuthor | null>(null);
   const [hideSubscribeButton, setHideSubscribeButton] = useState(false);
+  const [inlineContentPayment, setInlineContentPayment] = useState<{
+    messageId: string;
+    segmentIndex: number;
+  } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ConversationMessageWithAuthor | null>(null);
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
   const [messageLayer, setMessageLayer] = useState<{
@@ -467,9 +471,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
   const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
-  const openSponsorSection = useCallback(() => {
-    setLocation(`/messenger/channel/${conversationId}/settings?section=sponsor`);
-  }, [conversationId, setLocation]);
+
+  useEffect(() => {
+    if (canViewSponsorContent) setInlineContentPayment(null);
+  }, [canViewSponsorContent]);
 
   const voiceCall = useVoiceCall(conversationId, user?.id);
   const inboxUnreadMessages = useInboxUnreadMessages();
@@ -1592,9 +1597,18 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
               canViewSponsorContent={canViewSponsorContent}
               monetizationEnabled={channelMonetizationEnabled}
               isContentTruncated={msg.isContentTruncated}
+              conversationId={conversationId}
+              activePaymentSegmentIndex={
+                inlineContentPayment?.messageId === msg.id
+                  ? inlineContentPayment.segmentIndex
+                  : null
+              }
+              onPaymentSegmentOpen={(segmentIndex) =>
+                setInlineContentPayment({ messageId: msg.id, segmentIndex })
+              }
+              onPaymentFlowClose={() => setInlineContentPayment(null)}
               onTagClick={handleTagClick}
               highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
-              onSponsorCtaClick={openSponsorSection}
             />
           ) : null}
         </>
