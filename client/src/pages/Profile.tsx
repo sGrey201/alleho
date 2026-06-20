@@ -718,16 +718,15 @@ export default function Profile({
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-0 p-4">
+          <div className="absolute inset-x-0 top-0 flex px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top,0px))]">
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="rounded-full bg-black/35 text-white hover:bg-black/50"
+              className="h-12 w-12 shrink-0 rounded-full bg-black/35 text-white hover:bg-black/50"
               onClick={handleBack}
               aria-label="Назад"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-6 w-6" />
             </Button>
           </div>
 
@@ -859,7 +858,7 @@ export default function Profile({
       className={
         embedded
           ? "flex h-full min-h-0 flex-col overflow-y-auto px-4 py-4 pb-8"
-          : "px-4 py-4 pb-8"
+          : "px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top,0px))]"
       }
     >
       <div className="space-y-6">
@@ -868,13 +867,12 @@ export default function Profile({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="-ml-2 rounded-full"
+            className="h-12 w-12 shrink-0 -ml-2 rounded-full"
             onClick={handleBack}
             aria-label="Назад"
             data-testid="button-profile-back"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-6 w-6" />
           </Button>
         </div>
         )}
