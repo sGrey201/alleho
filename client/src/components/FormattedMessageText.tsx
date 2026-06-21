@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   parseMessageBoldSegments,
   parseMessageTagSegments,
@@ -84,18 +85,23 @@ export function FormattedMessageText({
   highlightQuery,
   as = "p",
 }: FormattedMessageTextProps) {
-  const segments = parseMessageBoldSegments(text);
-  const Tag = as;
-
-  return (
-    <Tag className={cn("whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug", className)}>
-      {segments.map((seg, i) =>
+  const segments = useMemo(() => parseMessageBoldSegments(text), [text]);
+  const content = useMemo(
+    () =>
+      segments.map((seg, i) =>
         seg.bold ? (
           <strong key={i}>{renderPlainWithTags(seg.text, `b${i}`, onTagClick, highlightQuery)}</strong>
         ) : (
           <span key={i}>{renderPlainWithTags(seg.text, `p${i}`, onTagClick, highlightQuery)}</span>
         )
-      )}
+      ),
+    [segments, onTagClick, highlightQuery]
+  );
+  const Tag = as;
+
+  return (
+    <Tag className={cn("whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug", className)}>
+      {content}
     </Tag>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { useLocation } from "wouter";
 import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2 } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
@@ -112,11 +113,7 @@ export default function PostCommentsThread({
     scrollChatElementIntoView(paymentSegmentRef.current);
   }, [inlineContentPaymentSegment]);
 
-  const { data: conversationMessages = [] } = useQuery<ConversationMessageWithAuthor[]>({
-    queryKey: ["/api/conversations", conversationId, "messages"],
-    enabled: !!conversationId,
-    ...liveConversationQueryOptions,
-  });
+  const { messages: conversationMessages } = useConversationMessages(conversationId);
 
   const anchorPost = useMemo(
     () => conversationMessages.find((item) => item.id === messageId) ?? null,

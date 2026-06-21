@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { postConversationSeen } from "@/lib/markConversationSeen";
+import {
+  appendConversationMessage,
+  conversationMessagesQueryKey,
+  updateConversationMessagesList,
+  type ConversationMessagesInfiniteData,
+} from "@/lib/conversationMessagesCache";
 
 export interface ConversationMessageAuthor {
   id: string;
@@ -160,7 +166,8 @@ export function useConversationWs(
   useEffect(() => {
     if (!enabled || !conversationId) return;
 
-    const messagesKey = () => ["/api/conversations", conversationIdRef.current, "messages"];
+    const messagesKey = () =>
+      conversationMessagesQueryKey(conversationIdRef.current!);
     const convKey = () => ["/api/conversations", conversationIdRef.current];
     const commentsKey = (messageId: string) => [
       "/api/conversations",
@@ -174,7 +181,7 @@ export function useConversationWs(
       const convId = conversationIdRef.current;
       if (!convId) return;
       void queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", convId, "messages"],
+        queryKey: conversationMessagesQueryKey(convId),
       });
     };
 
@@ -183,11 +190,9 @@ export function useConversationWs(
         list: ConversationMessageWithAuthor[]
       ) => ConversationMessageWithAuthor[]
     ) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(messagesKey(), (old) => {
-        const base = old ?? [];
-        const updated = updater(base);
-        return old === updated ? old : updated;
-      });
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey(), (old) =>
+        updateConversationMessagesList(old, updater)
+      );
     };
 
     const scheduleMarkSeen = () => {
@@ -223,7 +228,6 @@ export function useConversationWs(
             conversationId: activeConversationId,
           })
         );
-        refetchMessages();
       };
 
       ws.onmessage = (event) => {
@@ -243,13 +247,8 @@ export function useConversationWs(
             if (refetchMessagesRef.current) {
               void queryClient.invalidateQueries({ queryKey: messagesKey() });
             } else {
-              queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-                messagesKey(),
-                (old) => {
-                  const list = old ?? [];
-                  if (list.some((m) => m.id === payload.id)) return old;
-                  return [...list, payload];
-                }
+              queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey(), (old) =>
+                appendConversationMessage(old, payload)
               );
             }
             if (payload.authorUserId !== currentUserIdRef.current) {

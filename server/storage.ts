@@ -54,7 +54,7 @@ import {
   type ChannelSponsorDonationType,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, isNull } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, lt, isNull } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
@@ -362,6 +362,11 @@ export interface IStorage {
   ): Promise<boolean>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
+  getConversationMessagesBefore(
+    conversationId: string,
+    beforeMessageId: string | null,
+    limit: number
+  ): Promise<{ messages: ConversationMessage[]; hasMore: boolean }>;
   getConversationMessageById(messageId: string): Promise<ConversationMessage | undefined>;
   getConversationMessageComments(
     conversationId: string,
@@ -1549,13 +1554,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]> {
+    const { messages } = await this.getConversationMessagesBefore(conversationId, null, limit);
+    return messages;
+  }
+
+  async getConversationMessagesBefore(
+    conversationId: string,
+    beforeMessageId: string | null,
+    limit: number
+  ): Promise<{ messages: ConversationMessage[]; hasMore: boolean }> {
+    const fetchLimit = limit + 1;
+
+    if (!beforeMessageId) {
+      const rows = await db
+        .select()
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, conversationId))
+        .orderBy(desc(conversationMessages.createdAt))
+        .limit(fetchLimit);
+      const hasMore = rows.length > limit;
+      return { messages: rows.slice(0, limit).reverse(), hasMore };
+    }
+
+    const anchor = await this.getConversationMessageById(beforeMessageId);
+    if (!anchor || anchor.conversationId !== conversationId || !anchor.createdAt) {
+      return { messages: [], hasMore: false };
+    }
+
+    const anchorCreatedAt = anchor.createdAt;
+
     const rows = await db
       .select()
       .from(conversationMessages)
-      .where(eq(conversationMessages.conversationId, conversationId))
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          lt(conversationMessages.createdAt, anchorCreatedAt)
+        )
+      )
       .orderBy(desc(conversationMessages.createdAt))
-      .limit(limit);
-    return rows.reverse();
+      .limit(fetchLimit);
+    const hasMore = rows.length > limit;
+    return { messages: rows.slice(0, limit).reverse(), hasMore };
   }
 
   async createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage> {

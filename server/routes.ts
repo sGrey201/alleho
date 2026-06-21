@@ -2022,6 +2022,8 @@ ${allUrls.map(url => `  <url>
   // Conversation message helpers
   const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
   const RECENT_MESSAGES_LIMIT = 100;
+  const DEFAULT_MESSAGES_PAGE_LIMIT = 30;
+  const MAX_MESSAGES_PAGE_LIMIT = 50;
 
   function userToConvAuthor(u: User | undefined | null): ConversationMessageAuthor {
     return {
@@ -2219,10 +2221,33 @@ ${allUrls.map(url => `  <url>
             : inConv;
       if (!canReadMessages) return res.status(403).json({ message: "Access denied" });
       const sponsorFilter = await getChannelSponsorFilterContext(id, currentUserId, conv.type);
-      const messages = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
+      const rawLimit = parseInt(String(req.query.limit ?? DEFAULT_MESSAGES_PAGE_LIMIT), 10);
+      const limit = Number.isFinite(rawLimit)
+        ? Math.min(Math.max(rawLimit, 1), MAX_MESSAGES_PAGE_LIMIT)
+        : DEFAULT_MESSAGES_PAGE_LIMIT;
+      const before =
+        typeof req.query.before === "string" && req.query.before.length > 0
+          ? req.query.before
+          : null;
+      const { messages, hasMore } = await storage.getConversationMessagesBefore(id, before, limit);
       const withAuthors = await enrichConversationMessages(messages, currentUserId, sponsorFilter);
-      res.json(withAuthors);
-      backfillConversationRecent(id, withAuthors).catch((err) => console.error("Redis backfill conv:", err));
+      const nextBefore = withAuthors.length > 0 ? withAuthors[0]!.id : null;
+      res.json({
+        items: withAuthors,
+        hasMore,
+        nextBefore: hasMore ? nextBefore : null,
+      });
+      if (!before) {
+        const recentForCache = await storage.getConversationMessagesRecent(id, RECENT_MESSAGES_LIMIT);
+        const enrichedForCache = await enrichConversationMessages(
+          recentForCache,
+          currentUserId,
+          sponsorFilter
+        );
+        backfillConversationRecent(id, enrichedForCache).catch((err) =>
+          console.error("Redis backfill conv:", err)
+        );
+      }
     } catch (error) {
       console.error("Error fetching conversation messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });

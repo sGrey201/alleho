@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useConversationWs, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { useConversationMessages } from "@/hooks/useConversationMessages";
+import {
+  appendConversationMessage,
+  conversationMessagesQueryKey,
+  updateConversationMessagesList,
+  type ConversationMessagesInfiniteData,
+} from "@/lib/conversationMessagesCache";
 import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
@@ -64,6 +71,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
 import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
+import { CollapsibleMessageText } from "@/components/CollapsibleMessageText";
+import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
@@ -417,6 +426,10 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
+  const loadOlderRef = useRef<HTMLDivElement>(null);
+  const pendingScrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
+  const deepLinkFetchAttemptsRef = useRef(0);
+  const suppressAutoScrollUntilRef = useRef(0);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const paymentSegmentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const inlineContentPaymentRef = useRef(inlineContentPayment);
@@ -488,17 +501,23 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     scrollChatPaneToBottomForKeyboard(messagesScrollRef.current);
   }, []);
 
+  const blockAutoScrollBriefly = useCallback(() => {
+    suppressAutoScrollUntilRef.current = Date.now() + 800;
+  }, []);
+
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
     queryKey: ["/api/conversations", conversationId],
     enabled: !!conversationId,
     ...liveConversationQueryOptions,
   });
 
-  const { data: messages, isLoading: messagesLoading } = useQuery<ConversationMessageWithAuthor[]>({
-    queryKey: ["/api/conversations", conversationId, "messages"],
-    enabled: !!conversationId,
-    ...liveConversationQueryOptions,
-  });
+  const {
+    messages,
+    isLoading: messagesLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useConversationMessages(conversationId);
 
   const myChannelRole = conv?.participants?.find((p) => p.userId === user?.id)?.role;
   const canPostToChannel =
@@ -601,13 +620,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
     onSuccess: (newMessage) => {
       if (!conversationId) return;
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
-        (old) => {
-          const list = old ?? [];
-          if (list.some((m) => m.id === newMessage.id)) return old ?? list;
-          return [...list, newMessage];
-        }
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
+        (old) => appendConversationMessage(old, newMessage)
       );
       setQuestionnairePickerOpen(false);
     },
@@ -643,13 +658,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
     onSuccess: (newMessage: ConversationMessageWithAuthor) => {
       if (!conversationId) return;
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
-        (old) => {
-          const list = old ?? [];
-          if (list.some((m) => m.id === newMessage.id)) return old ?? list;
-          return [...list, newMessage];
-        }
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
+        (old) => appendConversationMessage(old, newMessage)
       );
       setMessage("");
       if (conversationId) clearChatComposerDraft(conversationId);
@@ -680,11 +691,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       }>;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
         (old) =>
-          old?.map((m) =>
-            m.id === variables.messageId ? { ...m, pollResults: data.pollResults ?? m.pollResults } : m
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) =>
+              m.id === variables.messageId ? { ...m, pollResults: data.pollResults ?? m.pollResults } : m
+            )
           )
       );
     },
@@ -703,18 +716,17 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       return res.json();
     },
     onSuccess: (_resp, variables) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
         (old) =>
-          old?.map((m) =>
-            m.id === variables.messageId
-              ? { ...m, content: variables.content, editedAt: new Date().toISOString() }
-              : m
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) =>
+              m.id === variables.messageId
+                ? { ...m, content: variables.content, editedAt: new Date().toISOString() }
+                : m
+            )
           )
       );
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", conversationId, "messages"],
-      });
       setEditing(null);
       setEditText("");
     },
@@ -728,25 +740,24 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       await apiRequest("DELETE", `/api/conversations/${conversationId}/messages/${messageId}`);
     },
     onSuccess: (_resp, messageId) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
         (old) =>
-          old?.map((m) =>
-            m.id === messageId
-              ? {
-                  ...m,
-                  deletedAt: new Date().toISOString(),
-                  content: null,
-                  imageUrl: null,
-                  pinnedAt: null,
-                  pinnedByUserId: null,
-                }
-              : m
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    deletedAt: new Date().toISOString(),
+                    content: null,
+                    imageUrl: null,
+                    pinnedAt: null,
+                    pinnedByUserId: null,
+                  }
+                : m
+            )
           )
       );
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", conversationId, "messages"],
-      });
       setPendingDelete(null);
     },
     onError: (err: Error) => {
@@ -763,22 +774,21 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       );
     },
     onSuccess: (_resp, { messageId, pin }) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
         (old) =>
-          old?.map((m) =>
-            m.id === messageId
-              ? {
-                  ...m,
-                  pinnedAt: pin ? new Date().toISOString() : null,
-                  pinnedByUserId: pin ? user?.id ?? null : null,
-                }
-              : m
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    pinnedAt: pin ? new Date().toISOString() : null,
+                    pinnedByUserId: pin ? user?.id ?? null : null,
+                  }
+                : m
+            )
           )
       );
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", conversationId, "messages"],
-      });
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
@@ -846,13 +856,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       };
     },
     onSuccess: ({ newMessage, targetConversationId, targetTitle, targetType }) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", targetConversationId, "messages"],
-        (old) => {
-          if (!old) return old;
-          if (old.some((m) => m.id === newMessage.id)) return old;
-          return [...old, newMessage];
-        }
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(targetConversationId),
+        (old) => appendConversationMessage(old, newMessage)
       );
       queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       setForwarding(null);
@@ -893,31 +899,40 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       return (await res.json()) as { messageId: string; reactions: ConversationMessageWithAuthor["reactions"] };
     },
     onMutate: async ({ messageId, emoji }) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
         (old) =>
-          old?.map((m) => {
-            if (m.id !== messageId) return m;
-            const prev = m.reactions ?? [];
-            const existing = prev.find((r) => r.emoji === emoji);
-            let next = prev;
-            if (existing?.reactedByMe) {
-              next = prev
-                .map((r) => (r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1), reactedByMe: false } : r))
-                .filter((r) => r.count > 0);
-            } else if (existing) {
-              next = prev.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, reactedByMe: true } : r));
-            } else {
-              next = [...prev, { emoji, count: 1, reactedByMe: true }];
-            }
-            return { ...m, reactions: next };
-          })
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) => {
+              if (m.id !== messageId) return m;
+              const prev = m.reactions ?? [];
+              const existing = prev.find((r) => r.emoji === emoji);
+              let next = prev;
+              if (existing?.reactedByMe) {
+                next = prev
+                  .map((r) =>
+                    r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1), reactedByMe: false } : r
+                  )
+                  .filter((r) => r.count > 0);
+              } else if (existing) {
+                next = prev.map((r) =>
+                  r.emoji === emoji ? { ...r, count: r.count + 1, reactedByMe: true } : r
+                );
+              } else {
+                next = [...prev, { emoji, count: 1, reactedByMe: true }];
+              }
+              return { ...m, reactions: next };
+            })
+          )
       );
     },
     onSuccess: ({ messageId, reactions }) => {
-      queryClient.setQueryData<ConversationMessageWithAuthor[]>(
-        ["/api/conversations", conversationId, "messages"],
-        (old) => old?.map((m) => (m.id === messageId ? { ...m, reactions: reactions ?? [] } : m))
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
+        (old) =>
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) => (m.id === messageId ? { ...m, reactions: reactions ?? [] } : m))
+          )
       );
     },
   });
@@ -1002,42 +1017,6 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
   });
 
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const deepLinkedMessageId = query.get("messageId");
-    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
-    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
-
-    const root = messagesScrollRef.current;
-    if (!root) return;
-    const scroll = () => scrollChatPaneToBottom(root);
-    scroll();
-    const raf = requestAnimationFrame(() => {
-      scroll();
-      requestAnimationFrame(scroll);
-    });
-    const t1 = window.setTimeout(scroll, 80);
-    const t2 = window.setTimeout(scroll, 350);
-    const contentEl = messagesContentRef.current;
-    const ro =
-      contentEl &&
-      new ResizeObserver(() => {
-        const inlinePayment = inlineContentPaymentRef.current;
-        if (inlinePayment) {
-          scrollToInlinePayment(inlinePayment);
-          return;
-        }
-        scrollChatPaneToBottom(root);
-      });
-    if (contentEl && ro) ro.observe(contentEl);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      ro?.disconnect();
-    };
-  }, [messages?.length, conversationId, scrollToInlinePayment]);
-
   // Keep the latest messages visible while the iOS keyboard and composer resize.
   useEffect(() => {
     const shouldStickToBottom = () =>
@@ -1108,18 +1087,102 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     return `${t.wasOnlineAt} ${format(date, "dd.MM.yyyy", { locale: ru })} в ${time}`;
   };
 
-  const sortedMessages = useMemo(() => {
-    if (!messages) return [];
-    return [...messages].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-  }, [messages]);
+  const sortedMessages = useMemo(() => messages, [messages]);
 
   const isPatientConv = conv?.type === "patient";
   const displayMessages = useMemo(() => {
     if (!isPatientConv || user?.isAdmin) return sortedMessages;
     return sortedMessages.filter((m) => m.messageType !== "followup");
   }, [sortedMessages, isPatientConv, user?.isAdmin]);
+
+  useEffect(() => {
+    deepLinkFetchAttemptsRef.current = 0;
+  }, [conversationId]);
+
+  useEffect(() => {
+    const root = messagesScrollRef.current;
+    const sentinel = loadOlderRef.current;
+    if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        pendingScrollRestoreRef.current = {
+          height: root.scrollHeight,
+          top: root.scrollTop,
+        };
+        void fetchNextPage();
+      },
+      { root, threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
+
+  useEffect(() => {
+    const restore = pendingScrollRestoreRef.current;
+    if (!restore) return;
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    requestAnimationFrame(() => {
+      const newHeight = root.scrollHeight;
+      root.scrollTop = restore.top + (newHeight - restore.height);
+      pendingScrollRestoreRef.current = null;
+    });
+  }, [sortedMessages.length, isFetchingNextPage]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const messageId = query.get("messageId");
+    if (!messageId || sortedMessages.length === 0) return;
+    if (sortedMessages.some((msg) => msg.id === messageId)) return;
+    if (!hasNextPage || isFetchingNextPage) return;
+    if (deepLinkFetchAttemptsRef.current >= 5) return;
+    deepLinkFetchAttemptsRef.current += 1;
+    void fetchNextPage();
+  }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const deepLinkedMessageId = query.get("messageId");
+    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
+    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const scroll = () => scrollChatPaneToBottom(root);
+    scroll();
+    const raf = requestAnimationFrame(() => {
+      scroll();
+      requestAnimationFrame(scroll);
+    });
+    const t1 = window.setTimeout(scroll, 80);
+    const t2 = window.setTimeout(scroll, 350);
+    const contentEl = messagesContentRef.current;
+    let scrollRaf: number | null = null;
+    const scheduleScroll = () => {
+      if (scrollRaf != null) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = null;
+        if (Date.now() < suppressAutoScrollUntilRef.current) return;
+        const inlinePayment = inlineContentPaymentRef.current;
+        if (inlinePayment) {
+          scrollToInlinePayment(inlinePayment);
+          return;
+        }
+        scrollChatPaneToBottom(root);
+      });
+    };
+    const ro = contentEl && new ResizeObserver(scheduleScroll);
+    if (contentEl && ro) ro.observe(contentEl);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (scrollRaf != null) cancelAnimationFrame(scrollRaf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+    };
+  }, [sortedMessages.length, conversationId, scrollToInlinePayment]);
 
   const chatSearchMatches = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
@@ -1603,6 +1666,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         <img
           src={getThumbUrl(msg.imageUrl)}
           alt=""
+          loading="lazy"
           className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
           data-testid={`image-${msg.id}`}
           onClick={() => {
@@ -1668,25 +1732,55 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             </div>
           )}
           {msg.content ? (
-            <SponsorAwareMessageText
-              text={msg.content}
-              canViewSponsorContent={canViewSponsorContent}
-              monetizationEnabled={channelMonetizationEnabled}
-              isContentTruncated={msg.isContentTruncated}
-              conversationId={conversationId}
-              activePaymentSegmentIndex={
-                inlineContentPayment?.messageId === msg.id
-                  ? inlineContentPayment.segmentIndex
-                  : null
-              }
-              onPaymentSegmentOpen={(segmentIndex) =>
-                setInlineContentPayment({ messageId: msg.id, segmentIndex })
-              }
-              onPaymentFlowClose={() => setInlineContentPayment(null)}
-              onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
-              onTagClick={handleTagClick}
-              highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
-            />
+            conv?.type === "channel" ? (
+              <CollapsibleMessageText
+                text={msg.content}
+                enabled
+                onToggleExpand={blockAutoScrollBriefly}
+              >
+                {(displayText) => (
+                  <SponsorAwareMessageText
+                    text={displayText}
+                    canViewSponsorContent={canViewSponsorContent}
+                    monetizationEnabled={channelMonetizationEnabled}
+                    isContentTruncated={msg.isContentTruncated}
+                    conversationId={conversationId}
+                    activePaymentSegmentIndex={
+                      inlineContentPayment?.messageId === msg.id
+                        ? inlineContentPayment.segmentIndex
+                        : null
+                    }
+                    onPaymentSegmentOpen={(segmentIndex) =>
+                      setInlineContentPayment({ messageId: msg.id, segmentIndex })
+                    }
+                    onPaymentFlowClose={() => setInlineContentPayment(null)}
+                    onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
+                    onTagClick={handleTagClick}
+                    highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+                  />
+                )}
+              </CollapsibleMessageText>
+            ) : (
+              <SponsorAwareMessageText
+                text={msg.content}
+                canViewSponsorContent={canViewSponsorContent}
+                monetizationEnabled={channelMonetizationEnabled}
+                isContentTruncated={msg.isContentTruncated}
+                conversationId={conversationId}
+                activePaymentSegmentIndex={
+                  inlineContentPayment?.messageId === msg.id
+                    ? inlineContentPayment.segmentIndex
+                    : null
+                }
+                onPaymentSegmentOpen={(segmentIndex) =>
+                  setInlineContentPayment({ messageId: msg.id, segmentIndex })
+                }
+                onPaymentFlowClose={() => setInlineContentPayment(null)}
+                onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
+                onTagClick={handleTagClick}
+                highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+              />
+            )
           ) : null}
         </>
       )}
@@ -1932,6 +2026,15 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         )}
       >
         <div ref={messagesContentRef} className="space-y-3">
+          {(hasNextPage || isFetchingNextPage) && (
+            <div ref={loadOlderRef} className="flex justify-center py-2">
+              {isFetchingNextPage ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <span className="text-xs text-muted-foreground">Загрузка…</span>
+              )}
+            </div>
+          )}
           {messagesLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1939,79 +2042,39 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
           ) : displayMessages.length > 0 ? (
             displayMessages.map((msg) => {
               const isOwn = msg.authorUserId === user?.id;
-              const isDeleted = !!msg.deletedAt;
               return (
-                <div
+                <ChatMessageBubble
                   key={msg.id}
-                  ref={setMessageRef(msg.id)}
-                  className={`group flex w-full transition-shadow duration-300 ${
-                    isOwn ? "justify-end" : "justify-start"
-                  }`}
+                  msg={msg}
+                  isOwn={isOwn}
+                  isChannel={conv.type === "channel"}
+                  canInteractWithChannel={canInteractWithChannel}
+                  showReceiptIcons={showReceiptIcons}
+                  peerLastReadAt={peerLastReadAt}
+                  onCommentsClick={() =>
+                    setLocation(`/messenger/channel/${conversationId}/post/${msg.id}/comments`)
+                  }
+                  setMessageRef={setMessageRef}
+                  onContextMenu={handleBubbleContextMenu}
+                  onPointerDown={handleBubblePointerDown}
+                  onPointerMove={handleBubblePointerMove}
+                  onPointerUp={clearLongPress}
+                  onPointerCancel={clearLongPress}
+                  onPointerLeave={clearLongPress}
+                  onTouchStart={handleBubbleTouchStart}
+                  onTouchMove={handleBubbleTouchMove}
+                  onTouchEnd={clearLongPress}
+                  onTouchCancel={clearLongPress}
+                  formatBubbleTime={formatBubbleTime}
+                  highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+                  inlinePaymentSegmentIndex={
+                    inlineContentPayment?.messageId === msg.id
+                      ? inlineContentPayment.segmentIndex
+                      : null
+                  }
                 >
-                  {!isDeleted ? (
-                    <div className="max-w-[85%]">
-                      <div
-                        onContextMenu={(e) => handleBubbleContextMenu(e, msg)}
-                        onPointerDown={(e) => handleBubblePointerDown(e, msg)}
-                        onPointerMove={handleBubblePointerMove}
-                        onPointerUp={clearLongPress}
-                        onPointerCancel={clearLongPress}
-                        onPointerLeave={clearLongPress}
-                        onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
-                        onTouchMove={handleBubbleTouchMove}
-                        onTouchEnd={clearLongPress}
-                        onTouchCancel={clearLongPress}
-                        className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
-                          isOwn
-                            ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                            : "border-border/50 bg-white text-foreground shadow-sm"
-                        }`}
-                        style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-                      >
-                        {renderMessageBody(msg, isOwn)}
-                        {conv.type === "channel" && (
-                          <div className="mt-0.5 pt-0.5">
-                            <div className="my-0.5 h-px w-full bg-foreground/35" />
-                            <button
-                              type="button"
-                              className={`text-xs text-muted-foreground hover:text-foreground ${
-                                isOwn ? "ml-auto block text-right" : ""
-                              }`}
-                              onClick={() => {
-                                if (!canInteractWithChannel) return;
-                                setLocation(`/messenger/channel/${conversationId}/post/${msg.id}/comments`);
-                              }}
-                            >
-                              {msg.commentsCount && msg.commentsCount > 0
-                                ? `${msg.commentsCount} комментариев`
-                                : "Комментировать"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className="message relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border border-dashed border-border/60 bg-muted/40 pl-2 pr-1.5 pt-1 pb-3.5 text-muted-foreground italic select-none"
-                      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-                    >
-                      <p className="whitespace-pre-wrap break-words text-sm leading-snug pr-7 pb-0.5">
-                        {t.messageDeleted}
-                      </p>
-                      <span className="pointer-events-none absolute bottom-0.5 right-1.5 flex items-center gap-0.5 text-[10px] leading-none tabular-nums select-none">
-                        <span className="text-muted-foreground">{formatBubbleTime(msg.createdAt)}</span>
-                        {isOwn && showReceiptIcons && (
-                          <MessageReceiptIcons
-                            status={getMessageReceiptStatus({
-                              createdAt: msg.createdAt,
-                              peerLastReadAt,
-                            })}
-                          />
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                  {renderMessageBody(msg, isOwn)}
+                </ChatMessageBubble>
               );
             })
           ) : (

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   parseMessageBoldSegments,
   parseMessageSponsorSegments,
@@ -70,6 +71,16 @@ export function SponsorAwareMessageText({
   onTagClick,
   highlightQuery,
 }: SponsorAwareMessageTextProps) {
+  const segments = useMemo(() => {
+    if (!monetizationEnabled) return null;
+    const usesPlaceholder = text.includes(SPONSOR_PLACEHOLDER_MARKER);
+    return canViewSponsorContent
+      ? parseMessageSponsorSegments(text)
+      : usesPlaceholder
+        ? parseSponsorPlaceholderSegments(text)
+        : parseMessageSponsorSegments(text);
+  }, [text, monetizationEnabled, canViewSponsorContent]);
+
   if (!monetizationEnabled) {
     return (
       <FormattedMessageText
@@ -81,18 +92,11 @@ export function SponsorAwareMessageText({
     );
   }
 
-  const usesPlaceholder = text.includes(SPONSOR_PLACEHOLDER_MARKER);
-  const segments = canViewSponsorContent
-    ? parseMessageSponsorSegments(text)
-    : usesPlaceholder
-      ? parseSponsorPlaceholderSegments(text)
-      : parseMessageSponsorSegments(text);
-
-  const firstSponsorSegmentIndex = segments.findIndex((seg) => seg.sponsor);
+  const firstSponsorSegmentIndex = segments!.findIndex((seg) => seg.sponsor);
 
   return (
     <div className={cn("text-sm leading-snug", className)}>
-      {segments.map((seg, i) => {
+      {segments!.map((seg, i) => {
         if (seg.sponsor && !canViewSponsorContent) {
           if (activePaymentSegmentIndex === i && conversationId) {
             return (

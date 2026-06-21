@@ -7,6 +7,39 @@ const SPONSOR_PLACEHOLDER = "[[SPONSOR]]";
 
 export const SPONSOR_CONTENT_MAX_LINES = 30;
 
+export const CHANNEL_PREVIEW_MAX_WORDS = 80;
+
+export type TruncatedMessagePreview = {
+  text: string;
+  isTruncated: boolean;
+};
+
+/** Truncate long channel posts for collapsed preview (by word count, preserves newlines). */
+export function truncateMessageForPreview(
+  text: string,
+  options?: { maxWords?: number }
+): TruncatedMessagePreview {
+  const maxWords = options?.maxWords ?? CHANNEL_PREVIEW_MAX_WORDS;
+  if (!text) return { text, isTruncated: false };
+
+  const wordRe = /\S+/g;
+  let wordCount = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = wordRe.exec(text)) !== null) {
+    wordCount++;
+    if (wordCount > maxWords) {
+      let end = match.index;
+      while (end > 0 && /[ \t]/.test(text[end - 1]!)) {
+        end--;
+      }
+      return { text: text.slice(0, end), isTruncated: true };
+    }
+  }
+
+  return { text, isTruncated: false };
+}
+
 export type MessageBoldSegment = {
   bold: boolean;
   text: string;
