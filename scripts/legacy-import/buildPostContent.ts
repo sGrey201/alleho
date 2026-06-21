@@ -63,19 +63,56 @@ export function formatHashtagLine(tags: SourceTag[]): string {
 }
 
 function splitAtWordCount(text: string, wordCount: number): { free: string; paid: string } {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= wordCount) {
-    return { free: text.trim(), paid: "" };
+  const paragraphs = text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) {
+    return { free: "", paid: "" };
   }
-  const free = words.slice(0, wordCount).join(" ");
-  const paid = words.slice(wordCount).join(" ");
-  return { free, paid };
+
+  let wordsUsed = 0;
+  const freeParagraphs: string[] = [];
+  let index = 0;
+
+  for (; index < paragraphs.length; index += 1) {
+    const paragraph = paragraphs[index];
+    const paragraphWords = paragraph.split(/\s+/).filter(Boolean);
+    const paragraphWordCount = paragraphWords.length;
+
+    if (wordsUsed + paragraphWordCount <= wordCount) {
+      freeParagraphs.push(paragraph);
+      wordsUsed += paragraphWordCount;
+      continue;
+    }
+
+    if (wordsUsed < wordCount) {
+      const remainingWords = wordCount - wordsUsed;
+      const freeWords = paragraphWords.slice(0, remainingWords);
+      const paidWords = paragraphWords.slice(remainingWords);
+      if (freeWords.length > 0) {
+        freeParagraphs.push(freeWords.join(" "));
+      }
+      const paidParagraphs = [
+        ...(paidWords.length > 0 ? [paidWords.join(" ")] : []),
+        ...paragraphs.slice(index + 1),
+      ];
+      return {
+        free: freeParagraphs.join("\n\n"),
+        paid: paidParagraphs.join("\n\n"),
+      };
+    }
+
+    break;
+  }
+
+  return {
+    free: freeParagraphs.join("\n\n"),
+    paid: paragraphs.slice(index).join("\n\n"),
+  };
 }
 
 function buildArticleBody(article: { preview: string; content: string }): string {
   const preview = htmlToFormatted(article.preview ?? "");
   const content = htmlToFormatted(article.content ?? "");
-  if (preview && content) return `${preview}\n${content}`;
+  if (preview && content) return `${preview}\n\n${content}`;
   return preview || content;
 }
 
