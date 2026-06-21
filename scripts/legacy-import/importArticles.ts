@@ -77,7 +77,7 @@ export async function importArticles(options: { dryRun: boolean }): Promise<Impo
     inserted: 0,
     skipped: 0,
     failed: 0,
-    details: { noTags: 0, updated: 0 },
+    details: { noTags: 0, replaced: 0 },
   };
 
   let latestMessage: {
@@ -100,15 +100,22 @@ export async function importArticles(options: { dryRun: boolean }): Promise<Impo
 
     if (existingIds.has(article.id)) {
       if (options.dryRun) {
-        result.details!.updated += 1;
+        result.details!.replaced += 1;
         continue;
       }
       try {
         await db
-          .update(conversationMessages)
-          .set({ content, createdAt })
+          .delete(conversationMessages)
           .where(eq(conversationMessages.id, article.id));
-        result.details!.updated += 1;
+        await db.insert(conversationMessages).values({
+          id: article.id,
+          conversationId: CHANNEL_ID,
+          authorUserId: ownerUserId,
+          messageType: "message",
+          content,
+          createdAt,
+        });
+        result.details!.replaced += 1;
       } catch {
         result.failed += 1;
       }

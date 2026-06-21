@@ -1,6 +1,6 @@
 import { BOLD_MARKER, SPONSOR_MARKER } from "../../shared/messageFormatting.ts";
 import { PAYWALL_FREE_WORDS } from "./constants.ts";
-import { htmlToPlain } from "./htmlToPlain.ts";
+import { htmlToFormatted } from "./htmlToPlain.ts";
 import type { SourceTag } from "./types.ts";
 
 function sortTags(tags: SourceTag[]): SourceTag[] {
@@ -12,9 +12,21 @@ function sortTags(tags: SourceTag[]): SourceTag[] {
   });
 }
 
+function formatRemedyName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const [first, ...rest] = words;
+  return [
+    first.charAt(0).toUpperCase() + first.slice(1).toLowerCase(),
+    ...rest.map((word) => word.toLowerCase()),
+  ].join(" ");
+}
+
 export function formatArticleTitle(tags: SourceTag[]): string {
   const sorted = sortTags(tags);
-  const title = sorted.map((tag) => tag.name).join(", ");
+  const title = sorted
+    .map((tag) => (tag.category === "remedy" ? formatRemedyName(tag.name) : tag.name))
+    .join(", ");
   if (!title) return "";
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
@@ -30,10 +42,21 @@ export function normalizeTagHashtag(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+export function formatTagHashtagToken(tag: SourceTag): string {
+  if (tag.category === "remedy") {
+    return formatRemedyName(tag.name)
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+  return normalizeTagHashtag(tag.name);
+}
+
 export function formatHashtagLine(tags: SourceTag[]): string {
   const sorted = sortTags(tags);
   return sorted
-    .map((tag) => normalizeTagHashtag(tag.name))
+    .map((tag) => formatTagHashtagToken(tag))
     .filter(Boolean)
     .map((token) => `#${token}`)
     .join(" ");
@@ -49,12 +72,23 @@ function splitAtWordCount(text: string, wordCount: number): { free: string; paid
   return { free, paid };
 }
 
-export function buildPostContent(article: {
-  content: string;
-  is_free: boolean;
-}, tags: SourceTag[]): string {
+function buildArticleBody(article: { preview: string; content: string }): string {
+  const preview = htmlToFormatted(article.preview ?? "");
+  const content = htmlToFormatted(article.content ?? "");
+  if (preview && content) return `${preview}\n${content}`;
+  return preview || content;
+}
+
+export function buildPostContent(
+  article: {
+    preview: string;
+    content: string;
+    is_free: boolean;
+  },
+  tags: SourceTag[]
+): string {
   const title = formatArticleTitle(tags);
-  const plainBody = htmlToPlain(article.content);
+  const plainBody = buildArticleBody(article);
   const hashtagLine = formatHashtagLine(tags);
 
   const parts: string[] = [];
@@ -74,6 +108,7 @@ export function buildPostContent(article: {
     }
   }
 
+  // Public hashtags after paid block so non-sponsors still see them.
   if (hashtagLine) {
     parts.push(hashtagLine);
   }
