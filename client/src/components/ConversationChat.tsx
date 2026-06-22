@@ -73,6 +73,7 @@ import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar
 import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { CollapsibleMessageText } from "@/components/CollapsibleMessageText";
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
+import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
 import { stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
@@ -247,7 +248,9 @@ function parseQuestionnaireTemplateMessageContent(
 }
 
 function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["replyTo"]>): string {
-  if (reply.deletedAt) return t.messageDeleted;
+  if (reply.deletedAt) {
+    return shouldShowDeletedMessagePlaque(reply.deletedAt) ? t.messageDeleted : "";
+  }
   if (reply.messageType === "voice") return t.voiceMessageLabel;
   const poll = parsePollPayload(reply.content ?? undefined);
   if (poll) {
@@ -439,6 +442,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     start: null,
   });
   const deepLinkHandledRef = useRef<string | null>(null);
+  const awaitingInitialScrollRef = useRef(true);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
   const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -518,6 +522,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     fetchNextPage,
     isFetchingNextPage,
   } = useConversationMessages(conversationId);
+
+  const [canLoadOlderMessages, setCanLoadOlderMessages] = useState(false);
 
   const myChannelRole = conv?.participants?.find((p) => p.userId === user?.id)?.role;
   const canPostToChannel =
@@ -1091,18 +1097,23 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   const isPatientConv = conv?.type === "patient";
   const displayMessages = useMemo(() => {
-    if (!isPatientConv || user?.isAdmin) return sortedMessages;
-    return sortedMessages.filter((m) => m.messageType !== "followup");
+    const visible = sortedMessages.filter(
+      (m) => !m.deletedAt || shouldShowDeletedMessagePlaque(m.deletedAt)
+    );
+    if (!isPatientConv || user?.isAdmin) return visible;
+    return visible.filter((m) => m.messageType !== "followup");
   }, [sortedMessages, isPatientConv, user?.isAdmin]);
 
   useEffect(() => {
     deepLinkFetchAttemptsRef.current = 0;
+    awaitingInitialScrollRef.current = true;
+    setCanLoadOlderMessages(false);
   }, [conversationId]);
 
   useEffect(() => {
     const root = messagesScrollRef.current;
     const sentinel = loadOlderRef.current;
-    if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return;
+    if (!canLoadOlderMessages || !root || !sentinel || !hasNextPage || isFetchingNextPage) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -1117,7 +1128,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
+  }, [canLoadOlderMessages, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
 
   useEffect(() => {
     const restore = pendingScrollRestoreRef.current;
@@ -1137,52 +1148,79 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (!messageId || sortedMessages.length === 0) return;
     if (sortedMessages.some((msg) => msg.id === messageId)) return;
     if (!hasNextPage || isFetchingNextPage) return;
-    if (deepLinkFetchAttemptsRef.current >= 5) return;
+    if (deepLinkFetchAttemptsRef.current >= 5) {
+      awaitingInitialScrollRef.current = false;
+      setCanLoadOlderMessages(true);
+      return;
+    }
     deepLinkFetchAttemptsRef.current += 1;
     void fetchNextPage();
-  }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const deepLinkedMessageId = query.get("messageId");
     const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
     if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+    if (!awaitingInitialScrollRef.current) return;
+    if (messagesLoading || displayMessages.length === 0) return;
 
     const root = messagesScrollRef.current;
     if (!root) return;
-    const scroll = () => scrollChatPaneToBottom(root);
+
+    let cancelled = false;
+    const finishInitialScroll = () => {
+      if (cancelled || !awaitingInitialScrollRef.current) return;
+      scrollChatPaneToBottom(root);
+      const distanceFromBottom = root.scrollHeight - root.scrollTop - root.clientHeight;
+      if (distanceFromBottom > 4) return;
+      awaitingInitialScrollRef.current = false;
+      setCanLoadOlderMessages(true);
+    };
+
+    const scroll = () => {
+      if (cancelled) return;
+      scrollChatPaneToBottom(root);
+    };
+
     scroll();
     const raf = requestAnimationFrame(() => {
       scroll();
       requestAnimationFrame(scroll);
     });
     const t1 = window.setTimeout(scroll, 80);
-    const t2 = window.setTimeout(scroll, 350);
+    const t2 = window.setTimeout(finishInitialScroll, 350);
+    const t3 = window.setTimeout(finishInitialScroll, 700);
+
     const contentEl = messagesContentRef.current;
     let scrollRaf: number | null = null;
     const scheduleScroll = () => {
       if (scrollRaf != null) return;
       scrollRaf = requestAnimationFrame(() => {
         scrollRaf = null;
+        if (cancelled || !awaitingInitialScrollRef.current) return;
         if (Date.now() < suppressAutoScrollUntilRef.current) return;
         const inlinePayment = inlineContentPaymentRef.current;
         if (inlinePayment) {
           scrollToInlinePayment(inlinePayment);
           return;
         }
-        scrollChatPaneToBottom(root);
+        finishInitialScroll();
       });
     };
     const ro = contentEl && new ResizeObserver(scheduleScroll);
     if (contentEl && ro) ro.observe(contentEl);
+
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       if (scrollRaf != null) cancelAnimationFrame(scrollRaf);
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       ro?.disconnect();
     };
-  }, [sortedMessages.length, conversationId, scrollToInlinePayment]);
+  }, [messagesLoading, displayMessages.length, conversationId, scrollToInlinePayment]);
 
   const chatSearchMatches = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
@@ -1253,6 +1291,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     const exists = sortedMessages.some((msg) => msg.id === messageId);
     if (!exists) return;
     deepLinkHandledRef.current = key;
+    awaitingInitialScrollRef.current = false;
+    setCanLoadOlderMessages(true);
     window.setTimeout(() => scrollToMessage(messageId), 80);
   }, [conversationId, sortedMessages.length]);
 
@@ -2027,7 +2067,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
         )}
       >
         <div ref={messagesContentRef} className="space-y-3">
-          {(hasNextPage || isFetchingNextPage) && (
+          {(canLoadOlderMessages && (hasNextPage || isFetchingNextPage)) && (
             <div ref={loadOlderRef} className="flex justify-center py-2">
               {isFetchingNextPage ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

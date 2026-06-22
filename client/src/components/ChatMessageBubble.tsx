@@ -2,6 +2,7 @@ import { memo, type ReactNode } from "react";
 import type { ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
+import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
 import { t } from "@/lib/i18n";
 
 type ChatMessageBubbleProps = {
@@ -75,7 +76,10 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
   formatBubbleTime,
   children,
 }: ChatMessageBubbleProps) {
-  const isDeleted = !!msg.deletedAt;
+  if (msg.deletedAt && !shouldShowDeletedMessagePlaque(msg.deletedAt)) {
+    return null;
+  }
+  const isDeleted = shouldShowDeletedMessagePlaque(msg.deletedAt);
 
   return (
     <div
