@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState, useCallback } from "react";
+import { useRef, useEffect, useLayoutEffect, useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,7 @@ import {
   CHAT_COMPOSER_INSET_EVENT,
   scrollChatPaneToBottom,
   scrollChatPaneToBottomForKeyboard,
+  anchorChatToBottom,
   scrollChatElementIntoView,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
@@ -1111,6 +1112,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   }, [conversationId]);
 
   useEffect(() => {
+    if (convLoading || !conv) return;
     const root = messagesScrollRef.current;
     const sentinel = loadOlderRef.current;
     if (!canLoadOlderMessages || !root || !sentinel || !hasNextPage || isFetchingNextPage) return;
@@ -1128,17 +1130,24 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [canLoadOlderMessages, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
+  }, [convLoading, conv, canLoadOlderMessages, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const restore = pendingScrollRestoreRef.current;
-    if (!restore) return;
+    if (!restore || isFetchingNextPage) return;
     const root = messagesScrollRef.current;
     if (!root) return;
-    requestAnimationFrame(() => {
+    const applyRestore = () => {
+      const pending = pendingScrollRestoreRef.current;
+      if (!pending) return;
       const newHeight = root.scrollHeight;
-      root.scrollTop = restore.top + (newHeight - restore.height);
+      root.scrollTop = pending.top + (newHeight - pending.height);
       pendingScrollRestoreRef.current = null;
+    };
+    applyRestore();
+    requestAnimationFrame(() => {
+      applyRestore();
+      requestAnimationFrame(applyRestore);
     });
   }, [sortedMessages.length, isFetchingNextPage]);
 
@@ -1157,7 +1166,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     void fetchNextPage();
   }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (convLoading || !conv) return;
     const query = new URLSearchParams(window.location.search);
     const deepLinkedMessageId = query.get("messageId");
     const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
@@ -1169,58 +1179,48 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (!root) return;
 
     let cancelled = false;
-    const finishInitialScroll = () => {
+    const anchor = () => {
       if (cancelled || !awaitingInitialScrollRef.current) return;
-      scrollChatPaneToBottom(root);
-      const distanceFromBottom = root.scrollHeight - root.scrollTop - root.clientHeight;
-      if (distanceFromBottom > 4) return;
+      anchorChatToBottom(root, messagesEndRef.current);
+    };
+
+    const completeInitialAnchor = () => {
+      if (cancelled || !awaitingInitialScrollRef.current) return;
+      anchor();
       awaitingInitialScrollRef.current = false;
       setCanLoadOlderMessages(true);
     };
 
-    const scroll = () => {
-      if (cancelled) return;
-      scrollChatPaneToBottom(root);
-    };
-
-    scroll();
-    const raf = requestAnimationFrame(() => {
-      scroll();
-      requestAnimationFrame(scroll);
-    });
-    const t1 = window.setTimeout(scroll, 80);
-    const t2 = window.setTimeout(finishInitialScroll, 350);
-    const t3 = window.setTimeout(finishInitialScroll, 700);
+    anchor();
+    const t1 = window.setTimeout(anchor, 0);
+    const t2 = window.setTimeout(anchor, 80);
+    const t3 = window.setTimeout(completeInitialAnchor, 500);
+    const t4 = window.setTimeout(completeInitialAnchor, 1500);
 
     const contentEl = messagesContentRef.current;
-    let scrollRaf: number | null = null;
-    const scheduleScroll = () => {
-      if (scrollRaf != null) return;
-      scrollRaf = requestAnimationFrame(() => {
-        scrollRaf = null;
-        if (cancelled || !awaitingInitialScrollRef.current) return;
-        if (Date.now() < suppressAutoScrollUntilRef.current) return;
-        const inlinePayment = inlineContentPaymentRef.current;
-        if (inlinePayment) {
-          scrollToInlinePayment(inlinePayment);
-          return;
-        }
-        finishInitialScroll();
-      });
-    };
-    const ro = contentEl && new ResizeObserver(scheduleScroll);
-    if (contentEl && ro) ro.observe(contentEl);
+    const ro = contentEl
+      ? new ResizeObserver(() => {
+          if (cancelled || !awaitingInitialScrollRef.current) return;
+          if (Date.now() < suppressAutoScrollUntilRef.current) return;
+          const inlinePayment = inlineContentPaymentRef.current;
+          if (inlinePayment) {
+            scrollToInlinePayment(inlinePayment);
+            return;
+          }
+          anchor();
+        })
+      : null;
+    ro?.observe(contentEl!);
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf);
-      if (scrollRaf != null) cancelAnimationFrame(scrollRaf);
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
       ro?.disconnect();
     };
-  }, [messagesLoading, displayMessages.length, conversationId, scrollToInlinePayment]);
+  }, [convLoading, conv, messagesLoading, displayMessages.length, conversationId, scrollToInlinePayment]);
 
   const chatSearchMatches = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
