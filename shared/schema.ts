@@ -52,6 +52,7 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   questionnaireHintsMode: varchar("questionnaire_hints_mode", { length: 20 }).default("icon").notNull(),
+  requiresRoleSelection: boolean("requires_role_selection").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

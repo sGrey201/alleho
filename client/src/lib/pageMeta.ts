@@ -18,6 +18,12 @@ export const pageMeta = {
     description: "Принятие приглашения на платформу hovial.",
     url: "/invite/accept",
   },
+  roleOnboarding: {
+    title: "Выбор роли",
+    description: "Укажите, гомеопат вы или пациент, чтобы продолжить работу в hovial.",
+    url: "/onboarding/role",
+    noindex: true,
+  },
   resetPassword: {
     title: "Новый пароль",
     description: "Восстановление пароля в hovial.",

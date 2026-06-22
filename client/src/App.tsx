@@ -16,6 +16,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentFail from "@/pages/PaymentFail";
 import AuthPage from "@/pages/AuthPage";
 import InviteAccept from "@/pages/InviteAccept";
+import RoleOnboarding from "@/pages/RoleOnboarding";
 import ResetPassword from "@/pages/ResetPassword";
 import About from "@/pages/About";
 import Messenger from "@/pages/Messenger";
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/" component={Landing} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/invite/accept" component={InviteAccept} />
+      <Route path="/onboarding/role" component={RoleOnboarding} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/terms" component={Terms} />
       <Route path="/oferta" component={Oferta} />
@@ -98,7 +100,7 @@ function useImmersiveViewport(enabled: boolean) {
 }
 
 function AppContent() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, requiresRoleSelection } = useAuth();
   const [location] = useLocation();
 
   const isQuestionnairesPage = location.startsWith("/questionnaires");
@@ -128,10 +130,14 @@ function AppContent() {
 
   const isAuthPage = location === "/auth";
   const isInviteAcceptPage = location.startsWith("/invite/accept");
+  const isRoleOnboardingPage = location.startsWith("/onboarding/role");
   const isResetPasswordPage = location.startsWith("/reset-password");
   const isLandingPage = location === "/";
+  if (isAuthenticated && requiresRoleSelection && !isRoleOnboardingPage && !isInviteAcceptPage) {
+    return <Redirect to="/onboarding/role" />;
+  }
   if (isAuthenticated && isAuthPage) {
-    return <Redirect to="/" />;
+    return <Redirect to={requiresRoleSelection ? "/onboarding/role" : "/messenger"} />;
   }
   // Allow the public landing page (logo from invite/auth screens links here).
   if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage && !isLandingPage) {
@@ -160,7 +166,7 @@ function AppContent() {
       <main className="flex-1">
         <Router />
       </main>
-      {!isAuthPage && !isInviteAcceptPage && <Footer />}
+      {!isAuthPage && !isInviteAcceptPage && !isRoleOnboardingPage && <Footer />}
     </div>
   );
 }

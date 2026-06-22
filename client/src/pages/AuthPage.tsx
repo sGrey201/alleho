@@ -49,9 +49,9 @@ export default function AuthPage() {
       const res = await apiRequest("POST", "/api/auth/login", data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/");
+    onSuccess: async (data: { requiresRoleSelection?: boolean }) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setLocation(data?.requiresRoleSelection ? "/onboarding/role" : "/messenger");
     },
     onError: (error: Error) => {
       toast({ 

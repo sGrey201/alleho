@@ -28,6 +28,7 @@ function mapSourceUser(row: SourceUser): UpsertUser {
     country: null,
     city: row.city ?? null,
     isAdmin: row.is_admin ?? false,
+    requiresRoleSelection: true,
     subscriptionExpiresAt: parseDate(row.subscription_expires_at),
     questionnaireHintsMode: "icon",
     createdAt: parseDate(row.created_at) ?? undefined,

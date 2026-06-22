@@ -322,11 +322,13 @@ export default function Messenger() {
   const [searchScope, setSearchScope] = useState<"all" | "doctors" | "patients" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
+  const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
   const [inviteLinkData, setInviteLinkData] = useState<{
     open: boolean;
     inviteUrl: string;
     expiresAt: string;
-  }>({ open: false, inviteUrl: "", expiresAt: "" });
+    inviteType: "patient" | "homeopath" | null;
+  }>({ open: false, inviteUrl: "", expiresAt: "", inviteType: null });
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -584,15 +586,21 @@ export default function Messenger() {
   };
 
   const createInviteLinkMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/invites", { inviteType: "open" });
-      return res.json();
+    mutationFn: async (inviteType: "patient" | "homeopath") => {
+      const res = await apiRequest("POST", "/api/invites", { inviteType });
+      return res.json() as Promise<{
+        inviteUrl: string;
+        expiresAt: string;
+        inviteType: "patient" | "homeopath";
+      }>;
     },
     onSuccess: (data) => {
+      setInviteRolePickerOpen(false);
       setInviteLinkData({
         open: true,
         inviteUrl: data.inviteUrl,
         expiresAt: data.expiresAt,
+        inviteType: data.inviteType,
       });
     },
     onError: (error: Error) => {
@@ -702,7 +710,7 @@ export default function Messenger() {
                   <>
                     <DropdownMenuItem
                       onSelect={() => {
-                        createInviteLinkMutation.mutate();
+                        setInviteRolePickerOpen(true);
                       }}
                     >
                       {t.messengerSendInvite}
@@ -1142,10 +1150,45 @@ export default function Messenger() {
 
       </div>
 
+      <Dialog open={inviteRolePickerOpen} onOpenChange={setInviteRolePickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.inviteChooseRoleTitle}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t.inviteChooseRoleHint}</p>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:space-x-0">
+            <Button
+              type="button"
+              className="w-full"
+              disabled={createInviteLinkMutation.isPending}
+              onClick={() => createInviteLinkMutation.mutate("patient")}
+            >
+              {createInviteLinkMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t.messengerInvitePatient}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={createInviteLinkMutation.isPending}
+              onClick={() => createInviteLinkMutation.mutate("homeopath")}
+            >
+              {t.messengerInviteHomeopath}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t.messengerSendInvite}</DialogTitle>
+            <DialogTitle>
+              {inviteLinkData.inviteType === "homeopath"
+                ? t.inviteLinkForHomeopath
+                : t.inviteLinkForPatient}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-md border bg-muted/40 p-3">

@@ -74,6 +74,7 @@ export const login: RequestHandler = async (req, res) => {
       email: user.email,
       subscriptionExpiresAt: user.subscriptionExpiresAt,
       isAdmin: user.isAdmin,
+      requiresRoleSelection: user.requiresRoleSelection,
     });
   } catch (error) {
     console.error('Login error:', error);

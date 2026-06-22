@@ -17,6 +17,7 @@ export function useAuth() {
     isLoading,
     isAuthenticated: !!user,
     isAdmin: user?.isAdmin || false,
+    requiresRoleSelection: user?.requiresRoleSelection ?? false,
     hasActiveSubscription: user ? (user.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) > new Date() : false) : false,
   };
 }

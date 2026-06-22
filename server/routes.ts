@@ -122,6 +122,7 @@ function toAuthUserResponse(user: any) {
     city: user.city,
     subscriptionExpiresAt: user.subscriptionExpiresAt,
     isAdmin: user.isAdmin,
+    requiresRoleSelection: user.requiresRoleSelection,
     authType: "email",
     hasPassword: !!user.passwordHash,
   };
@@ -196,6 +197,29 @@ ${allUrls.map(url => `  <url>
     res.status(403).json({ message: "Регистрация доступна только по ссылке-приглашению" });
   });
   app.post('/api/auth/login', login);
+  app.post('/api/auth/complete-role-selection', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      if (!user.requiresRoleSelection) {
+        return res.status(400).json({ message: "role_selection_not_required" });
+      }
+      const isHomeopathRaw = req.body?.isHomeopath;
+      if (typeof isHomeopathRaw !== "boolean") {
+        return res.status(400).json({ message: "role_selection_required" });
+      }
+      const updatedUser = await storage.updateUserProfile(userId, {
+        isAdmin: isHomeopathRaw,
+        requiresRoleSelection: false,
+      });
+      res.json(toAuthUserResponse(updatedUser));
+    } catch (error) {
+      console.error("Error completing role selection:", error);
+      res.status(500).json({ message: "Failed to complete role selection" });
+    }
+  });
   app.post('/api/auth/forgot-password', requestPasswordReset);
   app.post('/api/auth/reset-password', resetPassword);
   app.post('/api/auth/change-password', isAuthenticated, changePassword);
@@ -298,13 +322,11 @@ ${allUrls.map(url => `  <url>
 
       const emailRaw = String(req.body?.email || "").trim().toLowerCase();
       const email = emailRaw || null;
-      const inviteTypeRaw = String(req.body?.inviteType || "open").trim().toLowerCase();
-      const inviteType =
-        inviteTypeRaw === "homeopath"
-          ? "homeopath"
-          : inviteTypeRaw === "patient"
-            ? "patient"
-            : "open";
+      const inviteTypeRaw = String(req.body?.inviteType || "").trim().toLowerCase();
+      if (inviteTypeRaw !== "homeopath" && inviteTypeRaw !== "patient") {
+        return res.status(400).json({ message: "invite_type_required" });
+      }
+      const inviteType = inviteTypeRaw as "patient" | "homeopath";
       if (email) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) return res.status(400).json({ message: "Invalid email" });
@@ -443,15 +465,21 @@ ${allUrls.map(url => `  <url>
 
       let conversationId: string | undefined;
       if (effectiveInviteType === "homeopath") {
-        await storage.updateUserProfile(targetUser.id, { isAdmin: true });
+        await storage.updateUserProfile(targetUser.id, { isAdmin: true, requiresRoleSelection: false });
       } else {
         if (!firstName || !lastName) {
           return res.status(400).json({ message: "first_name_and_last_name_required" });
         }
         const chatName = `${lastName} ${firstName}`.trim();
+        const patientProfile: { firstName?: string; lastName?: string; isAdmin: boolean; requiresRoleSelection: boolean } = {
+          isAdmin: false,
+          requiresRoleSelection: false,
+        };
         if (!canJoinAsExistingUser) {
-          await storage.updateUserProfile(targetUser.id, { firstName, lastName });
+          patientProfile.firstName = firstName;
+          patientProfile.lastName = lastName;
         }
+        await storage.updateUserProfile(targetUser.id, patientProfile);
         const conv = await storage.createConversation({
           type: "patient",
           name: chatName,
