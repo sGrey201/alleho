@@ -63,7 +63,7 @@ import {
   parseQuestionnaireHintsMode,
   type QuestionnaireHintsMode,
 } from "@shared/questionnaireTypes";
-import { isPositiveTierAmount } from "@shared/sponsorTiers";
+import { isPositiveTierAmount, resolveContentTierAmount } from "@shared/sponsorTiers";
 import { canUserReadChannel, canUserSubscribeToChannel } from "./channelAccess";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
@@ -434,8 +434,10 @@ export interface IStorage {
       durationDays?: number;
       contentDurationDays?: number;
       sponsorDurationDays?: number;
+      contentRenewalDiscountPercent?: number;
     }
   ): Promise<ChannelSponsorSettings>;
+  hasPriorChannelContentSubscription(conversationId: string, userId: string): Promise<boolean>;
   getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
   getParticipantSponsorListingExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
   isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean>;
@@ -2668,6 +2670,7 @@ export class DatabaseStorage implements IStorage {
       durationDays?: number;
       contentDurationDays?: number;
       sponsorDurationDays?: number;
+      contentRenewalDiscountPercent?: number;
     }
   ): Promise<ChannelSponsorSettings> {
     const existing = await this.getChannelSponsorSettings(conversationId);
@@ -2687,6 +2690,9 @@ export class DatabaseStorage implements IStorage {
         ? { contentDurationDays, durationDays: contentDurationDays }
         : {}),
       ...(sponsorDurationDays !== undefined ? { sponsorDurationDays } : {}),
+      ...(data.contentRenewalDiscountPercent !== undefined
+        ? { contentRenewalDiscountPercent: data.contentRenewalDiscountPercent }
+        : {}),
       updatedAt: now,
     };
     if (existing) {
@@ -2708,10 +2714,30 @@ export class DatabaseStorage implements IStorage {
         durationDays: contentDurationDays ?? 30,
         contentDurationDays: contentDurationDays ?? 30,
         sponsorDurationDays: sponsorDurationDays ?? 30,
+        contentRenewalDiscountPercent: data.contentRenewalDiscountPercent ?? 0,
         updatedAt: now,
       })
       .returning();
     return row;
+  }
+
+  async hasPriorChannelContentSubscription(
+    conversationId: string,
+    userId: string
+  ): Promise<boolean> {
+    const [row] = await db
+      .select({ id: channelSponsorPayments.id })
+      .from(channelSponsorPayments)
+      .where(
+        and(
+          eq(channelSponsorPayments.conversationId, conversationId),
+          eq(channelSponsorPayments.userId, userId),
+          eq(channelSponsorPayments.donationType, "content"),
+          ne(channelSponsorPayments.status, "disputed")
+        )
+      )
+      .limit(1);
+    return !!row;
   }
 
   async getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null> {
@@ -2889,6 +2915,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error("sponsor_tier_amount_not_configured");
     }
 
+    let paymentAmount = tierAmount!;
+    if (data.donationType === "content") {
+      const hasPrior = await this.hasPriorChannelContentSubscription(conversationId, userId);
+      paymentAmount = resolveContentTierAmount({
+        baseAmount: tierAmount!,
+        discountPercent: settings.contentRenewalDiscountPercent ?? 0,
+        hasPriorContentSubscription: hasPrior,
+      }).payableAmount;
+    }
+
     await this.ensureConversationMember(conversationId, userId);
 
     const now = new Date();
@@ -2911,7 +2947,7 @@ export class DatabaseStorage implements IStorage {
         conversationId,
         userId,
         receiptUrl: data.receiptUrl,
-        amount: tierAmount,
+        amount: paymentAmount,
         donationType: data.donationType,
         status: "granted",
         durationDays,

@@ -13,7 +13,7 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
-import { isPositiveTierAmount } from "@shared/sponsorTiers";
+import { isPositiveTierAmount, clampDiscountPercent, resolveContentTierAmount } from "@shared/sponsorTiers";
 import { tagCategoryEnum } from "@shared/schema";
 import {
   questionnaireInstanceDataSchema,
@@ -1482,6 +1482,7 @@ ${allUrls.map(url => `  <url>
               durationDays: sponsorSettings.durationDays,
               contentDurationDays: sponsorSettings.contentDurationDays,
               sponsorDurationDays: sponsorSettings.sponsorDurationDays,
+              contentRenewalDiscountPercent: sponsorSettings.contentRenewalDiscountPercent,
             }
           : null,
         isSponsor,
@@ -1705,21 +1706,43 @@ ${allUrls.map(url => `  <url>
       const role = await storage.getParticipantRole(id, currentUserId);
       const hasActiveSponsors =
         role === "owner" ? await storage.hasActiveMonetizationParticipants(id) : undefined;
+      const hasPriorContentSubscription = await storage.hasPriorChannelContentSubscription(
+        id,
+        currentUserId
+      );
+      const contentRenewalDiscountPercent = settings?.contentRenewalDiscountPercent ?? 0;
       const contentDurationDays =
         settings?.contentDurationDays ?? settings?.durationDays ?? 30;
       const sponsorDurationDays =
         settings?.sponsorDurationDays ?? settings?.durationDays ?? 30;
       const tier1 = settings?.tier1Amount?.trim();
       const tier2 = settings?.tier2Amount?.trim();
+      const contentTierResolved = isPositiveTierAmount(tier1)
+        ? resolveContentTierAmount({
+            baseAmount: tier1!,
+            discountPercent: contentRenewalDiscountPercent,
+            hasPriorContentSubscription,
+          })
+        : null;
       const tiers = [
-        ...(isPositiveTierAmount(tier1)
-          ? [{ type: "content" as const, amount: tier1!, durationDays: contentDurationDays }]
+        ...(contentTierResolved
+          ? [
+              {
+                type: "content" as const,
+                amount: contentTierResolved.amount,
+                payableAmount: contentTierResolved.payableAmount,
+                isRenewalDiscount: contentTierResolved.isRenewalDiscount,
+                durationDays: contentDurationDays,
+              },
+            ]
           : []),
         ...(isPositiveTierAmount(tier2)
           ? [
               {
                 type: "content_thanks" as const,
                 amount: tier2!,
+                payableAmount: tier2!,
+                isRenewalDiscount: false,
                 durationDays: sponsorDurationDays,
               },
             ]
@@ -1733,6 +1756,8 @@ ${allUrls.map(url => `  <url>
         durationDays: contentDurationDays,
         contentDurationDays,
         sponsorDurationDays,
+        contentRenewalDiscountPercent,
+        hasPriorContentSubscription,
         tiers,
         isSponsor: hasContentAccess,
         sponsorExpiresAt: contentExpiresAt?.toISOString() ?? null,
@@ -1768,15 +1793,21 @@ ${allUrls.map(url => `  <url>
         durationDays?: number;
         contentDurationDays?: number;
         sponsorDurationDays?: number;
+        contentRenewalDiscountPercent?: number;
       };
       if (body.enabled === false && (await storage.hasActiveMonetizationParticipants(id))) {
         return res.status(400).json({ message: "cannot_disable_sponsor_monetization_with_active_sponsors" });
       }
       const parseDays = (value: unknown) =>
         typeof value === "number" && value > 0 ? Math.floor(value) : undefined;
+      const parseDiscount = (value: unknown) =>
+        typeof value === "number" && Number.isFinite(value)
+          ? clampDiscountPercent(value)
+          : undefined;
       const contentDurationDays =
         parseDays(body.contentDurationDays) ?? parseDays(body.durationDays);
       const sponsorDurationDays = parseDays(body.sponsorDurationDays) ?? parseDays(body.durationDays);
+      const contentRenewalDiscountPercent = parseDiscount(body.contentRenewalDiscountPercent);
       const settings = await storage.upsertChannelSponsorSettings(id, {
         ...(body.enabled !== undefined ? { enabled: !!body.enabled } : {}),
         ...(body.paymentInstructions !== undefined
@@ -1786,6 +1817,9 @@ ${allUrls.map(url => `  <url>
         ...(body.tier2Amount !== undefined ? { tier2Amount: body.tier2Amount } : {}),
         ...(contentDurationDays !== undefined ? { contentDurationDays } : {}),
         ...(sponsorDurationDays !== undefined ? { sponsorDurationDays } : {}),
+        ...(contentRenewalDiscountPercent !== undefined
+          ? { contentRenewalDiscountPercent }
+          : {}),
       });
       res.json(settings);
     } catch (error) {
@@ -2643,7 +2677,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Edit conversation message (author only, within 48h, not deleted)
+  // Edit conversation message (author only; 48h limit except channel posts)
   app.patch("/api/conversations/:id/messages/:messageId", isAuthenticated, async (req: any, res) => {
     try {
       const { id, messageId } = req.params;
@@ -2651,6 +2685,7 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
       if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
       const existing = await storage.getConversationMessageById(messageId);
       if (!existing || existing.conversationId !== id) {
         return res.status(404).json({ message: "Message not found" });
@@ -2663,7 +2698,7 @@ ${allUrls.map(url => `  <url>
       }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
-      if (Date.now() - createdAt > EDIT_WINDOW_MS) {
+      if (conv?.type !== "channel" && Date.now() - createdAt > EDIT_WINDOW_MS) {
         return res.status(400).json({ message: "Edit window expired" });
       }
       const content = (req.body?.content ?? "").toString().trim();

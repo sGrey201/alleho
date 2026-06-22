@@ -1934,6 +1934,7 @@ export const t = {
   channelSponsorPaymentInstructionsPlaceholder: 'Реквизиты, СБП, номер карты и т.д.',
   channelSponsorSuggestedAmount: 'Минимальная сумма',
   channelSponsorTier1Amount: 'Стоимость доступа к закрытому контенту',
+  channelSponsorContentRenewalDiscount: 'Скидка на продление доступа к контенту (%)',
   channelSponsorTier2Amount: 'Стоимость спонсорства канала',
   channelSponsorContentDurationDays: 'Срок доступа к контенту (дней)',
   channelSponsorListingDurationDays: 'Срок спонсорства канала (дней)',
@@ -1952,6 +1953,8 @@ export const t = {
     `Станьте спонсором канала на ${formatDurationDays(days)} прямо сейчас`,
   sponsorContentPaymentIntro: (days: number) =>
     `Откройте все платные материалы этого канала на ${formatDurationDays(days)} прямо сейчас`,
+  sponsorContentRenewalPaymentIntro: (discountPercent: number) =>
+    `Продлите доступ ко всем платным материалам этого канала со скидкой ${discountPercent}% прямо сейчас`,
   sponsorPaymentStepTransfer: (amount: string) =>
     `1. Переведите ${amount} ₽ одним из способов:`,
   sponsorPaymentStepReceipt: '2. Прикрепите чек',
@@ -1981,15 +1984,23 @@ export const t = {
   sponsorActiveCount: 'Спонсоров',
   channelSponsorsTitle: 'Спонсоры канала',
   channelSponsorsEmpty: 'Пока нет спонсоров',
+  channelSubscribersTitle: 'Подписчики канала',
+  channelSubscribersEmpty: 'Нет подписчиков',
+  channelSubscriberHomeopath: 'Гомеопат',
+  channelSubscriberPatient: 'Пациент',
+  channelSubscriberRoleHomeopath: 'Г',
+  channelSubscriberRolePatient: 'П',
+  channelSubscriberContentDaysLeft: (days: number) => `Контент: осталось ${formatDurationDays(days)}`,
+  channelSubscriberSponsorDaysLeft: (days: number) => `Спонсор: осталось ${formatDurationDays(days)}`,
   sponsorShowInListing: 'Показывать меня в списке спонсоров канала',
   contentPaidUntil: (date: string) => `Контент оплачен до ${date}`,
   channelSponsorPaidUntil: (date: string) => `Спонсор канала до ${date}`,
   channelParticipantCount: (n: number) => {
     const mod10 = n % 10;
     const mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return `${n} участник`;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} участника`;
-    return `${n} участников`;
+    if (mod10 === 1 && mod100 !== 11) return `${n} подписчик`;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} подписчика`;
+    return `${n} подписчиков`;
   },
   channelHeaderStats: (subscribers: number) => `Подписчиков: ${subscribers}`,
   sponsorPaymentSubmitted: 'Чек отправлен.',

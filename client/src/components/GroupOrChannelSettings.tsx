@@ -14,6 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import ChannelSponsorSection from "@/components/ChannelSponsorSection";
 import ChannelSponsorsList from "@/components/ChannelSponsorsList";
+import ChannelSubscribersList from "@/components/ChannelSubscribersList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import {
   AlertDialog,
@@ -27,13 +28,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { t } from "@/lib/i18n";
 import { messengerProfilePath, shareMessengerConversation } from "@/lib/messengerPaths";
-import { profileAvatarSrc } from "@/lib/utils";
+import { cn, profileAvatarSrc } from "@/lib/utils";
 
 type Participant = {
   userId: string;
   role: string;
   sponsorExpiresAt?: string | null;
-  user?: { firstName?: string | null; lastName?: string | null; email?: string | null };
+  sponsorListingExpiresAt?: string | null;
+  user?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    isAdmin?: boolean;
+  };
 };
 
 type ConversationInfo = {
@@ -276,12 +283,18 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     }
   };
 
-  const shareConversationButton = isPublicProfile ? (
-    <Button type="button" variant="outline" className="w-full" onClick={() => void handleShareConversation()}>
-      <Share2 className="mr-2 h-4 w-4" />
-      {t.shareConversation}
-    </Button>
-  ) : null;
+  const renderShareButton = (className?: string) =>
+    isPublicProfile ? (
+      <Button
+        type="button"
+        variant="outline"
+        className={cn("w-full", className)}
+        onClick={() => void handleShareConversation()}
+      >
+        <Share2 className="mr-2 h-4 w-4" />
+        {t.shareConversation}
+      </Button>
+    ) : null;
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -475,7 +488,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
-        {mode === "group" && shareConversationButton}
+        {mode === "group" && renderShareButton()}
 
         {mode === "group" && (
           <div className="space-y-2">
@@ -578,8 +591,6 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
-        {mode === "channel" && shareConversationButton}
-
         {mode === "channel" && (
           <>
             {sponsorMonetizationEnabled && (
@@ -596,6 +607,13 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 conversationId={conversationId}
                 isOwner
                 scrollOnMount={scrollSponsorSection}
+                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
+              />
+            )}
+            {isOwner && (
+              <ChannelSubscribersList
+                participants={conv.participants ?? []}
+                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
               />
             )}
           </>
@@ -621,19 +639,24 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
-        {canUnsubscribeFromChannel && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full text-destructive hover:text-destructive"
-            disabled={unsubscribeMutation.isPending}
-            onClick={() => unsubscribeMutation.mutate()}
-          >
-            {unsubscribeMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            {t.unsubscribeFromChannel}
-          </Button>
+        {mode === "channel" && (isPublicProfile || canUnsubscribeFromChannel) && (
+          <div className="flex gap-2">
+            {isPublicProfile && renderShareButton("w-auto flex-1 min-w-0")}
+            {canUnsubscribeFromChannel && (
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 min-w-0 text-destructive hover:text-destructive"
+                disabled={unsubscribeMutation.isPending}
+                onClick={() => unsubscribeMutation.mutate()}
+              >
+                {unsubscribeMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t.unsubscribeFromChannel}
+              </Button>
+            )}
+          </div>
         )}
 
         {isOwner && (

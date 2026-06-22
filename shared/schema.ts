@@ -666,6 +666,7 @@ export const channelSponsorSettings = pgTable("channel_sponsor_settings", {
   durationDays: integer("duration_days").notNull().default(30),
   contentDurationDays: integer("content_duration_days").notNull().default(30),
   sponsorDurationDays: integer("sponsor_duration_days").notNull().default(30),
+  contentRenewalDiscountPercent: integer("content_renewal_discount_percent").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

@@ -1487,12 +1487,13 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (msg.deletedAt || !canInteractWithChannel) return null;
     const isOwn = msg.authorUserId === user?.id;
     const createdAt = new Date(msg.createdAt).getTime();
+    const withinEditWindow = Date.now() - createdAt < EDIT_WINDOW_MS;
     const canEdit =
       isOwn &&
       !!msg.content &&
       msg.messageType !== "poll" &&
       msg.messageType !== "voice" &&
-      Date.now() - createdAt < EDIT_WINDOW_MS;
+      (conv.type === "channel" || withinEditWindow);
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
     const routeType =

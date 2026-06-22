@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Check, Loader2, Paperclip, X } from "lucide-react";
@@ -16,6 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc, cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { normalizeTierAmountInput } from "@shared/sponsorTiers";
 
 type DonationType = "content" | "content_thanks";
@@ -23,6 +25,8 @@ type DonationType = "content" | "content_thanks";
 type SponsorTier = {
   type: DonationType;
   amount: string;
+  payableAmount?: string;
+  isRenewalDiscount?: boolean;
   durationDays: number;
 };
 
@@ -34,6 +38,8 @@ type SponsorSettings = {
   durationDays: number;
   contentDurationDays?: number;
   sponsorDurationDays?: number;
+  contentRenewalDiscountPercent?: number;
+  hasPriorContentSubscription?: boolean;
   tiers: SponsorTier[];
   isSponsor: boolean;
   sponsorExpiresAt: string | null;
@@ -71,6 +77,7 @@ type Props = {
   /** Opens the payment flow immediately for the given tier. */
   initialSelectedTier?: DonationType;
   onPaymentFlowClose?: () => void;
+  profileReturnTo?: string;
 };
 
 function displayUserName(user?: SponsorPayment["user"]) {
@@ -107,6 +114,24 @@ function isTierActive(settings: SponsorSettings, type: DonationType) {
   return settings.isChannelSponsor ?? false;
 }
 
+function tierPayableAmount(tier: SponsorTier): string {
+  return tier.payableAmount ?? tier.amount;
+}
+
+function renderTierPrice(tier: SponsorTier) {
+  if (tier.isRenewalDiscount && tier.payableAmount && tier.payableAmount !== tier.amount) {
+    return (
+      <span className="flex flex-col items-center gap-0.5">
+        <span className="text-sm font-normal text-muted-foreground line-through">
+          {t.sponsorTierOpenFor(tier.amount)}
+        </span>
+        <span>{t.sponsorTierOpenFor(tier.payableAmount)}</span>
+      </span>
+    );
+  }
+  return t.sponsorTierOpenFor(tier.amount);
+}
+
 export default function ChannelSponsorSection({
   conversationId,
   isOwner,
@@ -115,7 +140,9 @@ export default function ChannelSponsorSection({
   tierTypes,
   initialSelectedTier,
   onPaymentFlowClose,
+  profileReturnTo,
 }: Props) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const sectionRef = useRef<HTMLDivElement>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +151,7 @@ export default function ChannelSponsorSection({
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [tier1Amount, setTier1Amount] = useState("0");
   const [tier2Amount, setTier2Amount] = useState("0");
+  const [contentRenewalDiscountPercent, setContentRenewalDiscountPercent] = useState("0");
   const [contentDurationDays, setContentDurationDays] = useState("30");
   const [sponsorDurationDays, setSponsorDurationDays] = useState("30");
   const [selectedTier, setSelectedTier] = useState<DonationType | null>(null);
@@ -172,6 +200,9 @@ export default function ChannelSponsorSection({
     setPaymentInstructions(settings.paymentInstructions ?? "");
     setTier1Amount(normalizeTierAmountInput(settings.tier1Amount));
     setTier2Amount(normalizeTierAmountInput(settings.tier2Amount));
+    setContentRenewalDiscountPercent(
+      String(settings.contentRenewalDiscountPercent ?? 0)
+    );
     setContentDurationDays(String(settings.contentDurationDays ?? settings.durationDays ?? 30));
     setSponsorDurationDays(String(settings.sponsorDurationDays ?? settings.durationDays ?? 30));
   }, [settings]);
@@ -196,6 +227,10 @@ export default function ChannelSponsorSection({
         paymentInstructions: paymentInstructions.trim() || null,
         tier1Amount: normalizeTierAmountInput(tier1Amount),
         tier2Amount: normalizeTierAmountInput(tier2Amount),
+        contentRenewalDiscountPercent: Math.min(
+          100,
+          Math.max(0, parseInt(contentRenewalDiscountPercent, 10) || 0)
+        ),
         contentDurationDays: Math.max(1, parseInt(contentDurationDays, 10) || 30),
         sponsorDurationDays: Math.max(1, parseInt(sponsorDurationDays, 10) || 30),
       });
@@ -311,9 +346,13 @@ export default function ChannelSponsorSection({
   }
 
   const tiers = settings?.tiers ?? [];
-  const selectedTierAmount = tiers.find((tier) => tier.type === selectedTier)?.amount;
-  const selectedTierDurationDays =
-    tiers.find((tier) => tier.type === selectedTier)?.durationDays ?? 30;
+  const selectedTierMeta = tiers.find((tier) => tier.type === selectedTier);
+  const selectedTierPayableAmount = selectedTierMeta
+    ? tierPayableAmount(selectedTierMeta)
+    : undefined;
+  const selectedTierDurationDays = selectedTierMeta?.durationDays ?? 30;
+  const selectedTierIsRenewalDiscount =
+    selectedTier === "content" && !!selectedTierMeta?.isRenewalDiscount;
   const hasContentAccess = settings ? isTierActive(settings, "content") : false;
   const hasChannelSponsor = settings ? isTierActive(settings, "content_thanks") : false;
   const contentUntil = settings?.sponsorExpiresAt ? formatExpiryDate(settings.sponsorExpiresAt) : null;
@@ -420,6 +459,17 @@ export default function ChannelSponsorSection({
                     value={tier1Amount}
                     onChange={(e) => setTier1Amount(e.target.value)}
                   />
+                  <Label htmlFor="content-renewal-discount">
+                    {t.channelSponsorContentRenewalDiscount}
+                  </Label>
+                  <Input
+                    id="content-renewal-discount"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={contentRenewalDiscountPercent}
+                    onChange={(e) => setContentRenewalDiscountPercent(e.target.value)}
+                  />
                   <Label htmlFor="content-duration-days">{t.channelSponsorContentDurationDays}</Label>
                   <Input
                     id="content-duration-days"
@@ -464,7 +514,20 @@ export default function ChannelSponsorSection({
                     <div key={payment.id} className="rounded-md border px-3 py-2 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{displayUserName(payment.user)}</p>
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-primary hover:underline truncate max-w-full"
+                            onClick={() =>
+                              setLocation(
+                                messengerProfilePath(
+                                  payment.user?.id ?? payment.userId,
+                                  profileReturnTo
+                                )
+                              )
+                            }
+                          >
+                            {displayUserName(payment.user)}
+                          </button>
                           <p className="text-xs text-muted-foreground">
                             {payment.submittedAt
                               ? format(new Date(payment.submittedAt), "d MMM yyyy, HH:mm", { locale: ru })
@@ -570,9 +633,13 @@ export default function ChannelSponsorSection({
                   <p className="font-medium">
                     {selectedTier === "content_thanks"
                       ? t.sponsorChannelPaymentIntro(selectedTierDurationDays)
-                      : t.sponsorContentPaymentIntro(selectedTierDurationDays)}
+                      : selectedTierIsRenewalDiscount
+                        ? t.sponsorContentRenewalPaymentIntro(
+                            settings?.contentRenewalDiscountPercent ?? 0
+                          )
+                        : t.sponsorContentPaymentIntro(selectedTierDurationDays)}
                   </p>
-                  <p>{t.sponsorPaymentStepTransfer(selectedTierAmount ?? "0")}</p>
+                  <p>{t.sponsorPaymentStepTransfer(selectedTierPayableAmount ?? "0")}</p>
                   {settings?.paymentInstructions?.trim() ? (
                     <div className="rounded-md bg-muted/50 px-3 py-2 whitespace-pre-wrap">
                       {settings.paymentInstructions.trim()}
@@ -662,7 +729,7 @@ export default function ChannelSponsorSection({
                             embedded && tier.type === "content" && "text-amber-900 dark:text-amber-50"
                           )}
                         >
-                          {t.sponsorTierOpenFor(tier.amount)}
+                          {renderTierPrice(tier)}
                         </span>
                       </button>
                     )

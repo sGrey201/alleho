@@ -204,6 +204,13 @@
       "when": 1774160000000,
       "tag": "0028_group_default_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1774170000000,
+      "tag": "0029_content_renewal_discount",
+      "breakpoints": true
     }
   ]
 }
