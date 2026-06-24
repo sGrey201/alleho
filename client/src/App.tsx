@@ -30,6 +30,8 @@ import { useOfflineRevalidation } from "@/hooks/useOfflineRevalidation";
 import { t } from "@/lib/i18n";
 import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
+import { isGuestForbiddenMessengerPath, isGuestMessengerPath } from "@/lib/guestMessengerPaths";
+import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo } from "@/lib/authReturnTo";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -154,14 +156,46 @@ function AppContent() {
   const isRoleOnboardingPage = location.startsWith("/onboarding/role");
   const isResetPasswordPage = location.startsWith("/reset-password");
   const isLandingPage = location === "/";
+  const isGuestMessengerPage = !isAuthenticated && isGuestMessengerPath(location);
+  const guestMessengerBlocked = !isAuthenticated && isGuestForbiddenMessengerPath(location);
+
+  if (guestMessengerBlocked) {
+    return <Redirect to="/messenger" />;
+  }
+
   if (isAuthenticated && requiresRoleSelection && !isRoleOnboardingPage && !isInviteAcceptPage) {
-    return <Redirect to="/onboarding/role" />;
+    const returnTo = readAuthReturnFromQuery() ?? peekAuthReturnTo();
+    if (returnTo && isGuestMessengerPath(returnTo)) {
+      saveAuthReturnTo(returnTo);
+    }
+    const rolePath = returnTo
+      ? `/onboarding/role?return=${encodeURIComponent(returnTo)}`
+      : "/onboarding/role";
+    return <Redirect to={rolePath} />;
   }
   if (isAuthenticated && isAuthPage) {
-    return <Redirect to={requiresRoleSelection ? "/onboarding/role" : "/messenger"} />;
+    const returnTo = readAuthReturnFromQuery() ?? peekAuthReturnTo();
+    return (
+      <Redirect
+        to={
+          requiresRoleSelection
+            ? returnTo
+              ? `/onboarding/role?return=${encodeURIComponent(returnTo)}`
+              : "/onboarding/role"
+            : returnTo ?? "/messenger"
+        }
+      />
+    );
   }
   // Allow the public landing page (logo from invite/auth screens links here).
-  if (!isAuthenticated && !isAuthPage && !isResetPasswordPage && !isInviteAcceptPage && !isLandingPage) {
+  if (
+    !isAuthenticated &&
+    !isAuthPage &&
+    !isResetPasswordPage &&
+    !isInviteAcceptPage &&
+    !isLandingPage &&
+    !isGuestMessengerPage
+  ) {
     return <Redirect to="/auth" />;
   }
 

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { truncateMessageForPreview } from "@shared/messageFormatting";
 import { t } from "@/lib/i18n";
 
@@ -7,6 +7,9 @@ type CollapsibleMessageTextProps = {
   enabled?: boolean;
   className?: string;
   onToggleExpand?: () => void;
+  /** Guest preview: show truncated text and redirect instead of expanding. */
+  guestPreviewMode?: boolean;
+  onGuestReadFull?: () => void;
   children: (displayText: string) => ReactNode;
 };
 
@@ -15,6 +18,8 @@ export function CollapsibleMessageText({
   enabled = true,
   className,
   onToggleExpand,
+  guestPreviewMode = false,
+  onGuestReadFull,
   children,
 }: CollapsibleMessageTextProps) {
   const [expanded, setExpanded] = useState(false);
@@ -30,15 +35,22 @@ export function CollapsibleMessageText({
     pendingScrollTopRef.current = null;
   }, [expanded]);
 
-  if (!enabled || !preview.isTruncated) {
+  const isTruncated = preview.isTruncated || guestPreviewMode;
+
+  if (!enabled || !isTruncated) {
     return <div className={className}>{children(text)}</div>;
   }
 
-  const displayText = expanded ? text : preview.text;
+  const displayText = guestPreviewMode || !expanded ? preview.text : text;
 
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     e.preventDefault();
+
+    if (guestPreviewMode) {
+      onGuestReadFull?.();
+      return;
+    }
 
     const scrollRoot = e.currentTarget.closest(".chat-messages-pane") as HTMLElement | null;
     if (scrollRoot) {
@@ -59,7 +71,7 @@ export function CollapsibleMessageText({
           className="text-sm font-semibold text-primary hover:underline"
           onClick={handleToggle}
         >
-          {expanded ? t.sponsorPaymentCollapse : t.readMore}
+          {guestPreviewMode ? t.readFull : expanded ? t.sponsorPaymentCollapse : t.readMore}
         </button>
       </div>
     </div>

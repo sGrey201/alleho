@@ -11,6 +11,7 @@ import { RouteSeo } from "@/components/RouteSeo";
 import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 import { t } from "@/lib/i18n";
+import { consumeAuthReturnTo, resolveAuthReturnTo } from "@/lib/authReturnTo";
 
 export default function RoleOnboarding() {
   const [, setLocation] = useLocation();
@@ -37,7 +38,9 @@ export default function RoleOnboarding() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/messenger");
+      const returnTo = resolveAuthReturnTo();
+      if (returnTo) consumeAuthReturnTo();
+      setLocation(returnTo ?? "/messenger");
     },
     onError: (error: Error) => {
       setPendingRole(null);

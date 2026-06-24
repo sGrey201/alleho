@@ -77,7 +77,10 @@ import {
   notifyConversationNewMessage,
   sendPushToUsers,
 } from "./push";
-import { filterMessageForNonSponsor } from "@shared/messageFormatting";
+import {
+  filterMessageForNonSponsor,
+  truncateMessageForPreview,
+} from "@shared/messageFormatting";
 
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
 let objectStorageModulePromise: Promise<typeof import("./replit_integrations/object_storage")> | null = null;
@@ -1030,6 +1033,153 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching my patients:", error);
       res.status(500).json({ message: "Failed to fetch patients" });
+    }
+  });
+
+  const GUEST_PREVIEW_USER_ID = "";
+
+  async function getPublicPatientChannels(nameFilter?: string) {
+    const channels = await storage.getDiscoverableConversations(GUEST_PREVIEW_USER_ID, {
+      type: "channel",
+      excludeClosed: true,
+      patientAvailableOnly: true,
+      nameFilter,
+    });
+    channels.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+    return channels.map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      avatarUrl: channel.avatarUrl ?? null,
+      participantCount: channel.participantCount,
+      isMember: false,
+      lastMessagePreview: channel.lastMessagePreview ?? null,
+      lastMessageAt: channel.lastMessageAt?.toISOString() ?? null,
+    }));
+  }
+
+  function applyGuestMessagePreview(content: string | null | undefined): {
+    content: string | null;
+    requiresAuthForFull: boolean;
+  } {
+    if (!content) {
+      return { content: content ?? null, requiresAuthForFull: false };
+    }
+    const preview = truncateMessageForPreview(content);
+    return {
+      content: preview.text,
+      requiresAuthForFull: preview.isTruncated,
+    };
+  }
+
+  // --- Public guest channel browse (preview only) ---
+  app.get("/api/public/channels", async (_req, res) => {
+    try {
+      const channels = await getPublicPatientChannels();
+      res.json({ channels });
+    } catch (error) {
+      console.error("Error fetching /api/public/channels:", error);
+      res.status(500).json({ message: "Failed to fetch channels" });
+    }
+  });
+
+  app.get("/api/public/channels/search", async (req, res) => {
+    try {
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (!q) return res.json({ channels: [] });
+      const channels = await getPublicPatientChannels(q);
+      res.json({ channels });
+    } catch (error) {
+      console.error("Error fetching /api/public/channels/search:", error);
+      res.status(500).json({ message: "Failed to search channels" });
+    }
+  });
+
+  app.get("/api/public/conversations/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      if (!canUserReadChannel(conv, false, false)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const participantRows = await storage.getConversationParticipants(id);
+      res.json({
+        id: conv.id,
+        type: conv.type,
+        name: conv.name ?? null,
+        avatarUrl: conv.avatarUrl ?? null,
+        participantCount: participantRows.length,
+        isGuestPreview: true,
+      });
+    } catch (error) {
+      console.error("Error fetching public conversation:", error);
+      res.status(500).json({ message: "Failed to fetch conversation" });
+    }
+  });
+
+  app.get("/api/public/conversations/:id/messages", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.type !== "channel") {
+        return res.status(404).json({ message: "Channel not found" });
+      }
+      if (!canUserReadChannel(conv, false, false)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const settings = await storage.getChannelSponsorSettings(id);
+      const monetizationEnabled = settings?.enabled ?? false;
+      const sponsorFilter = {
+        monetizationEnabled,
+        filterContent: monetizationEnabled,
+      };
+      const rawLimit = parseInt(String(req.query.limit ?? 30), 10);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 30;
+      const before =
+        typeof req.query.before === "string" && req.query.before.length > 0
+          ? req.query.before
+          : null;
+      const { messages, hasMore } = await storage.getConversationMessagesBefore(id, before, limit);
+      const withAuthors = await enrichConversationMessages(
+        messages,
+        GUEST_PREVIEW_USER_ID,
+        sponsorFilter
+      );
+      const previewItems = withAuthors.map((m) => {
+        const mainPreview = applyGuestMessagePreview(m.content);
+        return {
+          ...m,
+          content: mainPreview.content,
+          requiresAuthForFull: mainPreview.requiresAuthForFull,
+          imageUrl: null,
+          replyTo: m.replyTo
+            ? {
+                ...m.replyTo,
+                ...applyGuestMessagePreview(m.replyTo.content),
+                imageUrl: null,
+              }
+            : null,
+          isGuestPreview: true,
+        };
+      });
+      const nextBefore = previewItems.length > 0 ? previewItems[0]!.id : null;
+      res.json({
+        items: previewItems,
+        hasMore,
+        nextBefore: hasMore ? nextBefore : null,
+        isGuestPreview: true,
+        requiresAuthForFull: true,
+      });
+    } catch (error) {
+      console.error("Error fetching public conversation messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
 

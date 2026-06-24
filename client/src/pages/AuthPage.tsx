@@ -15,6 +15,7 @@ import { Mail, Lock, ArrowLeft } from "lucide-react";
 import { RouteSeo } from "@/components/RouteSeo";
 import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
+import { consumeAuthReturnTo, resolveAuthReturnTo } from "@/lib/authReturnTo";
 
 const loginSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -51,7 +52,15 @@ export default function AuthPage() {
     },
     onSuccess: async (data: { requiresRoleSelection?: boolean }) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      setLocation(data?.requiresRoleSelection ? "/onboarding/role" : "/messenger");
+      const returnTo = resolveAuthReturnTo();
+      if (data?.requiresRoleSelection) {
+        setLocation(
+          returnTo ? `/onboarding/role?return=${encodeURIComponent(returnTo)}` : "/onboarding/role"
+        );
+        return;
+      }
+      if (returnTo) consumeAuthReturnTo();
+      setLocation(returnTo ?? "/messenger");
     },
     onError: (error: Error) => {
       toast({ 

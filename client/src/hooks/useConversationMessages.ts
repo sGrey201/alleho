@@ -12,13 +12,15 @@ import type { ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 
 async function fetchConversationMessagesPage(
   conversationId: string,
-  before?: string
+  before?: string,
+  guestPreviewMode = false
 ): Promise<ConversationMessagesPage> {
   const params = new URLSearchParams({
     limit: String(CONVERSATION_MESSAGES_PAGE_SIZE),
   });
   if (before) params.set("before", before);
-  const res = await fetch(`/api/conversations/${conversationId}/messages?${params}`, {
+  const base = guestPreviewMode ? "/api/public/conversations" : "/api/conversations";
+  const res = await fetch(`${base}/${conversationId}/messages?${params}`, {
     credentials: "include",
     cache: "no-store",
   });
@@ -26,17 +28,27 @@ async function fetchConversationMessagesPage(
   return res.json();
 }
 
-export function useConversationMessages(conversationId: string | undefined) {
+export function useConversationMessages(
+  conversationId: string | undefined,
+  options?: { guestPreviewMode?: boolean }
+) {
+  const guestPreviewMode = options?.guestPreviewMode ?? false;
   const query = useInfiniteQuery<
     ConversationMessagesPage,
     Error,
     ConversationMessagesInfiniteData,
-    readonly string[],
+    readonly (string | boolean)[],
     string | undefined
   >({
-    queryKey: conversationId ? conversationMessagesQueryKey(conversationId) : ["disabled-messages"],
+    queryKey: conversationId
+      ? [...conversationMessagesQueryKey(conversationId), guestPreviewMode ? "guest" : "auth"]
+      : ["disabled-messages"],
     queryFn: ({ pageParam }) =>
-      fetchConversationMessagesPage(conversationId!, pageParam as string | undefined),
+      fetchConversationMessagesPage(
+        conversationId!,
+        pageParam as string | undefined,
+        guestPreviewMode
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore && lastPage.nextBefore ? lastPage.nextBefore : undefined,
