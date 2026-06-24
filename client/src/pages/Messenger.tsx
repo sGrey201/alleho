@@ -201,7 +201,7 @@ function ChatListAvatar({ chat, label }: { chat: ChatItem; label: string }) {
   if (useAvatar) {
     return (
       <Avatar className={cn("shrink-0", isPatientChat ? "size-[3.3rem]" : "size-11")}>
-        <AvatarImage src={profileAvatarSrc(chat.avatarUrl)} alt={label} />
+        <AvatarImage src={profileAvatarSrc(chat.avatarUrl, "avatar")} alt={label} />
         <AvatarFallback className={isPatientChat ? "text-sm font-semibold" : undefined}>
           {getPersonInitials(null, null, label)}
         </AvatarFallback>
@@ -770,7 +770,7 @@ export default function Messenger() {
       <RouteSeo {...pageMeta.messenger} />
     <div className="flex h-full flex-col md:flex-row">
       {!isMobileConversationOpen && (
-      <div className="w-full md:w-80 border-b md:border-b-0 flex flex-col shrink-0 bg-background">
+      <div className="w-full md:w-[22rem] md:max-w-[22rem] min-w-0 border-b md:border-b-0 flex flex-col shrink-0 overflow-hidden bg-background">
         <Tabs
           value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
           onValueChange={(v) => {
@@ -780,7 +780,7 @@ export default function Messenger() {
               setSearchScope(nextFolder);
             }
           }}
-          className="flex-1 flex flex-col min-h-0 bg-gray-50"
+          className="flex-1 flex flex-col min-h-0 min-w-0 bg-gray-50"
         >
           <div className="flex items-center gap-2 shrink-0 border-b border-border/60 bg-background px-3 py-2">
             <DropdownMenu>
@@ -915,7 +915,7 @@ export default function Messenger() {
           )}
           <TabsContent
             value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
-            className="flex-1 m-0 min-h-0 overflow-hidden bg-background"
+            className="flex-1 m-0 min-h-0 min-w-0 overflow-hidden bg-background"
           >
             {isSearching ? (
               searchLoading && !searchResults ? (
@@ -974,7 +974,7 @@ export default function Messenger() {
                                 void handleSelectChat(chat);
                               }}
                               className={cn(
-                                "w-full flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60",
+                                "w-full min-w-0 flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 overflow-hidden",
                                 alignTop ? "items-start" : "items-center",
                                 isSelected ? "bg-muted/70" : "bg-background"
                               )}
@@ -1034,7 +1034,7 @@ export default function Messenger() {
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
-                              <AvatarImage src={profileAvatarSrc(group.avatarUrl)} />
+                              <AvatarImage src={profileAvatarSrc(group.avatarUrl, "avatar")} />
                               <AvatarFallback>{chatInitial(group.name || t.chatGroup)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -1058,7 +1058,7 @@ export default function Messenger() {
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
                             <Avatar className="shrink-0 size-11">
-                              <AvatarImage src={profileAvatarSrc(channel.avatarUrl)} />
+                              <AvatarImage src={profileAvatarSrc(channel.avatarUrl, "avatar")} />
                               <AvatarFallback>{chatInitial(channel.name || t.channelSub)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -1083,7 +1083,7 @@ export default function Messenger() {
               </div>
             ) : (
               <ScrollArea ref={listScrollRef} className="h-full">
-                <div className="flex min-h-full flex-col pt-1">
+                <div className="flex min-h-full min-w-0 w-full flex-col pt-1">
                   {listChats.length === 0 ? (
                     <MessengerFolderPanel
                       folder={activeFolder}
@@ -1186,7 +1186,7 @@ export default function Messenger() {
                           void handleSelectChat(chat);
                         }}
                         className={cn(
-                          "w-full flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60",
+                          "w-full min-w-0 flex gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 overflow-hidden",
                           alignTop ? "items-start" : "items-center",
                           isSelected ? "bg-muted/70" : "bg-background"
                         )}

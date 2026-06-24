@@ -248,7 +248,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   }
 
   const displayName = nameDraft || conv.name || "—";
-  const avatarSrc = avatarDraft ? profileAvatarSrc(avatarDraft) : undefined;
+  const avatarFullSrc = avatarDraft ? profileAvatarSrc(avatarDraft) : undefined;
+  const avatarThumbSrc = avatarDraft ? profileAvatarSrc(avatarDraft, "avatar") : undefined;
   const participantCount =
     mode === "channel"
       ? (conv.participantCount ?? conv.participants?.length ?? 0)
@@ -268,7 +269,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       openAvatarUpload();
       return;
     }
-    if (avatarSrc) {
+    if (avatarFullSrc) {
       setAvatarViewerOpen(true);
     }
   };
@@ -311,13 +312,13 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               <button
                 type="button"
                 className={`relative block rounded-full ${
-                  isOwner || avatarSrc ? "cursor-pointer" : "cursor-default"
+                  isOwner || avatarFullSrc ? "cursor-pointer" : "cursor-default"
                 }`}
                 onClick={handleAvatarClick}
-                aria-label={isOwner ? t.edit : avatarSrc ? "Просмотр аватара" : undefined}
+                aria-label={isOwner ? t.edit : avatarFullSrc ? "Просмотр аватара" : undefined}
               >
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={avatarSrc} />
+                  <AvatarImage src={avatarThumbSrc} />
                   <AvatarFallback>{displayName.slice(0, 1).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </button>
@@ -400,7 +401,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
 
       <ImageViewerDialog
         open={avatarViewerOpen}
-        imageUrl={avatarSrc ?? null}
+        imageUrl={avatarFullSrc ?? null}
         hasMultiple={false}
         onClose={() => setAvatarViewerOpen(false)}
         onPrevious={() => {}}
@@ -414,13 +415,13 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               <button
                 type="button"
                 className={`relative block rounded-full ${
-                  isOwner || avatarSrc ? "cursor-pointer" : "cursor-default"
+                  isOwner || avatarFullSrc ? "cursor-pointer" : "cursor-default"
                 }`}
                 onClick={handleAvatarClick}
-                aria-label={isOwner ? t.edit : avatarSrc ? "Просмотр аватара" : undefined}
+                aria-label={isOwner ? t.edit : avatarFullSrc ? "Просмотр аватара" : undefined}
               >
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={avatarSrc} />
+                  <AvatarImage src={avatarThumbSrc} />
                   <AvatarFallback>{displayName.slice(0, 1).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </button>

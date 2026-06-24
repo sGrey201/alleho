@@ -188,6 +188,49 @@ export class ObjectStorageService {
   }
 
   /**
+   * Stream S3 object as small square avatar (128×128) for chat list / header circles.
+   * Non-image content-types are streamed as-is (no resize).
+   */
+  async downloadObjectAsAvatar(
+    ref: S3ObjectRef,
+    res: Response,
+    cacheTtlSec: number = 3600
+  ): Promise<void> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
+      );
+      const contentType = response.ContentType || "application/octet-stream";
+      if (!contentType.startsWith("image/")) {
+        return this.downloadObject(ref, res, cacheTtlSec);
+      }
+      if (!response.Body) {
+        res.status(404).end();
+        return;
+      }
+      const { default: sharp } = await import("sharp");
+      res.set({
+        "Content-Type": contentType,
+        "Cache-Control": `private, max-age=${cacheTtlSec}`,
+      });
+      const pipeline = sharp()
+        .rotate()
+        .resize(128, 128, { fit: "cover", withoutEnlargement: true })
+        .on("error", (err: Error) => {
+          console.error("Sharp avatar resize error:", err);
+          if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });
+        });
+      const bodyStream = response.Body as NodeJS.ReadableStream;
+      bodyStream.pipe(pipeline).pipe(res);
+    } catch (error) {
+      console.error("Error downloading avatar thumbnail:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error downloading file" });
+      }
+    }
+  }
+
+  /**
    * Stream S3 object as thumbnail (max width 400px) for chat preview.
    * Non-image content-types are streamed as-is (no resize).
    */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { useLocation } from "wouter";
@@ -13,6 +13,8 @@ import { stripMessageFormatting } from "@shared/messageFormatting";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { profileAvatarSrc } from "@/lib/utils";
+import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +24,7 @@ import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -40,6 +43,10 @@ type PostCommentsThreadProps = {
 };
 
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
+
+function getThumbUrl(url: string): string {
+  return url + (url.includes("?") ? "&" : "?") + "size=thumb";
+}
 
 function getAuthorName(author: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined): string {
   if (!author) return "User";
@@ -75,6 +82,7 @@ export default function PostCommentsThread({
     rect: { top: number; left: number; width: number; height: number };
   } | null>(null);
   const [inlineContentPaymentSegment, setInlineContentPaymentSegment] = useState<number | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const paymentSegmentRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -135,6 +143,50 @@ export default function PostCommentsThread({
     () => [...comments].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [comments]
   );
+
+  const galleryImages = useMemo(() => {
+    const urls: string[] = [];
+    if (anchorPost?.imageUrl && !anchorPost.deletedAt && anchorPost.messageType !== "voice") {
+      urls.push(anchorPost.imageUrl);
+    }
+    for (const comment of sortedComments) {
+      if (comment.imageUrl && !comment.deletedAt) {
+        urls.push(comment.imageUrl);
+      }
+    }
+    return urls;
+  }, [anchorPost, sortedComments]);
+
+  const goToPrevGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const prevIndex = index <= 0 ? galleryImages.length - 1 : index - 1;
+    setSelectedImage(galleryImages[prevIndex]);
+  }, [galleryImages, selectedImage]);
+
+  const goToNextGalleryImage = useCallback(() => {
+    if (!selectedImage || galleryImages.length < 2) return;
+    const index = galleryImages.indexOf(selectedImage);
+    const nextIndex = index < 0 || index >= galleryImages.length - 1 ? 0 : index + 1;
+    setSelectedImage(galleryImages[nextIndex]);
+  }, [galleryImages, selectedImage]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToPrevGalleryImage();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToNextGalleryImage();
+      } else if (e.key === "Escape") {
+        setSelectedImage(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedImage, goToPrevGalleryImage, goToNextGalleryImage]);
 
   const setCommentRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) commentRefs.current.set(id, el);
@@ -562,9 +614,13 @@ export default function PostCommentsThread({
               <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border bg-background px-2 pt-1 pb-1.5">
                 <p className="mb-0.5 text-[10px] text-muted-foreground">Публикация</p>
                 {anchorPost.imageUrl && (
-                  <a href={anchorPost.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
-                    <img src={anchorPost.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
-                  </a>
+                  <img
+                    src={getThumbUrl(anchorPost.imageUrl)}
+                    alt=""
+                    loading="lazy"
+                    className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                    onClick={() => setSelectedImage(anchorPost.imageUrl!)}
+                  />
                 )}
                 {anchorPost.content ? (
                   <SponsorAwareMessageText
@@ -635,9 +691,16 @@ export default function PostCommentsThread({
                     ) : (
                       <>
                         {comment.imageUrl && (
-                          <a href={comment.imageUrl} target="_blank" rel="noopener noreferrer" className="mb-0.5 block">
-                            <img src={comment.imageUrl} alt="" className="max-h-48 max-w-full rounded object-contain" />
-                          </a>
+                          <img
+                            src={getThumbUrl(comment.imageUrl)}
+                            alt=""
+                            loading="lazy"
+                            className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                            onClick={() => {
+                              setMessageLayer(null);
+                              setSelectedImage(comment.imageUrl!);
+                            }}
+                          />
                         )}
                         {comment.content ? (
                           <FormattedMessageText text={comment.content} />
@@ -713,7 +776,8 @@ export default function PostCommentsThread({
           isSending={createCommentMutation.isPending || editCommentMutation.isPending}
           onUploadImages={editing ? undefined : async (files: File[]) => {
             for (const file of files) {
-              await uploadFile(file);
+              const normalizedFile = await normalizeChatImageFile(file);
+              await uploadFile(normalizedFile);
             }
           }}
           isUploadingImages={isUploading}
@@ -838,7 +902,7 @@ export default function PostCommentsThread({
                       className="w-full text-left flex items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 disabled:opacity-60"
                     >
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={chat.avatarUrl ?? undefined} />
+                        <AvatarImage src={profileAvatarSrc(chat.avatarUrl, "avatar")} />
                         <AvatarFallback className="text-xs">{chatTitle.slice(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -852,6 +916,15 @@ export default function PostCommentsThread({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ImageViewerDialog
+        open={!!selectedImage}
+        imageUrl={selectedImage}
+        hasMultiple={galleryImages.length > 1}
+        onClose={() => setSelectedImage(null)}
+        onPrevious={goToPrevGalleryImage}
+        onNext={goToNextGalleryImage}
+      />
     </div>
   );
 }

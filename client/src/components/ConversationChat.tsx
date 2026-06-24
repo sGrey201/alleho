@@ -88,6 +88,7 @@ import {
   scrollChatElementIntoView,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
+import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -1084,7 +1085,8 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   const handleUploadImages = async (files: File[]) => {
     if (!canPostToChannel) return;
     for (const file of files) {
-      await uploadFile(file);
+      const normalizedFile = await normalizeChatImageFile(file);
+      await uploadFile(normalizedFile);
     }
   };
 
@@ -2031,7 +2033,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
             data-testid="button-header-avatar"
           >
             <Avatar className="h-full w-full">
-              <AvatarImage src={profileAvatarSrc(headerAvatarUrl)} />
+              <AvatarImage src={profileAvatarSrc(headerAvatarUrl, "avatar")} />
               <AvatarFallback className="text-sm font-semibold">{headerInitials}</AvatarFallback>
             </Avatar>
           </button>
@@ -2623,7 +2625,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
                       data-testid={`button-forward-target-${chat.conversationId}`}
                     >
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={chat.avatarUrl ?? undefined} />
+                        <AvatarImage src={profileAvatarSrc(chat.avatarUrl, "avatar")} />
                         <AvatarFallback className="text-xs">
                           {chatTitle.slice(0, 2).toUpperCase()}
                         </AvatarFallback>

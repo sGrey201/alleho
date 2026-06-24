@@ -40,15 +40,29 @@ function objectPathFromStorageUrl(raw: string): string | undefined {
   }
 }
 
+export type ProfileAvatarVariant = "full" | "avatar" | "thumb";
+
 /** Avatar image src from users.profile_image_url (app-served /objects/... paths). */
-export function profileAvatarSrc(profileImageUrl?: string | null): string | undefined {
+export function profileAvatarSrc(
+  profileImageUrl?: string | null,
+  variant: ProfileAvatarVariant = "full",
+): string | undefined {
   if (!profileImageUrl?.trim()) return undefined;
   const raw = profileImageUrl.trim();
-  if (raw.startsWith("/objects/")) return raw;
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return objectPathFromStorageUrl(raw) ?? raw;
+  let path: string;
+  if (raw.startsWith("/objects/")) {
+    path = raw;
+  } else if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    path = objectPathFromStorageUrl(raw) ?? raw;
+  } else if (raw.startsWith("objects/")) {
+    path = `/${raw}`;
+  } else if (raw.startsWith("uploads/")) {
+    path = `/objects/${raw}`;
+  } else {
+    path = raw.startsWith("/") ? raw : `/${raw}`;
   }
-  if (raw.startsWith("objects/")) return `/${raw}`;
-  if (raw.startsWith("uploads/")) return `/objects/${raw}`;
-  return raw.startsWith("/") ? raw : `/${raw}`;
+
+  if (variant === "full" || !path.startsWith("/objects/")) return path;
+  const query = variant === "avatar" ? "size=avatar" : "size=thumb";
+  return path + (path.includes("?") ? "&" : "?") + query;
 }

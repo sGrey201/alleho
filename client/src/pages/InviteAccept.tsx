@@ -268,7 +268,7 @@ export default function InviteAccept() {
                   </p>
                   <div className="flex flex-col items-center gap-3 rounded-lg border bg-muted/30 px-4 py-5">
                     <Avatar className="h-16 w-16">
-                      <AvatarImage src={profileAvatarSrc(user.profileImageUrl)} alt="" />
+                      <AvatarImage src={profileAvatarSrc(user.profileImageUrl, "avatar")} alt="" />
                       <AvatarFallback className="text-lg">
                         {userInitials(user.firstName, user.lastName, user.email)}
                       </AvatarFallback>

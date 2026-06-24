@@ -92,7 +92,7 @@ export function VoiceCallRoom({
                 )}
               >
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={profileAvatarSrc(p.user.profileImageUrl)} />
+                  <AvatarImage src={profileAvatarSrc(p.user.profileImageUrl, "avatar")} />
                   <AvatarFallback className="text-sm font-semibold">
                     {initials(p.user)}
                   </AvatarFallback>

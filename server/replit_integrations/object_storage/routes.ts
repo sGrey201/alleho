@@ -68,12 +68,15 @@ export function registerObjectStorageRoutes(app: Express): void {
    *
    * GET /objects/<key> — full file.
    * GET /objects/<key>?size=thumb — thumbnail for chat preview (max width 400px).
+   * GET /objects/<key>?size=avatar — small square avatar (128×128).
    */
   app.get(/^\/objects\/.+/, async (req, res) => {
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      const useThumb = req.query.size === "thumb";
-      if (useThumb) {
+      const size = req.query.size;
+      if (size === "avatar") {
+        await objectStorageService.downloadObjectAsAvatar(objectFile, res);
+      } else if (size === "thumb") {
         await objectStorageService.downloadObjectAsThumb(objectFile, res);
       } else {
         await objectStorageService.downloadObject(objectFile, res);

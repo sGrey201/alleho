@@ -138,7 +138,7 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
       <div className="space-y-6 overflow-y-auto p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-16 w-16">
-            <AvatarImage src={profileAvatarSrc(avatarDraft || conv.avatarUrl)} />
+            <AvatarImage src={profileAvatarSrc(avatarDraft || conv.avatarUrl, "avatar")} />
             <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div>

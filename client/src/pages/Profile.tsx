@@ -24,6 +24,7 @@ import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 import { messengerProfilePath, getMessengerProfileFromSearch } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
+import { profileAvatarSrc } from "@/lib/utils";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 
 export type ProfileProps = {
@@ -894,7 +895,9 @@ export default function Profile({
             aria-label="Открыть аватар"
           >
             <Avatar className="h-20 w-20">
-              {profileImageUrl ? <AvatarImage src={`${profileImageUrl}?size=thumb`} alt="avatar" /> : null}
+              {profileImageUrl ? (
+                <AvatarImage src={profileAvatarSrc(profileImageUrl, "avatar")} alt="avatar" />
+              ) : null}
               <AvatarFallback>{initials.toUpperCase()}</AvatarFallback>
             </Avatar>
           </button>
