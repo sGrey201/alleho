@@ -1876,6 +1876,7 @@ export const t = {
   folderChannels: 'Каналы',
   chatWithPatient: 'Пациент',
   chatWithDoctor: 'Врач',
+  chatWithHomeopath: 'Гомеопат',
   chatGroup: 'Группа',
   chatConsilium: 'Консилиум',
   channelOwn: 'Веду',
@@ -1902,6 +1903,18 @@ export const t = {
   messengerSendInvite: 'Выслать приглашение',
   inviteFromMessengerHint: 'Чтобы пригласить пользователя, откройте Мессенджер и в меню выберите «Выслать приглашение».',
   messengerInviteHomeopath: 'Пригласить гомеопата',
+  messengerEmptyPatientsDescription:
+    'Здесь будут чаты с пациентами. Пригласите нового пациента по ссылке — он сможет зарегистрироваться и начать переписку.',
+  messengerEmptyDoctorsDescription:
+    'Личные чаты с коллегами-гомеопатами. Пригласите гомеопата, чтобы общаться один на один.',
+  messengerEmptyGroupsDescription:
+    'Группы для совместной работы и обсуждений. Создайте группу и добавьте участников.',
+  messengerEmptyChannelsDescription:
+    'Каналы для публикаций и подписчиков. Создайте канал и делитесь материалами с аудиторией.',
+  messengerEmptyCommunityDescription:
+    'Здесь будет ваш чат с гомеопатом. Когда врач подключится, переписка появится в этом списке.',
+  messengerEmptyChannelsPatientDescription:
+    'Каналы гомеопатов — только для чтения. Подпишитесь на интересные каналы в разделе «Все каналы».',
   registrationAreYouHomeopath: 'Вы гомеопат?',
   registrationYesHomeopath: 'Да, я гомеопат',
   registrationNoPatient: 'Нет, я пациент',

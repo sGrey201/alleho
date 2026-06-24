@@ -1,11 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { User } from "@shared/schema";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn, queryClient } from "@/lib/queryClient";
 
 export function useAuth() {
-  const { data: user, isLoading } = useQuery<User>({
+  const { data: user, isPending } = useQuery<User | null>({
     queryKey: ["/api/auth/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async (context) => {
+      if (!navigator.onLine) {
+        const cached = queryClient.getQueryData<User | null>(["/api/auth/user"]);
+        if (cached !== undefined) return cached;
+        return null;
+      }
+      return getQueryFn<User | null>({ on401: "returnNull" })(context);
+    },
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
@@ -14,8 +21,8 @@ export function useAuth() {
   });
 
   return {
-    user,
-    isLoading,
+    user: user ?? undefined,
+    isLoading: isPending && user === undefined,
     isAuthenticated: !!user,
     isAdmin: user?.isAdmin || false,
     requiresRoleSelection: user?.requiresRoleSelection ?? false,

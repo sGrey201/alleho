@@ -222,6 +222,113 @@ function ChatListAvatar({ chat, label }: { chat: ChatItem; label: string }) {
 
 const PAGE_SIZE = 20;
 
+type MessengerFolderAction = {
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionPending?: boolean;
+};
+
+function MessengerFolderPanel({
+  folder,
+  isAdmin,
+  variant,
+  invitePending,
+  createPending,
+  onInvitePatient,
+  onInviteHomeopath,
+  onCreateGroup,
+  onCreateChannel,
+}: {
+  folder: MessengerFolder;
+  isAdmin: boolean;
+  variant: "empty" | "footer";
+  invitePending: boolean;
+  createPending: boolean;
+  onInvitePatient: () => void;
+  onInviteHomeopath: () => void;
+  onCreateGroup: () => void;
+  onCreateChannel: () => void;
+}) {
+  let config: MessengerFolderAction | null = null;
+
+  if (isAdmin) {
+    if (folder === "patients") {
+      config = {
+        description: t.messengerEmptyPatientsDescription,
+        actionLabel: t.messengerInvitePatient,
+        onAction: onInvitePatient,
+        actionPending: invitePending,
+      };
+    } else if (folder === "doctors") {
+      config = {
+        description: t.messengerEmptyDoctorsDescription,
+        actionLabel: t.messengerInviteHomeopath,
+        onAction: onInviteHomeopath,
+        actionPending: invitePending,
+      };
+    } else if (folder === "groups") {
+      config = {
+        description: t.messengerEmptyGroupsDescription,
+        actionLabel: t.createGroup,
+        onAction: onCreateGroup,
+        actionPending: createPending,
+      };
+    } else if (folder === "channels") {
+      config = {
+        description: t.messengerEmptyChannelsDescription,
+        actionLabel: t.createChannel,
+        onAction: onCreateChannel,
+        actionPending: createPending,
+      };
+    }
+  } else if (folder === "patients") {
+    config = { description: t.messengerEmptyCommunityDescription };
+  } else if (folder === "channels") {
+    config = {
+      description: t.messengerEmptyChannelsPatientDescription,
+    };
+  }
+
+  if (!config) return null;
+
+  if (variant === "empty") {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center min-h-[240px]">
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">{config.description}</p>
+        {config.actionLabel && config.onAction && (
+          <Button
+            type="button"
+            className="mt-5"
+            onClick={config.onAction}
+            disabled={config.actionPending}
+          >
+            {config.actionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {config.actionLabel}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  if (!config.actionLabel || !config.onAction) return null;
+
+  return (
+    <div className="px-3 py-3 border-t border-border/50 bg-background shrink-0">
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={config.onAction}
+        disabled={config.actionPending}
+      >
+        {config.actionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        {config.actionLabel}
+      </Button>
+    </div>
+  );
+}
+
 const messengerFolderTabClass =
   "relative !flex w-full min-w-0 items-center justify-center rounded-none border-b-2 border-transparent bg-transparent px-0 py-2 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
@@ -398,6 +505,9 @@ export default function Messenger() {
     if (activeFolder === "channels") {
       return chats.filter((chat) => chat.type === "channel" || chat.type === "divider");
     }
+    if (activeFolder === "groups") {
+      return chats.filter((chat) => chat.type === "group" || chat.type === "divider");
+    }
     return chats;
   }, [chats, activeFolder, isAdmin]);
 
@@ -469,6 +579,11 @@ export default function Messenger() {
           : "Каналы не найдены";
   const listToShow =
     isSearching && searchQuery.trim() ? searchFiltered : chatsByFolder;
+
+  const listChats = useMemo(
+    () => listToShow.filter((chat) => chat.type !== "divider"),
+    [listToShow]
+  );
 
   useEffect(() => {
     if (isSearching || !hasNextPage || isFetchingNextPage) return;
@@ -613,6 +728,9 @@ export default function Messenger() {
 
   const createConversationMutation = useMutation({
     mutationFn: async (payload: { type: "group" | "channel"; name: string }) => {
+      if (!isAdmin) {
+        throw new Error("Forbidden");
+      }
       const res = await apiRequest("POST", "/api/conversations", {
         type: payload.type,
         name: payload.name.trim(),
@@ -828,7 +946,7 @@ export default function Messenger() {
                                 ? t.chatWithPatient
                                 : (chat.otherParticipantName ?? t.chatWithDoctor)
                               : chat.type === "direct"
-                                ? t.chatWithDoctor
+                                ? t.chatWithHomeopath
                                 : chat.type === "consilium"
                                   ? t.chatConsilium
                                   : chat.type === "channel"
@@ -959,14 +1077,34 @@ export default function Messenger() {
                   </div>
                 </ScrollArea>
               )
-            ) : isLoading && listToShow.length === 0 ? (
+            ) : isLoading && listChats.length === 0 ? (
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-            ) : listToShow.length === 0 ? null : (
+            ) : (
               <ScrollArea ref={listScrollRef} className="h-full">
-                <div className="pt-1">
-                  {listToShow.map((chat) => {
+                <div className="flex min-h-full flex-col pt-1">
+                  {listChats.length === 0 ? (
+                    <MessengerFolderPanel
+                      folder={activeFolder}
+                      isAdmin={!!isAdmin}
+                      variant="empty"
+                      invitePending={createInviteLinkMutation.isPending}
+                      createPending={createConversationMutation.isPending}
+                      onInvitePatient={() => createInviteLinkMutation.mutate("patient")}
+                      onInviteHomeopath={() => createInviteLinkMutation.mutate("homeopath")}
+                      onCreateGroup={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("group");
+                      }}
+                      onCreateChannel={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("channel");
+                      }}
+                    />
+                  ) : (
+                    <>
+                      {listToShow.map((chat) => {
                     if (chat.type === "divider") {
                       const isGroupsDivider = chat.dividerKey === "groups-split";
                       return (
@@ -1002,7 +1140,7 @@ export default function Messenger() {
                           ? t.chatWithPatient
                           : (chat.otherParticipantName ?? t.chatWithDoctor)
                         : chat.type === "direct"
-                          ? t.chatWithDoctor
+                          ? t.chatWithHomeopath
                           : chat.type === "consilium"
                             ? t.chatConsilium
                             : chat.type === "channel"
@@ -1089,6 +1227,27 @@ export default function Messenger() {
                     <div className="flex items-center justify-center py-3">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     </div>
+                  )}
+                  {isAdmin && (
+                    <MessengerFolderPanel
+                      folder={activeFolder}
+                      isAdmin
+                      variant="footer"
+                      invitePending={createInviteLinkMutation.isPending}
+                      createPending={createConversationMutation.isPending}
+                      onInvitePatient={() => createInviteLinkMutation.mutate("patient")}
+                      onInviteHomeopath={() => createInviteLinkMutation.mutate("homeopath")}
+                      onCreateGroup={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("group");
+                      }}
+                      onCreateChannel={() => {
+                        setCreateConversationName("");
+                        setCreateConversationType("channel");
+                      }}
+                    />
+                  )}
+                    </>
                   )}
                 </div>
               </ScrollArea>
@@ -1236,7 +1395,7 @@ export default function Messenger() {
       </Dialog>
 
       <Dialog
-        open={createConversationType !== null}
+        open={isAdmin && createConversationType !== null}
         onOpenChange={(open) => {
           if (!open) {
             setCreateConversationType(null);

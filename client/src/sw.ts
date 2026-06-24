@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
-import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
-import { registerRoute } from "workbox-routing";
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
+import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst, StaleWhileRevalidate } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { MEDIA_FILES_CACHE, MEDIA_THUMB_CACHE } from "./lib/offlineCacheConfig";
@@ -11,6 +11,14 @@ declare const self: ServiceWorkerGlobalScope & {
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// SPA offline: serve precached index.html for client-side routes (e.g. /messenger/...).
+const navigationHandler = createHandlerBoundToURL("/index.html");
+registerRoute(
+  new NavigationRoute(navigationHandler, {
+    denylist: [/^\/api\//, /^\/objects\//],
+  })
+);
 
 registerRoute(
   ({ url, request }) =>

@@ -506,6 +506,12 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     scrollChatPaneToBottomForKeyboard(messagesScrollRef.current);
   }, []);
 
+  const [scrollToBottomTick, setScrollToBottomTick] = useState(0);
+
+  const requestScrollToBottom = useCallback(() => {
+    setScrollToBottomTick((tick) => tick + 1);
+  }, []);
+
   const blockAutoScrollBriefly = useCallback(() => {
     suppressAutoScrollUntilRef.current = Date.now() + 800;
   }, []);
@@ -627,6 +633,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     },
     onSuccess: (newMessage) => {
       if (!conversationId) return;
+      requestScrollToBottom();
       queryClient.setQueryData<ConversationMessagesInfiniteData>(
         conversationMessagesQueryKey(conversationId),
         (old) => appendConversationMessage(old, newMessage)
@@ -676,6 +683,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       setPollQuestion("");
       setPollOptions(["", ""]);
       setPollAllowMultiple(false);
+      requestScrollToBottom();
       requestAnimationFrame(() => chatInputRef.current?.focusInput());
     },
   });
@@ -1221,6 +1229,14 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
       ro?.disconnect();
     };
   }, [convLoading, conv, messagesLoading, displayMessages.length, conversationId, scrollToInlinePayment]);
+
+  useLayoutEffect(() => {
+    if (scrollToBottomTick === 0) return;
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    anchorChatToBottom(root, messagesEndRef.current);
+    scrollChatPaneToBottomForKeyboard(root);
+  }, [scrollToBottomTick]);
 
   const chatSearchMatches = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
