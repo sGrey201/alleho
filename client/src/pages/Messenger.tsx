@@ -154,7 +154,7 @@ function renderDiscoverSearchSubtitle(
 function getChatListLabel(chat: ChatItem, isAdminUser: boolean): string {
   if (chat.type === "patient") {
     if (!isAdminUser) {
-      return chat.name ?? chat.patientName ?? t.chatWithDoctor;
+      return chat.name ?? chat.otherParticipantName ?? chat.patientName ?? t.chatWithDoctor;
     }
     return chat.name ?? chat.patientName ?? chat.patientEmail ?? t.patient;
   }
@@ -519,38 +519,73 @@ export default function Messenger() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: isAuthenticated && isAdmin && searchQuery.trim().length > 0,
+    enabled: isAuthenticated && isAdmin && debouncedSearchQuery.trim().length > 0,
+  });
+
+  const patientChannelSearchActive =
+    isAuthenticated && !isAdmin && activeFolder === "channels" && debouncedSearchQuery.trim().length > 0;
+  const patientChannelSearchDebouncing =
+    !isAdmin &&
+    activeFolder === "channels" &&
+    isSearching &&
+    searchQuery.trim().length > 0 &&
+    searchQuery.trim() !== debouncedSearchQuery.trim();
+  const {
+    data: patientChannelSearchResults,
+    isLoading: patientChannelSearchLoading,
+    isFetching: patientChannelSearchFetching,
+    isError: patientChannelSearchError,
+    refetch: refetchPatientChannelSearch,
+  } = useQuery<{ channels: MessengerSearchChannel[] }>({
+    queryKey: ["/api/messenger/patient-channel-search", debouncedSearchQuery],
+    queryFn: async () => {
+      const url = `/api/messenger/patient-channel-search?q=${encodeURIComponent(debouncedSearchQuery)}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: patientChannelSearchActive,
   });
 
   useDoctorChatsWs(isAuthenticated);
 
-  function filterChatsBySearch(items: ChatItem[], query: string): ChatItem[] {
+  function filterChatsBySearch(items: ChatItem[], query: string, isAdminUser: boolean): ChatItem[] {
     const q = query.trim().toLowerCase();
     if (!q) return items;
     const words = q.split(/\s+/).filter(Boolean);
     return items.filter((chat) => {
-      const searchable =
-        chat.type === "patient"
-          ? [chat.name, chat.patientName, chat.patientEmail].filter(Boolean).join(" ")
-          : chat.type === "direct"
-            ? (chat.otherParticipantName ?? "")
-            : (chat.name ?? "");
-      const searchableNorm = searchable.toLowerCase();
-      return words.every((w) => searchableNorm.includes(w));
+      const searchable = getChatListLabel(chat, isAdminUser).toLowerCase();
+      return words.every((w) => searchable.includes(w));
     });
   }
 
-  useEffect(() => {
-    if (!isSearching) {
-      setSearchScope("all");
-    }
-  }, [isSearching]);
+  function mapChannelSearchToChatItem(channel: MessengerSearchChannel): ChatItem {
+    return {
+      source: "conversation",
+      folder: "channels",
+      section: channel.isMember ? "subscriptions" : "discover",
+      conversationId: channel.id,
+      type: "channel",
+      name: channel.name ?? undefined,
+      avatarUrl: channel.avatarUrl ?? null,
+      isMember: channel.isMember,
+      lastMessageAt: channel.lastMessageAt ?? null,
+      lastMessagePreview: channel.lastMessagePreview ?? null,
+      unreadCount: 0,
+    };
+  }
 
-  const activeSearchScope = isSearching ? searchScope : activeFolder;
+  useEffect(() => {
+    if (!isSearching || !isAdmin) {
+      if (!isSearching) setSearchScope("all");
+    }
+  }, [isSearching, isAdmin]);
+
+  const activeSearchScope = isSearching ? (isAdmin ? searchScope : activeFolder) : activeFolder;
   const searchChatsSource = activeSearchScope === "all" ? chats.filter((chat) => chat.type !== "patient") : chatsByFolder;
   const searchFiltered =
     isSearching && searchQuery.trim()
-      ? filterChatsBySearch(searchChatsSource, searchQuery)
+      ? filterChatsBySearch(searchChatsSource, searchQuery, !!isAdmin)
       : [];
   const doctorSearchResults =
     activeSearchScope === "all" || activeSearchScope === "doctors" ? (searchResults?.doctors ?? []) : [];
@@ -577,8 +612,45 @@ export default function Messenger() {
         : activeSearchScope === "groups"
           ? "Группы не найдены"
           : "Каналы не найдены";
-  const listToShow =
-    isSearching && searchQuery.trim() ? searchFiltered : chatsByFolder;
+  const patientChannelLocalSearch = useMemo(() => {
+    if (isAdmin || activeFolder !== "channels" || !searchQuery.trim()) return [];
+    return filterChatsBySearch(
+      chatsByFolder.filter((chat) => chat.type === "channel"),
+      searchQuery,
+      false,
+    );
+  }, [isAdmin, activeFolder, searchQuery, chatsByFolder]);
+
+  const patientChannelSearchChats = useMemo(
+    () => (patientChannelSearchResults?.channels ?? []).map(mapChannelSearchToChatItem),
+    [patientChannelSearchResults]
+  );
+
+  const listToShow = useMemo(() => {
+    if (!isSearching || !searchQuery.trim()) return chatsByFolder;
+    if (!isAdmin && activeFolder === "channels") {
+      const merged = new Map<string, ChatItem>();
+      for (const chat of patientChannelLocalSearch) {
+        if (chat.conversationId) merged.set(chat.conversationId, chat);
+      }
+      if (debouncedSearchQuery.trim() === searchQuery.trim()) {
+        for (const chat of patientChannelSearchChats) {
+          if (chat.conversationId) merged.set(chat.conversationId, chat);
+        }
+      }
+      return Array.from(merged.values());
+    }
+    return filterChatsBySearch(chatsByFolder, searchQuery, false);
+  }, [
+    isSearching,
+    searchQuery,
+    debouncedSearchQuery,
+    chatsByFolder,
+    isAdmin,
+    activeFolder,
+    patientChannelLocalSearch,
+    patientChannelSearchChats,
+  ]);
 
   const listChats = useMemo(
     () => listToShow.filter((chat) => chat.type !== "divider"),
@@ -851,16 +923,18 @@ export default function Messenger() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            {!isAdmin && (
-              <h1 className="flex-1 truncate text-base font-semibold">{t.messenger}</h1>
-            )}
-            {isAdmin && (
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <Input
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchMessengerPlaceholder}
+                placeholder={
+                  isAdmin
+                    ? t.searchMessengerPlaceholder
+                    : activeFolder === "channels"
+                      ? t.searchPatientChannelsPlaceholder
+                      : t.searchPatientChatsPlaceholder
+                }
                 className="h-9 pr-9"
               />
               {searchQuery.length > 0 && (
@@ -877,7 +951,6 @@ export default function Messenger() {
                 </button>
               )}
             </div>
-            )}
           </div>
           {isAdmin && (
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
@@ -904,7 +977,7 @@ export default function Messenger() {
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
               <TabsList className="!grid h-10 w-full grid-cols-2 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
                 <TabsTrigger value="patients" className={messengerFolderTabClass}>
-                  <FolderTabLabel label={t.folderCommunity} unread={unreadChatsByFolder.patients} />
+                  <FolderTabLabel label={t.folderPatients} unread={unreadChatsByFolder.patients} />
                 </TabsTrigger>
                 <TabsTrigger value="channels" className={messengerFolderTabClass}>
                   <FolderTabLabel label={t.folderChannels} unread={unreadChatsByFolder.channels} />
@@ -917,7 +990,7 @@ export default function Messenger() {
             value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
             className="flex-1 m-0 min-h-0 min-w-0 overflow-hidden bg-background"
           >
-            {isSearching ? (
+            {isSearching && isAdmin ? (
               searchLoading && !searchResults ? (
                 <div className="flex items-center justify-center p-4 min-h-[200px]">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1077,6 +1150,18 @@ export default function Messenger() {
                   </div>
                 </ScrollArea>
               )
+            ) : (patientChannelSearchDebouncing && patientChannelLocalSearch.length === 0) ||
+              (patientChannelSearchActive && patientChannelSearchFetching && listChats.length === 0) ? (
+              <div className="flex items-center justify-center p-4 min-h-[200px]">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : patientChannelSearchError && patientChannelSearchActive ? (
+              <div className="flex flex-col items-center justify-center p-4 min-h-[200px] text-center">
+                <p className="text-sm text-muted-foreground mb-2">{t.searchError}</p>
+                <Button variant="outline" size="sm" onClick={() => refetchPatientChannelSearch()}>
+                  {t.retry}
+                </Button>
+              </div>
             ) : isLoading && listChats.length === 0 ? (
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1085,6 +1170,15 @@ export default function Messenger() {
               <ScrollArea ref={listScrollRef} className="h-full">
                 <div className="flex min-h-full min-w-0 w-full flex-col pt-1">
                   {listChats.length === 0 ? (
+                    isSearching ? (
+                      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        {!isAdmin && activeFolder === "channels"
+                          ? t.searchPatientChannelsNotFound
+                          : !isAdmin
+                            ? t.searchPatientChatsNotFound
+                            : t.noResults}
+                      </p>
+                    ) : (
                     <MessengerFolderPanel
                       folder={activeFolder}
                       isAdmin={!!isAdmin}
@@ -1102,6 +1196,7 @@ export default function Messenger() {
                         setCreateConversationType("channel");
                       }}
                     />
+                    )
                   ) : (
                     <>
                       {listToShow.map((chat) => {

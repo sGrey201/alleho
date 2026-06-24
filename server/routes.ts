@@ -1305,6 +1305,64 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Patient messenger search: subscribed + patient-available discover channels
+  app.get("/api/messenger/patient-channel-search", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
+      if (currentUser.isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (!q) return res.json({ channels: [] });
+
+      const channelNameMatchesQuery = (name: string | null) => {
+        const nameLower = (name ?? "").toLowerCase();
+        const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+        return words.every((word) => nameLower.includes(word));
+      };
+
+      const subscriptions = await storage.getMessengerChannels(currentUserId);
+      const matchedSubscriptions = subscriptions
+        .filter((channel) => channelNameMatchesQuery(channel.name))
+        .map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          avatarUrl: channel.avatarUrl ?? null,
+          isMember: true,
+          lastMessagePreview: channel.lastMessagePreview ?? null,
+          lastMessageAt: channel.lastPostAt?.toISOString() ?? null,
+        }));
+
+      const discover = await storage.getDiscoverableConversations(currentUserId, {
+        type: "channel",
+        excludeClosed: true,
+        patientAvailableOnly: true,
+        excludeConversationIds: subscriptions.map((channel) => channel.id),
+      });
+      const matchedDiscover = discover.filter((channel) => channelNameMatchesQuery(channel.name));
+
+      res.json({
+        channels: [
+          ...matchedSubscriptions,
+          ...matchedDiscover.map((channel) => ({
+            id: channel.id,
+            name: channel.name,
+            avatarUrl: channel.avatarUrl ?? null,
+            isMember: false,
+            lastMessagePreview: channel.lastMessagePreview ?? null,
+            lastMessageAt: channel.lastMessageAt?.toISOString() ?? null,
+          })),
+        ],
+      });
+    } catch (error) {
+      console.error("Error fetching /api/messenger/patient-channel-search:", error);
+      res.status(500).json({ message: "Failed to search channels" });
+    }
+  });
+
   // Messenger search: doctors, groups (no consilium), channels
   app.get("/api/messenger/search", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
