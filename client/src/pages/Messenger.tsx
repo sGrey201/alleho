@@ -19,6 +19,7 @@ import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest } from "@/lib/queryClient";
+import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import { useAppShellTheme } from "@/hooks/useAppShellTheme";
@@ -354,9 +355,7 @@ export default function Messenger() {
     initialPageParam: 0,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextOffset : undefined),
     enabled: isAuthenticated,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    ...offlineMessengerQueryOptions,
   });
   const chats = useMemo(() => chatsPages?.pages.flatMap((page) => page.items) ?? [], [chatsPages]);
 
@@ -368,8 +367,7 @@ export default function Messenger() {
       return res.json();
     },
     enabled: isAuthenticated,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
+    ...offlineMessengerQueryOptions,
   });
 
   const unreadChatsByFolder = useMemo(() => {
@@ -961,7 +959,7 @@ export default function Messenger() {
                   </div>
                 </ScrollArea>
               )
-            ) : isLoading ? (
+            ) : isLoading && listToShow.length === 0 ? (
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>

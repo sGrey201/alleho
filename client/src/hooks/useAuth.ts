@@ -8,8 +8,9 @@ export function useAuth() {
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
     staleTime: Infinity,
+    networkMode: "offlineFirst",
   });
 
   return {

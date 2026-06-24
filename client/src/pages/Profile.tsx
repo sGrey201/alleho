@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { clearOfflineCache } from "@/lib/clearOfflineCache";
 import { useUpload } from "@/hooks/use-upload";
 import { parseQuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import type { AccountReportCategory } from "@shared/schema";
@@ -528,8 +529,13 @@ export default function Profile({
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    queryClient.clear();
+    await clearOfflineCache();
     window.location.href = "/";
+  };
+
+  const handleClearOfflineCache = async () => {
+    await clearOfflineCache();
+    toast({ title: t.offlineCacheCleared });
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1109,6 +1115,18 @@ export default function Profile({
             ) : (
               t.save
             )}
+          </Button>
+        )}
+
+        {isOwnProfile && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleClearOfflineCache}
+            data-testid="button-clear-offline-cache"
+          >
+            {t.clearOfflineCache}
           </Button>
         )}
 

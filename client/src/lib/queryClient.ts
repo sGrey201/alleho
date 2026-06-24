@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { OFFLINE_CACHE_GC_TIME_MS } from "@/lib/offlineCacheConfig";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -50,6 +51,7 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
+      gcTime: OFFLINE_CACHE_GC_TIME_MS,
       retry: false,
     },
     mutations: {

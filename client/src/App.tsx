@@ -2,7 +2,9 @@ import { Switch, Route, useLocation, Redirect } from "wouter";
 import { useEffect } from "react";
 import { HelmetProvider } from "react-helmet-async";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { useIsRestoring } from "@tanstack/react-query";
+import { offlinePersistOptions } from "@/lib/queryPersister";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +25,9 @@ import Messenger from "@/pages/Messenger";
 import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { useOfflineRevalidation } from "@/hooks/useOfflineRevalidation";
+import { t } from "@/lib/i18n";
 import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
 
@@ -100,6 +105,7 @@ function useImmersiveViewport(enabled: boolean) {
 }
 
 function AppContent() {
+  const isRestoring = useIsRestoring();
   const { isLoading, isAuthenticated, requiresRoleSelection } = useAuth();
   const [location] = useLocation();
 
@@ -116,6 +122,21 @@ function AppContent() {
       resetAppShellThemeForClassicLayout();
     }
   }, [isFullscreenPage]);
+
+  useOfflineRevalidation(
+    !isRestoring && isAuthenticated && location.startsWith("/messenger")
+  );
+
+  if (isRestoring) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="text-muted-foreground">{t.loading}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -151,6 +172,7 @@ function AppContent() {
   if (isFullscreenPage) {
     return (
       <div className="app-viewport">
+        <OfflineIndicator />
         <ScrollToTop />
         <div className="app-viewport-content">
           <Router />
@@ -162,6 +184,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <OfflineIndicator />
       <ScrollToTop />
       <main className="flex-1">
         <Router />
@@ -174,13 +197,13 @@ function AppContent() {
 function App() {
   return (
     <HelmetProvider>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={offlinePersistOptions}>
         <TooltipProvider>
           <AppContent />
           <Toaster />
           <AppUpdatePrompt />
         </TooltipProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </HelmetProvider>
   );
 }

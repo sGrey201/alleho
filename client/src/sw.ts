@@ -1,6 +1,9 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
-import { clientsClaim } from "workbox-core";
+import { registerRoute } from "workbox-routing";
+import { CacheFirst, StaleWhileRevalidate } from "workbox-strategies";
+import { ExpirationPlugin } from "workbox-expiration";
+import { MEDIA_FILES_CACHE, MEDIA_THUMB_CACHE } from "./lib/offlineCacheConfig";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<string | { url: string; revision: string | null }>;
@@ -9,6 +12,35 @@ declare const self: ServiceWorkerGlobalScope & {
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+registerRoute(
+  ({ url, request }) =>
+    request.method === "GET" &&
+    url.pathname.startsWith("/objects/") &&
+    url.searchParams.get("size") === "thumb",
+  new CacheFirst({
+    cacheName: MEDIA_THUMB_CACHE,
+    plugins: [
+      new ExpirationPlugin({
+        maxEntries: 500,
+        maxAgeSeconds: 60 * 60 * 24 * 30,
+      }),
+    ],
+  })
+);
+
+registerRoute(
+  ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/objects/"),
+  new StaleWhileRevalidate({
+    cacheName: MEDIA_FILES_CACHE,
+    plugins: [
+      new ExpirationPlugin({
+        maxEntries: 300,
+        maxAgeSeconds: 60 * 60 * 24 * 14,
+      }),
+    ],
+  })
+);
+
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
@@ -16,7 +48,7 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(clientsClaim());
+  event.waitUntil(self.clients.claim());
 });
 
 type PushPayload = {
