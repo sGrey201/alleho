@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfilePath } from "@/lib/messengerPaths";
+import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { t } from "@/lib/i18n";
 
 type ConversationInfo = {
@@ -89,7 +90,8 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const uploadResponse = await uploadFile(file);
+    const normalizedFile = await normalizeImageFile(file);
+    const uploadResponse = await uploadFile(normalizedFile);
     if (!uploadResponse?.objectPath) return;
     const newAvatarPath = uploadResponse.objectPath;
     setAvatarDraft(newAvatarPath);

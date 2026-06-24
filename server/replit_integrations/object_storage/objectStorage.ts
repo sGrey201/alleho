@@ -150,6 +150,24 @@ export class ObjectStorageService {
       );
       const contentType =
         response.ContentType || "application/octet-stream";
+
+      if (contentType.startsWith("image/") && response.Body) {
+        const { default: sharp } = await import("sharp");
+        res.set({
+          "Content-Type": contentType,
+          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+        });
+        const pipeline = sharp()
+          .rotate()
+          .on("error", (err: Error) => {
+            console.error("Sharp orient error:", err);
+            if (!res.headersSent) res.status(500).json({ error: "Error processing image" });
+          });
+        const bodyStream = response.Body as NodeJS.ReadableStream;
+        bodyStream.pipe(pipeline).pipe(res);
+        return;
+      }
+
       const contentLength = response.ContentLength;
       res.set({
         "Content-Type": contentType,

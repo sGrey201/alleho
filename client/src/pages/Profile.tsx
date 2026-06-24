@@ -22,6 +22,8 @@ import type { AccountReportCategory } from "@shared/schema";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 import { messengerProfilePath, getMessengerProfileFromSearch } from "@/lib/messengerPaths";
+import { normalizeImageFile } from "@/lib/normalizeImageFile";
+import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
@@ -533,7 +535,8 @@ export default function Profile({
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const uploadResponse = await uploadFile(file);
+    const normalizedFile = await normalizeImageFile(file);
+    const uploadResponse = await uploadFile(normalizedFile);
     if (uploadResponse?.objectPath) {
       const newAvatarPath = uploadResponse.objectPath;
       setProfileImageUrl(newAvatarPath);
@@ -1123,15 +1126,14 @@ export default function Profile({
         )}
       </div>
 
-      <Dialog open={avatarPreviewOpen} onOpenChange={setAvatarPreviewOpen}>
-        <DialogContent className="max-w-[100vw] w-screen h-screen p-0 border-none bg-black">
-          <div className="w-full h-full flex items-center justify-center">
-            {profileImageUrl ? (
-              <img src={profileImageUrl} alt="avatar-fullscreen" className="max-w-full max-h-full object-contain" />
-            ) : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ImageViewerDialog
+        open={avatarPreviewOpen}
+        imageUrl={profileImageUrl || null}
+        hasMultiple={false}
+        onClose={() => setAvatarPreviewOpen(false)}
+        onPrevious={() => {}}
+        onNext={() => {}}
+      />
 
       {questionnairePreviewSheet}
     </div>

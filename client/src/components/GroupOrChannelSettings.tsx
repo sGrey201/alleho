@@ -16,6 +16,7 @@ import ChannelSponsorSection from "@/components/ChannelSponsorSection";
 import ChannelSponsorsList from "@/components/ChannelSponsorsList";
 import ChannelSubscribersList from "@/components/ChannelSubscribersList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -212,7 +213,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const uploadResponse = await uploadFile(file);
+    const normalizedFile = await normalizeImageFile(file);
+    const uploadResponse = await uploadFile(normalizedFile);
     if (uploadResponse?.objectPath) {
       const newAvatarPath = uploadResponse.objectPath;
       setAvatarDraft(newAvatarPath);

@@ -51,14 +51,17 @@ export function ImageViewerDialog({
           <DialogTitle className="sr-only">Просмотр фото</DialogTitle>
 
           <div
-            className="pointer-events-auto absolute right-4 z-20 flex gap-2"
-            style={{ top: "max(1rem, env(safe-area-inset-top, 0px))" }}
+            className="pointer-events-auto absolute z-20 flex gap-2 touch-manipulation"
+            style={{
+              top: "max(1rem, env(safe-area-inset-top, 0px))",
+              right: "max(1rem, env(safe-area-inset-right, 0px))",
+            }}
           >
             {allowZoom ? (
               <Button
                 type="button"
                 variant="secondary"
-                className="h-11 rounded-full border border-white/20 bg-white px-4 text-foreground shadow-lg hover:bg-white/90"
+                className="h-14 rounded-full border border-white/20 bg-white px-4 text-foreground shadow-lg hover:bg-white/90"
                 onClick={() => setNativeSize((value) => !value)}
                 aria-label={nativeSize ? t.imageViewerZoomFit : t.imageViewerZoom100}
                 data-testid="button-image-viewer-zoom"
@@ -80,23 +83,29 @@ export function ImageViewerDialog({
               type="button"
               variant="secondary"
               size="icon"
-              className="h-11 w-11 rounded-full border border-white/20 bg-white text-foreground shadow-lg hover:bg-white/90"
+              className="h-14 w-14 rounded-full border border-white/20 bg-white text-foreground shadow-lg hover:bg-white/90"
               onClick={onClose}
               aria-label="Закрыть"
               data-testid="button-close-image-viewer"
             >
-              <X className="h-6 w-6" />
+              <X className="h-8 w-8" />
             </Button>
           </div>
 
-          <div className="flex min-h-0 flex-1 items-center justify-center gap-2 px-2 sm:gap-4 sm:px-4">
+          <div
+            className="pointer-events-auto flex min-h-0 flex-1 items-center justify-center gap-2 px-2 sm:gap-4 sm:px-4"
+            onClick={onClose}
+          >
             {hasMultiple ? (
               <Button
                 type="button"
                 variant="secondary"
                 size="icon"
-                className="pointer-events-auto h-11 w-11 shrink-0 rounded-full border border-white/20 bg-white/95 text-foreground shadow-lg hover:bg-white"
-                onClick={onPrevious}
+                className="h-11 w-11 shrink-0 rounded-full border border-white/20 bg-white/95 text-foreground shadow-lg hover:bg-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPrevious();
+                }}
                 aria-label="Предыдущее фото"
                 data-testid="button-image-gallery-prev"
               >
@@ -109,9 +118,10 @@ export function ImageViewerDialog({
             <div
               className={
                 nativeSize
-                  ? "pointer-events-auto flex min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-8"
+                  ? "flex min-h-0 min-w-0 flex-1 overflow-auto p-4 sm:p-8"
                   : "flex min-h-0 min-w-0 flex-1 items-center justify-center"
               }
+              onClick={(e) => e.stopPropagation()}
             >
               {imageUrl ? (
                 <img
@@ -120,7 +130,7 @@ export function ImageViewerDialog({
                   className={
                     nativeSize
                       ? "mx-auto block max-h-none max-w-none select-none"
-                      : "pointer-events-auto max-h-[calc(100vh-8rem)] max-w-full object-contain select-none"
+                      : "max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-6rem)] max-w-full object-contain select-none"
                   }
                   draggable={false}
                 />
@@ -132,8 +142,11 @@ export function ImageViewerDialog({
                 type="button"
                 variant="secondary"
                 size="icon"
-                className="pointer-events-auto h-11 w-11 shrink-0 rounded-full border border-white/20 bg-white/95 text-foreground shadow-lg hover:bg-white"
-                onClick={onNext}
+                className="h-11 w-11 shrink-0 rounded-full border border-white/20 bg-white/95 text-foreground shadow-lg hover:bg-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNext();
+                }}
                 aria-label="Следующее фото"
                 data-testid="button-image-gallery-next"
               >
