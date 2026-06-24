@@ -10,13 +10,13 @@ export function scrollChatPaneToBottom(scrollRoot: HTMLElement | null): void {
   scrollRoot.scrollTop = scrollRoot.scrollHeight;
 }
 
-/** Pin the chat viewport to the latest messages (scroll root + optional end marker). */
-export function anchorChatToBottom(
-  scrollRoot: HTMLElement | null,
-  endMarker?: HTMLElement | null
-): void {
+export function isChatScrolledToBottom(scrollRoot: HTMLElement, threshold = 8): boolean {
+  return scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight <= threshold;
+}
+
+/** Pin the chat viewport to the latest messages. */
+export function anchorChatToBottom(scrollRoot: HTMLElement | null): void {
   scrollChatPaneToBottom(scrollRoot);
-  endMarker?.scrollIntoView({ block: "end" });
 }
 
 /** Keep a chat element visible while nested content height changes (e.g. inline payment forms). */

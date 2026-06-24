@@ -84,6 +84,7 @@ import {
   scrollChatPaneToBottom,
   scrollChatPaneToBottomForKeyboard,
   anchorChatToBottom,
+  isChatScrolledToBottom,
   scrollChatElementIntoView,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
@@ -443,7 +444,9 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     start: null,
   });
   const deepLinkHandledRef = useRef<string | null>(null);
-  const awaitingInitialScrollRef = useRef(true);
+  /** While true, keep the viewport pinned to the latest message as content grows. */
+  const stickToBottomRef = useRef(true);
+  const ignoreScrollRef = useRef(false);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
   const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1115,9 +1118,42 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
 
   useEffect(() => {
     deepLinkFetchAttemptsRef.current = 0;
-    awaitingInitialScrollRef.current = true;
+    stickToBottomRef.current = true;
     setCanLoadOlderMessages(false);
   }, [conversationId]);
+
+  const pinToBottomIfNeeded = useCallback(() => {
+    const query = new URLSearchParams(window.location.search);
+    const deepLinkedMessageId = query.get("messageId");
+    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
+    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+
+    if (!stickToBottomRef.current) return;
+    if (Date.now() < suppressAutoScrollUntilRef.current) return;
+
+    const root = messagesScrollRef.current;
+    if (!root) return;
+
+    const inlinePayment = inlineContentPaymentRef.current;
+    if (inlinePayment) {
+      scrollToInlinePayment(inlinePayment);
+      return;
+    }
+
+    ignoreScrollRef.current = true;
+    anchorChatToBottom(root);
+    if (isChatScrolledToBottom(root)) {
+      setCanLoadOlderMessages(true);
+    }
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false;
+      if (!stickToBottomRef.current) return;
+      anchorChatToBottom(root);
+      if (isChatScrolledToBottom(root)) {
+        setCanLoadOlderMessages(true);
+      }
+    });
+  }, [conversationId, scrollToInlinePayment]);
 
   useEffect(() => {
     if (convLoading || !conv) return;
@@ -1166,7 +1202,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     if (sortedMessages.some((msg) => msg.id === messageId)) return;
     if (!hasNextPage || isFetchingNextPage) return;
     if (deepLinkFetchAttemptsRef.current >= 5) {
-      awaitingInitialScrollRef.current = false;
+      stickToBottomRef.current = false;
       setCanLoadOlderMessages(true);
       return;
     }
@@ -1175,66 +1211,61 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
   }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
   useLayoutEffect(() => {
-    if (convLoading || !conv) return;
+    if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
+
     const query = new URLSearchParams(window.location.search);
     const deepLinkedMessageId = query.get("messageId");
     const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
     if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
-    if (!awaitingInitialScrollRef.current) return;
-    if (messagesLoading || displayMessages.length === 0) return;
 
+    pinToBottomIfNeeded();
+  }, [convLoading, conv, messagesLoading, displayMessages, conversationId, pinToBottomIfNeeded]);
+
+  useEffect(() => {
+    if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
+
+    const root = messagesScrollRef.current;
+    const contentEl = messagesContentRef.current;
+    if (!root || !contentEl) return;
+
+    const ro = new ResizeObserver(() => pinToBottomIfNeeded());
+    ro.observe(contentEl);
+
+    const onComposerInset = () => pinToBottomIfNeeded();
+    window.addEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
+    };
+  }, [
+    convLoading,
+    conv,
+    conversationId,
+    messagesLoading,
+    displayMessages.length,
+    pinToBottomIfNeeded,
+  ]);
+
+  useEffect(() => {
     const root = messagesScrollRef.current;
     if (!root) return;
 
-    let cancelled = false;
-    const anchor = () => {
-      if (cancelled || !awaitingInitialScrollRef.current) return;
-      anchorChatToBottom(root, messagesEndRef.current);
+    const onScroll = () => {
+      if (ignoreScrollRef.current || pendingScrollRestoreRef.current) return;
+      stickToBottomRef.current = isChatScrolledToBottom(root);
     };
 
-    const completeInitialAnchor = () => {
-      if (cancelled || !awaitingInitialScrollRef.current) return;
-      anchor();
-      awaitingInitialScrollRef.current = false;
-      setCanLoadOlderMessages(true);
-    };
-
-    anchor();
-    const t1 = window.setTimeout(anchor, 0);
-    const t2 = window.setTimeout(anchor, 80);
-    const t3 = window.setTimeout(completeInitialAnchor, 500);
-    const t4 = window.setTimeout(completeInitialAnchor, 1500);
-
-    const contentEl = messagesContentRef.current;
-    const ro = contentEl
-      ? new ResizeObserver(() => {
-          if (cancelled || !awaitingInitialScrollRef.current) return;
-          if (Date.now() < suppressAutoScrollUntilRef.current) return;
-          const inlinePayment = inlineContentPaymentRef.current;
-          if (inlinePayment) {
-            scrollToInlinePayment(inlinePayment);
-            return;
-          }
-          anchor();
-        })
-      : null;
-    ro?.observe(contentEl!);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      ro?.disconnect();
-    };
-  }, [convLoading, conv, messagesLoading, displayMessages.length, conversationId, scrollToInlinePayment]);
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, [conversationId]);
 
   useLayoutEffect(() => {
     if (scrollToBottomTick === 0) return;
+    stickToBottomRef.current = true;
     const root = messagesScrollRef.current;
     if (!root) return;
-    anchorChatToBottom(root, messagesEndRef.current);
+    anchorChatToBottom(root);
     scrollChatPaneToBottomForKeyboard(root);
   }, [scrollToBottomTick]);
 
@@ -1307,7 +1338,7 @@ export default function ConversationChat({ conversationId, onBack, onTitleClick 
     const exists = sortedMessages.some((msg) => msg.id === messageId);
     if (!exists) return;
     deepLinkHandledRef.current = key;
-    awaitingInitialScrollRef.current = false;
+    stickToBottomRef.current = false;
     setCanLoadOlderMessages(true);
     window.setTimeout(() => scrollToMessage(messageId), 80);
   }, [conversationId, sortedMessages.length]);
