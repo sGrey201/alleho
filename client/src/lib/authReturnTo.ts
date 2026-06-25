@@ -36,3 +36,9 @@ export function navigateToAuth(setLocation: (path: string) => void, returnTo: st
   const query = `?return=${encodeURIComponent(returnTo)}`;
   setLocation(`/auth${query}`);
 }
+
+export function navigateToAuthRegister(setLocation: (path: string) => void, returnTo: string): void {
+  saveAuthReturnTo(returnTo);
+  const query = `?return=${encodeURIComponent(returnTo)}`;
+  setLocation(`/auth/register${query}`);
+}

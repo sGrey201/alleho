@@ -10,13 +10,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { Footer } from "@/components/Footer";
 import NotFound from "@/pages/not-found";
-import Landing from "@/pages/Landing";
 import Terms from "@/pages/Terms";
 import Oferta from "@/pages/Oferta";
 import Subscribe from "@/pages/Subscribe";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentFail from "@/pages/PaymentFail";
 import AuthPage from "@/pages/AuthPage";
+import RegisterPage from "@/pages/RegisterPage";
 import InviteAccept from "@/pages/InviteAccept";
 import RoleOnboarding from "@/pages/RoleOnboarding";
 import ResetPassword from "@/pages/ResetPassword";
@@ -49,7 +49,8 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/" component={Landing} />
+      <Route path="/"><Redirect to="/messenger" /></Route>
+      <Route path="/auth/register" component={RegisterPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/invite/accept" component={InviteAccept} />
       <Route path="/onboarding/role" component={RoleOnboarding} />
@@ -151,12 +152,10 @@ function AppContent() {
     );
   }
 
-  const isAuthPage = location === "/auth";
+  const isAuthPage = location === "/auth" || location.startsWith("/auth/register");
   const isInviteAcceptPage = location.startsWith("/invite/accept");
   const isRoleOnboardingPage = location.startsWith("/onboarding/role");
   const isResetPasswordPage = location.startsWith("/reset-password");
-  const isLandingPage = location === "/";
-  const isGuestMessengerPage = !isAuthenticated && isGuestMessengerPath(location);
   const guestMessengerBlocked = !isAuthenticated && isGuestForbiddenMessengerPath(location);
 
   if (guestMessengerBlocked) {
@@ -187,14 +186,13 @@ function AppContent() {
       />
     );
   }
-  // Allow the public landing page (logo from invite/auth screens links here).
+  // Guests may browse /messenger without signing in.
   if (
     !isAuthenticated &&
     !isAuthPage &&
     !isResetPasswordPage &&
     !isInviteAcceptPage &&
-    !isLandingPage &&
-    !isGuestMessengerPage
+    !isGuestMessengerPath(location)
   ) {
     return <Redirect to="/auth" />;
   }
@@ -205,11 +203,13 @@ function AppContent() {
 
   if (isFullscreenPage) {
     return (
-      <div className="app-viewport">
+      <div className="app-viewport flex-1 min-h-0">
         <OfflineIndicator />
         <ScrollToTop />
         <div className="app-viewport-content">
-          <Router />
+          <div className="app-viewport-router">
+            <Router />
+          </div>
           <PushNotificationPrompt enabled={pushPromptEnabled} />
         </div>
       </div>
@@ -233,9 +233,11 @@ function App() {
     <HelmetProvider>
       <PersistQueryClientProvider client={queryClient} persistOptions={offlinePersistOptions}>
         <TooltipProvider>
-          <AppContent />
-          <Toaster />
-          <AppUpdatePrompt />
+          <div className="app-root-shell">
+            <AppContent />
+            <Toaster />
+            <AppUpdatePrompt />
+          </div>
         </TooltipProvider>
       </PersistQueryClientProvider>
     </HelmetProvider>

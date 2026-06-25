@@ -13,6 +13,11 @@ export const pageMeta = {
     description: "Вход в платформу hovial для гомеопатов и пациентов.",
     url: "/auth",
   },
+  register: {
+    title: "Регистрация",
+    description: "Регистрация на платформе hovial для гомеопатов и пациентов.",
+    url: "/auth/register",
+  },
   inviteAccept: {
     title: "Приглашение",
     description: "Принятие приглашения на платформу hovial.",

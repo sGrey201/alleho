@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,6 +16,7 @@ import { RouteSeo } from "@/components/RouteSeo";
 import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 import { consumeAuthReturnTo, resolveAuthReturnTo } from "@/lib/authReturnTo";
+import { t } from "@/lib/i18n";
 
 const loginSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -156,15 +157,28 @@ export default function AuthPage() {
                   </Button>
                 </form>
               </Form>
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <button
                   type="button"
                   onClick={() => setActiveTab("forgot")}
-                  className="text-sm text-primary hover:underline"
+                  className="text-sm text-primary hover:underline block w-full"
                   data-testid="link-forgot-password"
                 >
                   Забыли пароль?
                 </button>
+                <p className="text-sm text-muted-foreground">
+                  {t.authNoAccount}{" "}
+                  <Link
+                    href={
+                      resolveAuthReturnTo()
+                        ? `/auth/register?return=${encodeURIComponent(resolveAuthReturnTo()!)}`
+                        : "/auth/register"
+                    }
+                    className="text-primary hover:underline"
+                  >
+                    {t.register}
+                  </Link>
+                </p>
               </div>
             </TabsContent>
 

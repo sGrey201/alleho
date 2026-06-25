@@ -4,6 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -17,23 +19,15 @@ export default function RoleOnboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isLoading, requiresRoleSelection } = useAuth();
+  const [displayName, setDisplayName] = useState("");
   const [pendingRole, setPendingRole] = useState<boolean | null>(null);
 
-  if (!isLoading && !requiresRoleSelection) {
-    return <Redirect to="/messenger" />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   const completeRoleMutation = useMutation({
-    mutationFn: async (isHomeopath: boolean) => {
-      const res = await apiRequest("POST", "/api/auth/complete-role-selection", { isHomeopath });
+    mutationFn: async ({ isHomeopath, displayName: name }: { isHomeopath: boolean; displayName: string }) => {
+      const res = await apiRequest("POST", "/api/auth/complete-role-selection", {
+        isHomeopath,
+        displayName: name,
+      });
       return res.json();
     },
     onSuccess: async () => {
@@ -52,9 +46,32 @@ export default function RoleOnboarding() {
     },
   });
 
+  if (!isLoading && !requiresRoleSelection) {
+    return <Redirect to="/messenger" />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const trimmedName = displayName.trim();
+  const canSelectRole = trimmedName.length >= 2;
+
   const handleSelect = (isHomeopath: boolean) => {
+    if (!canSelectRole) {
+      toast({
+        title: t.error,
+        description: "Имя пользователя должно быть не короче 2 символов",
+        variant: "destructive",
+      });
+      return;
+    }
     setPendingRole(isHomeopath);
-    completeRoleMutation.mutate(isHomeopath);
+    completeRoleMutation.mutate({ isHomeopath, displayName: trimmedName });
   };
 
   return (
@@ -67,13 +84,22 @@ export default function RoleOnboarding() {
             <CardTitle className="text-2xl pt-4">{t.roleOnboardingTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="role-onboarding-display-name">{t.roleOnboardingDisplayName}</Label>
+              <Input
+                id="role-onboarding-display-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={t.registerDisplayNamePlaceholder}
+              />
+            </div>
             <p className="text-center text-base font-medium">{t.registrationAreYouHomeopath}</p>
             <p className="text-center text-sm text-muted-foreground">{t.roleOnboardingHint}</p>
             <Button
               type="button"
               className="w-full"
               onClick={() => handleSelect(true)}
-              disabled={completeRoleMutation.isPending}
+              disabled={!canSelectRole || completeRoleMutation.isPending}
             >
               {completeRoleMutation.isPending && pendingRole === true ? (
                 <>
@@ -89,7 +115,7 @@ export default function RoleOnboarding() {
               variant="outline"
               className="w-full"
               onClick={() => handleSelect(false)}
-              disabled={completeRoleMutation.isPending}
+              disabled={!canSelectRole || completeRoleMutation.isPending}
             >
               {completeRoleMutation.isPending && pendingRole === false ? (
                 <>

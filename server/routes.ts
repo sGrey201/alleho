@@ -10,7 +10,8 @@ import { db } from "./db";
 import { users, payments } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin } from "./emailAuth";
-import { login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
+import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
+import { generateAuthPassword } from "./authPassword";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { BASE_URL } from "@shared/brand";
 import { isPositiveTierAmount, clampDiscountPercent, resolveContentTierAmount } from "@shared/sponsorTiers";
@@ -196,9 +197,7 @@ ${allUrls.map(url => `  <url>
   });
 
   // Email auth routes
-  app.post('/api/auth/register', (_req, res) => {
-    res.status(403).json({ message: "Регистрация доступна только по ссылке-приглашению" });
-  });
+  app.post('/api/auth/register', register);
   app.post('/api/auth/login', login);
   app.post('/api/auth/complete-role-selection', isAuthenticated, async (req: any, res) => {
     try {
@@ -210,10 +209,15 @@ ${allUrls.map(url => `  <url>
         return res.status(400).json({ message: "role_selection_not_required" });
       }
       const isHomeopathRaw = req.body?.isHomeopath;
+      const displayName = String(req.body?.displayName || "").trim();
       if (typeof isHomeopathRaw !== "boolean") {
         return res.status(400).json({ message: "role_selection_required" });
       }
+      if (displayName.length < 2) {
+        return res.status(400).json({ message: "display_name_required" });
+      }
       const updatedUser = await storage.updateUserProfile(userId, {
+        firstName: displayName,
         isAdmin: isHomeopathRaw,
         requiresRoleSelection: false,
       });
@@ -447,17 +451,10 @@ ${allUrls.map(url => `  <url>
         effectiveInviteType = invite.inviteType === "homeopath" ? "homeopath" : "patient";
       }
 
-      const generatePassword = () => {
-        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-        let pass = "";
-        for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
-        return pass;
-      };
-
       let password: string | null = null;
       let targetUser = existingUser ?? null;
       if (!targetUser) {
-        password = generatePassword();
+        password = generateAuthPassword();
         const bcrypt = await import("bcryptjs");
         const passwordHash = await bcrypt.hash(password, 10);
         targetUser = await storage.createUserWithPassword(email, passwordHash);

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfileReturnPath } from "@/lib/messengerPaths";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, LogOut, ClipboardList, Phone } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, Phone } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PatientChatSettings from "@/components/PatientChatSettings";
@@ -17,19 +17,14 @@ import Profile from "@/pages/Profile";
 import ChatListMessagePreview from "@/components/ChatListMessagePreview";
 import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
 import { RouteSeo } from "@/components/RouteSeo";
+import { MessengerMenu } from "@/components/MessengerMenu";
 import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest } from "@/lib/queryClient";
 import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import { useAppShellTheme } from "@/hooks/useAppShellTheme";
-import { navigateToAuth } from "@/lib/authReturnTo";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { navigateToAuth, navigateToAuthRegister } from "@/lib/authReturnTo";
 import {
   Dialog,
   DialogContent,
@@ -295,7 +290,7 @@ function MessengerFolderPanel({
 
   if (variant === "empty") {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center min-h-[240px]">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center min-h-0 h-full">
         <p className="text-sm text-muted-foreground leading-relaxed max-w-[280px]">{config.description}</p>
         {config.actionLabel && config.onAction && (
           <Button
@@ -433,6 +428,7 @@ export default function Messenger() {
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [inviteLinkData, setInviteLinkData] = useState<{
     open: boolean;
     inviteUrl: string;
@@ -918,11 +914,10 @@ export default function Messenger() {
   }
 
   return (
-    <>
+    <div className="messenger-shell">
       <RouteSeo {...pageMeta.messenger} />
-    <div className="flex h-full flex-col md:flex-row">
       {!isMobileConversationOpen && (
-      <div className="w-full md:w-[22rem] md:max-w-[22rem] min-w-0 border-b md:border-b-0 flex flex-col shrink-0 overflow-hidden bg-background">
+      <div className="messenger-sidebar border-b md:border-b-0 bg-background">
         <Tabs
           value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
           onValueChange={(v) => {
@@ -932,90 +927,20 @@ export default function Messenger() {
               setSearchScope(nextFolder);
             }
           }}
-          className="flex-1 flex flex-col min-h-0 min-w-0 bg-gray-50"
+          className="messenger-sidebar-tabs bg-gray-50"
         >
           <div className="flex items-center gap-2 shrink-0 border-b border-border/60 bg-background px-3 py-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  aria-label={t.menu}
-                >
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                {isGuest ? (
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      navigateToAuth(setLocation, location);
-                    }}
-                  >
-                    <User className="h-4 w-4 mr-2" />
-                    {t.login}
-                  </DropdownMenuItem>
-                ) : (
-                  <>
-                <DropdownMenuItem asChild>
-                  <Link href="/messenger/profile" className="cursor-pointer flex items-center">
-                    <User className="h-4 w-4 mr-2" />
-                    {t.profile}
-                  </Link>
-                </DropdownMenuItem>
-                {isAdmin && (
-                  <DropdownMenuItem asChild>
-                    <Link href="/questionnaires" className="cursor-pointer flex items-center">
-                      <ClipboardList className="h-4 w-4 mr-2" />
-                      {t.questionnaires}
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {!isAdmin && (
-                  <DropdownMenuItem
-                    onSelect={async () => {
-                      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-                      qc.clear();
-                      window.location.href = "/";
-                    }}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    {t.logout}
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && (
-                  <>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setInviteRolePickerOpen(true);
-                      }}
-                    >
-                      {t.messengerSendInvite}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setCreateConversationName("");
-                        setCreateConversationType("group");
-                      }}
-                    >
-                      {t.createGroup}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setCreateConversationName("");
-                        setCreateConversationType("channel");
-                      }}
-                    >
-                      {t.createChannel}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              aria-label={menuOpen ? t.cancel : t.menu}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
             <div className="relative flex-1 min-w-0">
               <Input
                 ref={searchInputRef}
@@ -1045,6 +970,32 @@ export default function Messenger() {
               )}
             </div>
           </div>
+          <div className="messenger-sidebar-main">
+          {menuOpen && (
+            <div className="messenger-menu-layer">
+              <MessengerMenu
+                isGuest={isGuest}
+                isAdmin={!!isAdmin}
+                onLogin={() => navigateToAuth(setLocation, location)}
+                onRegister={() => navigateToAuthRegister(setLocation, location)}
+                onLogout={async () => {
+                  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+                  qc.clear();
+                  window.location.href = "/messenger";
+                }}
+                onInvite={() => setInviteRolePickerOpen(true)}
+                onCreateGroup={() => {
+                  setCreateConversationName("");
+                  setCreateConversationType("group");
+                }}
+                onCreateChannel={() => {
+                  setCreateConversationName("");
+                  setCreateConversationType("channel");
+                }}
+                onClose={() => setMenuOpen(false)}
+              />
+            </div>
+          )}
           {isAdmin && (
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
@@ -1081,22 +1032,23 @@ export default function Messenger() {
           )}
           <TabsContent
             value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
-            className="flex-1 m-0 min-h-0 min-w-0 overflow-hidden bg-background"
+            className="messenger-sidebar-panel bg-background"
           >
+            <div className="messenger-sidebar-panel-inner">
             {isSearching && isAdmin ? (
               searchLoading && !searchResults ? (
-                <div className="flex items-center justify-center p-4 min-h-[200px]">
+                <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : searchError ? (
-                <div className="flex flex-col items-center justify-center p-4 min-h-[200px] text-center">
+                <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
                   <p className="text-sm text-muted-foreground mb-2">{t.searchError}</p>
                   <Button variant="outline" size="sm" onClick={() => refetchSearch()}>
                     {t.retry}
                   </Button>
                 </div>
               ) : (
-                <ScrollArea className="h-full min-h-[200px]">
+                <ScrollArea className="messenger-sidebar-scroll">
                   <div className="pt-1 pb-2">
                     {searchChatResults.length > 0 && (
                       <section className="mb-2">
@@ -1247,29 +1199,29 @@ export default function Messenger() {
               (guestChannelSearchActive && guestChannelSearchFetching && listChats.length === 0) ||
               (patientChannelSearchDebouncing && patientChannelLocalSearch.length === 0) ||
               (patientChannelSearchActive && patientChannelSearchFetching && listChats.length === 0) ? (
-              <div className="flex items-center justify-center p-4 min-h-[200px]">
+              <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : guestChannelSearchError && guestChannelSearchActive ? (
-              <div className="flex flex-col items-center justify-center p-4 min-h-[200px] text-center">
+              <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
                 <p className="text-sm text-muted-foreground mb-2">{t.searchError}</p>
                 <Button variant="outline" size="sm" onClick={() => refetchGuestChannelSearch()}>
                   {t.retry}
                 </Button>
               </div>
             ) : patientChannelSearchError && patientChannelSearchActive ? (
-              <div className="flex flex-col items-center justify-center p-4 min-h-[200px] text-center">
+              <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
                 <p className="text-sm text-muted-foreground mb-2">{t.searchError}</p>
                 <Button variant="outline" size="sm" onClick={() => refetchPatientChannelSearch()}>
                   {t.retry}
                 </Button>
               </div>
             ) : listQueryLoading && listChats.length === 0 ? (
-              <div className="flex items-center justify-center p-4">
+              <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : (
-              <ScrollArea ref={listScrollRef} className="h-full">
+              <ScrollArea ref={listScrollRef} className="messenger-sidebar-scroll">
                 <div className="flex min-h-full min-w-0 w-full flex-col pt-1">
                   {listChats.length === 0 ? (
                     isSearching ? (
@@ -1453,12 +1405,14 @@ export default function Messenger() {
                 </div>
               </ScrollArea>
             )}
+            </div>
           </TabsContent>
+          </div>
         </Tabs>
       </div>
       )}
 
-      <div className="flex-1 flex flex-col min-h-0 bg-muted/20">
+      <div className="messenger-main flex flex-1 flex-col min-h-0 bg-muted/20">
         {isProfileOpen ? (
           <div className="app-profile-panel-scroll flex min-h-0 min-w-0 flex-1 flex-col bg-background">
             <Profile
@@ -1668,6 +1622,5 @@ export default function Messenger() {
       </Dialog>
 
     </div>
-    </>
   );
 }

@@ -166,6 +166,35 @@ export async function sendInviteEmail(
   });
 }
 
+export async function sendRegistrationAccessEmail(to: string, password: string) {
+  const { client, fromEmail } = await getUncachableResendClient();
+  const loginUrl = `${getBaseUrl()}/auth`;
+
+  await client.emails.send({
+    from: fromEmail,
+    to: [to],
+    subject: "Добро пожаловать в Hovial ✨",
+    html: `
+      <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Регистрация завершена</h1>
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Ваш аккаунт создан. Используйте эти данные для входа и подтверждения почты:
+        </p>
+        <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>
+          <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Пароль:</strong> ${password}</p>
+        </div>
+        <a href="${loginUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
+          Войти в Hovial
+        </a>
+        <p style="font-size: 14px; color: #666; margin-top: 30px;">
+          Рекомендуем сменить пароль после первого входа.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendInviteAccessEmail(to: string, password: string) {
   const { client, fromEmail } = await getUncachableResendClient();
   const loginUrl = `${getBaseUrl()}/auth`;

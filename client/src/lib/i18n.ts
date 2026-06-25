@@ -32,6 +32,9 @@ export const t = {
   clear: 'Очистить',
   
   // Landing Page
+  landingDescription:
+    'Общение и работа в одном месте. Современные технологии вместе с накопленной мудростью — безопасная среда для обмена опытом, консилиумов и поддержки пациентов.',
+  landingLoginCta: 'Войти в сообщество',
   landingInviteOnly: 'Только по приглашению',
   welcomeTitle: 'Профессиональная платформа по гомеопатии',
   welcomeSubtitle: 'Специализированные статьи о пациентах и препаратах',
@@ -1918,6 +1921,18 @@ export const t = {
   registrationAreYouHomeopath: 'Вы гомеопат?',
   registrationYesHomeopath: 'Да, я гомеопат',
   registrationNoPatient: 'Нет, я пациент',
+  register: 'Зарегистрироваться',
+  registerTitle: 'Регистрация',
+  registerDisplayName: 'Имя пользователя',
+  registerDisplayNamePlaceholder: 'Как вас называть в сообществе',
+  registerSuccessTitle: 'Пароль отправлен на почту',
+  registerSuccessDescription: 'Проверьте email и войдите с полученным паролем.',
+  registerSubmit: 'Зарегистрироваться',
+  registerSubmitting: 'Регистрация...',
+  registerGoToLogin: 'Перейти ко входу',
+  registerHaveAccount: 'Уже есть аккаунт?',
+  authNoAccount: 'Нет аккаунта?',
+  roleOnboardingDisplayName: 'Имя пользователя',
   roleOnboardingTitle: 'Добро пожаловать',
   roleOnboardingHint: 'Укажите вашу роль, чтобы продолжить работу в системе',
   inviteChooseRoleTitle: 'Кого пригласить?',

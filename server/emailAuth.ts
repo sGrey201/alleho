@@ -2,46 +2,56 @@ import { RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { storage } from './storage';
-import { sendPasswordResetEmail } from './email';
+import { sendPasswordResetEmail, sendRegistrationAccessEmail } from './email';
+import { generateAuthPassword } from './authPassword';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const register: RequestHandler = async (req, res) => {
   try {
-    const { email, password, confirmPassword } = req.body;
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const displayName = String(req.body?.displayName || '').trim();
+    const isHomeopathRaw = req.body?.isHomeopath;
 
-    if (!email || !password || !confirmPassword) {
-      return res.status(400).json({ message: 'Все поля обязательны' });
+    if (!email || !displayName) {
+      return res.status(400).json({ message: 'Email и имя пользователя обязательны' });
     }
 
-    if (password !== confirmPassword) {
-      return res.status(400).json({ message: 'Пароли не совпадают' });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Пароль должен быть не менее 6 символов' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ message: 'Некорректный email' });
     }
 
-    const existingUser = await storage.getUserByEmail(email.toLowerCase());
-    if (existingUser) {
-      return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+    if (displayName.length < 2) {
+      return res.status(400).json({ message: 'Имя пользователя должно быть не короче 2 символов' });
     }
 
+    if (typeof isHomeopathRaw !== 'boolean') {
+      return res.status(400).json({ message: 'role_selection_required' });
+    }
+
+    const existingUser = await storage.getUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({ message: 'user_exists' });
+    }
+
+    const password = generateAuthPassword();
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await storage.createUserWithPassword(email.toLowerCase(), passwordHash);
+    const user = await storage.createUserWithPassword(email, passwordHash);
 
-    (req.session as any).userId = user.id;
-    (req.session as any).authType = 'email';
-
-    res.json({
-      id: user.id,
-      email: user.email,
-      subscriptionExpiresAt: user.subscriptionExpiresAt,
-      isAdmin: user.isAdmin,
+    await storage.updateUserProfile(user.id, {
+      firstName: displayName,
+      isAdmin: isHomeopathRaw,
+      requiresRoleSelection: false,
     });
+
+    try {
+      await sendRegistrationAccessEmail(email, password);
+    } catch (emailError) {
+      console.error('Failed to send registration email:', emailError);
+      return res.status(500).json({ message: 'Не удалось отправить письмо с паролем' });
+    }
+
+    res.status(201).json({ message: 'password_sent', email });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Ошибка регистрации' });
