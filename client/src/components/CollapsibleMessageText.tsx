@@ -7,9 +7,6 @@ type CollapsibleMessageTextProps = {
   enabled?: boolean;
   className?: string;
   onToggleExpand?: () => void;
-  /** Guest preview: show truncated text and redirect instead of expanding. */
-  guestPreviewMode?: boolean;
-  onGuestReadFull?: () => void;
   children: (displayText: string) => ReactNode;
 };
 
@@ -18,8 +15,6 @@ export function CollapsibleMessageText({
   enabled = true,
   className,
   onToggleExpand,
-  guestPreviewMode = false,
-  onGuestReadFull,
   children,
 }: CollapsibleMessageTextProps) {
   const [expanded, setExpanded] = useState(false);
@@ -35,22 +30,17 @@ export function CollapsibleMessageText({
     pendingScrollTopRef.current = null;
   }, [expanded]);
 
-  const isTruncated = preview.isTruncated || guestPreviewMode;
+  const isTruncated = preview.isTruncated;
 
   if (!enabled || !isTruncated) {
     return <div className={className}>{children(text)}</div>;
   }
 
-  const displayText = guestPreviewMode || !expanded ? preview.text : text;
+  const displayText = !expanded ? preview.text : text;
 
   const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     e.preventDefault();
-
-    if (guestPreviewMode) {
-      onGuestReadFull?.();
-      return;
-    }
 
     const scrollRoot = e.currentTarget.closest(".chat-messages-pane") as HTMLElement | null;
     if (scrollRoot) {
@@ -71,7 +61,7 @@ export function CollapsibleMessageText({
           className="text-sm font-semibold text-primary hover:underline"
           onClick={handleToggle}
         >
-          {guestPreviewMode ? t.readFull : expanded ? t.sponsorPaymentCollapse : t.readMore}
+          {expanded ? t.sponsorPaymentCollapse : t.readMore}
         </button>
       </div>
     </div>

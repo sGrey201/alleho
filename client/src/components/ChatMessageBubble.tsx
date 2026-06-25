@@ -42,6 +42,7 @@ function bubblePropsEqual(prev: ChatMessageBubbleProps, next: ChatMessageBubbleP
     pm.pinnedAt === nm.pinnedAt &&
     pm.commentsCount === nm.commentsCount &&
     pm.isContentTruncated === nm.isContentTruncated &&
+    pm.hasSponsorContent === nm.hasSponsorContent &&
     JSON.stringify(pm.reactions) === JSON.stringify(nm.reactions) &&
     JSON.stringify(pm.pollResults) === JSON.stringify(nm.pollResults) &&
     prev.isOwn === next.isOwn &&
@@ -108,6 +109,15 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
             }`}
             style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
           >
+            {msg.hasSponsorContent && (
+              <span
+                className="pointer-events-none absolute right-1.5 top-1 z-[1] flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1 text-[11px] font-bold leading-none text-amber-800 dark:bg-amber-900/80 dark:text-amber-200"
+                aria-hidden
+                title={t.sponsorContentLabel}
+              >
+                $
+              </span>
+            )}
             {children}
             {isChannel && (
               <div className="mt-0.5 pt-0.5">

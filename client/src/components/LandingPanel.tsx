@@ -1,11 +1,10 @@
-import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type LandingPanelProps = {
   onLogin: () => void;
-  onRegister: () => void;
+  onRegister?: () => void;
   compact?: boolean;
   className?: string;
 };
@@ -19,10 +18,6 @@ export function LandingPanel({ onLogin, onRegister, compact = false, className }
         className
       )}
     >
-      <div className={cn("w-full", compact ? "mb-4 max-w-[200px]" : "mb-6 max-w-[280px]")}>
-        <AuthLogoLink href="/messenger" />
-      </div>
-
       <p
         className={cn(
           "text-muted-foreground leading-relaxed",
@@ -36,14 +31,16 @@ export function LandingPanel({ onLogin, onRegister, compact = false, className }
         <Button onClick={onLogin} size={compact ? "default" : "lg"} className="flex-1 min-w-0">
           {t.landingLoginCta}
         </Button>
-        <Button
-          onClick={onRegister}
-          variant="outline"
-          size={compact ? "default" : "lg"}
-          className="flex-1 min-w-0"
-        >
-          {t.landingRegisterCta}
-        </Button>
+        {onRegister ? (
+          <Button
+            onClick={onRegister}
+            variant="outline"
+            size={compact ? "default" : "lg"}
+            className="flex-1 min-w-0"
+          >
+            {t.landingRegisterCta}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

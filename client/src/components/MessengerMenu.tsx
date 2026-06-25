@@ -110,10 +110,6 @@ export function MessengerMenu({
               onClose();
               onLogin();
             }}
-            onRegister={() => {
-              onClose();
-              onRegister();
-            }}
           />
         </div>
         {installFooter}

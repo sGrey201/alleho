@@ -42,3 +42,83 @@ export function scrollChatPaneToBottomForKeyboard(scrollRoot: HTMLElement | null
   window.setTimeout(scroll, 350);
   window.setTimeout(scroll, 550);
 }
+
+/** Scroll an element to the vertical center of a chat pane (instant, no document scroll). */
+export function scrollChatBubbleIntoPane(
+  scrollRoot: HTMLElement,
+  el: HTMLElement,
+  block: "center" | "nearest" = "center"
+): void {
+  const rootRect = scrollRoot.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const elTopInRoot = elRect.top - rootRect.top + scrollRoot.scrollTop;
+
+  let targetTop: number;
+  if (block === "center") {
+    targetTop = elTopInRoot - scrollRoot.clientHeight / 2 + elRect.height / 2;
+  } else {
+    const elBottom = elTopInRoot + elRect.height;
+    const viewTop = scrollRoot.scrollTop;
+    const viewBottom = viewTop + scrollRoot.clientHeight;
+    if (elTopInRoot >= viewTop && elBottom <= viewBottom) return;
+    if (elTopInRoot < viewTop) targetTop = elTopInRoot;
+    else targetTop = elBottom - scrollRoot.clientHeight;
+  }
+
+  const maxTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+  scrollRoot.scrollTop = Math.min(maxTop, Math.max(0, targetTop));
+}
+
+/** Opacity pulse to highlight a message bubble after scroll. */
+export function blinkChatBubble(el: HTMLElement): void {
+  let blinkCount = 0;
+  const tick = () => {
+    if (blinkCount >= 6) return;
+    if (blinkCount % 2 === 0) {
+      el.classList.add("opacity-60");
+    } else {
+      el.classList.remove("opacity-60");
+    }
+    blinkCount += 1;
+    window.setTimeout(tick, 320);
+  };
+  tick();
+}
+
+const FOCUS_BUBBLE_RETRY_MS = 2000;
+const FOCUS_BUBBLE_RETRY_INTERVAL_MS = 50;
+
+/**
+ * Scroll a bubble into view inside the chat pane, then run onHighlighted.
+ * Retries until scroll root and element exist or timeout (deep links after pagination).
+ */
+export function focusChatBubble(
+  resolveScrollRoot: () => HTMLElement | null,
+  resolveElement: () => HTMLElement | null,
+  onHighlighted?: () => void
+): void {
+  const startedAt = Date.now();
+
+  const tryFocus = () => {
+    const scrollRoot = resolveScrollRoot();
+    const el = resolveElement();
+    if (!scrollRoot || !el) {
+      if (Date.now() - startedAt < FOCUS_BUBBLE_RETRY_MS) {
+        window.setTimeout(tryFocus, FOCUS_BUBBLE_RETRY_INTERVAL_MS);
+      }
+      return;
+    }
+
+    scrollChatBubbleIntoPane(scrollRoot, el, "center");
+
+    requestAnimationFrame(() => {
+      scrollChatBubbleIntoPane(scrollRoot, el, "center");
+      requestAnimationFrame(() => {
+        scrollChatBubbleIntoPane(scrollRoot, el, "center");
+        onHighlighted?.();
+      });
+    });
+  };
+
+  tryFocus();
+}

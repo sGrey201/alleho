@@ -87,6 +87,8 @@ import {
   anchorChatToBottom,
   isChatScrolledToBottom,
   scrollChatElementIntoView,
+  focusChatBubble,
+  blinkChatBubble,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
@@ -175,6 +177,8 @@ type MyChatsPage = {
 
 const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
+/** User must scroll near the top before older pages load via the sentinel. */
+const LOAD_OLDER_NEAR_TOP_PX = 80;
 
 interface ConversationChatProps {
   conversationId: string;
@@ -454,6 +458,9 @@ export default function ConversationChat({
   const deepLinkHandledRef = useRef<string | null>(null);
   /** While true, keep the viewport pinned to the latest message as content grows. */
   const stickToBottomRef = useRef(true);
+  /** True after the user scrolls the pane (blocks pagination at open on short threads). */
+  const userHasScrolledRef = useRef(false);
+  const needsInitialPinRef = useRef(true);
   const ignoreScrollRef = useRef(false);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
   const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -466,27 +473,24 @@ export default function ConversationChat({
     }
   };
 
-  const blinkMessageBubble = (el: HTMLDivElement) => {
-    let blinkCount = 0;
-    const tick = () => {
-      if (blinkCount >= 6) return;
-      if (blinkCount % 2 === 0) {
-        el.classList.add("opacity-60");
-      } else {
-        el.classList.remove("opacity-60");
-      }
-      blinkCount += 1;
-      window.setTimeout(tick, 320);
-    };
-    tick();
-  };
-
-  const scrollToMessage = (id: string) => {
-    const el = messageRefs.current.get(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    blinkMessageBubble(el);
-  };
+  const scrollToMessage = useCallback(
+    (id: string, options?: { onScrolled?: () => void }) => {
+      ignoreScrollRef.current = true;
+      focusChatBubble(
+        () => messagesScrollRef.current,
+        () => messageRefs.current.get(id) ?? null,
+        () => {
+          const el = messageRefs.current.get(id);
+          if (el) blinkChatBubble(el);
+          options?.onScrolled?.();
+          requestAnimationFrame(() => {
+            ignoreScrollRef.current = false;
+          });
+        }
+      );
+    },
+    []
+  );
 
   const paymentSegmentKey = (messageId: string, segmentIndex: number) =>
     `${messageId}:${segmentIndex}`;
@@ -552,6 +556,17 @@ export default function ConversationChat({
   const redirectGuestToAuth = useCallback(() => {
     navigateToAuth(setLocation, location);
   }, [location, setLocation]);
+
+  const handlePaymentSegmentOpen = useCallback(
+    (messageId: string, segmentIndex: number) => {
+      if (guestPreviewMode) {
+        redirectGuestToAuth();
+        return;
+      }
+      setInlineContentPayment({ messageId, segmentIndex });
+    },
+    [guestPreviewMode, redirectGuestToAuth]
+  );
 
   const [canLoadOlderMessages, setCanLoadOlderMessages] = useState(false);
 
@@ -1139,15 +1154,15 @@ export default function ConversationChat({
 
   useEffect(() => {
     deepLinkFetchAttemptsRef.current = 0;
+    deepLinkHandledRef.current = null;
     stickToBottomRef.current = true;
+    userHasScrolledRef.current = false;
+    needsInitialPinRef.current = true;
     setCanLoadOlderMessages(false);
   }, [conversationId]);
 
   const pinToBottomIfNeeded = useCallback(() => {
-    const query = new URLSearchParams(window.location.search);
-    const deepLinkedMessageId = query.get("messageId");
-    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
-    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+    if (new URLSearchParams(window.location.search).get("messageId")) return;
 
     if (!stickToBottomRef.current) return;
     if (Date.now() < suppressAutoScrollUntilRef.current) return;
@@ -1163,41 +1178,48 @@ export default function ConversationChat({
 
     ignoreScrollRef.current = true;
     anchorChatToBottom(root);
-    if (isChatScrolledToBottom(root)) {
-      setCanLoadOlderMessages(true);
-    }
     requestAnimationFrame(() => {
-      ignoreScrollRef.current = false;
-      if (!stickToBottomRef.current) return;
       anchorChatToBottom(root);
-      if (isChatScrolledToBottom(root)) {
-        setCanLoadOlderMessages(true);
-      }
+      ignoreScrollRef.current = false;
+      stickToBottomRef.current = isChatScrolledToBottom(root);
     });
-  }, [conversationId, scrollToInlinePayment]);
+  }, [scrollToInlinePayment]);
+
+  const isDeepLinkPending = useCallback(() => {
+    const messageId = new URLSearchParams(window.location.search).get("messageId");
+    if (!messageId) return false;
+    const key = `${conversationId}:${messageId}`;
+    return deepLinkHandledRef.current !== key;
+  }, [conversationId]);
 
   useEffect(() => {
     if (convLoading || !conv) return;
     const root = messagesScrollRef.current;
     const sentinel = loadOlderRef.current;
-    if (!canLoadOlderMessages || !root || !sentinel || !hasNextPage || isFetchingNextPage) return;
+    if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return;
+    if (isDeepLinkPending()) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
+        if (isDeepLinkPending()) return;
+        if (!userHasScrolledRef.current) return;
+        if (root.scrollTop > LOAD_OLDER_NEAR_TOP_PX) return;
         pendingScrollRestoreRef.current = {
           height: root.scrollHeight,
           top: root.scrollTop,
         };
+        stickToBottomRef.current = false;
         void fetchNextPage();
       },
       { root, threshold: 0.1 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [convLoading, conv, canLoadOlderMessages, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
+  }, [convLoading, conv, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length, isDeepLinkPending]);
 
   useLayoutEffect(() => {
+    if (isDeepLinkPending()) return;
     const restore = pendingScrollRestoreRef.current;
     if (!restore || isFetchingNextPage) return;
     const root = messagesScrollRef.current;
@@ -1208,39 +1230,31 @@ export default function ConversationChat({
       const newHeight = root.scrollHeight;
       root.scrollTop = pending.top + (newHeight - pending.height);
       pendingScrollRestoreRef.current = null;
+      stickToBottomRef.current = isChatScrolledToBottom(root);
     };
     applyRestore();
     requestAnimationFrame(() => {
       applyRestore();
       requestAnimationFrame(applyRestore);
     });
-  }, [sortedMessages.length, isFetchingNextPage]);
+  }, [sortedMessages.length, isFetchingNextPage, isDeepLinkPending]);
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const messageId = query.get("messageId");
-    if (!messageId || sortedMessages.length === 0) return;
-    if (sortedMessages.some((msg) => msg.id === messageId)) return;
+    const messageId = new URLSearchParams(window.location.search).get("messageId");
+    if (!messageId || displayMessages.length === 0) return;
+    if (displayMessages.some((msg) => msg.id === messageId)) return;
     if (!hasNextPage || isFetchingNextPage) return;
-    if (deepLinkFetchAttemptsRef.current >= 5) {
-      stickToBottomRef.current = false;
-      setCanLoadOlderMessages(true);
-      return;
-    }
+    if (deepLinkFetchAttemptsRef.current >= 5) return;
     deepLinkFetchAttemptsRef.current += 1;
     void fetchNextPage();
-  }, [sortedMessages, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
+  }, [displayMessages.length, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
   useLayoutEffect(() => {
     if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
-
-    const query = new URLSearchParams(window.location.search);
-    const deepLinkedMessageId = query.get("messageId");
-    const deepLinkKey = deepLinkedMessageId ? `${conversationId}:${deepLinkedMessageId}` : null;
-    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
-
+    if (!needsInitialPinRef.current) return;
+    needsInitialPinRef.current = false;
     pinToBottomIfNeeded();
-  }, [convLoading, conv, messagesLoading, displayMessages, conversationId, pinToBottomIfNeeded]);
+  }, [convLoading, conv, messagesLoading, displayMessages.length, conversationId, pinToBottomIfNeeded]);
 
   useEffect(() => {
     if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
@@ -1249,10 +1263,16 @@ export default function ConversationChat({
     const contentEl = messagesContentRef.current;
     if (!root || !contentEl) return;
 
-    const ro = new ResizeObserver(() => pinToBottomIfNeeded());
+    const ro = new ResizeObserver(() => {
+      if (!stickToBottomRef.current) return;
+      pinToBottomIfNeeded();
+    });
     ro.observe(contentEl);
 
-    const onComposerInset = () => pinToBottomIfNeeded();
+    const onComposerInset = () => {
+      if (!stickToBottomRef.current) return;
+      pinToBottomIfNeeded();
+    };
     window.addEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
 
     return () => {
@@ -1269,17 +1289,24 @@ export default function ConversationChat({
   ]);
 
   useEffect(() => {
+    if (convLoading || !conv) return;
     const root = messagesScrollRef.current;
     if (!root) return;
 
     const onScroll = () => {
-      if (ignoreScrollRef.current || pendingScrollRestoreRef.current) return;
-      stickToBottomRef.current = isChatScrolledToBottom(root);
+      if (ignoreScrollRef.current) return;
+      userHasScrolledRef.current = true;
+      const atBottom = isChatScrolledToBottom(root);
+      stickToBottomRef.current = atBottom;
+      if (pendingScrollRestoreRef.current) return;
+      if (root.scrollTop <= LOAD_OLDER_NEAR_TOP_PX) {
+        setCanLoadOlderMessages(true);
+      }
     };
 
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
-  }, [conversationId]);
+  }, [conversationId, convLoading, conv]);
 
   useLayoutEffect(() => {
     if (scrollToBottomTick === 0) return;
@@ -1340,9 +1367,8 @@ export default function ConversationChat({
     const idx = Math.min(chatSearchMatchIndex, chatSearchMatches.length - 1);
     const matchId = chatSearchMatches[idx]?.id;
     if (!matchId) return;
-    const timer = window.setTimeout(() => scrollToMessage(matchId), 80);
-    return () => window.clearTimeout(timer);
-  }, [isChatSearchOpen, chatSearchQuery, chatSearchMatchIndex, chatSearchMatches]);
+    scrollToMessage(matchId);
+  }, [isChatSearchOpen, chatSearchQuery, chatSearchMatchIndex, chatSearchMatches, scrollToMessage]);
 
   useEffect(() => {
     if (!isChatSearchOpen) return;
@@ -1350,19 +1376,18 @@ export default function ConversationChat({
   }, [isChatSearchOpen]);
 
   useEffect(() => {
-    if (sortedMessages.length === 0) return;
-    const query = new URLSearchParams(window.location.search);
-    const messageId = query.get("messageId");
+    const messageId = new URLSearchParams(window.location.search).get("messageId");
     if (!messageId) return;
+    if (!displayMessages.some((msg) => msg.id === messageId)) return;
     const key = `${conversationId}:${messageId}`;
     if (deepLinkHandledRef.current === key) return;
-    const exists = sortedMessages.some((msg) => msg.id === messageId);
-    if (!exists) return;
-    deepLinkHandledRef.current = key;
     stickToBottomRef.current = false;
-    setCanLoadOlderMessages(true);
-    window.setTimeout(() => scrollToMessage(messageId), 80);
-  }, [conversationId, sortedMessages.length]);
+    scrollToMessage(messageId, {
+      onScrolled: () => {
+        deepLinkHandledRef.current = key;
+      },
+    });
+  }, [conversationId, displayMessages.length, scrollToMessage]);
 
   const galleryImages = useMemo(
     () =>
@@ -1770,7 +1795,10 @@ export default function ConversationChat({
     }
   };
 
-  const renderMessageBody = (msg: ConversationMessageWithAuthor, isOwn: boolean) => (
+  const renderMessageBody = (msg: ConversationMessageWithAuthor, isOwn: boolean) => {
+    const sponsorTextPad = msg.hasSponsorContent ? "pr-5" : undefined;
+
+    return (
     <>
       {!isOwn && showMessageAuthorName && (
         <p className="mb-0.5 pr-8 text-[10px] leading-tight text-muted-foreground">
@@ -1853,8 +1881,7 @@ export default function ConversationChat({
               <CollapsibleMessageText
                 text={msg.content}
                 enabled
-                guestPreviewMode={guestPreviewMode}
-                onGuestReadFull={redirectGuestToAuth}
+                className={sponsorTextPad}
                 onToggleExpand={blockAutoScrollBriefly}
               >
                 {(displayText) => (
@@ -1870,7 +1897,7 @@ export default function ConversationChat({
                         : null
                     }
                     onPaymentSegmentOpen={(segmentIndex) =>
-                      setInlineContentPayment({ messageId: msg.id, segmentIndex })
+                      handlePaymentSegmentOpen(msg.id, segmentIndex)
                     }
                     onPaymentFlowClose={() => setInlineContentPayment(null)}
                     onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
@@ -1882,6 +1909,7 @@ export default function ConversationChat({
             ) : (
               <SponsorAwareMessageText
                 text={msg.content}
+                className={sponsorTextPad}
                 canViewSponsorContent={canViewSponsorContent}
                 monetizationEnabled={channelMonetizationEnabled}
                 isContentTruncated={msg.isContentTruncated}
@@ -1892,7 +1920,7 @@ export default function ConversationChat({
                     : null
                 }
                 onPaymentSegmentOpen={(segmentIndex) =>
-                  setInlineContentPayment({ messageId: msg.id, segmentIndex })
+                  handlePaymentSegmentOpen(msg.id, segmentIndex)
                 }
                 onPaymentFlowClose={() => setInlineContentPayment(null)}
                 onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
@@ -1922,7 +1950,8 @@ export default function ConversationChat({
         </span>
       </div>
     </>
-  );
+    );
+  };
 
   const isComposerInEditMode = !!editing;
   const composerValue = isComposerInEditMode ? editText : message;
@@ -2145,13 +2174,22 @@ export default function ConversationChat({
         )}
       >
         <div ref={messagesContentRef} className="space-y-3">
-          {(canLoadOlderMessages && (hasNextPage || isFetchingNextPage)) && (
-            <div ref={loadOlderRef} className="flex justify-center py-2">
-              {isFetchingNextPage ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Загрузка…</span>
+          {(hasNextPage || isFetchingNextPage) && (
+            <div
+              ref={loadOlderRef}
+              className={cn(
+                "flex justify-center",
+                canLoadOlderMessages || isFetchingNextPage ? "py-2" : "h-px",
               )}
+              aria-hidden={!canLoadOlderMessages && !isFetchingNextPage}
+            >
+              {canLoadOlderMessages || isFetchingNextPage ? (
+                isFetchingNextPage ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <span className="text-xs text-muted-foreground">Загрузка…</span>
+                )
+              ) : null}
             </div>
           )}
           {messagesLoading ? (

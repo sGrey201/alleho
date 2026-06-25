@@ -80,7 +80,7 @@ import {
 } from "./push";
 import {
   filterMessageForNonSponsor,
-  truncateMessageForPreview,
+  hasSponsorSections,
 } from "@shared/messageFormatting";
 
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
@@ -1063,20 +1063,6 @@ ${allUrls.map(url => `  <url>
     }));
   }
 
-  function applyGuestMessagePreview(content: string | null | undefined): {
-    content: string | null;
-    requiresAuthForFull: boolean;
-  } {
-    if (!content) {
-      return { content: content ?? null, requiresAuthForFull: false };
-    }
-    const preview = truncateMessageForPreview(content);
-    return {
-      content: preview.text,
-      requiresAuthForFull: preview.isTruncated,
-    };
-  }
-
   // --- Public guest channel browse (preview only) ---
   app.get("/api/public/channels", async (_req, res) => {
     try {
@@ -1111,12 +1097,14 @@ ${allUrls.map(url => `  <url>
         return res.status(403).json({ message: "Access denied" });
       }
       const participantRows = await storage.getConversationParticipants(id);
+      const sponsorSettings = await storage.getChannelSponsorSettings(id);
       res.json({
         id: conv.id,
         type: conv.type,
         name: conv.name ?? null,
         avatarUrl: conv.avatarUrl ?? null,
         participantCount: participantRows.length,
+        sponsorSettings: sponsorSettings ? { enabled: sponsorSettings.enabled } : null,
         isGuestPreview: true,
       });
     } catch (error) {
@@ -1153,30 +1141,23 @@ ${allUrls.map(url => `  <url>
         GUEST_PREVIEW_USER_ID,
         sponsorFilter
       );
-      const previewItems = withAuthors.map((m) => {
-        const mainPreview = applyGuestMessagePreview(m.content);
-        return {
-          ...m,
-          content: mainPreview.content,
-          requiresAuthForFull: mainPreview.requiresAuthForFull,
-          imageUrl: null,
-          replyTo: m.replyTo
-            ? {
-                ...m.replyTo,
-                ...applyGuestMessagePreview(m.replyTo.content),
-                imageUrl: null,
-              }
-            : null,
-          isGuestPreview: true,
-        };
-      });
+      const previewItems = withAuthors.map((m) => ({
+        ...m,
+        imageUrl: null,
+        replyTo: m.replyTo
+          ? {
+              ...m.replyTo,
+              imageUrl: null,
+            }
+          : null,
+        isGuestPreview: true,
+      }));
       const nextBefore = previewItems.length > 0 ? previewItems[0]!.id : null;
       res.json({
         items: previewItems,
         hasMore,
         nextBefore: hasMore ? nextBefore : null,
         isGuestPreview: true,
-        requiresAuthForFull: true,
       });
     } catch (error) {
       console.error("Error fetching public conversation messages:", error);
@@ -2372,8 +2353,13 @@ ${allUrls.map(url => `  <url>
     );
     const commentCountMap = await storage.getConversationMessageCommentCounts(messages.map((m) => m.id));
     const applySponsorFilter = (content: string | null | undefined) => {
-      if (!content || !sponsorFilter?.filterContent) {
-        return { content: content ?? null, hasSponsorContent: false, isContentTruncated: false };
+      if (!content) {
+        return { content: null as string | null, hasSponsorContent: false, isContentTruncated: false };
+      }
+      const hasPaid =
+        sponsorFilter?.monetizationEnabled === true && hasSponsorSections(content);
+      if (!sponsorFilter?.filterContent) {
+        return { content, hasSponsorContent: hasPaid, isContentTruncated: false };
       }
       const filtered = filterMessageForNonSponsor(content, {
         monetizationEnabled: sponsorFilter.monetizationEnabled,

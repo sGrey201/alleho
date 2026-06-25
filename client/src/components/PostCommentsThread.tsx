@@ -18,7 +18,7 @@ import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
-import { scrollChatPaneToBottom, scrollChatElementIntoView } from "@/lib/chatScroll";
+import { scrollChatPaneToBottom, scrollChatElementIntoView, focusChatBubble, blinkChatBubble } from "@/lib/chatScroll";
 import { useConversationWs, type ConversationCommentWithAuthor, type ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
 import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
@@ -193,17 +193,21 @@ export default function PostCommentsThread({
     else commentRefs.current.delete(id);
   };
 
-  const blinkCommentBubble = (el: HTMLDivElement) => {
-    let blinkCount = 0;
-    const tick = () => {
-      if (blinkCount >= 6) return;
-      if (blinkCount % 2 === 0) el.classList.add("opacity-60");
-      else el.classList.remove("opacity-60");
-      blinkCount += 1;
-      window.setTimeout(tick, 320);
-    };
-    tick();
-  };
+  const scrollToComment = useCallback((commentId: string, options?: { onScrolled?: () => void }) => {
+    focusChatBubble(
+      () => messagesScrollRef.current,
+      () => commentRefs.current.get(commentId) ?? null,
+      () => {
+        const el = commentRefs.current.get(commentId);
+        if (el) blinkChatBubble(el);
+        options?.onScrolled?.();
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    deepLinkHandledRef.current = null;
+  }, [conversationId, messageId]);
 
   type MyChatItem = {
     source: "conversation";
@@ -393,10 +397,7 @@ export default function PostCommentsThread({
   });
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const deepLinkedCommentId = query.get("commentId");
-    const deepLinkKey = deepLinkedCommentId ? `${conversationId}:${messageId}:${deepLinkedCommentId}` : null;
-    if (deepLinkKey && deepLinkHandledRef.current !== deepLinkKey) return;
+    if (new URLSearchParams(window.location.search).get("commentId")) return;
 
     const root = messagesScrollRef.current;
     if (!root) return;
@@ -404,18 +405,17 @@ export default function PostCommentsThread({
   }, [comments.length, anchorPost?.id]);
 
   useEffect(() => {
-    if (sortedComments.length === 0) return;
-    const query = new URLSearchParams(window.location.search);
-    const commentId = query.get("commentId");
+    const commentId = new URLSearchParams(window.location.search).get("commentId");
     if (!commentId) return;
+    if (!sortedComments.some((c) => c.id === commentId)) return;
     const key = `${conversationId}:${messageId}:${commentId}`;
     if (deepLinkHandledRef.current === key) return;
-    const el = commentRefs.current.get(commentId);
-    if (!el) return;
-    deepLinkHandledRef.current = key;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    blinkCommentBubble(el);
-  }, [conversationId, messageId, sortedComments.length]);
+    scrollToComment(commentId, {
+      onScrolled: () => {
+        deepLinkHandledRef.current = key;
+      },
+    });
+  }, [conversationId, messageId, sortedComments.length, scrollToComment]);
 
   const composerValue = editing ? message : message;
   const canSend = !!composerValue.trim() && !createCommentMutation.isPending && !editCommentMutation.isPending;

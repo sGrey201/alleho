@@ -5,6 +5,15 @@ import { type Server } from "http";
 
 export { log } from "./logger";
 
+function isPwaDevAssetPath(urlPath: string): boolean {
+  return (
+    urlPath === "/sw.js" ||
+    urlPath === "/dev-sw.js" ||
+    urlPath === "/manifest.webmanifest" ||
+    urlPath.startsWith("/workbox-")
+  );
+}
+
 export async function setupVite(app: Express, server: Server) {
   console.log("[vite] setup start");
   const { createServer: createViteServer, createLogger } = await import("vite");
@@ -35,6 +44,10 @@ export async function setupVite(app: Express, server: Server) {
 
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
+    if (isPwaDevAssetPath(req.path)) {
+      return next();
+    }
+
     const url = req.originalUrl;
     console.log(`[vite] html middleware start: ${url}`);
 
