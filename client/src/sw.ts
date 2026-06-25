@@ -4,6 +4,7 @@ import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst, StaleWhileRevalidate } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { MEDIA_FILES_CACHE, MEDIA_THUMB_CACHE } from "./lib/offlineCacheConfig";
+import { APP_HOME_PATH } from "@shared/brand";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<string | { url: string; revision: string | null }>;
@@ -79,7 +80,7 @@ self.addEventListener("push", (event) => {
   const options: NotificationOptions = {
     body: payload.body ?? "",
     tag: payload.tag,
-    data: { url: payload.url ?? "/" },
+    data: { url: payload.url ?? APP_HOME_PATH },
     icon: "/pwa-192x192.png",
     badge: "/pwa-192x192.png",
   };
@@ -90,7 +91,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const path =
-    typeof event.notification.data?.url === "string" ? event.notification.data.url : "/";
+    typeof event.notification.data?.url === "string" ? event.notification.data.url : APP_HOME_PATH;
   const targetUrl = new URL(path, self.location.origin).href;
 
   event.waitUntil(

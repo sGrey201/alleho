@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
+import { APP_HOME_PATH } from '@shared/brand';
 import { queryClient } from '@/lib/queryClient';
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
@@ -15,7 +16,7 @@ export default function PaymentSuccess() {
     queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
     
     const timer = setTimeout(() => {
-      setLocation('/');
+      setLocation(APP_HOME_PATH);
     }, 5000);
 
     return () => clearTimeout(timer);
@@ -44,7 +45,7 @@ export default function PaymentSuccess() {
 
           <div className="space-y-3">
             <Button 
-              onClick={() => setLocation('/')} 
+              onClick={() => setLocation(APP_HOME_PATH)} 
               className="w-full"
               data-testid="button-go-home"
             >

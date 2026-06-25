@@ -23,7 +23,7 @@ export default function Subscribe() {
 
   const handlePayment = async (subscriptionType: 'initial' | 'renewal') => {
     if (!user) {
-      setLocation('/');
+      setLocation('/auth');
       return;
     }
 

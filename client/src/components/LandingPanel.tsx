@@ -32,17 +32,17 @@ export function LandingPanel({ onLogin, onRegister, compact = false, className }
         {t.landingDescription}
       </p>
 
-      <div className={cn("flex w-full gap-3", compact ? "flex-col" : "flex-col sm:flex-row sm:justify-center")}>
-        <Button onClick={onLogin} size={compact ? "default" : "lg"} className={compact ? "w-full" : "sm:min-w-[10rem]"}>
+      <div className="flex w-full flex-row gap-3">
+        <Button onClick={onLogin} size={compact ? "default" : "lg"} className="flex-1 min-w-0">
           {t.landingLoginCta}
         </Button>
         <Button
           onClick={onRegister}
           variant="outline"
           size={compact ? "default" : "lg"}
-          className={compact ? "w-full" : "sm:min-w-[10rem]"}
+          className="flex-1 min-w-0"
         >
-          {t.register}
+          {t.landingRegisterCta}
         </Button>
       </div>
     </div>

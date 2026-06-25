@@ -13,7 +13,7 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { generateAuthPassword } from "./authPassword";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
-import { BASE_URL } from "@shared/brand";
+import { BASE_URL, APP_HOME_PATH } from "@shared/brand";
 import { isPositiveTierAmount, clampDiscountPercent, resolveContentTierAmount } from "@shared/sponsorTiers";
 import { tagCategoryEnum } from "@shared/schema";
 import {
@@ -163,13 +163,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   }));
 
+  app.get("/", (_req, res) => {
+    res.redirect(301, APP_HOME_PATH);
+  });
+
   // Sitemap.xml - dynamic generation
   app.get('/sitemap.xml', async (req, res) => {
     try {
       const baseUrl = process.env.APP_URL || BASE_URL;
       
       const staticPages: Array<{ loc: string; priority: string; changefreq: string; lastmod?: string }> = [
-        { loc: '/', priority: '1.0', changefreq: 'daily' },
+        { loc: APP_HOME_PATH, priority: '1.0', changefreq: 'daily' },
         { loc: '/subscribe', priority: '0.8', changefreq: 'monthly' },
         { loc: '/about', priority: '0.6', changefreq: 'monthly' },
         { loc: '/terms', priority: '0.3', changefreq: 'yearly' },

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { XCircle } from 'lucide-react';
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
+import { APP_HOME_PATH } from '@shared/brand';
 
 export default function PaymentFail() {
   const [, setLocation] = useLocation();
@@ -39,7 +40,7 @@ export default function PaymentFail() {
             </Button>
             
             <Button 
-              onClick={() => setLocation('/')} 
+              onClick={() => setLocation(APP_HOME_PATH)} 
               variant="outline"
               className="w-full"
               data-testid="button-go-home"

@@ -32,6 +32,7 @@ import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
 import { isGuestForbiddenMessengerPath, isGuestMessengerPath } from "@/lib/guestMessengerPaths";
 import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo } from "@/lib/authReturnTo";
+import { APP_HOME_PATH } from "@shared/brand";
 
 function Router() {
   const { isLoading, isAdmin } = useAuth();
@@ -49,7 +50,6 @@ function Router() {
 
   return (
     <Switch>
-      <Route path="/"><Redirect to="/messenger" /></Route>
       <Route path="/auth/register" component={RegisterPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/invite/accept" component={InviteAccept} />
@@ -158,8 +158,12 @@ function AppContent() {
   const isResetPasswordPage = location.startsWith("/reset-password");
   const guestMessengerBlocked = !isAuthenticated && isGuestForbiddenMessengerPath(location);
 
+  if (location === "/" || location === "") {
+    return <Redirect to={APP_HOME_PATH} />;
+  }
+
   if (guestMessengerBlocked) {
-    return <Redirect to="/messenger" />;
+    return <Redirect to={APP_HOME_PATH} />;
   }
 
   if (isAuthenticated && requiresRoleSelection && !isRoleOnboardingPage && !isInviteAcceptPage) {
@@ -181,7 +185,7 @@ function AppContent() {
             ? returnTo
               ? `/onboarding/role?return=${encodeURIComponent(returnTo)}`
               : "/onboarding/role"
-            : returnTo ?? "/messenger"
+            : returnTo ?? APP_HOME_PATH
         }
       />
     );

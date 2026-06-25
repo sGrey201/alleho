@@ -23,7 +23,7 @@ export default defineConfig({
         orientation: "portrait",
         lang: "ru",
         scope: "/",
-        start_url: "/",
+        start_url: "/messenger",
         icons: [
           {
             src: "/pwa-192x192.png",

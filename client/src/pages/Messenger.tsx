@@ -18,6 +18,11 @@ import ChatListMessagePreview from "@/components/ChatListMessagePreview";
 import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
 import { RouteSeo } from "@/components/RouteSeo";
 import { MessengerMenu } from "@/components/MessengerMenu";
+import {
+  PwaInstallInstructionsSheet,
+  type PwaInstallBrowser,
+} from "@/components/PwaInstallInstructionsSheet";
+import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest } from "@/lib/queryClient";
 import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
@@ -429,6 +434,8 @@ export default function Messenger() {
   const [createConversationName, setCreateConversationName] = useState("");
   const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pwaInstallBrowser, setPwaInstallBrowser] = useState<PwaInstallBrowser | null>(null);
+  const showInstallButtons = isMobileView && !isInstalledPwaSession();
   const [inviteLinkData, setInviteLinkData] = useState<{
     open: boolean;
     inviteUrl: string;
@@ -976,6 +983,10 @@ export default function Messenger() {
               <MessengerMenu
                 isGuest={isGuest}
                 isAdmin={!!isAdmin}
+                showInstallButtons={showInstallButtons}
+                onInstallSafari={() => setPwaInstallBrowser("safari")}
+                onInstallChrome={() => setPwaInstallBrowser("chrome")}
+                onInstallYandex={() => setPwaInstallBrowser("yandex")}
                 onLogin={() => navigateToAuth(setLocation, location)}
                 onRegister={() => navigateToAuthRegister(setLocation, location)}
                 onLogout={async () => {
@@ -1620,6 +1631,13 @@ export default function Messenger() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PwaInstallInstructionsSheet
+        browser={pwaInstallBrowser}
+        onOpenChange={(open) => {
+          if (!open) setPwaInstallBrowser(null);
+        }}
+      />
 
     </div>
   );

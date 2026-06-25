@@ -79,6 +79,7 @@ export function serveStatic(app: Express) {
       urlPath === "/sw.js" ||
       urlPath === "/manifest.webmanifest" ||
       urlPath === "/" ||
+      urlPath === "/messenger" ||
       urlPath.endsWith(".html")
     ) {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

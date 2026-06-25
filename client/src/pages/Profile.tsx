@@ -26,6 +26,7 @@ import { messengerProfilePath, getMessengerProfileFromSearch } from "@/lib/messe
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { profileAvatarSrc } from "@/lib/utils";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { APP_HOME_PATH } from "@shared/brand";
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
@@ -531,7 +532,7 @@ export default function Profile({
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     await clearOfflineCache();
-    window.location.href = "/";
+    window.location.href = APP_HOME_PATH;
   };
 
   const handleClearOfflineCache = async () => {

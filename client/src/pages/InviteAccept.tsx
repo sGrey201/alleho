@@ -17,7 +17,7 @@ import { profileAvatarSrc } from "@/lib/utils";
 import { RouteSeo } from "@/components/RouteSeo";
 import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
-import { t } from "@/lib/i18n";
+import { APP_HOME_PATH } from "@shared/brand";
 
 const acceptInviteSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -118,7 +118,7 @@ export default function InviteAccept() {
           ? "Вы добавлены в новый чат с гомеопатом"
           : "Пароль отправлен на вашу почту",
       });
-      setLocation("/");
+      setLocation(APP_HOME_PATH);
     },
     onError: (error: Error) => {
       const msg = error.message || "";
