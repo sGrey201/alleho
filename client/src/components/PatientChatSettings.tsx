@@ -2,11 +2,18 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowLeft, Camera, Loader2 } from "lucide-react";
+import { ArrowLeft, Camera, Copy, Loader2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
@@ -14,11 +21,13 @@ import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfilePath } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { t } from "@/lib/i18n";
+import { useAuth } from "@/hooks/useAuth";
 
 type ConversationInfo = {
   id: string;
   type: string;
   name?: string | null;
+  myDisplayName?: string | null;
   avatarUrl?: string | null;
   patientUserId?: string | null;
   participants?: Array<{
@@ -48,10 +57,15 @@ type Props = {
 
 export default function PatientChatSettings({ conversationId, onBack }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [inviteLinkDialog, setInviteLinkDialog] = useState<{
+    open: boolean;
+    inviteUrl: string;
+  }>({ open: false, inviteUrl: "" });
   const { uploadFile, isUploading } = useUpload();
 
   const { data: conv, isLoading } = useQuery<ConversationInfo>({
@@ -66,9 +80,9 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
 
   useEffect(() => {
     if (!conv) return;
-    setNameDraft(conv.name ?? "");
+    setNameDraft(conv.myDisplayName ?? conv.name ?? "");
     setAvatarDraft(conv.avatarUrl ?? "");
-  }, [conv?.id, conv?.name, conv?.avatarUrl]);
+  }, [conv?.id, conv?.myDisplayName, conv?.name, conv?.avatarUrl]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -87,6 +101,17 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
     onError: () => toast({ title: t.error, variant: "destructive" }),
   });
 
+  const issueInviteLinkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/patient-invite-link`);
+      return res.json() as Promise<{ inviteUrl: string; expiresAt: string }>;
+    },
+    onSuccess: (data) => {
+      setInviteLinkDialog({ open: true, inviteUrl: data.inviteUrl });
+    },
+    onError: () => toast({ title: t.inviteError, variant: "destructive" }),
+  });
+
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -97,7 +122,7 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
     setAvatarDraft(newAvatarPath);
     try {
       await apiRequest("PATCH", `/api/conversations/${conversationId}/patient-settings`, {
-        name: (nameDraft || conv?.name || "").trim(),
+        name: (nameDraft || conv?.myDisplayName || conv?.name || "").trim(),
         avatarUrl: newAvatarPath,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
@@ -121,10 +146,11 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
     );
   }
 
-  const displayName = nameDraft || conv.name || "—";
+  const displayName = nameDraft || conv.myDisplayName || conv.name || "—";
   const patientProfileId = conv.patientUserId;
   const patientUser = conv.participants?.find((p) => p.userId === patientProfileId)?.user;
   const contactFullName = formatContactFullName(patientUser);
+  const showPendingInvite = !!user?.isAdmin && !patientProfileId;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -141,25 +167,27 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
             <AvatarImage src={profileAvatarSrc(avatarDraft || conv.avatarUrl, "avatar")} />
             <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
-          <div>
-            <input
-              ref={avatarInputRef}
-              type="file"
-              className="hidden"
-              accept="image/*"
-              onChange={handleAvatarChange}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isUploading}
-              onClick={() => avatarInputRef.current?.click()}
-            >
-              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-              {t.changeChatPhoto}
-            </Button>
-          </div>
+          {!user?.isAdmin && (
+            <div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleAvatarChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isUploading}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                {t.changeChatPhoto}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -192,7 +220,7 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    setNameDraft(conv.name ?? "");
+                    setNameDraft(conv.myDisplayName ?? conv.name ?? "");
                     setIsEditingName(false);
                   }}
                 >
@@ -202,6 +230,24 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
             </div>
           )}
         </div>
+
+        {showPendingInvite && (
+          <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
+            <p className="text-sm font-medium mb-3">{t.patientInvitePending}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={issueInviteLinkMutation.isPending}
+              onClick={() => issueInviteLinkMutation.mutate()}
+            >
+              {issueInviteLinkMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t.patientInviteResendButton}
+            </Button>
+          </div>
+        )}
 
         {patientProfileId && (
           <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
@@ -219,6 +265,60 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={inviteLinkDialog.open}
+        onOpenChange={(open) => setInviteLinkDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.inviteLinkForPatient}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="break-all text-sm">{inviteLinkDialog.inviteUrl}</p>
+            </div>
+            <p className="text-sm text-muted-foreground">{t.inviteLinkValid24h}</p>
+            <DialogFooter className="flex flex-row justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!inviteLinkDialog.inviteUrl) return;
+                  await navigator.clipboard.writeText(inviteLinkDialog.inviteUrl);
+                  toast({ title: t.patientInviteLinkCopied });
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                {t.patientInviteCopyLink}
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!inviteLinkDialog.inviteUrl) return;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: "Приглашение в hovial",
+                        text: "Присоединяйтесь по ссылке:",
+                        url: inviteLinkDialog.inviteUrl,
+                      });
+                    } catch {
+                      // user cancelled
+                    }
+                  } else {
+                    await navigator.clipboard.writeText(inviteLinkDialog.inviteUrl);
+                    toast({ title: t.patientInviteLinkCopied });
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                {t.patientInviteShareLink}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

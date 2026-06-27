@@ -379,6 +379,85 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  app.post("/api/patient-invites", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      const patientName = String(req.body?.patientName || "").trim();
+      if (patientName.length < 1) {
+        return res.status(400).json({ message: "patient_name_required" });
+      }
+
+      const conv = await storage.createConversation({
+        type: "patient",
+        name: null,
+        patientUserId: null,
+      });
+      await storage.addConversationParticipant(conv.id, userId, "owner", patientName);
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.createInvite({
+        email: null,
+        inviteType: "patient",
+        status: "pending",
+        tokenHash,
+        token,
+        invitedByUserId: userId,
+        conversationId: conv.id,
+        expiresAt,
+      });
+
+      await postPatientChatStatusMessage(conv.id, userId, PATIENT_INVITE_SENT_MESSAGE);
+      await publishDoctorChatsUpdated(userId);
+
+      const baseUrl = process.env.APP_URL || BASE_URL;
+      const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+
+      res.status(201).json({
+        success: true,
+        inviteType: "patient" as const,
+        conversationId: conv.id,
+        expiresAt: expiresAt.toISOString(),
+        inviteUrl,
+      });
+    } catch (error) {
+      console.error("Error creating patient invite:", error);
+      res.status(500).json({ message: "Failed to create patient invite" });
+    }
+  });
+
+  app.get('/api/invites/check-email', async (req: any, res) => {
+    try {
+      const token = String(req.query?.token || "").trim();
+      const email = String(req.query?.email || "").trim().toLowerCase();
+      if (!token || !email) {
+        return res.status(400).json({ message: "token_and_email_required" });
+      }
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const invite = await storage.getInviteByTokenHash(tokenHash);
+      if (!invite) return res.status(404).json({ message: "invalid_invite" });
+      if (invite.email && invite.email !== email) {
+        return res.status(400).json({ message: "invalid_invite_email" });
+      }
+      if (invite.status !== "pending") {
+        return res.status(400).json({ message: "invite_inactive" });
+      }
+      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+        return res.status(400).json({ message: "invite_expired" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      res.json({ exists: !!user });
+    } catch (error) {
+      console.error("Error checking invite email:", error);
+      res.status(500).json({ message: "Failed to check email" });
+    }
+  });
+
   app.get('/api/invites/preview', async (req: any, res) => {
     try {
       const token = String(req.query?.token || "").trim();
@@ -396,6 +475,7 @@ ${allUrls.map(url => `  <url>
 
       res.json({
         inviteType: invite.inviteType,
+        precreatedPatientChat: invite.inviteType === "patient" && !!invite.conversationId,
         inviter: {
           id: inviter?.id ?? null,
           name: inviterName,
@@ -414,6 +494,7 @@ ${allUrls.map(url => `  <url>
       const token = String(req.body?.token || "").trim();
       const firstName = String(req.body?.firstName || "").trim();
       const lastName = String(req.body?.lastName || "").trim();
+      const patientName = String(req.body?.patientName || req.body?.chatName || "").trim();
       const isHomeopathRaw = req.body?.isHomeopath;
       if (!email || !token) return res.status(400).json({ message: "Email and token are required" });
 
@@ -471,28 +552,49 @@ ${allUrls.map(url => `  <url>
       if (effectiveInviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true, requiresRoleSelection: false });
       } else {
-        if (!firstName || !lastName) {
-          return res.status(400).json({ message: "first_name_and_last_name_required" });
+        if (!firstName) {
+          return res.status(400).json({ message: "first_name_required" });
         }
-        const chatName = `${lastName} ${firstName}`.trim();
+        const patientChatTitle = patientName || firstName;
         const patientProfile: { firstName?: string; lastName?: string; isAdmin: boolean; requiresRoleSelection: boolean } = {
           isAdmin: false,
           requiresRoleSelection: false,
         };
         if (!canJoinAsExistingUser) {
           patientProfile.firstName = firstName;
-          patientProfile.lastName = lastName;
+          if (lastName) patientProfile.lastName = lastName;
         }
         await storage.updateUserProfile(targetUser.id, patientProfile);
-        const conv = await storage.createConversation({
-          type: "patient",
-          name: chatName,
-          patientUserId: targetUser.id,
-        });
-        await storage.addConversationParticipant(conv.id, invite.invitedByUserId, "owner");
-        await storage.addConversationParticipant(conv.id, targetUser.id, "member");
-        conversationId = conv.id;
-        await publishDoctorChatsUpdated(invite.invitedByUserId);
+
+        if (invite.conversationId) {
+          const conv = await storage.getConversation(invite.conversationId);
+          if (!conv || conv.type !== "patient") {
+            return res.status(400).json({ message: "invalid_invite_conversation" });
+          }
+          if (conv.patientUserId) {
+            return res.status(400).json({ message: "invite_inactive" });
+          }
+          const ownerRole = await storage.getParticipantRole(conv.id, invite.invitedByUserId);
+          if (ownerRole !== "owner") {
+            return res.status(400).json({ message: "invalid_invite_conversation" });
+          }
+          await storage.updateConversation(conv.id, { patientUserId: targetUser.id });
+          await storage.addConversationParticipant(conv.id, targetUser.id, "member", patientChatTitle);
+          conversationId = conv.id;
+          await postPatientChatStatusMessage(conv.id, targetUser.id, PATIENT_INVITE_ACCEPTED_MESSAGE);
+          await publishDoctorChatsUpdated(invite.invitedByUserId);
+          await publishDoctorChatsUpdated(targetUser.id);
+        } else {
+          const conv = await storage.createConversation({
+            type: "patient",
+            name: patientChatTitle,
+            patientUserId: targetUser.id,
+          });
+          await storage.addConversationParticipant(conv.id, invite.invitedByUserId, "owner", patientChatTitle);
+          await storage.addConversationParticipant(conv.id, targetUser.id, "member", patientChatTitle);
+          conversationId = conv.id;
+          await publishDoctorChatsUpdated(invite.invitedByUserId);
+        }
       }
 
       await storage.markInviteAccepted(invite.id, targetUser.id, email, conversationId, {
@@ -1685,9 +1787,15 @@ ${allUrls.map(url => `  <url>
           : false;
       const sponsorCount =
         conv.type === "channel" ? await storage.countActiveChannelSponsors(id) : undefined;
+      const myParticipant = participants.find((p) => p.userId === currentUserId);
+      const myDisplayName =
+        myParticipant?.displayName?.trim() ||
+        (conv.type === "patient" ? conv.name?.trim() : null) ||
+        null;
       res.json({
         ...conv,
         participants,
+        myDisplayName,
         ...(conv.type === "channel"
           ? { participantCount: participants.length, sponsorCount }
           : {}),
@@ -1733,20 +1841,92 @@ ${allUrls.map(url => `  <url>
       if (!trimmedName && body.name != null) {
         return res.status(400).json({ message: "name_required" });
       }
-      await storage.updateConversation(id, {
-        ...(body.name != null ? { name: trimmedName } : {}),
-        ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
-      });
+      if (body.name != null) {
+        await storage.updateConversationParticipantDisplayName(id, currentUserId, trimmedName);
+      }
+      if (body.avatarUrl !== undefined) {
+        await storage.updateConversation(id, { avatarUrl: body.avatarUrl });
+      }
       const updatedConv = await storage.getConversation(id);
       const participants = await storage.getConversationParticipants(id);
+      const myParticipant = participants.find((p) => p.userId === currentUserId);
+      const myDisplayName =
+        myParticipant?.displayName?.trim() ||
+        updatedConv?.name?.trim() ||
+        null;
       const owner = participants.find((p) => p.role === "owner");
       if (owner?.userId) {
         await publishDoctorChatsUpdated(owner.userId);
       }
-      res.json({ ...updatedConv, participants });
+      const patientPart = participants.find((p) => p.role === "member");
+      if (patientPart?.userId) {
+        await publishDoctorChatsUpdated(patientPart.userId);
+      }
+      res.json({ ...updatedConv, participants, myDisplayName });
     } catch (error) {
       console.error("Error updating patient chat settings:", error);
       res.status(500).json({ message: "Failed to update conversation" });
+    }
+  });
+
+  app.post("/api/conversations/:id/patient-invite-link", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "not_a_patient_chat" });
+      }
+      if (conv.patientUserId) {
+        return res.status(400).json({ message: "patient_already_joined" });
+      }
+
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner") return res.status(403).json({ message: "Access denied" });
+
+      const baseUrl = process.env.APP_URL || BASE_URL;
+      const existingInvite = await storage.getPendingPatientInviteByConversationId(id);
+      const now = new Date();
+      if (
+        existingInvite &&
+        existingInvite.expiresAt > now &&
+        existingInvite.token
+      ) {
+        const inviteUrl = `${baseUrl}/invite/accept?token=${existingInvite.token}`;
+        return res.json({
+          inviteUrl,
+          expiresAt: existingInvite.expiresAt.toISOString(),
+        });
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      if (existingInvite) {
+        await storage.renewInviteToken(existingInvite.id, tokenHash, expiresAt, token);
+      } else {
+        await storage.createInvite({
+          email: null,
+          inviteType: "patient",
+          status: "pending",
+          tokenHash,
+          token,
+          invitedByUserId: currentUserId,
+          conversationId: id,
+          expiresAt,
+        });
+      }
+
+      const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+
+      res.json({ inviteUrl, expiresAt: expiresAt.toISOString() });
+    } catch (error) {
+      console.error("Error issuing patient invite link:", error);
+      res.status(500).json({ message: "Failed to issue patient invite link" });
     }
   });
 
@@ -2416,6 +2596,34 @@ ${allUrls.map(url => `  <url>
       };
     });
     return mergeConversationPollResults(base, currentUserId);
+  }
+
+  const PATIENT_INVITE_SENT_MESSAGE = "Приглашение отправлено";
+  const PATIENT_INVITE_ACCEPTED_MESSAGE = "Приглашение принято";
+
+  async function postPatientChatStatusMessage(
+    conversationId: string,
+    authorUserId: string,
+    text: string
+  ): Promise<void> {
+    const message = await storage.createConversationMessage({
+      conversationId,
+      authorUserId,
+      messageType: "message",
+      content: text,
+    });
+    const sponsorFilter = await getChannelSponsorFilterContext(conversationId, authorUserId, "patient");
+    const [enriched] = await enrichConversationMessages([message], authorUserId, sponsorFilter);
+    const [wsPayload] = await enrichConversationMessages([message], authorUserId, {
+      monetizationEnabled: sponsorFilter.monetizationEnabled,
+      filterContent: sponsorFilter.monetizationEnabled,
+    });
+    await pushConversationRecentMessage(conversationId, wsPayload);
+    await publishConversationMessage(conversationId, wsPayload);
+    void notifyMessengerConversationActivity(conversationId, authorUserId).catch((err) =>
+      console.error("[DoctorChats] messenger conversation notify error:", err)
+    );
+    void enriched;
   }
 
   async function getChannelSponsorFilterContext(

@@ -128,14 +128,14 @@ export function MessengerMenu({
       { id: "createGroup", icon: Users, label: t.createGroup, onClick: () => { onClose(); onCreateGroup(); } },
       { id: "createChannel", icon: Radio, label: t.createChannel, onClick: () => { onClose(); onCreateChannel(); } },
     );
-  } else {
-    items.push({
-      id: "logout",
-      icon: LogOut,
-      label: t.logout,
-      onClick: () => { onClose(); onLogout(); },
-    });
   }
+
+  items.push({
+    id: "logout",
+    icon: LogOut,
+    label: t.logout,
+    onClick: () => { onClose(); onLogout(); },
+  });
 
   const cols = 3;
   const remainder = items.length % cols;

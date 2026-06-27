@@ -218,6 +218,20 @@
       "when": 1774180000000,
       "tag": "0030_users_requires_role_selection",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1774190000000,
+      "tag": "0031_conversation_participant_display_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774200000000,
+      "tag": "0032_invites_link_token",
+      "breakpoints": true
     }
   ]
 }

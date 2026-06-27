@@ -72,6 +72,7 @@ export const invites = pgTable("invites", {
   inviteType: varchar("invite_type", { length: 20 }).notNull().default("patient"),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(),
+  token: varchar("token", { length: 64 }),
   invitedByUserId: varchar("invited_by_user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -332,6 +333,8 @@ export const conversationParticipants = pgTable(
     conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"),
+    /** Per-user chat title (patient chats: doctor and patient may differ). */
+    displayName: varchar("display_name", { length: 255 }),
     sponsorExpiresAt: timestamp("sponsor_expires_at"),
     sponsorListingExpiresAt: timestamp("sponsor_listing_expires_at"),
     showInSponsorThanks: boolean("show_in_sponsor_thanks").notNull().default(false),

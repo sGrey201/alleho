@@ -308,6 +308,8 @@ export interface IStorage {
   // Invite operations
   createInvite(invite: InsertInvite): Promise<Invite>;
   getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined>;
+  getPendingPatientInviteByConversationId(conversationId: string): Promise<Invite | undefined>;
+  renewInviteToken(inviteId: string, tokenHash: string, expiresAt: Date, token: string): Promise<Invite>;
   markInviteAccepted(
     inviteId: string,
     acceptedUserId: string,
@@ -347,7 +349,17 @@ export interface IStorage {
       isClosed?: boolean;
     }>
   >;
-  addConversationParticipant(conversationId: string, userId: string, role?: string): Promise<ConversationParticipant>;
+  addConversationParticipant(
+    conversationId: string,
+    userId: string,
+    role?: string,
+    displayName?: string | null
+  ): Promise<ConversationParticipant>;
+  updateConversationParticipantDisplayName(
+    conversationId: string,
+    userId: string,
+    displayName: string
+  ): Promise<void>;
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
@@ -410,6 +422,7 @@ export interface IStorage {
     data: {
       name?: string;
       avatarUrl?: string | null;
+      patientUserId?: string | null;
       patientAvailable?: boolean;
       isClosed?: boolean;
     }
@@ -1161,6 +1174,43 @@ export class DatabaseStorage implements IStorage {
     return invite;
   }
 
+  async getPendingPatientInviteByConversationId(
+    conversationId: string
+  ): Promise<Invite | undefined> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(
+        and(
+          eq(invites.conversationId, conversationId),
+          eq(invites.inviteType, "patient"),
+          eq(invites.status, "pending")
+        )
+      )
+      .orderBy(desc(invites.createdAt));
+    return invite;
+  }
+
+  async renewInviteToken(
+    inviteId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    token: string
+  ): Promise<Invite> {
+    const [updated] = await db
+      .update(invites)
+      .set({
+        tokenHash,
+        token,
+        expiresAt,
+        status: "pending",
+        updatedAt: new Date(),
+      })
+      .where(eq(invites.id, inviteId))
+      .returning();
+    return updated;
+  }
+
   async markInviteAccepted(
     inviteId: string,
     acceptedUserId: string,
@@ -1364,12 +1414,38 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async addConversationParticipant(conversationId: string, userId: string, role: string = "member"): Promise<ConversationParticipant> {
+  async addConversationParticipant(
+    conversationId: string,
+    userId: string,
+    role: string = "member",
+    displayName?: string | null
+  ): Promise<ConversationParticipant> {
     const [p] = await db
       .insert(conversationParticipants)
-      .values({ conversationId, userId, role })
+      .values({
+        conversationId,
+        userId,
+        role,
+        ...(displayName != null && displayName.trim() ? { displayName: displayName.trim() } : {}),
+      })
       .returning();
     return p;
+  }
+
+  async updateConversationParticipantDisplayName(
+    conversationId: string,
+    userId: string,
+    displayName: string
+  ): Promise<void> {
+    await db
+      .update(conversationParticipants)
+      .set({ displayName: displayName.trim() })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
   }
 
   async removeConversationParticipant(conversationId: string, userId: string): Promise<boolean> {
@@ -2088,6 +2164,7 @@ export class DatabaseStorage implements IStorage {
     data: {
       name?: string;
       avatarUrl?: string | null;
+      patientUserId?: string | null;
       patientAvailable?: boolean;
       isClosed?: boolean;
     }
@@ -2596,6 +2673,7 @@ export class DatabaseStorage implements IStorage {
     const items: PatientConversationListItem[] = [];
     for (const conv of convRows) {
       const participants = await this.getConversationParticipants(conv.id);
+      const myPart = participants.find((p) => p.userId === userId);
       const other = participants.find((p) => p.userId !== userId);
       const lastSeenAt = await this.getConversationParticipantLastSeenAt(conv.id, userId);
 
@@ -2612,6 +2690,7 @@ export class DatabaseStorage implements IStorage {
         .from(conversationMessages)
         .where(and(...unreadConditions));
 
+      const myDisplayName = myPart?.displayName?.trim() || conv.name?.trim() || undefined;
       let avatarUrl: string | null = conv.avatarUrl ?? null;
       let otherParticipantId: string | undefined;
       let otherParticipantName: string | undefined;
@@ -2619,26 +2698,27 @@ export class DatabaseStorage implements IStorage {
       if (isDoctor) {
         const patientUser = conv.patientUserId ? await this.getUser(conv.patientUserId) : undefined;
         avatarUrl = conv.avatarUrl ?? patientUser?.profileImageUrl ?? null;
-        otherParticipantName = conv.name ?? undefined;
+        otherParticipantName = myDisplayName;
       } else if (other?.user) {
         otherParticipantId = other.userId;
         avatarUrl = conv.avatarUrl ?? other.user.profileImageUrl ?? null;
         otherParticipantName =
-          [other.user.firstName, other.user.lastName].filter(Boolean).join(" ").trim() ||
-          other.user.email ||
-          undefined;
+          myDisplayName ??
+          ([other.user.firstName, other.user.lastName].filter(Boolean).join(" ").trim() ||
+            other.user.email ||
+            undefined);
       }
 
       items.push({
         conversationId: conv.id,
-        name: conv.name,
+        name: myDisplayName ?? null,
         patientUserId: conv.patientUserId,
         avatarUrl,
         lastMessageAt: conv.lastMessageAt,
         lastMessagePreview: conv.lastMessagePreview,
         unreadCount: Number(unreadRow?.c ?? 0),
         otherParticipantId,
-        otherParticipantName: isDoctor ? conv.name ?? otherParticipantName : otherParticipantName,
+        otherParticipantName: isDoctor ? myDisplayName : otherParticipantName,
       });
     }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, Link, Redirect, useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -432,6 +432,8 @@ export default function Messenger() {
   const [searchScope, setSearchScope] = useState<"all" | "doctors" | "patients" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
+  const [patientInviteOpen, setPatientInviteOpen] = useState(false);
+  const [patientInviteName, setPatientInviteName] = useState("");
   const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pwaInstallBrowser, setPwaInstallBrowser] = useState<PwaInstallBrowser | null>(null);
@@ -884,6 +886,40 @@ export default function Messenger() {
     },
   });
 
+  const openPatientInviteDialog = useCallback(() => {
+    setInviteRolePickerOpen(false);
+    setPatientInviteName("");
+    setPatientInviteOpen(true);
+  }, []);
+
+  const createPatientInviteMutation = useMutation({
+    mutationFn: async (patientName: string) => {
+      const res = await apiRequest("POST", "/api/patient-invites", { patientName: patientName.trim() });
+      return res.json() as Promise<{
+        inviteUrl: string;
+        expiresAt: string;
+        conversationId: string;
+        inviteType: "patient";
+      }>;
+    },
+    onSuccess: (data) => {
+      setPatientInviteOpen(false);
+      setPatientInviteName("");
+      setFolder("patients");
+      qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      setInviteLinkData({
+        open: true,
+        inviteUrl: data.inviteUrl,
+        expiresAt: data.expiresAt,
+        inviteType: "patient",
+      });
+      setLocation(`/messenger/chat/${data.conversationId}`);
+    },
+    onError: () => {
+      toast({ title: t.inviteError, variant: "destructive" });
+    },
+  });
+
   const createConversationMutation = useMutation({
     mutationFn: async (payload: { type: "group" | "channel"; name: string }) => {
       if (!isAdmin) {
@@ -994,7 +1030,7 @@ export default function Messenger() {
                   qc.clear();
                   window.location.href = "/messenger";
                 }}
-                onInvite={() => setInviteRolePickerOpen(true)}
+                onInvite={openPatientInviteDialog}
                 onCreateGroup={() => {
                   setCreateConversationName("");
                   setCreateConversationType("group");
@@ -1252,9 +1288,9 @@ export default function Messenger() {
                       folder={activeFolder}
                       isAdmin={!!isAdmin}
                       variant="empty"
-                      invitePending={createInviteLinkMutation.isPending}
+                      invitePending={createPatientInviteMutation.isPending || createInviteLinkMutation.isPending}
                       createPending={createConversationMutation.isPending}
-                      onInvitePatient={() => createInviteLinkMutation.mutate("patient")}
+                      onInvitePatient={openPatientInviteDialog}
                       onInviteHomeopath={() => createInviteLinkMutation.mutate("homeopath")}
                       onCreateGroup={() => {
                         setCreateConversationName("");
@@ -1397,9 +1433,9 @@ export default function Messenger() {
                       folder={activeFolder}
                       isAdmin
                       variant="footer"
-                      invitePending={createInviteLinkMutation.isPending}
+                      invitePending={createPatientInviteMutation.isPending || createInviteLinkMutation.isPending}
                       createPending={createConversationMutation.isPending}
-                      onInvitePatient={() => createInviteLinkMutation.mutate("patient")}
+                      onInvitePatient={openPatientInviteDialog}
                       onInviteHomeopath={() => createInviteLinkMutation.mutate("homeopath")}
                       onCreateGroup={() => {
                         setCreateConversationName("");
@@ -1489,7 +1525,7 @@ export default function Messenger() {
               type="button"
               className="w-full"
               disabled={createInviteLinkMutation.isPending}
-              onClick={() => createInviteLinkMutation.mutate("patient")}
+              onClick={openPatientInviteDialog}
             >
               {createInviteLinkMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1562,6 +1598,65 @@ export default function Messenger() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isAdmin && patientInviteOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPatientInviteOpen(false);
+            setPatientInviteName("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.messengerPatientInviteNameTitle}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t.messengerPatientInviteNameHint}</p>
+          <Input
+            value={patientInviteName}
+            onChange={(e) => setPatientInviteName(e.target.value)}
+            placeholder={t.messengerPatientInviteNamePlaceholder}
+            autoFocus
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                patientInviteName.trim() &&
+                !createPatientInviteMutation.isPending
+              ) {
+                e.preventDefault();
+                createPatientInviteMutation.mutate(patientInviteName);
+              }
+            }}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPatientInviteOpen(false);
+                setPatientInviteName("");
+              }}
+            >
+              {t.cancel}
+            </Button>
+            <Button
+              type="button"
+              disabled={!patientInviteName.trim() || createPatientInviteMutation.isPending}
+              onClick={() => {
+                if (!patientInviteName.trim()) return;
+                createPatientInviteMutation.mutate(patientInviteName);
+              }}
+            >
+              {createPatientInviteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t.messengerInvitePatient
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

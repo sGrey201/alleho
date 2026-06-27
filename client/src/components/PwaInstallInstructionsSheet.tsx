@@ -17,9 +17,19 @@ type PwaInstallInstructionsSheetProps = {
 };
 
 const STEPS_BY_BROWSER: Record<PwaInstallBrowser, string[]> = {
-  safari: [t.installAppSafariStep1, t.installAppSafariStep2, t.installAppSafariStep3],
-  chrome: [t.installAppChromeStep1, t.installAppChromeStep2, t.installAppChromeStep3],
-  yandex: [t.installAppYandexStep1, t.installAppYandexStep2, t.installAppYandexStep3],
+  safari: [t.installAppSafariStep1, t.installAppSafariStep2, t.installAppSafariStep3, t.installAppOpenAsWebAppStep],
+  chrome: [
+    t.installAppChromeStep1,
+    t.installAppChromeStep2,
+    t.installAppChromeStep3,
+    t.installAppOpenAsWebAppStep,
+  ],
+  yandex: [
+    t.installAppYandexStep1,
+    t.installAppYandexStep2,
+    t.installAppYandexStep3,
+    t.installAppOpenAsWebAppStep,
+  ],
 };
 
 const TITLE_BY_BROWSER: Record<PwaInstallBrowser, string> = {

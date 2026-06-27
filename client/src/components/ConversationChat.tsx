@@ -117,6 +117,7 @@ interface ConversationInfo {
   id: string;
   type: string;
   name?: string | null;
+  myDisplayName?: string | null;
   avatarUrl?: string | null;
   patientUserId?: string | null;
   sponsorSettings?: {
@@ -133,6 +134,7 @@ interface ConversationInfo {
   participants?: Array<{
     userId: string;
     role: string;
+    displayName?: string | null;
     sponsorExpiresAt?: string | null;
     lastSeenAt?: string | null;
     user?: {
@@ -1482,7 +1484,7 @@ export default function ConversationChat({
       peerParticipant?.user?.email?.split("@")[0] ||
       t.chatWithDoctor
     : title;
-  const chatName = conv.name?.trim() || null;
+  const chatName = conv.myDisplayName?.trim() || conv.name?.trim() || null;
   const headerTitle = isPatientConv
     ? chatName || t.patient
     : conv.type === "direct"
