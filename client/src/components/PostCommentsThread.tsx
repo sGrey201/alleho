@@ -669,7 +669,7 @@ export default function PostCommentsThread({
                     className={`message relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
                       isOwn
                         ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                        : "border-border/50 bg-white text-foreground shadow-sm"
+                        : "border-border/50 bg-stone-50 text-foreground shadow-sm dark:bg-stone-900/80"
                     }`}
                     style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                   >
@@ -679,7 +679,7 @@ export default function PostCommentsThread({
                       </p>
                     )}
                     {comment.replyTo && (
-                      <div className="mb-1 rounded-lg border-l-2 border-primary/70 bg-white px-2 py-1 text-[11px] text-muted-foreground">
+                      <div className="mb-1 rounded-lg border-l-2 border-primary/70 bg-stone-50 px-2 py-1 text-[11px] text-muted-foreground dark:bg-stone-900/80">
                         <span className="font-semibold">{getAuthorName(comment.replyTo.author)}</span>{" "}
                         {comment.replyTo.content || "Сообщение"}
                       </div>

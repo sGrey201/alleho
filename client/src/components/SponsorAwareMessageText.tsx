@@ -121,7 +121,7 @@ export function SponsorAwareMessageText({
               <div
                 key={i}
                 ref={(el) => onPaymentSegmentRef?.(i, el)}
-                className="my-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-2"
+                className="my-1 rounded-md border border-amber-500/30 px-2 py-2"
               >
                 <ChannelSponsorSection
                   conversationId={conversationId}
@@ -147,7 +147,7 @@ export function SponsorAwareMessageText({
           return (
             <div
               key={i}
-              className="my-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1"
+              className="my-1 rounded-md border border-amber-500/30 px-2 py-1"
             >
               <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
                 {t.sponsorContentLabel}

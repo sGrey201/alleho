@@ -1731,7 +1731,7 @@ export default function ConversationChat({
       className={`mb-1 block w-full rounded-lg border-l-2 px-2 py-1 pr-8 text-left text-[11px] leading-tight ${
         isOwn
           ? "border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40"
-          : "border-primary/70 bg-white"
+          : "border-primary/70 bg-stone-50 dark:bg-stone-900/80"
       }`}
     >
       <span className="block font-semibold text-[10px] text-muted-foreground truncate">

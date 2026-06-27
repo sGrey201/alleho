@@ -105,7 +105,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
             className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
               isOwn
                 ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
-                : "border-border/50 bg-white text-foreground shadow-sm"
+                : "border-border/50 bg-stone-50 text-foreground shadow-sm dark:bg-stone-900/80"
             }`}
             style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
           >
