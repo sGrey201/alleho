@@ -15,8 +15,13 @@ export type ConversationMessagesInfiniteData = InfiniteData<
 
 export const CONVERSATION_MESSAGES_PAGE_SIZE = 30;
 
-export function conversationMessagesQueryKey(conversationId: string) {
-  return ["/api/conversations", conversationId, "messages"] as const;
+export type ConversationMessagesCacheMode = "auth" | "guest";
+
+export function conversationMessagesQueryKey(
+  conversationId: string,
+  mode: ConversationMessagesCacheMode = "auth"
+) {
+  return ["/api/conversations", conversationId, "messages", mode] as const;
 }
 
 /** Chronological order (oldest → newest). Page 0 is the newest batch. */
@@ -66,10 +71,11 @@ export function setConversationMessagesQueryData(
   conversationId: string,
   updater: (
     old: ConversationMessagesInfiniteData | undefined
-  ) => ConversationMessagesInfiniteData | undefined
+  ) => ConversationMessagesInfiniteData | undefined,
+  mode: ConversationMessagesCacheMode = "auth"
 ): void {
   queryClient.setQueryData<ConversationMessagesInfiniteData>(
-    conversationMessagesQueryKey(conversationId),
+    conversationMessagesQueryKey(conversationId, mode),
     updater
   );
 }

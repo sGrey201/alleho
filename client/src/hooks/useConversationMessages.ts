@@ -41,7 +41,7 @@ export function useConversationMessages(
     string | undefined
   >({
     queryKey: conversationId
-      ? [...conversationMessagesQueryKey(conversationId), guestPreviewMode ? "guest" : "auth"]
+      ? conversationMessagesQueryKey(conversationId, guestPreviewMode ? "guest" : "auth")
       : ["disabled-messages"],
     queryFn: ({ pageParam }) =>
       fetchConversationMessagesPage(
