@@ -12,21 +12,19 @@ echo "🚀 Старт деплоя приложения..."
 echo "🔄 Pulling latest Docker image..."
 docker pull $APP_IMAGE
 
-# 2️⃣ Останавливаем текущие контейнеры (без удаления volumes)
-echo "🛑 Stopping current containers..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
-
-# 3️⃣ Поднимаем только db и redis, затем применяем миграции
-echo "🔼 Starting db and redis..."
+# 2️⃣ Убеждаемся, что db и redis доступны (без рестарта, если уже работают)
+echo "🔍 Ensuring db and redis are up..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d db redis
 
+# 3️⃣ Применяем миграции
 echo "📦 Running database migrations..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm app npm run migrate
 
-# 4️⃣ Поднимаем все контейнеры с новым образом
-echo "🔼 Starting all containers..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+# 4️⃣ Пересоздаём только app с новым образом (nginx, livekit, db, redis не трогаем)
+echo "🔼 Recreating app container..."
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps --force-recreate app
 
-# 5️⃣ Проверяем статус
+# 5️⃣ Краткий статус работающих контейнеров
 echo "✅ Deployment completed!"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+echo "📋 Running containers:"
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps --status running --format "  {{.Service}} — {{.Status}}"
