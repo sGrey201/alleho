@@ -101,7 +101,7 @@ export function MessengerMenu({
 
   if (isGuest) {
     return (
-      <div className="flex h-full min-h-0 flex-col bg-background">
+      <div className="flex h-full min-h-0 w-full flex-col bg-background">
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <LandingPanel
             compact
@@ -145,7 +145,7 @@ export function MessengerMenu({
   const tileWidth = "w-[calc((100%-1.5rem)/3)]";
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4">
         {headItems.length > 0 && (
           <div className="grid grid-cols-3 gap-3">

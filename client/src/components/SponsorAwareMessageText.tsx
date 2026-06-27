@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   parseMessageBoldSegments,
   parseMessageSponsorSegments,
+  parseMessageTagSegments,
   parseSponsorPlaceholderSegments,
   SPONSOR_PLACEHOLDER_MARKER,
 } from "@shared/messageFormatting";
@@ -25,6 +26,22 @@ type SponsorAwareMessageTextProps = {
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
 };
+
+const segmentTextClass = "m-0 whitespace-pre-wrap break-words";
+
+function normalizeSegmentDisplayText(text: string): string {
+  return text.replace(/^\n+/, "");
+}
+
+function isTagOnlyText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const tagSegments = parseMessageTagSegments(trimmed);
+  return (
+    tagSegments.length > 0 &&
+    tagSegments.every((part) => part.type === "tag" || (part.type === "text" && !part.text.trim()))
+  );
+}
 
 function renderSegmentContent(
   segmentText: string,
@@ -95,8 +112,9 @@ export function SponsorAwareMessageText({
   const firstSponsorSegmentIndex = segments!.findIndex((seg) => seg.sponsor);
 
   return (
-    <div className={cn("text-sm leading-snug", className)}>
+    <div className={cn("space-y-1 text-sm leading-snug", className)}>
       {segments!.map((seg, i) => {
+        const prevIsSponsor = i > 0 && segments![i - 1].sponsor;
         if (seg.sponsor && !canViewSponsorContent) {
           if (activePaymentSegmentIndex === i && conversationId) {
             return (
@@ -123,7 +141,8 @@ export function SponsorAwareMessageText({
             />
           );
         }
-        if (!seg.text) return null;
+        const displayText = normalizeSegmentDisplayText(seg.text);
+        if (!displayText.trim()) return null;
         if (seg.sponsor && canViewSponsorContent) {
           return (
             <div
@@ -133,15 +152,21 @@ export function SponsorAwareMessageText({
               <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
                 {t.sponsorContentLabel}
               </span>
-              <p className="whitespace-pre-wrap break-words pb-0.5">
-                {renderSegmentContent(seg.text, `seg${i}`, onTagClick, highlightQuery)}
+              <p className={segmentTextClass}>
+                {renderSegmentContent(displayText, `seg${i}`, onTagClick, highlightQuery)}
               </p>
             </div>
           );
         }
         return (
-          <p key={i} className="whitespace-pre-wrap break-words pb-0.5">
-            {renderSegmentContent(seg.text, `seg${i}`, onTagClick, highlightQuery)}
+          <p
+            key={i}
+            className={cn(
+              segmentTextClass,
+              prevIsSponsor && isTagOnlyText(displayText) ? "pt-3" : "pb-0.5"
+            )}
+          >
+            {renderSegmentContent(displayText, `seg${i}`, onTagClick, highlightQuery)}
           </p>
         );
       })}

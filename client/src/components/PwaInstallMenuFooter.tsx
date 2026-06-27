@@ -31,7 +31,7 @@ export function PwaInstallMenuFooter({
   const [showBrowsers, setShowBrowsers] = useState(false);
 
   return (
-    <div className="shrink-0 border-t border-border/60 px-4 pt-4 pb-6">
+    <div className="mt-auto shrink-0 px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
       {showInstallButtons ? (
         <div className="space-y-3">
           {!showBrowsers ? (
@@ -88,7 +88,7 @@ export function PwaInstallMenuFooter({
           </div>
         </div>
       ) : (
-        <AuthLogoLink href="/messenger" className="max-w-[200px] mx-auto" />
+        <AuthLogoLink href="/messenger" className="mx-auto max-w-[200px]" />
       )}
     </div>
   );

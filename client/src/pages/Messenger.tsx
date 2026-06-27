@@ -957,7 +957,7 @@ export default function Messenger() {
   }
 
   return (
-    <div className="messenger-shell">
+    <div className={cn("messenger-shell", !isMobileConversationOpen && "messenger-shell--list")}>
       <RouteSeo {...pageMeta.messenger} />
       {!isMobileConversationOpen && (
       <div className="messenger-sidebar border-b md:border-b-0 bg-background">

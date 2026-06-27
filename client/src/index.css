@@ -451,16 +451,53 @@ html.app-immersive .messenger-main {
   overflow: hidden;
 }
 
-html.app-immersive .messenger-menu-layer {
+/* Mobile shows one pane at a time. On the list/menu view the (empty) chat pane
+   must not claim half the column, or the sidebar + menu overlay get squeezed
+   into the top half. The main pane returns once a conversation/profile/settings
+   is open (sidebar hidden). Desktop keeps both panes side by side. */
+@media (max-width: 767px) {
+  html.app-immersive .messenger-shell--list .messenger-main {
+    display: none;
+  }
+}
+
+/* Menu overlay fills the chat-list area below the header in every context
+   (browser + installed PWA), independent of the immersive class so it never
+   collapses to content height. The whole sidebar chain must propagate full
+   height, otherwise the absolutely-positioned overlay shrinks to the in-flow
+   chat-list content (footer ends up mid-screen, over the landing panel). */
+.messenger-shell,
+.messenger-sidebar,
+.messenger-sidebar-tabs,
+.messenger-sidebar-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+}
+
+.messenger-sidebar-main {
+  position: relative;
+}
+
+.messenger-menu-layer {
   position: absolute;
   inset: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 100%;
+  height: 100%;
   overflow: hidden;
   background-color: hsl(var(--background));
+}
+
+.messenger-menu-layer > * {
+  flex: 1 1 0%;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
 }
 
 html.app-immersive .app-root-shell {

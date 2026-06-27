@@ -382,7 +382,7 @@ export default function ConversationChat({
   onTitleClick,
   guestPreviewMode = false,
 }: ConversationChatProps) {
-  const { user } = useAuth();
+  const { user, hasActiveSubscription } = useAuth();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -1334,11 +1334,12 @@ export default function ConversationChat({
   }, []);
 
   const openChatSearch = useCallback((initialQuery = "") => {
+    if (!hasActiveSubscription) return;
     setIsChatSearchOpen(true);
     setChatSearchQuery(initialQuery);
     setChatSearchMatchIndex(0);
     window.setTimeout(() => chatSearchInputRef.current?.focus(), 50);
-  }, []);
+  }, [hasActiveSubscription]);
 
   const handleTagClick = useCallback(
     (tag: string) => {
@@ -2075,6 +2076,7 @@ export default function ConversationChat({
               </p>
             )}
           </button>
+          {hasActiveSubscription && (
           <Button
             variant="secondary"
             size="icon"
@@ -2085,6 +2087,7 @@ export default function ConversationChat({
           >
             <Search className="h-5 w-5" />
           </Button>
+          )}
           <button
             type="button"
             onClick={handleHeaderProfileClick}

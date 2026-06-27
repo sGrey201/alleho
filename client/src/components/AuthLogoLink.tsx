@@ -1,4 +1,7 @@
-import { Link } from "wouter";
+import type { MouseEvent } from "react";
+import { useLocation } from "wouter";
+import { APP_HOME_PATH } from "@shared/brand";
+import { resolveAuthReturnTo } from "@/lib/authReturnTo";
 import { cn } from "@/lib/utils";
 
 type AuthLogoLinkProps = {
@@ -8,13 +11,23 @@ type AuthLogoLinkProps = {
   className?: string;
 };
 
-/** hovial logo — links to messenger by default. */
-export function AuthLogoLink({ href = "/messenger", compact = false, className }: AuthLogoLinkProps) {
+/** hovial logo — returns to messenger (or prior messenger URL) on click. */
+export function AuthLogoLink({ href, compact = false, className }: AuthLogoLinkProps) {
+  const [, setLocation] = useLocation();
+  const destination = href ?? resolveAuthReturnTo() ?? APP_HOME_PATH;
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    setLocation(destination);
+  };
+
   return (
-    <Link
-      href={href}
+    <a
+      href={destination}
+      onClick={handleClick}
       className={cn(
         "block rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "cursor-pointer transition-opacity hover:opacity-80",
         compact ? "w-fit" : "mx-auto w-full max-w-[280px]",
         className
       )}
@@ -30,6 +43,6 @@ export function AuthLogoLink({ href = "/messenger", compact = false, className }
         loading="eager"
         decoding="async"
       />
-    </Link>
+    </a>
   );
 }
