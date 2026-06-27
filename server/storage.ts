@@ -2214,51 +2214,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]> {
-    const adminUsers = await this.getAdminUsers(currentUserId);
-    const rows = await Promise.all(
-      adminUsers.map(async (user) => {
-        const conversationId = await this.getDirectConversationBetween(currentUserId, user.id);
-        const lastVisitedAt = conversationId
-          ? await this.getConversationParticipantLastSeenAt(conversationId, currentUserId)
-          : null;
-        return { user, conversationId, lastVisitedAt };
-      })
+    const convList = await this.getConversationsForUser(currentUserId);
+    const directConvs = convList.filter(
+      (conv) => conv.type === "direct" && conv.lastMessageAt != null
     );
 
-    const convIds = Array.from(
-      new Set(rows.map((r) => r.conversationId).filter((id): id is string => typeof id === "string" && id.length > 0))
-    );
-    let convById = new Map<string, Conversation>();
-    if (convIds.length > 0) {
-      const convRows = await db.select().from(conversations).where(inArray(conversations.id, convIds));
-      convById = new Map(convRows.map((c) => [c.id, c]));
+    const contacts: MessengerPersonalContact[] = [];
+    for (const conv of directConvs) {
+      const other = conv.participants.find(
+        (p) => p.userId !== currentUserId && p.user.isAdmin
+      );
+      if (!other) continue;
+
+      const lastVisitedAt = await this.getConversationParticipantLastSeenAt(
+        conv.id,
+        currentUserId
+      );
+      contacts.push({
+        userId: other.user.id,
+        firstName: other.user.firstName,
+        lastName: other.user.lastName,
+        email: other.user.email,
+        profileImageUrl: other.user.profileImageUrl ?? null,
+        conversationId: conv.id,
+        lastMessageAt: conv.lastMessageAt ?? null,
+        lastMessagePreview: conv.lastMessagePreview ?? null,
+        lastVisitedAt,
+      });
     }
 
-    const contacts: MessengerPersonalContact[] = rows.map(({ user, conversationId, lastVisitedAt }) => {
-      const conv = conversationId ? convById.get(conversationId) : undefined;
-      return {
-        userId: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        profileImageUrl: user.profileImageUrl ?? null,
-        conversationId,
-        lastMessageAt: conv?.lastMessageAt ?? null,
-        lastMessagePreview: conv?.lastMessagePreview ?? null,
-        lastVisitedAt,
-      };
-    });
-
     contacts.sort((a, b) => {
-      const aHasConversation = !!a.conversationId && !!a.lastMessageAt;
-      const bHasConversation = !!b.conversationId && !!b.lastMessageAt;
-      if (aHasConversation !== bHasConversation) return bHasConversation ? 1 : -1;
-
-      if (aHasConversation && bHasConversation) {
-        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        if (aTime !== bTime) return bTime - aTime;
-      }
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
 
       const aVisit = a.lastVisitedAt ? new Date(a.lastVisitedAt).getTime() : 0;
       const bVisit = b.lastVisitedAt ? new Date(b.lastVisitedAt).getTime() : 0;

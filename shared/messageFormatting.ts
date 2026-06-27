@@ -170,7 +170,7 @@ export function filterMessageForNonSponsor(
   return {
     content: filtered,
     hasSponsorContent: hadSponsor,
-    isTruncated,
+    isTruncated: hadSponsor && isTruncated,
   };
 }
 

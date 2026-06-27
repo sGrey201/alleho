@@ -18,14 +18,9 @@ export function LandingPanel({ onLogin, onRegister, compact = false, className }
         className
       )}
     >
-      <p
-        className={cn(
-          "text-muted-foreground leading-relaxed",
-          compact ? "text-sm mb-6" : "mb-8"
-        )}
-      >
-        {t.landingDescription}
-      </p>
+      {!compact ? (
+        <p className="text-muted-foreground leading-relaxed mb-8">{t.landingDescription}</p>
+      ) : null}
 
       <div className="flex w-full flex-row gap-3">
         <Button onClick={onLogin} size={compact ? "default" : "lg"} className="flex-1 min-w-0">

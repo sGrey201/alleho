@@ -170,7 +170,7 @@ export function SponsorAwareMessageText({
           </p>
         );
       })}
-      {!canViewSponsorContent && isContentTruncated && (
+      {!canViewSponsorContent && isContentTruncated && firstSponsorSegmentIndex >= 0 && (
         <button
           type="button"
           onClick={() =>
