@@ -363,8 +363,6 @@ html.app-immersive .messenger-shell {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  /* Fallback when a flex ancestor does not propagate height (e.g. provider wrappers). */
-  min-height: var(--app-height, 100dvh);
 }
 
 @media (min-width: 768px) {
@@ -386,7 +384,6 @@ html.app-immersive .messenger-sidebar {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  min-height: var(--app-height, 100dvh);
 }
 
 @media (min-width: 768px) {
@@ -461,6 +458,8 @@ html.app-immersive .messenger-menu-layer {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
   background-color: hsl(var(--background));
 }
 
