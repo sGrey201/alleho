@@ -68,7 +68,7 @@ type MessengerMenuProps = {
   onInstallYandex: () => void;
   onLogin: () => void;
   onRegister: () => void;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
   onInvite: () => void;
   onCreateGroup: () => void;
   onCreateChannel: () => void;
@@ -134,7 +134,9 @@ export function MessengerMenu({
     id: "logout",
     icon: LogOut,
     label: t.logout,
-    onClick: () => { onClose(); onLogout(); },
+    onClick: () => {
+      void onLogout();
+    },
   });
 
   const cols = 3;

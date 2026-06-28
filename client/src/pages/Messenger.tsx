@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import { useAppShellTheme } from "@/hooks/useAppShellTheme";
 import { navigateToAuth, navigateToAuthRegister } from "@/lib/authReturnTo";
+import { performLogout } from "@/lib/logout";
 import {
   Dialog,
   DialogContent,
@@ -1028,11 +1029,7 @@ export default function Messenger() {
                 onInstallYandex={() => setPwaInstallBrowser("yandex")}
                 onLogin={() => navigateToAuth(setLocation, location)}
                 onRegister={() => navigateToAuthRegister(setLocation, location)}
-                onLogout={async () => {
-                  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-                  qc.clear();
-                  window.location.href = "/messenger";
-                }}
+                onLogout={performLogout}
                 onInvite={openPatientInviteDialog}
                 onCreateGroup={() => {
                   setCreateConversationName("");

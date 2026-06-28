@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Bell, Maximize2, Smartphone, Zap } from "lucide-react";
-import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { ChromeBrowserIcon, SafariBrowserIcon, YandexBrowserIcon } from "@/components/PwaBrowserIcons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -88,7 +87,15 @@ export function PwaInstallMenuFooter({
           </div>
         </div>
       ) : (
-        <AuthLogoLink href="/messenger" className="mx-auto max-w-[200px]" />
+        <div className="mx-auto max-w-[200px]">
+          <img
+            src="/auth-logo.png"
+            alt="hovial"
+            className="h-auto w-full object-contain"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
       )}
     </div>
   );
