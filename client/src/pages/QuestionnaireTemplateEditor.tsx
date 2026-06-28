@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Loader2, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,12 @@ import {
   updateNodeAtPath,
   updateTagAtPath,
 } from "@/lib/questionnaireTreeOps";
+import {
+  exportSectionToTextFile,
+  mergeImportedSection,
+  parseSectionFromText,
+  validateMergedSectionDepth,
+} from "@/lib/questionnaireSectionImportExport";
 
 type EditTarget =
   | { kind: "node"; path: number[] }
@@ -84,6 +90,8 @@ type StructureActions = {
   canMoveNodeDown: (path: number[]) => boolean;
   canMoveTagUp: (path: number[], tagIndex: number) => boolean;
   canMoveTagDown: (path: number[], tagIndex: number) => boolean;
+  onExportSection: (path: number[]) => void;
+  onImportSection: (path: number[]) => void;
 };
 
 function stopAccordionToggle(e: React.MouseEvent | React.PointerEvent) {
@@ -154,6 +162,12 @@ function NodeActionsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem className="py-2.5" disabled={!canAddChild} onSelect={() => actions.onAddChild(path)}>
           {t.addSubsection}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="py-2.5" onSelect={() => actions.onExportSection(path)}>
+          {t.exportSection}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="py-2.5" onSelect={() => actions.onImportSection(path)}>
+          {t.importSection}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -433,12 +447,16 @@ export function QuestionnaireTemplateEditor({
   onBack?: () => void;
 }) {
   const { toast } = useToast();
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const importPathRef = useRef<number[] | null>(null);
   const [name, setName] = useState("");
   const [hintsMode, setHintsMode] = useState<QuestionnaireHintsMode>(DEFAULT_QUESTIONNAIRE_HINTS_MODE);
   const [structure, setStructure] = useState<QuestionnaireTemplateStructure>({ root: [] });
   const [dirty, setDirty] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [importTargetPath, setImportTargetPath] = useState<number[] | null>(null);
+  const [pendingImportedNode, setPendingImportedNode] = useState<QuestionnaireNode | null>(null);
 
   const { data, isLoading } = useQuery<QuestionnaireTemplate>({
     queryKey: ["/api/questionnaire-templates", templateId],
@@ -534,6 +552,72 @@ export function QuestionnaireTemplateEditor({
     canMoveNodeDown: (path) => path[path.length - 1] < getParentListLength(structure, path) - 1,
     canMoveTagUp: (_path, tagIndex) => tagIndex > 0,
     canMoveTagDown: (path, tagIndex) => tagIndex < getTagCountAtPath(structure, path) - 1,
+    onExportSection: (path) => {
+      const node = getNodeAtPath(structure.root, path);
+      if (!node) return;
+      exportSectionToTextFile(node);
+    },
+    onImportSection: (path) => {
+      importPathRef.current = path;
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+        importInputRef.current.click();
+      }
+    },
+  };
+
+  const handleImportFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const path = importPathRef.current;
+    importPathRef.current = null;
+    event.target.value = "";
+    if (!path) return;
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        const imported = parseSectionFromText(text);
+        const existing = getNodeAtPath(structure.root, path);
+        if (!existing) return;
+        const merged = mergeImportedSection(existing, imported);
+        if (!validateMergedSectionDepth(path.length, merged)) {
+          toast({ title: t.importSectionDepthError, variant: "destructive" });
+          return;
+        }
+        setPendingImportedNode(imported);
+        setImportTargetPath(path);
+      } catch {
+        toast({ title: t.importSectionInvalidFormat, variant: "destructive" });
+      }
+    };
+    reader.onerror = () => {
+      toast({ title: t.importSectionInvalidFormat, variant: "destructive" });
+    };
+    reader.readAsText(file, "utf-8");
+  };
+
+  const handleImportConfirm = () => {
+    if (!importTargetPath || !pendingImportedNode) return;
+    const existing = getNodeAtPath(structure.root, importTargetPath);
+    if (!existing) {
+      setImportTargetPath(null);
+      setPendingImportedNode(null);
+      return;
+    }
+    const merged = mergeImportedSection(existing, pendingImportedNode);
+    if (!validateMergedSectionDepth(importTargetPath.length, merged)) {
+      toast({ title: t.importSectionDepthError, variant: "destructive" });
+      setImportTargetPath(null);
+      setPendingImportedNode(null);
+      return;
+    }
+    setStructure(updateNodeAtPath(structure, importTargetPath, () => merged));
+    setImportTargetPath(null);
+    setPendingImportedNode(null);
+    markDirty();
+    toast({ title: t.importSectionSuccess });
   };
 
   const handleAddRootSection = () => {
@@ -730,6 +814,40 @@ export function QuestionnaireTemplateEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog
+        open={!!importTargetPath && !!pendingImportedNode}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImportTargetPath(null);
+            setPendingImportedNode(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.importSectionConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.importSectionConfirmDescription.replace(
+                "{title}",
+                importTargetPath ? (getNodeAtPath(structure.root, importTargetPath)?.title ?? "") : ""
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImportConfirm}>{t.importSection}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".txt,.json,text/plain,application/json"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
     </div>
   );
 }
