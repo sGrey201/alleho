@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import { ArrowLeft, Loader2, Trash2, UserPlus, Pencil, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +56,8 @@ type ConversationInfo = {
   isClosed?: boolean;
   sponsorSettings?: { enabled: boolean } | null;
   isSponsor?: boolean;
+  hasContentAccess?: boolean;
+  sponsorExpiresAt?: string | null;
   participants?: Participant[];
 };
 
@@ -261,6 +265,14 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       channelOwner.user?.email ||
       channelOwner.userId
     : null;
+  const hasContentAccess = !!(conv.hasContentAccess ?? conv.isSponsor);
+  const contentPaidUntilFormatted =
+    mode === "channel" &&
+    sponsorMonetizationEnabled &&
+    hasContentAccess &&
+    conv.sponsorExpiresAt
+      ? format(new Date(conv.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
+      : null;
 
   const openAvatarUpload = () => avatarInputRef.current?.click();
 
@@ -620,6 +632,13 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               />
             )}
           </>
+        )}
+
+        {mode === "channel" && contentPaidUntilFormatted && (
+          <div className="rounded-lg border px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{t.contentPaidUntilLabel}</p>
+            <p className="text-sm font-medium">{contentPaidUntilFormatted}</p>
+          </div>
         )}
 
         {mode === "channel" && channelOwner && ownerDisplayName && (

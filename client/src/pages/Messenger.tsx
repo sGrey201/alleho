@@ -989,6 +989,9 @@ export default function Messenger() {
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => {
+                  if (menuOpen) setMenuOpen(false);
+                }}
                 placeholder={
                   isAdmin
                     ? t.searchMessengerPlaceholder

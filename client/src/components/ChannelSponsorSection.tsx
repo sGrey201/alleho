@@ -14,6 +14,7 @@ import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { refreshChannelContentAfterSponsorPayment } from "@/lib/channelSponsorRefresh";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc, cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -253,16 +254,12 @@ export default function ChannelSponsorSection({
       });
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (_payment, variables) => {
       setSelectedTier(null);
-      onPaymentFlowClose?.();
-      await queryClient.invalidateQueries({ queryKey: settingsKey });
-      await queryClient.invalidateQueries({ queryKey: paymentsKey });
-      await queryClient.invalidateQueries({ queryKey: sponsorsKey });
-      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", conversationId, "messages"],
+      await refreshChannelContentAfterSponsorPayment(conversationId, {
+        reloadMessages: variables.donationType === "content",
       });
+      onPaymentFlowClose?.();
       toast({ title: t.sponsorPaymentSubmitted });
     },
     onError: (err: Error) =>
@@ -294,13 +291,7 @@ export default function ChannelSponsorSection({
     onSuccess: async () => {
       setDisputePaymentId(null);
       setDisputeReason("");
-      await queryClient.invalidateQueries({ queryKey: settingsKey });
-      await queryClient.invalidateQueries({ queryKey: paymentsKey });
-      await queryClient.invalidateQueries({ queryKey: sponsorsKey });
-      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/conversations", conversationId, "messages"],
-      });
+      await refreshChannelContentAfterSponsorPayment(conversationId, { reloadMessages: true });
       toast({ title: t.sponsorPaymentDisputed });
     },
   });

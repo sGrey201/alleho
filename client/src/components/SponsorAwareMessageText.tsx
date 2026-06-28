@@ -143,21 +143,6 @@ export function SponsorAwareMessageText({
         }
         const displayText = normalizeSegmentDisplayText(seg.text);
         if (!displayText.trim()) return null;
-        if (seg.sponsor && canViewSponsorContent) {
-          return (
-            <div
-              key={i}
-              className="my-1 rounded-md border border-amber-500/30 px-2 py-1"
-            >
-              <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                {t.sponsorContentLabel}
-              </span>
-              <p className={segmentTextClass}>
-                {renderSegmentContent(displayText, `seg${i}`, onTagClick, highlightQuery)}
-              </p>
-            </div>
-          );
-        }
         return (
           <p
             key={i}

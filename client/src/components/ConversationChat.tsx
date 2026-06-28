@@ -75,7 +75,7 @@ import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { CollapsibleMessageText } from "@/components/CollapsibleMessageText";
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
-import { stripMessageFormatting } from "@shared/messageFormatting";
+import { flattenSponsorMarkersForDisplay, hasSponsorSections, stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCall } from "@/hooks/useVoiceCall";
 import { VoiceCallBanner } from "@/components/VoiceCallBanner";
@@ -588,6 +588,13 @@ export default function ConversationChat({
 
   const channelMonetizationEnabled = conv?.type === "channel" && !!conv.sponsorSettings?.enabled;
   const canViewSponsorContent = conv?.type !== "channel" || !!conv.isSponsor;
+  const canUseChatSearch =
+    conv?.type === "channel"
+      ? !!conv.isSponsor ||
+        myChannelRole === "owner" ||
+        myChannelRole === "admin" ||
+        (!channelMonetizationEnabled && !!myChannelRole)
+      : hasActiveSubscription;
 
   useEffect(() => {
     if (canViewSponsorContent) setInlineContentPayment(null);
@@ -1334,12 +1341,12 @@ export default function ConversationChat({
   }, []);
 
   const openChatSearch = useCallback((initialQuery = "") => {
-    if (!hasActiveSubscription) return;
+    if (!canUseChatSearch) return;
     setIsChatSearchOpen(true);
     setChatSearchQuery(initialQuery);
     setChatSearchMatchIndex(0);
     window.setTimeout(() => chatSearchInputRef.current?.focus(), 50);
-  }, [hasActiveSubscription]);
+  }, [canUseChatSearch]);
 
   const handleTagClick = useCallback(
     (tag: string) => {
@@ -1881,9 +1888,22 @@ export default function ConversationChat({
           )}
           {msg.content ? (
             conv?.type === "channel" ? (
+              (() => {
+                const postHasSponsorMarkers =
+                  msg.hasSponsorContent || hasSponsorSections(msg.content);
+                const hasLockedSponsorContent =
+                  channelMonetizationEnabled &&
+                  !canViewSponsorContent &&
+                  postHasSponsorMarkers;
+                const channelCollapseText =
+                  canViewSponsorContent && hasSponsorSections(msg.content)
+                    ? flattenSponsorMarkersForDisplay(msg.content)
+                    : msg.content;
+
+                return (
               <CollapsibleMessageText
-                text={msg.content}
-                enabled
+                text={hasLockedSponsorContent ? msg.content : channelCollapseText}
+                enabled={!hasLockedSponsorContent}
                 className={sponsorTextPad}
                 onToggleExpand={blockAutoScrollBriefly}
               >
@@ -1909,6 +1929,8 @@ export default function ConversationChat({
                   />
                 )}
               </CollapsibleMessageText>
+                );
+              })()
             ) : (
               <SponsorAwareMessageText
                 text={msg.content}
@@ -2076,7 +2098,7 @@ export default function ConversationChat({
               </p>
             )}
           </button>
-          {hasActiveSubscription && (
+          {canUseChatSearch && (
           <Button
             variant="secondary"
             size="icon"

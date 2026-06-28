@@ -7,7 +7,7 @@ const SPONSOR_PLACEHOLDER = "[[SPONSOR]]";
 
 export const SPONSOR_CONTENT_MAX_LINES = 30;
 
-export const CHANNEL_PREVIEW_MAX_WORDS = 80;
+export const CHANNEL_PREVIEW_MAX_WORDS = 160;
 
 export type TruncatedMessagePreview = {
   text: string;
@@ -131,6 +131,11 @@ export function hasSponsorSections(text: string): boolean {
   return new RegExp(SPONSOR_REGEX.source).test(text);
 }
 
+/** Unwrap $$...$$ markers, keeping inner text (for collapse when sponsor content is unlocked). */
+export function flattenSponsorMarkersForDisplay(text: string): string {
+  return text.replace(SPONSOR_REGEX, "$1");
+}
+
 export function countContentLines(text: string): number {
   if (!text) return 0;
   return text.split("\n").length;
@@ -160,17 +165,12 @@ export function filterMessageForNonSponsor(
   }
 
   const hadSponsor = hasSponsorSections(content);
-  let filtered = replaceSponsorSectionsWithPlaceholder(content);
-  const { text: truncated, truncated: isTruncated } = truncateToLines(
-    filtered,
-    SPONSOR_CONTENT_MAX_LINES
-  );
-  filtered = truncated;
+  const filtered = replaceSponsorSectionsWithPlaceholder(content);
 
   return {
     content: filtered,
     hasSponsorContent: hadSponsor,
-    isTruncated: hadSponsor && isTruncated,
+    isTruncated: false,
   };
 }
 

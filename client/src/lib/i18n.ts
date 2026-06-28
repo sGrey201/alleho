@@ -2071,6 +2071,7 @@ export const t = {
   channelSubscriberSponsorDaysLeft: (days: number) => `Спонсор: осталось ${formatDurationDays(days)}`,
   sponsorShowInListing: 'Показывать меня в списке спонсоров канала',
   contentPaidUntil: (date: string) => `Контент оплачен до ${date}`,
+  contentPaidUntilLabel: 'Контент оплачен до:',
   channelSponsorPaidUntil: (date: string) => `Спонсор канала до ${date}`,
   channelParticipantCount: (n: number) => {
     const mod10 = n % 10;
