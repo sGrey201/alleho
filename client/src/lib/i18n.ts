@@ -2041,8 +2041,8 @@ export const t = {
     `Станьте спонсором канала на ${formatDurationDays(days)} прямо сейчас`,
   sponsorContentPaymentIntro: (days: number) =>
     `Откройте все платные материалы этого канала на ${formatDurationDays(days)} прямо сейчас`,
-  sponsorContentRenewalPaymentIntro: (discountPercent: number) =>
-    `Продлите доступ ко всем платным материалам этого канала со скидкой ${discountPercent}% прямо сейчас`,
+  sponsorContentRenewalPaymentIntro: (days: number, discountPercent: number) =>
+    `Продлите доступ ко всем платным материалам этого канала на ${formatDurationDays(days)} со скидкой ${discountPercent}% прямо сейчас`,
   sponsorPaymentStepTransfer: (amount: string) =>
     `1. Переведите ${amount} ₽ одним из способов:`,
   sponsorPaymentStepReceipt: '2. Прикрепите чек',

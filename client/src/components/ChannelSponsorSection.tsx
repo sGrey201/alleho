@@ -357,6 +357,8 @@ export default function ChannelSponsorSection({
   );
   const showContentStatus = visibleTierTypes.includes("content");
   const showChannelSponsorStatus = visibleTierTypes.includes("content_thanks");
+  const showContentStatusBadge =
+    showContentStatus && hasContentAccess && !!contentUntil && !embedded;
   const selectedTierVisible = selectedTier ? visibleTierTypes.includes(selectedTier) : false;
   const pendingPaymentCount = payments.filter((p) => p.status === "granted").length;
   const sortedPayments = [...payments].sort((a, b) => {
@@ -373,7 +375,7 @@ export default function ChannelSponsorSection({
     !isOwner &&
     !selectedTierVisible &&
     visiblePurchasableTiers.length === 0 &&
-    !(showContentStatus && hasContentAccess && contentUntil) &&
+    !(showContentStatusBadge) &&
     !(showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil)
   ) {
     return null;
@@ -606,11 +608,11 @@ export default function ChannelSponsorSection({
       ) : (
         settings?.enabled && (
           <div className="space-y-3">
-            {((showContentStatus && hasContentAccess && contentUntil) ||
+            {(showContentStatusBadge ||
               (showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil)) && (
               <div className="flex flex-wrap gap-2">
-                {showContentStatus && hasContentAccess && contentUntil && (
-                  <Badge variant="secondary">{t.contentPaidUntil(contentUntil)}</Badge>
+                {showContentStatusBadge && (
+                  <Badge variant="secondary">{t.contentPaidUntil(contentUntil!)}</Badge>
                 )}
                 {showChannelSponsorStatus && hasChannelSponsor && channelSponsorUntil && (
                   <Badge variant="secondary">{t.channelSponsorPaidUntil(channelSponsorUntil)}</Badge>
@@ -626,6 +628,7 @@ export default function ChannelSponsorSection({
                       ? t.sponsorChannelPaymentIntro(selectedTierDurationDays)
                       : selectedTierIsRenewalDiscount
                         ? t.sponsorContentRenewalPaymentIntro(
+                            selectedTierDurationDays,
                             settings?.contentRenewalDiscountPercent ?? 0
                           )
                         : t.sponsorContentPaymentIntro(selectedTierDurationDays)}
