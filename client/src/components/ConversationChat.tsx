@@ -21,7 +21,6 @@ import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
-import { navigateToAuth } from "@/lib/authReturnTo";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
@@ -187,7 +186,6 @@ interface ConversationChatProps {
   conversationId: string;
   onBack: () => void;
   onTitleClick?: () => void;
-  guestPreviewMode?: boolean;
 }
 
 function getMessageDisplayName(author: ConversationMessageWithAuthor["author"] | null | undefined): string {
@@ -415,7 +413,6 @@ export default function ConversationChat({
   conversationId,
   onBack,
   onTitleClick,
-  guestPreviewMode = false,
 }: ConversationChatProps) {
   const { user, hasActiveSubscription } = useAuth();
   const [location, setLocation] = useLocation();
@@ -571,12 +568,9 @@ export default function ConversationChat({
   }, []);
 
   const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
-    queryKey: guestPreviewMode
-      ? ["/api/public/conversations", conversationId]
-      : ["/api/conversations", conversationId],
+    queryKey: ["/api/conversations", conversationId],
     queryFn: async () => {
-      const base = guestPreviewMode ? "/api/public/conversations" : "/api/conversations";
-      const res = await fetch(`${base}/${conversationId}`, { credentials: "include" });
+      const res = await fetch(`/api/conversations/${conversationId}`, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -590,21 +584,13 @@ export default function ConversationChat({
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useConversationMessages(conversationId, { guestPreviewMode });
-
-  const redirectGuestToAuth = useCallback(() => {
-    navigateToAuth(setLocation, location);
-  }, [location, setLocation]);
+  } = useConversationMessages(conversationId);
 
   const handlePaymentSegmentOpen = useCallback(
     (messageId: string, segmentIndex: number) => {
-      if (guestPreviewMode) {
-        redirectGuestToAuth();
-        return;
-      }
       setInlineContentPayment({ messageId, segmentIndex });
     },
-    [guestPreviewMode, redirectGuestToAuth]
+    []
   );
 
   const [canLoadOlderMessages, setCanLoadOlderMessages] = useState(false);
@@ -645,7 +631,7 @@ export default function ConversationChat({
   const voiceCall = useVoiceCall(conversationId, user?.id);
   const inboxUnreadMessages = useInboxUnreadMessages();
 
-  useConversationWs(conversationId, !!conversationId && !guestPreviewMode, user?.id, voiceCall.handleCallWsEvent, {
+  useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent, {
     refetchMessagesOnNewMessage:
       conv?.type === "channel" && channelMonetizationEnabled && !canViewSponsorContent,
   });
@@ -1545,10 +1531,6 @@ export default function ConversationChat({
   const directProfileUserId =
     conv.type === "direct" ? peerParticipant?.userId : undefined;
   const handleHeaderProfileClick = () => {
-    if (guestPreviewMode) {
-      redirectGuestToAuth();
-      return;
-    }
     if (conv.type === "patient") {
       onTitleClick?.();
       return;
@@ -1560,8 +1542,7 @@ export default function ConversationChat({
     onTitleClick?.();
   };
   const canClickHeader =
-    guestPreviewMode ||
-    (conv.type === "patient" ? !!onTitleClick : !!directProfileUserId || !!onTitleClick);
+    conv.type === "patient" ? !!onTitleClick : !!directProfileUserId || !!onTitleClick;
   const headerInitials = directDisplayName
     .split(" ")
     .filter(Boolean)
@@ -1580,9 +1561,7 @@ export default function ConversationChat({
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
   const isChannelReadOnly = conv.type === "channel" && !myRole;
   const isGroupReadOnly = conv.type === "group" && !myRole;
-  const showGuestAction = guestPreviewMode
-    ? conv.type === "channel"
-    : isChannelReadOnly || isGroupReadOnly;
+  const showGuestAction = isChannelReadOnly || isGroupReadOnly;
   const showChannelComposer = !isChannelMemberReadOnly;
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
@@ -2271,13 +2250,11 @@ export default function ConversationChat({
                   msg={msg}
                   isOwn={isOwn}
                   isChannel={conv.type === "channel"}
-                  canInteractWithChannel={guestPreviewMode || canInteractWithChannel}
+                  canInteractWithChannel={canInteractWithChannel}
                   showReceiptIcons={showReceiptIcons}
                   peerLastReadAt={peerLastReadAt}
                   onCommentsClick={() =>
-                    guestPreviewMode
-                      ? redirectGuestToAuth()
-                      : setLocation(`/messenger/channel/${conversationId}/post/${msg.id}/comments`)
+                    setLocation(`/messenger/channel/${conversationId}/post/${msg.id}/comments`)
                   }
                   setMessageRef={setMessageRef}
                   onContextMenu={handleBubbleContextMenu}
@@ -2435,12 +2412,10 @@ export default function ConversationChat({
               <Button
                 type="button"
                 className="w-full"
-                onClick={() =>
-                  guestPreviewMode ? redirectGuestToAuth() : subscribeMutation.mutate()
-                }
-                disabled={!guestPreviewMode && subscribeMutation.isPending}
+                onClick={() => subscribeMutation.mutate()}
+                disabled={subscribeMutation.isPending}
               >
-                {!guestPreviewMode && subscribeMutation.isPending ? (
+                {subscribeMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {t.actionSubscribe}

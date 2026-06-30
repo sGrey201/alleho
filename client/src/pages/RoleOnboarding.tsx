@@ -14,6 +14,7 @@ import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 import { t } from "@/lib/i18n";
 import { consumeAuthReturnTo, resolveAuthReturnTo } from "@/lib/authReturnTo";
+import { APP_HOME_PATH } from "@shared/brand";
 
 export default function RoleOnboarding() {
   const [, setLocation] = useLocation();
@@ -47,7 +48,9 @@ export default function RoleOnboarding() {
   });
 
   if (!isLoading && !requiresRoleSelection) {
-    return <Redirect to="/messenger" />;
+    const returnTo = resolveAuthReturnTo();
+    if (returnTo) consumeAuthReturnTo();
+    return <Redirect to={returnTo ?? APP_HOME_PATH} />;
   }
 
   if (isLoading) {

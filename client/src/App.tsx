@@ -30,8 +30,7 @@ import { useOfflineRevalidation } from "@/hooks/useOfflineRevalidation";
 import { t } from "@/lib/i18n";
 import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
-import { isGuestForbiddenMessengerPath, isGuestMessengerPath } from "@/lib/guestMessengerPaths";
-import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo } from "@/lib/authReturnTo";
+import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo, buildAuthRedirectPath, getRequestedReturnPath } from "@/lib/authReturnTo";
 import { APP_HOME_PATH } from "@shared/brand";
 
 function Router() {
@@ -156,19 +155,18 @@ function AppContent() {
   const isInviteAcceptPage = location.startsWith("/invite/accept");
   const isRoleOnboardingPage = location.startsWith("/onboarding/role");
   const isResetPasswordPage = location.startsWith("/reset-password");
-  const guestMessengerBlocked = !isAuthenticated && isGuestForbiddenMessengerPath(location);
+  const isPaymentResultPage =
+    location.startsWith("/payment/success") || location.startsWith("/payment/fail");
+  const isPublicPage =
+    isAuthPage || isResetPasswordPage || isInviteAcceptPage || isPaymentResultPage;
 
   if (location === "/" || location === "") {
     return <Redirect to={APP_HOME_PATH} />;
   }
 
-  if (guestMessengerBlocked) {
-    return <Redirect to={APP_HOME_PATH} />;
-  }
-
   if (isAuthenticated && requiresRoleSelection && !isRoleOnboardingPage && !isInviteAcceptPage) {
     const returnTo = readAuthReturnFromQuery() ?? peekAuthReturnTo();
-    if (returnTo && isGuestMessengerPath(returnTo)) {
+    if (returnTo) {
       saveAuthReturnTo(returnTo);
     }
     const rolePath = returnTo
@@ -190,15 +188,8 @@ function AppContent() {
       />
     );
   }
-  // Guests may browse /messenger without signing in.
-  if (
-    !isAuthenticated &&
-    !isAuthPage &&
-    !isResetPasswordPage &&
-    !isInviteAcceptPage &&
-    !isGuestMessengerPath(location)
-  ) {
-    return <Redirect to="/auth" />;
+  if (!isAuthenticated && !isPublicPage) {
+    return <Redirect to={buildAuthRedirectPath(getRequestedReturnPath())} />;
   }
 
   const pushPromptEnabled =

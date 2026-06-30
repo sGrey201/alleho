@@ -8,7 +8,6 @@ import {
   Radio,
 } from "lucide-react";
 import { Link } from "wouter";
-import { LandingPanel } from "@/components/LandingPanel";
 import { PwaInstallMenuFooter } from "@/components/PwaInstallMenuFooter";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -60,14 +59,11 @@ type MenuItem = {
 };
 
 type MessengerMenuProps = {
-  isGuest: boolean;
   isAdmin: boolean;
   showInstallButtons: boolean;
   onInstallSafari: () => void;
   onInstallChrome: () => void;
   onInstallYandex: () => void;
-  onLogin: () => void;
-  onRegister: () => void;
   onLogout: () => void | Promise<void>;
   onInvite: () => void;
   onCreateGroup: () => void;
@@ -76,14 +72,11 @@ type MessengerMenuProps = {
 };
 
 export function MessengerMenu({
-  isGuest,
   isAdmin,
   showInstallButtons,
   onInstallSafari,
   onInstallChrome,
   onInstallYandex,
-  onLogin,
-  onRegister,
   onLogout,
   onInvite,
   onCreateGroup,
@@ -98,24 +91,6 @@ export function MessengerMenu({
       onYandexClick={onInstallYandex}
     />
   );
-
-  if (isGuest) {
-    return (
-      <div className="flex h-full min-h-0 w-full flex-col bg-background">
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          <LandingPanel
-            compact
-            className="min-h-full justify-center"
-            onLogin={() => {
-              onClose();
-              onLogin();
-            }}
-          />
-        </div>
-        {installFooter}
-      </div>
-    );
-  }
 
   const items: MenuItem[] = [
     { id: "profile", icon: User, label: t.profile, href: "/messenger/profile", onClick: onClose },

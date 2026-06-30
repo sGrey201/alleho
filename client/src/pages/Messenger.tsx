@@ -29,7 +29,6 @@ import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import { useAppShellTheme } from "@/hooks/useAppShellTheme";
-import { navigateToAuth, navigateToAuthRegister } from "@/lib/authReturnTo";
 import { performLogout } from "@/lib/logout";
 import {
   Dialog,
@@ -348,7 +347,6 @@ function FolderTabLabel({ label, unread }: { label: string; unread: number }) {
 
 export default function Messenger() {
   const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
-  const isGuest = !isAuthenticated && !authLoading;
   const [location, setLocation] = useLocation();
   const profileSearch = useSearch();
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
@@ -451,13 +449,11 @@ export default function Messenger() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const prevLocationRef = useRef(location);
 
-  const activeFolder = isGuest
-    ? "channels"
-    : isAdmin
-      ? folder
-      : folder === "channels"
-        ? "channels"
-        : "patients";
+  const activeFolder = isAdmin
+    ? folder
+    : folder === "channels"
+      ? "channels"
+      : "patients";
   const apiFolder =
     activeFolder === "doctors" || activeFolder === "patients"
       ? "personal"
@@ -568,77 +564,27 @@ export default function Messenger() {
     };
   }
 
-  const { data: publicChannelsData, isLoading: publicChannelsLoading } = useQuery<{
-    channels: MessengerSearchChannel[];
-  }>({
-    queryKey: ["/api/public/channels"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/channels");
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    enabled: isGuest,
-  });
-
-  const guestChannelChats = useMemo(
-    () => (publicChannelsData?.channels ?? []).map(mapChannelSearchToChatItem),
-    [publicChannelsData]
-  );
-
-  const guestChannelSearchActive =
-    isGuest && activeFolder === "channels" && debouncedSearchQuery.trim().length > 0;
-  const guestChannelSearchDebouncing =
-    isGuest &&
-    activeFolder === "channels" &&
-    isSearching &&
-    searchQuery.trim().length > 0 &&
-    searchQuery.trim() !== debouncedSearchQuery.trim();
-  const {
-    data: guestChannelSearchResults,
-    isFetching: guestChannelSearchFetching,
-    isError: guestChannelSearchError,
-    refetch: refetchGuestChannelSearch,
-  } = useQuery<{ channels: MessengerSearchChannel[] }>({
-    queryKey: ["/api/public/channels/search", debouncedSearchQuery],
-    queryFn: async () => {
-      const url = `/api/public/channels/search?q=${encodeURIComponent(debouncedSearchQuery)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    enabled: guestChannelSearchActive,
-  });
-
-  const guestChannelSearchChats = useMemo(
-    () => (guestChannelSearchResults?.channels ?? []).map(mapChannelSearchToChatItem),
-    [guestChannelSearchResults]
-  );
-
-  const effectiveChats = isGuest ? guestChannelChats : chats;
-  const listQueryLoading = isGuest ? publicChannelsLoading : isLoading;
-
   const chatsByFolder = useMemo(() => {
-    if (isGuest || !isAdmin) {
+    if (!isAdmin) {
       if (activeFolder === "channels") {
-        return effectiveChats.filter((chat) => chat.type === "channel" || chat.type === "divider");
+        return chats.filter((chat) => chat.type === "channel" || chat.type === "divider");
       }
-      if (isGuest) return effectiveChats.filter((chat) => chat.type === "channel");
-      return effectiveChats.filter((chat) => chat.type === "patient");
+      return chats.filter((chat) => chat.type === "patient");
     }
     if (activeFolder === "patients") {
-      return effectiveChats.filter((chat) => chat.type === "patient");
+      return chats.filter((chat) => chat.type === "patient");
     }
     if (activeFolder === "doctors") {
-      return effectiveChats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
+      return chats.filter((chat) => chat.source === "conversation" && chat.type === "direct");
     }
     if (activeFolder === "channels") {
-      return effectiveChats.filter((chat) => chat.type === "channel" || chat.type === "divider");
+      return chats.filter((chat) => chat.type === "channel" || chat.type === "divider");
     }
     if (activeFolder === "groups") {
-      return effectiveChats.filter((chat) => chat.type === "group" || chat.type === "divider");
+      return chats.filter((chat) => chat.type === "group" || chat.type === "divider");
     }
-    return effectiveChats;
-  }, [effectiveChats, activeFolder, isAdmin, isGuest]);
+    return chats;
+  }, [chats, activeFolder, isAdmin]);
 
   useEffect(() => {
     if (!isSearching || !isAdmin) {
@@ -693,22 +639,6 @@ export default function Messenger() {
 
   const listToShow = useMemo(() => {
     if (!isSearching || !searchQuery.trim()) return chatsByFolder;
-    if (isGuest && activeFolder === "channels") {
-      const merged = new Map<string, ChatItem>();
-      for (const chat of filterChatsBySearch(
-        chatsByFolder.filter((chat) => chat.type === "channel"),
-        searchQuery,
-        false
-      )) {
-        if (chat.conversationId) merged.set(chat.conversationId, chat);
-      }
-      if (debouncedSearchQuery.trim() === searchQuery.trim()) {
-        for (const chat of guestChannelSearchChats) {
-          if (chat.conversationId) merged.set(chat.conversationId, chat);
-        }
-      }
-      return Array.from(merged.values());
-    }
     if (!isAdmin && activeFolder === "channels") {
       const merged = new Map<string, ChatItem>();
       for (const chat of patientChannelLocalSearch) {
@@ -731,8 +661,6 @@ export default function Messenger() {
     activeFolder,
     patientChannelLocalSearch,
     patientChannelSearchChats,
-    isGuest,
-    guestChannelSearchChats,
   ]);
 
   const listChats = useMemo(
@@ -757,12 +685,6 @@ export default function Messenger() {
     observer.observe(target);
     return () => observer.disconnect();
   }, [isSearching, hasNextPage, isFetchingNextPage, fetchNextPage, chats.length, folder]);
-
-  useEffect(() => {
-    if (isGuest) {
-      setFolder("channels");
-    }
-  }, [isGuest]);
 
   useEffect(() => {
     if (!isAuthenticated || authLoading || isAdmin) return;
@@ -996,7 +918,7 @@ export default function Messenger() {
                 placeholder={
                   isAdmin
                     ? t.searchMessengerPlaceholder
-                    : isGuest || activeFolder === "channels"
+                    : activeFolder === "channels"
                       ? t.searchPatientChannelsPlaceholder
                       : t.searchPatientChatsPlaceholder
                 }
@@ -1021,14 +943,11 @@ export default function Messenger() {
           {menuOpen && (
             <div className="messenger-menu-layer">
               <MessengerMenu
-                isGuest={isGuest}
                 isAdmin={!!isAdmin}
                 showInstallButtons={showInstallButtons}
                 onInstallSafari={() => setPwaInstallBrowser("safari")}
                 onInstallChrome={() => setPwaInstallBrowser("chrome")}
                 onInstallYandex={() => setPwaInstallBrowser("yandex")}
-                onLogin={() => navigateToAuth(setLocation, location)}
-                onRegister={() => navigateToAuthRegister(setLocation, location)}
                 onLogout={performLogout}
                 onInvite={openPatientInviteDialog}
                 onCreateGroup={() => {
@@ -1063,7 +982,7 @@ export default function Messenger() {
             </div>
           </div>
           )}
-          {!isAdmin && !isGuest && (
+          {!isAdmin && (
           <div className="mt-2 mx-3 md:mt-0 md:mx-0 flex items-center shrink-0 z-10 md:border-b pt-1.5 pb-1 md:pt-0 md:pb-0">
             <div className="flex-1 min-w-0 rounded-2xl md:rounded-none shadow-md md:shadow-none bg-background px-1.5 md:px-0">
               <TabsList className="!grid h-10 w-full grid-cols-2 gap-0 rounded-none border-0 border-b border-border bg-transparent p-0">
@@ -1242,19 +1161,10 @@ export default function Messenger() {
                   </div>
                 </ScrollArea>
               )
-            ) : (guestChannelSearchDebouncing && listChats.length === 0) ||
-              (guestChannelSearchActive && guestChannelSearchFetching && listChats.length === 0) ||
-              (patientChannelSearchDebouncing && patientChannelLocalSearch.length === 0) ||
+            ) : (patientChannelSearchDebouncing && patientChannelLocalSearch.length === 0) ||
               (patientChannelSearchActive && patientChannelSearchFetching && listChats.length === 0) ? (
               <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : guestChannelSearchError && guestChannelSearchActive ? (
-              <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t.searchError}</p>
-                <Button variant="outline" size="sm" onClick={() => refetchGuestChannelSearch()}>
-                  {t.retry}
-                </Button>
               </div>
             ) : patientChannelSearchError && patientChannelSearchActive ? (
               <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
@@ -1263,7 +1173,7 @@ export default function Messenger() {
                   {t.retry}
                 </Button>
               </div>
-            ) : listQueryLoading && listChats.length === 0 ? (
+            ) : isLoading && listChats.length === 0 ? (
               <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
@@ -1273,15 +1183,11 @@ export default function Messenger() {
                   {listChats.length === 0 ? (
                     isSearching ? (
                       <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                        {!isAdmin && (isGuest || activeFolder === "channels")
+                        {!isAdmin && activeFolder === "channels"
                           ? t.searchPatientChannelsNotFound
                           : !isAdmin
                             ? t.searchPatientChatsNotFound
                             : t.noResults}
-                      </p>
-                    ) : isGuest ? (
-                      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                        {t.searchPatientChannelsNotFound}
                       </p>
                     ) : (
                     <MessengerFolderPanel
@@ -1497,13 +1403,8 @@ export default function Messenger() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden chat-panel-bg">
             <ConversationChat
               conversationId={conversationId}
-              guestPreviewMode={isGuest && isChannelChat}
               onBack={() => setLocation("/messenger")}
               onTitleClick={() => {
-                if (isGuest) {
-                  navigateToAuth(setLocation, location);
-                  return;
-                }
                 if (isGroupChat) setLocation(`/messenger/group/${conversationId}/settings`);
                 if (isChannelChat) setLocation(`/messenger/channel/${conversationId}/settings`);
                 if (isPatientChat) setLocation(`/messenger/chat/${conversationId}/settings`);
