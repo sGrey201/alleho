@@ -109,9 +109,10 @@ import {
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
-import { pollPayloadSchema, voicePayloadSchema } from "@shared/schema";
+import { pollPayloadSchema, voicePayloadSchema, type PollPayload } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface ConversationInfo {
   id: string;
@@ -197,9 +198,7 @@ function getMessageDisplayName(author: ConversationMessageWithAuthor["author"] |
   return "User";
 }
 
-function parsePollPayload(
-  content: string | null | undefined
-): { question: string; options: string[]; allowMultiple: boolean } | null {
+function parsePollPayload(content: string | null | undefined): PollPayload | null {
   if (!content?.trim()) return null;
   try {
     return pollPayloadSchema.parse(JSON.parse(content));
@@ -299,40 +298,71 @@ function PollMessageBlock({
     return <p className="text-sm text-muted-foreground">{t.pollLabel}</p>;
   }
 
+  const isQuiz = !!parsed.quizMode;
+  const hasVoted = (pollResults?.selectedOptionIndices?.length ?? 0) > 0;
+  const userSelected = pollResults?.selectedOptionIndices?.[0];
+  const correctIndex = parsed.correctOptionIndex;
+  const revealQuiz = isQuiz && hasVoted && correctIndex !== undefined;
+  const userWasCorrect = revealQuiz && userSelected === correctIndex;
+
   const counts =
     pollResults?.voteCounts?.length === parsed.options.length
       ? pollResults.voteCounts
       : parsed.options.map((_, i) => pollResults?.voteCounts?.[i] ?? 0);
   const total = pollResults?.totalVotes ?? counts.reduce((a, b) => a + b, 0);
   const pct = (i: number) => (total > 0 ? Math.round(((counts[i] ?? 0) / total) * 100) : 0);
+  const voteLocked = disabled || isSubmitting || (isQuiz && hasVoted);
 
   return (
     <div className="space-y-2 pb-0.5 min-w-[200px] max-w-full">
       <p className="text-sm font-medium whitespace-pre-wrap break-words">{parsed.question}</p>
+      {revealQuiz && (
+        <p
+          className={cn(
+            "text-xs font-medium",
+            userWasCorrect ? "text-green-700 dark:text-green-400" : "text-destructive"
+          )}
+        >
+          {userWasCorrect ? t.pollQuizAnswerCorrect : t.pollQuizAnswerWrong}
+        </p>
+      )}
       {parsed.options.map((label, i) => {
         const selectedSingle = !parsed.allowMultiple && pollResults?.selectedOptionIndices?.includes(i);
         const selectedMulti = parsed.allowMultiple && draftMulti.includes(i);
+        const isCorrectOption = revealQuiz && i === correctIndex;
+        const isWrongPick = revealQuiz && userSelected === i && i !== correctIndex;
+
         return (
           <div key={i} className="space-y-0.5">
             <button
               type="button"
-              disabled={disabled || isSubmitting}
+              disabled={voteLocked}
               onClick={() => {
                 if (parsed.allowMultiple) {
                   setDraftMulti((prev) =>
                     prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort((a, b) => a - b)
                   );
+                } else if (isQuiz) {
+                  if (!hasVoted) onVote([i]);
                 } else {
                   const cur = pollResults?.selectedOptionIndices?.[0];
                   if (cur === i) onVote([]);
                   else onVote([i]);
                 }
               }}
-              className={`flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-sm transition-colors ${
-                selectedSingle || selectedMulti
-                  ? "border-primary bg-primary/10"
-                  : "border-border/60 bg-background/50 hover:bg-muted/50"
-              }`}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-sm transition-colors",
+                isCorrectOption
+                  ? "border-green-600 bg-green-500/10 dark:border-green-500"
+                  : isWrongPick
+                    ? "border-destructive bg-destructive/10"
+                    : selectedSingle || selectedMulti
+                      ? "border-primary bg-primary/10"
+                      : "border-border/60 bg-background/50 hover:bg-muted/50",
+                voteLocked && !selectedSingle && !selectedMulti && !isCorrectOption && !isWrongPick
+                  ? "opacity-80"
+                  : undefined
+              )}
             >
               <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                 {parsed.allowMultiple ? (
@@ -348,6 +378,11 @@ function PollMessageBlock({
                 )}
               </span>
               <span className="min-w-0 flex-1 break-words">{label}</span>
+              {isCorrectOption && (
+                <span className="shrink-0 text-[10px] font-medium text-green-700 dark:text-green-400">
+                  {t.pollCorrectOption}
+                </span>
+              )}
             </button>
             <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
               <div className="h-full bg-primary/80 transition-all" style={{ width: `${pct(i)}%` }} />
@@ -412,6 +447,8 @@ export default function ConversationChat({
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
+  const [pollQuizMode, setPollQuizMode] = useState(false);
+  const [pollCorrectOptionIndex, setPollCorrectOptionIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
@@ -697,7 +734,7 @@ export default function ConversationChat({
       templateId?: string;
       replyToMessageId?: string;
       voiceDurationSec?: number;
-      poll?: { question: string; options: string[]; allowMultiple: boolean };
+      poll?: PollPayload;
     }) => {
       const body =
         data.poll != null
@@ -730,6 +767,8 @@ export default function ConversationChat({
       setPollQuestion("");
       setPollOptions(["", ""]);
       setPollAllowMultiple(false);
+      setPollQuizMode(false);
+      setPollCorrectOptionIndex(0);
       requestScrollToBottom();
       requestAnimationFrame(() => chatInputRef.current?.focusInput());
     },
@@ -2555,18 +2594,42 @@ export default function ConversationChat({
             </div>
             <div className="space-y-2">
               <Label>{t.pollOptionsLabel}</Label>
-              {pollOptions.map((opt, i) => (
-                <Input
-                  key={i}
-                  value={opt}
-                  onChange={(e) => {
-                    const next = [...pollOptions];
-                    next[i] = e.target.value;
-                    setPollOptions(next);
-                  }}
-                  placeholder={`${t.pollOptionsLabel} ${i + 1}`}
-                />
-              ))}
+              {pollQuizMode ? (
+                <RadioGroup
+                  value={String(pollCorrectOptionIndex)}
+                  onValueChange={(value) => setPollCorrectOptionIndex(Number(value))}
+                  className="gap-2"
+                >
+                  {pollOptions.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <RadioGroupItem value={String(i)} id={`poll-correct-radio-${i}`} />
+                      <Input
+                        value={opt}
+                        onChange={(e) => {
+                          const next = [...pollOptions];
+                          next[i] = e.target.value;
+                          setPollOptions(next);
+                        }}
+                        placeholder={`${t.pollOptionsLabel} ${i + 1}`}
+                        className="flex-1"
+                      />
+                    </div>
+                  ))}
+                </RadioGroup>
+              ) : (
+                pollOptions.map((opt, i) => (
+                  <Input
+                    key={i}
+                    value={opt}
+                    onChange={(e) => {
+                      const next = [...pollOptions];
+                      next[i] = e.target.value;
+                      setPollOptions(next);
+                    }}
+                    placeholder={`${t.pollOptionsLabel} ${i + 1}`}
+                  />
+                ))
+              )}
               {pollOptions.length < 10 && (
                 <Button
                   type="button"
@@ -2577,15 +2640,41 @@ export default function ConversationChat({
                   {t.pollAddOption}
                 </Button>
               )}
+              {pollQuizMode && (
+                <p className="text-xs text-muted-foreground">{t.pollCorrectOption}</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Switch
                 id="poll-multi"
                 checked={pollAllowMultiple}
-                onCheckedChange={setPollAllowMultiple}
+                disabled={pollQuizMode}
+                onCheckedChange={(checked) => {
+                  setPollAllowMultiple(checked);
+                  if (checked) setPollQuizMode(false);
+                }}
               />
               <Label htmlFor="poll-multi" className="cursor-pointer">
                 {t.pollAllowMultiple}
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="poll-quiz"
+                checked={pollQuizMode}
+                disabled={pollAllowMultiple}
+                onCheckedChange={(checked) => {
+                  setPollQuizMode(checked);
+                  if (checked) {
+                    setPollAllowMultiple(false);
+                    setPollCorrectOptionIndex((prev) =>
+                      Math.min(prev, Math.max(0, pollOptions.length - 1))
+                    );
+                  }
+                }}
+              />
+              <Label htmlFor="poll-quiz" className="cursor-pointer">
+                {t.pollQuizMode}
               </Label>
             </div>
             <Button
@@ -2593,11 +2682,31 @@ export default function ConversationChat({
               className="w-full"
               disabled={sendMutation.isPending}
               onClick={() => {
-                const opts = pollOptions.map((o) => o.trim()).filter(Boolean);
+                const entries = pollOptions
+                  .map((text, originalIndex) => ({ text: text.trim(), originalIndex }))
+                  .filter((entry) => entry.text.length > 0);
+                const opts = entries.map((entry) => entry.text);
+                let correctOptionIndex: number | undefined;
+                if (pollQuizMode) {
+                  const mapped = entries.findIndex(
+                    (entry) => entry.originalIndex === pollCorrectOptionIndex
+                  );
+                  if (mapped < 0) {
+                    toast({
+                      title: t.error,
+                      description: "Выберите правильный вариант ответа.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  correctOptionIndex = mapped;
+                }
                 const parsed = pollPayloadSchema.safeParse({
                   question: pollQuestion,
                   options: opts,
                   allowMultiple: pollAllowMultiple,
+                  quizMode: pollQuizMode,
+                  correctOptionIndex,
                 });
                 if (!parsed.success) {
                   toast({

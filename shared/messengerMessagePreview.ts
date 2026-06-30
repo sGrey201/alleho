@@ -2,7 +2,7 @@ import { stripMessageFormatting, stripSponsorSections } from "./messageFormattin
 
 const PREVIEW_MAX_LEN = 500;
 
-const LEGACY_TAG_PREFIXES = ["Анкета: ", "Назначение: ", "Follow Up: ", "Опрос: "] as const;
+const LEGACY_TAG_PREFIXES = ["Опросник: ", "Анкета: ", "Назначение: ", "Follow Up: ", "Опрос: "] as const;
 
 function truncate(text: string): string {
   return text.length > PREVIEW_MAX_LEN ? `${text.slice(0, PREVIEW_MAX_LEN)}…` : text;
@@ -82,7 +82,7 @@ export function formatConversationMessagePreview(
 
   if (messageType === "questionnaire" || messageType === "questionnaire_template") {
     const name = text ? templateNameFromQuestionnaireJson(text) : null;
-    return truncate(name ?? "Анкета");
+    return truncate(name ?? "Опросник");
   }
 
   if (messageType === "prescription" || messageType === "followup") {
@@ -92,7 +92,7 @@ export function formatConversationMessagePreview(
 
   if (looksLikeQuestionnaireJson(text ?? "")) {
     const name = templateNameFromQuestionnaireJson(text!);
-    return truncate(name ?? "Анкета");
+    return truncate(name ?? "Опросник");
   }
 
   if (text) return truncate(stripSponsorSections(stripMessageFormatting(text)));
@@ -106,7 +106,7 @@ export function normalizeMessengerListPreview(preview: string | null | undefined
   let trimmed = preview.trim();
   if (looksLikeQuestionnaireJson(trimmed)) {
     const name = templateNameFromQuestionnaireJson(trimmed);
-    return name ?? "Анкета";
+    return name ?? "Опросник";
   }
   trimmed = stripLegacyTaggedPrefix(trimmed);
   return trimmed || null;

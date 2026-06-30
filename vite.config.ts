@@ -16,7 +16,7 @@ export default defineConfig({
       manifest: {
         name: "hovial — Be Jovial",
         short_name: "hovial",
-        description: "Чаты, анкеты и работа с пациентами для гомеопатов",
+        description: "Чаты, опросники и работа с пациентами для гомеопатов",
         theme_color: "#6B7042",
         background_color: "#ffffff",
         display: "standalone",

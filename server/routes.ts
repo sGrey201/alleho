@@ -913,7 +913,7 @@ ${allUrls.map(url => `  <url>
     try {
       const userId = await getCurrentUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
-      const name = String(req.body?.name ?? "Новая анкета").trim();
+      const name = String(req.body?.name ?? "Новый опросник").trim();
       if (!name) return res.status(400).json({ message: "Name is required" });
       let structure = req.body?.structure
         ? questionnaireTemplateStructureSchema.parse(req.body.structure)
@@ -3271,6 +3271,19 @@ ${allUrls.map(url => `  <url>
         .sort((a, b) => a - b);
       if (!poll.allowMultiple && unique.length > 1) {
         return res.status(400).json({ message: "Single choice only" });
+      }
+      if (poll.quizMode) {
+        const priorStates = await storage.getConversationPollStates(
+          [{ messageId, optionCount }],
+          currentUserId
+        );
+        const prior = priorStates.get(messageId);
+        if (prior && prior.selectedOptionIndices.length > 0) {
+          return res.status(400).json({ message: "Quiz votes cannot be changed" });
+        }
+        if (unique.length !== 1) {
+          return res.status(400).json({ message: "Quiz requires exactly one answer" });
+        }
       }
       await storage.setConversationPollVotes(messageId, currentUserId, unique, optionCount);
       const states = await storage.getConversationPollStates(

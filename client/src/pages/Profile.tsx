@@ -4,7 +4,7 @@ import { Loader2, LogOut, Camera, ArrowLeft, ClipboardList, Eye, MessageCircle, 
 import { format } from "date-fns";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Link, useLocation, useRoute, useSearch } from "wouter";
+import { useLocation, useRoute, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,7 @@ import { parseQuestionnaireHintsMode } from "@shared/questionnaireTypes";
 import type { AccountReportCategory } from "@shared/schema";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
-import { messengerProfilePath, getMessengerProfileFromSearch } from "@/lib/messengerPaths";
+import { getMessengerProfileFromSearch } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { profileAvatarSrc } from "@/lib/utils";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
@@ -35,51 +35,6 @@ export type ProfileProps = {
   onBack?: () => void;
   profileUserId?: string;
 };
-
-type AcceptedInviteCounts = { homeopath: number; patient: number };
-
-type InviteProfileSummary = {
-  inviter: { id?: string; firstName?: string | null; lastName?: string | null; email?: string | null } | null;
-  acceptedInvites: AcceptedInviteCounts;
-};
-
-const EMPTY_ACCEPTED_INVITES: AcceptedInviteCounts = { homeopath: 0, patient: 0 };
-
-function InviteCountCard({
-  label,
-  count,
-  testId,
-}: {
-  label: string;
-  count: number;
-  testId: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="text-base text-foreground" data-testid={testId}>
-        {count}
-      </p>
-    </div>
-  );
-}
-
-function AcceptedInvitesStats({ counts }: { counts: AcceptedInviteCounts }) {
-  return (
-    <>
-      <InviteCountCard
-        label="Приглашённые гомеопаты"
-        count={counts.homeopath}
-        testId="invite-count-homeopath"
-      />
-      <InviteCountCard
-        label="Приглашённые пациенты"
-        count={counts.patient}
-        testId="invite-count-patient"
-      />
-    </>
-  );
-}
 
 const COUNTRIES_RU = [
   "Австралия",
@@ -302,16 +257,6 @@ export default function Profile({
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showChangePasswordForm, setShowChangePasswordForm] = useState(false);
   const hasPassword = (user as { hasPassword?: boolean } | undefined)?.hasPassword !== false;
-  const { data: ownInviteSummary } = useQuery<InviteProfileSummary>({
-    queryKey: ["/api/invites/profile-summary"],
-    queryFn: async () => {
-      const res = await fetch("/api/invites/profile-summary", { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    enabled: isOwnProfile,
-    retry: false,
-  });
   const { data: viewedProfile, isLoading: viewedProfileLoading, error: viewedProfileError } = useQuery<{
     user: {
       id: string;
@@ -323,7 +268,7 @@ export default function Profile({
       city?: string | null;
       isAdmin: boolean;
     };
-  } & InviteProfileSummary>({
+  }>({
     queryKey: ["/api/users/profile", targetUserId],
     queryFn: async () => {
       const res = await fetch(`/api/users/${targetUserId}/profile`, { credentials: "include" });
@@ -406,16 +351,6 @@ export default function Profile({
       toast({ title, variant: "destructive" });
     },
   });
-
-  const inviteSummary: InviteProfileSummary | undefined = isOwnProfile
-    ? ownInviteSummary
-    : viewedProfile
-      ? {
-          inviter: viewedProfile.inviter ?? null,
-          acceptedInvites: viewedProfile.acceptedInvites ?? EMPTY_ACCEPTED_INVITES,
-        }
-      : undefined;
-  const acceptedInvites = inviteSummary?.acceptedInvites ?? EMPTY_ACCEPTED_INVITES;
 
   useEffect(() => {
     if (profileUser) {
@@ -597,10 +532,6 @@ export default function Profile({
   const displayName = [lastName, firstName].filter(Boolean).join(" ").trim() || profileUser.email || "Профиль";
   const locationLabel =
     country && city ? `${country}, ${city}` : country || city || "Не указано";
-  const inviterName =
-    [inviteSummary?.inviter?.firstName, inviteSummary?.inviter?.lastName].filter(Boolean).join(" ") ||
-    inviteSummary?.inviter?.email ||
-    "Нет данных";
 
   const openDirectChat = async (partnerUserId: string) => {
     setOpeningChat(true);
@@ -766,30 +697,6 @@ export default function Profile({
             <p className="text-xs text-muted-foreground mb-1">Страна, город</p>
             <p className="text-base text-foreground">{locationLabel}</p>
           </div>
-          <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-1">Приглашен</p>
-            <p className="text-base text-foreground">
-              {inviteSummary?.inviter ? (
-                inviteSummary.inviter.id ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const inviterId = inviteSummary.inviter?.id;
-                      if (inviterId) void openDirectChat(inviterId);
-                    }}
-                    className="text-primary hover:underline"
-                  >
-                    {inviterName}
-                  </button>
-                ) : (
-                  inviterName
-                )
-              ) : (
-                "Нет данных"
-              )}
-            </p>
-          </div>
-          {profileUser.isAdmin && <AcceptedInvitesStats counts={acceptedInvites} />}
           {sharedQuestionnairesSection}
           {canReportUser && (
             <Button
@@ -986,17 +893,29 @@ export default function Profile({
           />
         </div>
 
-        {hasPassword && (
+        {isOwnProfile && (
           <div>
             {!showChangePasswordForm ? (
-              <button
-                type="button"
-                className="text-sm text-primary hover:underline"
-                onClick={() => setShowChangePasswordForm(true)}
-                data-testid="link-show-change-password"
-              >
-                {t.changePassword}
-              </button>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {hasPassword && (
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline"
+                    onClick={() => setShowChangePasswordForm(true)}
+                    data-testid="link-show-change-password"
+                  >
+                    {t.changePassword}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => void handleClearOfflineCache()}
+                  data-testid="button-clear-offline-cache"
+                >
+                  {t.clearOfflineCache}
+                </button>
+              </div>
             ) : (
               <div className="space-y-4 rounded-lg border border-border/60 p-4">
                 <div className="flex items-center justify-between gap-2">
@@ -1070,38 +989,6 @@ export default function Profile({
           </div>
         )}
 
-        <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm">
-          <p className="font-medium text-foreground">
-            Приглашен:{" "}
-            <span className="font-normal text-muted-foreground">
-              {inviteSummary?.inviter ? (
-                inviteSummary.inviter.id ? (
-                  <Link
-                    href={messengerProfilePath(inviteSummary.inviter.id, profileReturnTo)}
-                    className="text-primary hover:underline"
-                  >
-                    {[inviteSummary.inviter.firstName, inviteSummary.inviter.lastName].filter(Boolean).join(" ") ||
-                      inviteSummary.inviter.email ||
-                      "Неизвестно"}
-                  </Link>
-                ) : (
-                  [inviteSummary.inviter.firstName, inviteSummary.inviter.lastName].filter(Boolean).join(" ") ||
-                  inviteSummary.inviter.email ||
-                  "Неизвестно"
-                )
-              ) : (
-                "Нет данных"
-              )}
-            </span>
-          </p>
-        </div>
-
-        {profileUser.isAdmin && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <AcceptedInvitesStats counts={acceptedInvites} />
-          </div>
-        )}
-
         {sharedQuestionnairesSection}
 
         {isOwnProfile && (
@@ -1119,18 +1006,6 @@ export default function Profile({
             ) : (
               t.save
             )}
-          </Button>
-        )}
-
-        {isOwnProfile && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={handleClearOfflineCache}
-            data-testid="button-clear-offline-cache"
-          >
-            {t.clearOfflineCache}
           </Button>
         )}
 

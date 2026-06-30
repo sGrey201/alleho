@@ -45,18 +45,18 @@ export const pageMeta = {
     url: "/messenger/profile",
   },
   questionnaires: {
-    title: "Анкеты",
-    description: "Шаблоны анкет и работа с данными пациентов в hovial.",
+    title: "Опросники",
+    description: "Шаблоны опросников и работа с данными пациентов в hovial.",
     url: "/questionnaires",
   },
   questionnaireEdit: {
-    title: "Редактирование анкеты",
-    description: "Редактор шаблона анкеты в hovial.",
+    title: "Редактирование опросника",
+    description: "Редактор шаблона опросника в hovial.",
   },
   about: {
     title: "О платформе",
     description:
-      "hovial — защищённая среда для практики гомеопата: пациенты, коллеги, анкеты и обмен опытом.",
+      "hovial — защищённая среда для практики гомеопата: пациенты, коллеги, опросники и обмен опытом.",
     url: "/about",
   },
   subscribe: {

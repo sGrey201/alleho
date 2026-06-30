@@ -269,11 +269,38 @@ export const conversationMessageTypeEnum = z.enum([
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 
 /** JSON stored in conversation_messages.content when message_type is `poll`. */
-export const pollPayloadSchema = z.object({
-  question: z.string().trim().min(1).max(500),
-  options: z.array(z.string().trim().min(1).max(200)).min(2).max(10),
-  allowMultiple: z.boolean(),
-});
+export const pollPayloadSchema = z
+  .object({
+    question: z.string().trim().min(1).max(500),
+    options: z.array(z.string().trim().min(1).max(200)).min(2).max(10),
+    allowMultiple: z.boolean(),
+    quizMode: z.boolean().optional().default(false),
+    correctOptionIndex: z.number().int().min(0).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.quizMode && data.allowMultiple) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Quiz mode cannot allow multiple answers",
+        path: ["allowMultiple"],
+      });
+    }
+    if (data.quizMode) {
+      if (data.correctOptionIndex === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Correct option required in quiz mode",
+          path: ["correctOptionIndex"],
+        });
+      } else if (data.correctOptionIndex >= data.options.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Correct option index out of range",
+          path: ["correctOptionIndex"],
+        });
+      }
+    }
+  });
 export type PollPayload = z.infer<typeof pollPayloadSchema>;
 
 /**
