@@ -1905,7 +1905,7 @@ export const t = {
   actionJoinGroup: 'Вступить',
   joinGroup: 'Вступить в группу',
   channelSubscriptionsDivider: 'Подписки 👆',
-  channelAllDivider: 'Все каналы 👇',
+  channelAllDivider: 'Другие каналы',
   paidContentTitle: 'Платный контент',
   paidContentUntil: (date: string) => `до ${date}`,
   noPaidContent: 'Нет оплаченного контента',
@@ -1955,7 +1955,7 @@ export const t = {
   messengerEmptyCommunityDescription:
     'Здесь будет ваш чат с гомеопатом. Когда врач подключится, переписка появится в этом списке.',
   messengerEmptyChannelsPatientDescription:
-    'Каналы гомеопатов — только для чтения. Подпишитесь на интересные каналы в разделе «Все каналы».',
+    'Каналы гомеопатов — только для чтения. Подпишитесь на интересные каналы в разделе «Другие каналы».',
   registrationAreYouHomeopath: 'Вы гомеопат?',
   registrationYesHomeopath: 'Да, я гомеопат',
   registrationNoPatient: 'Нет, я пациент',
