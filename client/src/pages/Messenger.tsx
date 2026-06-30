@@ -18,6 +18,7 @@ import ChatListMessagePreview from "@/components/ChatListMessagePreview";
 import { normalizeMessengerListPreview } from "@shared/messengerMessagePreview";
 import { RouteSeo } from "@/components/RouteSeo";
 import { MessengerMenu } from "@/components/MessengerMenu";
+import { ChannelSubscriptionsDialog } from "@/components/ChannelSubscriptionsDialog";
 import {
   PwaInstallInstructionsSheet,
   type PwaInstallBrowser,
@@ -435,6 +436,7 @@ export default function Messenger() {
   const [patientInviteName, setPatientInviteName] = useState("");
   const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [channelSubscriptionsOpen, setChannelSubscriptionsOpen] = useState(false);
   const [pwaInstallBrowser, setPwaInstallBrowser] = useState<PwaInstallBrowser | null>(null);
   const showInstallButtons = isMobileView && !isInstalledPwaSession();
   const [inviteLinkData, setInviteLinkData] = useState<{
@@ -1226,7 +1228,13 @@ export default function Messenger() {
                             </>
                           ) : (
                             <>
-                              <span>{t.channelSubscriptionsDivider}</span>
+                              <button
+                                type="button"
+                                className="underline-offset-2 hover:text-foreground hover:underline"
+                                onClick={() => setChannelSubscriptionsOpen(true)}
+                              >
+                                {t.channelSubscriptionsDivider}
+                              </button>
                               <span className="mx-1.5">|</span>
                               <span>{t.channelAllDivider}</span>
                             </>
@@ -1632,6 +1640,15 @@ export default function Messenger() {
         browser={pwaInstallBrowser}
         onOpenChange={(open) => {
           if (!open) setPwaInstallBrowser(null);
+        }}
+      />
+
+      <ChannelSubscriptionsDialog
+        open={channelSubscriptionsOpen}
+        onOpenChange={setChannelSubscriptionsOpen}
+        onSelectChannel={(conversationId) => {
+          setFolder("channels");
+          setLocation(`/messenger/channel/${conversationId}/settings`);
         }}
       />
 

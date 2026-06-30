@@ -642,6 +642,18 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-bottom: max(1.5rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));
 }
 
+/* Full-height sheet panels (questionnaire, template preview): header below notch. */
+.app-sheet-panel-header {
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  padding-bottom: 0.75rem;
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.app-sheet-panel-body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Keyboard replaces the home-indicator safe area; fill any Safari accessory strip
    below the composer with scrim (padding keeps ::before inside overflow-hidden).
    max() keeps safe-area when keyboard-gap is 0 after a false keyboard-open (mic permission). */

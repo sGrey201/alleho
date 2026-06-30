@@ -1906,6 +1906,9 @@ export const t = {
   joinGroup: 'Вступить в группу',
   channelSubscriptionsDivider: 'Подписки 👆',
   channelAllDivider: 'Все каналы 👇',
+  paidContentTitle: 'Платный контент',
+  paidContentUntil: (date: string) => `до ${date}`,
+  noPaidContent: 'Нет оплаченного контента',
   channelAccessDenied: 'Нет доступа к этому каналу',
   noChats: 'Нет чатов',
   selectChat: 'Выберите чат',
@@ -2080,6 +2083,7 @@ export const t = {
   sponsorShowInListing: 'Показывать меня в списке спонсоров канала',
   contentPaidUntil: (date: string) => `Контент оплачен до ${date}`,
   contentPaidUntilLabel: 'Контент оплачен до:',
+  extendContent: 'Продлить',
   channelSponsorPaidUntil: (date: string) => `Спонсор канала до ${date}`,
   channelParticipantCount: (n: number) => {
     const mod10 = n % 10;

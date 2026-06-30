@@ -2018,7 +2018,7 @@ export default function ConversationChat({
     : templatePreview?.templateName ?? t.questionnaireTitle;
 
   const questionnairePanelHeader = (
-    <div className="flex shrink-0 items-center gap-2 border-b px-3 py-3">
+    <div className="app-sheet-panel-header flex shrink-0 items-center gap-2 border-b">
       <Button
         type="button"
         variant="ghost"
@@ -2894,7 +2894,7 @@ export default function ConversationChat({
         <Sheet open={questionnairePanelOpen} onOpenChange={(open) => !open && closeQuestionnairePanel()}>
           <SheetContent side="right" hideCloseButton className="flex w-full flex-col p-0 sm:max-w-lg">
             {questionnairePanelHeader}
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
               {openQuestionnaireInstanceId && (
                 <DynamicQuestionnaireForm hideTitle mode="instance" instanceId={openQuestionnaireInstanceId} />
               )}

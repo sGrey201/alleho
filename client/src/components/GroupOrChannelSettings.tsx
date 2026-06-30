@@ -92,6 +92,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [patientAvailable, setPatientAvailable] = useState(false);
   const [isClosed, setIsClosed] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contentRenewalOpen, setContentRenewalOpen] = useState(false);
+  const contentRenewalRef = useRef<HTMLDivElement | null>(null);
 
   const { uploadFile, isUploading } = useUpload();
 
@@ -265,14 +267,23 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       channelOwner.user?.email ||
       channelOwner.userId
     : null;
-  const hasContentAccess = !!(conv.hasContentAccess ?? conv.isSponsor);
-  const contentPaidUntilFormatted =
-    mode === "channel" &&
-    sponsorMonetizationEnabled &&
-    hasContentAccess &&
-    conv.sponsorExpiresAt
-      ? format(new Date(conv.sponsorExpiresAt), "d MMMM yyyy", { locale: ru })
-      : null;
+  const contentExpiresAtIso =
+    mode === "channel" && sponsorMonetizationEnabled && !isOwner ? conv.sponsorExpiresAt : null;
+  const contentPaidUntilFormatted = contentExpiresAtIso
+    ? format(new Date(contentExpiresAtIso), "d MMMM yyyy", { locale: ru })
+    : null;
+  const isContentSubscriptionActive = contentExpiresAtIso
+    ? new Date(contentExpiresAtIso).getTime() > Date.now()
+    : false;
+  const showContentPaidBlock = !!contentPaidUntilFormatted;
+  const profileReturnTo = `/messenger/${mode}/${conversationId}/settings`;
+
+  const handleRenewContent = () => {
+    setContentRenewalOpen(true);
+    window.setTimeout(() => {
+      contentRenewalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  };
 
   const openAvatarUpload = () => avatarInputRef.current?.click();
 
@@ -614,7 +625,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 monetizationEnabled={sponsorMonetizationEnabled}
                 isOwner={isOwner}
                 scrollPaymentOnMount={scrollSponsorSection}
-                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
+                profileReturnTo={profileReturnTo}
               />
             )}
             {isOwner && (
@@ -622,22 +633,51 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 conversationId={conversationId}
                 isOwner
                 scrollOnMount={scrollSponsorSection}
-                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
+                profileReturnTo={profileReturnTo}
               />
             )}
             {isOwner && (
               <ChannelSubscribersList
                 participants={conv.participants ?? []}
-                profileReturnTo={`/messenger/${mode}/${conversationId}/settings`}
+                profileReturnTo={profileReturnTo}
               />
             )}
           </>
         )}
 
-        {mode === "channel" && contentPaidUntilFormatted && (
-          <div className="rounded-lg border px-4 py-3">
+        {showContentPaidBlock && (
+          <div
+            className={cn(
+              "rounded-xl border-2 px-4 py-3",
+              isContentSubscriptionActive
+                ? "border-green-600 bg-green-500/10 dark:border-green-500"
+                : "border-destructive bg-destructive/10"
+            )}
+          >
             <p className="text-xs text-muted-foreground mb-1">{t.contentPaidUntilLabel}</p>
-            <p className="text-sm font-medium">{contentPaidUntilFormatted}</p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <p className="text-sm font-medium">{contentPaidUntilFormatted}</p>
+              <button
+                type="button"
+                className="text-sm font-medium text-primary hover:underline"
+                onClick={handleRenewContent}
+              >
+                {t.extendContent}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {contentRenewalOpen && !isOwner && sponsorMonetizationEnabled && (
+          <div ref={contentRenewalRef}>
+            <ChannelSponsorSection
+              conversationId={conversationId}
+              isOwner={false}
+              embedded
+              tierTypes={["content"]}
+              initialSelectedTier="content"
+              profileReturnTo={profileReturnTo}
+            />
           </div>
         )}
 

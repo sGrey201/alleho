@@ -92,6 +92,13 @@ export type MessengerChannelListItem = {
   myRole?: string;
 };
 
+export type UserChannelSubscriptionItem = {
+  conversationId: string;
+  name: string | null;
+  expiresAt: Date;
+  isActive: boolean;
+};
+
 export type MessengerChannelDiscoverItem = {
   id: string;
   name: string | null;
@@ -432,6 +439,7 @@ export interface IStorage {
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
+  getUserChannelSubscriptions(userId: string): Promise<UserChannelSubscriptionItem[]>;
   getMessengerChannelBrowseList(userId: string, isAdmin: boolean): Promise<MessengerChannelBrowseList>;
   getMessengerGroupBrowseList(userId: string): Promise<MessengerGroupBrowseList>;
 
@@ -452,6 +460,10 @@ export interface IStorage {
   ): Promise<ChannelSponsorSettings>;
   hasPriorChannelContentSubscription(conversationId: string, userId: string): Promise<boolean>;
   getParticipantSponsorExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
+  getParticipantContentSubscriptionExpiry(
+    conversationId: string,
+    userId: string
+  ): Promise<Date | null>;
   getParticipantSponsorListingExpiresAt(conversationId: string, userId: string): Promise<Date | null>;
   isActiveChannelSponsor(conversationId: string, userId: string): Promise<boolean>;
   isActiveChannelSponsorListing(conversationId: string, userId: string): Promise<boolean>;
@@ -2324,6 +2336,53 @@ export class DatabaseStorage implements IStorage {
     return channels;
   }
 
+  async getUserChannelSubscriptions(userId: string): Promise<UserChannelSubscriptionItem[]> {
+    const now = Date.now();
+    const participations = await db
+      .select({
+        conversationId: conversations.id,
+        name: conversations.name,
+        role: conversationParticipants.role,
+      })
+      .from(conversationParticipants)
+      .innerJoin(conversations, eq(conversationParticipants.conversationId, conversations.id))
+      .where(
+        and(
+          eq(conversationParticipants.userId, userId),
+          eq(conversations.type, "channel"),
+          isNull(conversations.deletedAt)
+        )
+      );
+
+    const items: UserChannelSubscriptionItem[] = [];
+
+    for (const row of participations) {
+      if (row.role === "owner") continue;
+
+      const expiresAt = await this.getParticipantContentSubscriptionExpiry(
+        row.conversationId,
+        userId
+      );
+      if (!expiresAt || Number.isNaN(expiresAt.getTime())) continue;
+
+      items.push({
+        conversationId: row.conversationId,
+        name: row.name,
+        expiresAt,
+        isActive: expiresAt.getTime() > now,
+      });
+    }
+
+    items.sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      const aTime = a.expiresAt.getTime();
+      const bTime = b.expiresAt.getTime();
+      if (aTime !== bTime) return bTime - aTime;
+      return (a.name ?? "").localeCompare(b.name ?? "", "ru");
+    });
+    return items;
+  }
+
   async getMessengerChannelBrowseList(
     userId: string,
     isAdmin: boolean
@@ -2819,6 +2878,29 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return p?.sponsorExpiresAt ?? null;
+  }
+
+  async getParticipantContentSubscriptionExpiry(
+    conversationId: string,
+    userId: string
+  ): Promise<Date | null> {
+    const fromParticipant = await this.getParticipantSponsorExpiresAt(conversationId, userId);
+    if (fromParticipant) return fromParticipant;
+
+    const [payment] = await db
+      .select({ validUntil: channelSponsorPayments.validUntil })
+      .from(channelSponsorPayments)
+      .where(
+        and(
+          eq(channelSponsorPayments.conversationId, conversationId),
+          eq(channelSponsorPayments.userId, userId),
+          eq(channelSponsorPayments.donationType, "content"),
+          ne(channelSponsorPayments.status, "disputed")
+        )
+      )
+      .orderBy(desc(channelSponsorPayments.validUntil))
+      .limit(1);
+    return payment?.validUntil ?? null;
   }
 
   async getParticipantSponsorListingExpiresAt(

@@ -614,11 +614,26 @@ export default function Profile({
 
   const questionnairePreviewSheet = (
     <Sheet open={!!previewTemplateId} onOpenChange={(open) => !open && setPreviewTemplateId(null)}>
-      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-lg">
+      <SheetContent side="right" hideCloseButton className="flex w-full flex-col p-0 sm:max-w-lg">
         <SheetHeader className="sr-only">
           <SheetTitle>{previewTemplateMeta?.name ?? t.questionnaireTitle}</SheetTitle>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="app-sheet-panel-header flex shrink-0 items-center gap-2 border-b">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            onClick={() => setPreviewTemplateId(null)}
+            aria-label={t.backToHealthWall}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">
+            {previewTemplateMeta?.name ?? t.questionnaireTitle}
+          </h2>
+        </div>
+        <div className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
           {previewTemplate?.structure && (
             <DynamicQuestionnaireForm
               hideTitle

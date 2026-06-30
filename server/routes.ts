@@ -1152,6 +1152,25 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  app.get("/api/me/channel-subscriptions", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const subscriptions = await storage.getUserChannelSubscriptions(currentUserId);
+      res.json({
+        subscriptions: subscriptions.map((sub) => ({
+          conversationId: sub.conversationId,
+          name: sub.name,
+          expiresAt: sub.expiresAt.toISOString(),
+          isActive: sub.isActive,
+        })),
+      });
+    } catch (error) {
+      console.error("Error fetching /api/me/channel-subscriptions:", error);
+      res.status(500).json({ message: "Failed to fetch channel subscriptions" });
+    }
+  });
+
   app.get("/api/me/chats", isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = await getCurrentUserId(req);
