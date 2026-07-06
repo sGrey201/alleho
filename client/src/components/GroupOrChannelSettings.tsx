@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ArrowLeft, Loader2, Trash2, UserPlus, Pencil, Share2 } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Share2, Trash2, UserPlus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +20,13 @@ import ChannelSubscribersList from "@/components/ChannelSubscribersList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,7 +37,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { t } from "@/lib/i18n";
-import { messengerProfilePath, shareMessengerConversation } from "@/lib/messengerPaths";
+import { messengerProfilePath, messengerConversationUrl, shareMessengerConversation } from "@/lib/messengerPaths";
 import { cn, profileAvatarSrc } from "@/lib/utils";
 
 type Participant = {
@@ -94,6 +101,10 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contentRenewalOpen, setContentRenewalOpen] = useState(false);
   const contentRenewalRef = useRef<HTMLDivElement | null>(null);
+  const [groupInviteLinkDialog, setGroupInviteLinkDialog] = useState<{
+    open: boolean;
+    inviteUrl: string;
+  }>({ open: false, inviteUrl: "" });
 
   const { uploadFile, isUploading } = useUpload();
 
@@ -121,6 +132,17 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
       return res.json();
     },
     enabled: mode === "group" && !!conv && isOwner,
+  });
+
+  const issueGroupInviteLinkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/group-invite-link`);
+      return res.json() as Promise<{ inviteUrl: string; expiresAt: string }>;
+    },
+    onSuccess: (data) => {
+      setGroupInviteLinkDialog({ open: true, inviteUrl: data.inviteUrl });
+    },
+    onError: () => toast({ title: t.inviteError, variant: "destructive" }),
   });
 
   const participantIds = useMemo(() => new Set((conv?.participants ?? []).map((p) => p.userId)), [conv?.participants]);
@@ -277,6 +299,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     : false;
   const showContentPaidBlock = !!contentPaidUntilFormatted;
   const profileReturnTo = `/messenger/${mode}/${conversationId}/settings`;
+  const groupConversationPath = `/messenger/group/${conversationId}`;
+  const groupConversationUrl = messengerConversationUrl("group", conversationId);
 
   const handleRenewContent = () => {
     setContentRenewalOpen(true);
@@ -514,7 +538,39 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
-        {mode === "group" && renderShareButton()}
+        {mode === "group" && isPublicProfile && (
+          <div className="rounded-lg border px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{t.groupPublicLinkLabel}</p>
+            <a
+              href={groupConversationPath}
+              className="text-sm font-medium text-primary hover:underline break-all"
+              onClick={(e) => {
+                e.preventDefault();
+                setLocation(groupConversationPath);
+              }}
+            >
+              {groupConversationUrl}
+            </a>
+          </div>
+        )}
+
+        {mode === "group" && !isPublicProfile && isOwner && (
+          <div className="rounded-lg border px-4 py-3">
+            <p className="text-sm text-muted-foreground mb-3">{t.groupInviteLinkHint}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={issueGroupInviteLinkMutation.isPending}
+              onClick={() => issueGroupInviteLinkMutation.mutate()}
+            >
+              {issueGroupInviteLinkMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t.groupInviteGenerateLink}
+            </Button>
+          </div>
+        )}
 
         {mode === "group" && (
           <div className="space-y-2">
@@ -738,6 +794,60 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </Button>
         )}
       </div>
+
+      <Dialog
+        open={groupInviteLinkDialog.open}
+        onOpenChange={(open) => setGroupInviteLinkDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.inviteLinkForGroup}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="break-all text-sm">{groupInviteLinkDialog.inviteUrl}</p>
+            </div>
+            <p className="text-sm text-muted-foreground">{t.inviteLinkValid24h}</p>
+            <DialogFooter className="flex flex-row justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!groupInviteLinkDialog.inviteUrl) return;
+                  await navigator.clipboard.writeText(groupInviteLinkDialog.inviteUrl);
+                  toast({ title: t.patientInviteLinkCopied });
+                }}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                {t.patientInviteCopyLink}
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!groupInviteLinkDialog.inviteUrl) return;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: displayName,
+                        text: t.inviteLinkForGroup,
+                        url: groupInviteLinkDialog.inviteUrl,
+                      });
+                      return;
+                    } catch {
+                      // cancelled
+                    }
+                  }
+                  await navigator.clipboard.writeText(groupInviteLinkDialog.inviteUrl);
+                  toast({ title: t.patientInviteLinkCopied });
+                }}
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                {t.patientInviteShareLink}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

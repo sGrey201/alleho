@@ -60,7 +60,7 @@ export const users = pgTable("users", {
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
-export const inviteTypeEnum = z.enum(["patient", "homeopath", "open"]);
+export const inviteTypeEnum = z.enum(["patient", "homeopath", "open", "group_member"]);
 export type InviteType = z.infer<typeof inviteTypeEnum>;
 
 export const inviteStatusEnum = z.enum(["pending", "accepted", "expired", "revoked"]);

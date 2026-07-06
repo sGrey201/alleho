@@ -29,8 +29,9 @@ const acceptInviteSchema = z.object({
 
 type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
 type InvitePreview = {
-  inviteType: "patient" | "homeopath" | "open";
+  inviteType: "patient" | "homeopath" | "open" | "group_member";
   precreatedPatientChat?: boolean;
+  groupName?: string | null;
   inviter: {
     id: string | null;
     name: string;
@@ -82,6 +83,7 @@ export default function InviteAccept() {
 
   const isOpenInvite = invitePreview?.inviteType === "open";
   const isTypedPatientInvite = invitePreview?.inviteType === "patient";
+  const isGroupInvite = invitePreview?.inviteType === "group_member";
 
   useEffect(() => {
     if (authLoading) return;
@@ -147,6 +149,27 @@ export default function InviteAccept() {
     },
     onError: () => {
       toast({ title: "Неверный email или пароль", variant: "destructive" });
+    },
+  });
+
+  const groupInviteAcceptMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/group-invites/accept", { token });
+      return res.json() as Promise<{ conversationId: string }>;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({ title: t.groupInviteJoined });
+      setLocation(data.conversationId ? `/messenger/group/${data.conversationId}` : APP_HOME_PATH);
+    },
+    onError: (error: Error) => {
+      const msg = error.message || "";
+      let title = t.inviteError;
+      if (msg.includes("invite_expired")) title = "Ссылка-приглашение истекла";
+      else if (msg.includes("invite_inactive")) title = "Ссылка уже использована или отозвана";
+      else if (msg.includes("invalid_invite")) title = "Недействительная ссылка-приглашение";
+      toast({ title, variant: "destructive" });
     },
   });
 
@@ -229,6 +252,10 @@ export default function InviteAccept() {
   };
 
   const goAfterAccountOrEmail = () => {
+    if (isGroupInvite) {
+      setStep("account");
+      return;
+    }
     if (isOpenInvite) {
       setStep("roleSelection");
       return;
@@ -243,6 +270,14 @@ export default function InviteAccept() {
   const handleAccountNext = () => {
     if (!user?.email) return;
     form.setValue("email", user.email);
+    if (isGroupInvite) {
+      if (!user.isAdmin) {
+        toast({ title: t.groupInvitePatientsNotAllowed, variant: "destructive" });
+        return;
+      }
+      groupInviteAcceptMutation.mutate();
+      return;
+    }
     if (isTypedPatientInvite) {
       const resolvedFirstName =
         user.firstName?.trim() ||
@@ -261,6 +296,14 @@ export default function InviteAccept() {
     form.setValue("email", email);
     try {
       const { exists } = await checkInviteEmailMutation.mutateAsync(email);
+      if (isGroupInvite && !exists) {
+        toast({
+          title: t.groupInvitePatientsNotAllowed,
+          description: "Войдите с email зарегистрированного гомеопата.",
+          variant: "destructive",
+        });
+        return;
+      }
       if (exists) {
         setPassword("");
         setStep("password");
@@ -367,9 +410,11 @@ export default function InviteAccept() {
                     </div>
                   </div>
                   <p className="text-center text-sm text-muted-foreground">
-                    {t.inviteAcceptJoinPrecreatedChat(
-                      invitePreview?.inviter?.name || "ваш гомеопат"
-                    )}
+                    {isGroupInvite
+                      ? t.groupInviteAcceptJoin(invitePreview?.groupName ?? "")
+                      : t.inviteAcceptJoinPrecreatedChat(
+                          invitePreview?.inviter?.name || "ваш гомеопат"
+                        )}
                   </p>
                   {isTypedPatientInvite && (
                     <FormField
@@ -391,13 +436,15 @@ export default function InviteAccept() {
                       type="button"
                       className="w-full"
                       onClick={handleAccountNext}
-                      disabled={acceptInviteMutation.isPending}
+                      disabled={acceptInviteMutation.isPending || groupInviteAcceptMutation.isPending}
                     >
-                      {acceptInviteMutation.isPending ? (
+                      {acceptInviteMutation.isPending || groupInviteAcceptMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Завершение...
                         </>
+                      ) : isGroupInvite ? (
+                        t.groupInviteAcceptJoin(invitePreview?.groupName ?? "")
                       ) : isTypedPatientInvite ? (
                         "Завершить регистрацию"
                       ) : (
@@ -409,7 +456,7 @@ export default function InviteAccept() {
                       variant="outline"
                       className="w-full"
                       onClick={() => void handleSwitchAccount()}
-                      disabled={acceptInviteMutation.isPending}
+                      disabled={acceptInviteMutation.isPending || groupInviteAcceptMutation.isPending}
                     >
                       Сменить аккаунт
                     </Button>

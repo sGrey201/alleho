@@ -316,13 +316,14 @@ export interface IStorage {
   createInvite(invite: InsertInvite): Promise<Invite>;
   getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined>;
   getPendingPatientInviteByConversationId(conversationId: string): Promise<Invite | undefined>;
+  getPendingGroupInviteByConversationId(conversationId: string): Promise<Invite | undefined>;
   renewInviteToken(inviteId: string, tokenHash: string, expiresAt: Date, token: string): Promise<Invite>;
   markInviteAccepted(
     inviteId: string,
     acceptedUserId: string,
     acceptedEmail?: string,
     conversationId?: string,
-    options?: { inviteType?: "patient" | "homeopath" }
+    options?: { inviteType?: "patient" | "homeopath" | "group_member" }
   ): Promise<Invite>;
   markInviteExpired(inviteId: string): Promise<Invite>;
   getInviterOfUser(userId: string): Promise<User | undefined>;
@@ -1203,6 +1204,23 @@ export class DatabaseStorage implements IStorage {
     return invite;
   }
 
+  async getPendingGroupInviteByConversationId(
+    conversationId: string
+  ): Promise<Invite | undefined> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(
+        and(
+          eq(invites.conversationId, conversationId),
+          eq(invites.inviteType, "group_member"),
+          eq(invites.status, "pending")
+        )
+      )
+      .orderBy(desc(invites.createdAt));
+    return invite;
+  }
+
   async renewInviteToken(
     inviteId: string,
     tokenHash: string,
@@ -1228,7 +1246,7 @@ export class DatabaseStorage implements IStorage {
     acceptedUserId: string,
     acceptedEmail?: string,
     conversationId?: string,
-    options?: { inviteType?: "patient" | "homeopath" }
+    options?: { inviteType?: "patient" | "homeopath" | "group_member" }
   ): Promise<Invite> {
     const [updated] = await db
       .update(invites)

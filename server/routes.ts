@@ -476,6 +476,10 @@ ${allUrls.map(url => `  <url>
       res.json({
         inviteType: invite.inviteType,
         precreatedPatientChat: invite.inviteType === "patient" && !!invite.conversationId,
+        groupName:
+          invite.inviteType === "group_member" && invite.conversationId
+            ? (await storage.getConversation(invite.conversationId))?.name ?? null
+            : null,
         inviter: {
           id: inviter?.id ?? null,
           name: inviterName,
@@ -1818,6 +1822,117 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error issuing patient invite link:", error);
       res.status(500).json({ message: "Failed to issue patient invite link" });
+    }
+  });
+
+  app.post("/api/conversations/:id/group-invite-link", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "group") {
+        return res.status(400).json({ message: "not_a_group" });
+      }
+      if (!conv.isClosed) {
+        return res.status(400).json({ message: "group_is_public" });
+      }
+
+      const role = await storage.getParticipantRole(id, currentUserId);
+      if (role !== "owner") return res.status(403).json({ message: "Access denied" });
+
+      const baseUrl = process.env.APP_URL || BASE_URL;
+      const existingInvite = await storage.getPendingGroupInviteByConversationId(id);
+      const now = new Date();
+      if (existingInvite && existingInvite.expiresAt > now && existingInvite.token) {
+        const inviteUrl = `${baseUrl}/invite/accept?token=${existingInvite.token}`;
+        return res.json({
+          inviteUrl,
+          expiresAt: existingInvite.expiresAt.toISOString(),
+        });
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      if (existingInvite) {
+        await storage.renewInviteToken(existingInvite.id, tokenHash, expiresAt, token);
+      } else {
+        await storage.createInvite({
+          email: null,
+          inviteType: "group_member",
+          status: "pending",
+          tokenHash,
+          token,
+          invitedByUserId: currentUserId,
+          conversationId: id,
+          expiresAt,
+        });
+      }
+
+      const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
+      res.json({ inviteUrl, expiresAt: expiresAt.toISOString() });
+    } catch (error) {
+      console.error("Error issuing group invite link:", error);
+      res.status(500).json({ message: "Failed to issue group invite link" });
+    }
+  });
+
+  app.post("/api/group-invites/accept", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const token = String(req.body?.token || "").trim();
+      if (!token) return res.status(400).json({ message: "token_required" });
+
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const invite = await storage.getInviteByTokenHash(tokenHash);
+      if (!invite || invite.inviteType !== "group_member") {
+        return res.status(400).json({ message: "invalid_invite" });
+      }
+      if (invite.status !== "pending") {
+        return res.status(400).json({ message: "invite_inactive" });
+      }
+      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+        await storage.markInviteExpired(invite.id);
+        return res.status(400).json({ message: "invite_expired" });
+      }
+      if (!invite.conversationId) {
+        return res.status(400).json({ message: "invalid_invite" });
+      }
+
+      const conv = await storage.getConversation(invite.conversationId);
+      if (!conv || conv.type !== "group" || !conv.isClosed) {
+        return res.status(400).json({ message: "invalid_invite_conversation" });
+      }
+
+      const ownerRole = await storage.getParticipantRole(conv.id, invite.invitedByUserId);
+      if (ownerRole !== "owner") {
+        return res.status(400).json({ message: "invalid_invite_conversation" });
+      }
+
+      const inConv = await storage.isUserInConversation(currentUserId, conv.id);
+      if (!inConv) {
+        await storage.addConversationParticipant(conv.id, currentUserId, "member");
+      }
+
+      const currentUser = await storage.getUser(currentUserId);
+      await storage.markInviteAccepted(invite.id, currentUserId, currentUser?.email ?? undefined, conv.id, {
+        inviteType: "group_member",
+      });
+      await publishDoctorChatsUpdated(currentUserId);
+
+      res.json({
+        conversationId: conv.id,
+        alreadyMember: inConv,
+      });
+    } catch (error) {
+      console.error("Error accepting group invite:", error);
+      res.status(500).json({ message: "Failed to accept group invite" });
     }
   });
 
