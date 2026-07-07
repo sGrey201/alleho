@@ -15,8 +15,60 @@ type FormattedMessageTextProps = {
 };
 
 const tagClassName = "font-normal text-blue-600 hover:underline dark:text-blue-400";
+const linkClassName = "text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400";
 const highlightMarkClass = "rounded-sm bg-yellow-300/80 text-inherit dark:bg-yellow-500/40";
 const tagHighlightClass = "rounded-sm bg-yellow-300/80 dark:bg-yellow-500/40";
+const urlRegex = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+
+type TextUrlSegment =
+  | { type: "text"; text: string }
+  | { type: "url"; text: string; href: string };
+
+function trimTrailingUrlPunctuation(url: string): { cleanUrl: string; trailing: string } {
+  let cleanUrl = url;
+  let trailing = "";
+  while (/[),.!?:;]$/.test(cleanUrl)) {
+    trailing = cleanUrl.slice(-1) + trailing;
+    cleanUrl = cleanUrl.slice(0, -1);
+  }
+  return { cleanUrl, trailing };
+}
+
+function ensureUrlProtocol(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function splitTextAndUrls(text: string): TextUrlSegment[] {
+  const segments: TextUrlSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(urlRegex.source, "gi");
+
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    const rawUrl = match[0];
+    const { cleanUrl, trailing } = trimTrailingUrlPunctuation(rawUrl);
+    if (cleanUrl) {
+      segments.push({
+        type: "url",
+        text: cleanUrl,
+        href: ensureUrlProtocol(cleanUrl),
+      });
+    }
+    if (trailing) {
+      segments.push({ type: "text", text: trailing });
+    }
+    lastIndex = re.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", text }];
+}
 
 function renderHighlightedText(text: string, keyPrefix: string, highlightQuery?: string) {
   if (!highlightQuery?.trim()) {
@@ -72,7 +124,27 @@ function renderPlainWithTags(
     }
     return (
       <span key={`${keyPrefix}-${j}`}>
-        {renderHighlightedText(seg.text, `${keyPrefix}-${j}`, highlightQuery)}
+        {splitTextAndUrls(seg.text).map((part, partIndex) => {
+          if (part.type === "url") {
+            return (
+              <a
+                key={`${keyPrefix}-${j}-u${partIndex}`}
+                href={part.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className={linkClassName}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {part.text}
+              </a>
+            );
+          }
+          return (
+            <span key={`${keyPrefix}-${j}-t${partIndex}`}>
+              {renderHighlightedText(part.text, `${keyPrefix}-${j}-${partIndex}`, highlightQuery)}
+            </span>
+          );
+        })}
       </span>
     );
   });

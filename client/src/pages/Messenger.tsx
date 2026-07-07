@@ -538,6 +538,26 @@ export default function Messenger() {
     enabled: patientChannelSearchActive,
   });
 
+  const shouldValidateConversationRoute =
+    isAuthenticated &&
+    !!conversationId &&
+    !isProfileOpen;
+  const { isError: isConversationRouteInvalid } = useQuery({
+    queryKey: ["/api/conversations", conversationId, "route-guard"],
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations/${conversationId}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: shouldValidateConversationRoute,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!isConversationRouteInvalid) return;
+    setLocation("/messenger");
+  }, [isConversationRouteInvalid, setLocation]);
+
   useDoctorChatsWs(isAuthenticated);
 
   function filterChatsBySearch(items: ChatItem[], query: string, isAdminUser: boolean): ChatItem[] {
