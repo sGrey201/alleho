@@ -40,6 +40,10 @@ import { t } from "@/lib/i18n";
 import { messengerProfilePath, messengerConversationUrl, shareMessengerConversation } from "@/lib/messengerPaths";
 import { cn, profileAvatarSrc } from "@/lib/utils";
 
+function generateDeleteConfirmationCode(): number {
+  return Math.floor(100 + Math.random() * 900);
+}
+
 type Participant = {
   userId: string;
   role: string;
@@ -99,6 +103,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [patientAvailable, setPatientAvailable] = useState(false);
   const [isClosed, setIsClosed] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState<number | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState("");
   const [contentRenewalOpen, setContentRenewalOpen] = useState(false);
   const contentRenewalRef = useRef<HTMLDivElement | null>(null);
   const [groupInviteLinkDialog, setGroupInviteLinkDialog] = useState<{
@@ -224,6 +230,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     },
     onSuccess: async () => {
       setDeleteDialogOpen(false);
+      setDeleteConfirmationCode(null);
+      setDeleteCodeInput("");
       await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/messenger/search"] });
       await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
@@ -237,6 +245,23 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
 
   const canUnsubscribeFromChannel = mode === "channel" && !!myRole && !isOwner;
   const isPublicProfile = !isClosed;
+
+  const openDeleteDialog = () => {
+    setDeleteConfirmationCode(generateDeleteConfirmationCode());
+    setDeleteCodeInput("");
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setDeleteConfirmationCode(null);
+      setDeleteCodeInput("");
+    }
+  };
+
+  const deleteCodeMatches =
+    deleteConfirmationCode !== null && deleteCodeInput.trim() === String(deleteConfirmationCode);
 
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -783,7 +808,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
             variant="outline"
             className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
             disabled={deleteMutation.isPending}
-            onClick={() => setDeleteDialogOpen(true)}
+            onClick={openDeleteDialog}
           >
             {deleteMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -849,26 +874,46 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
               {mode === "group" ? t.deleteGroupConfirmTitle : t.deleteChannelConfirmTitle}
             </AlertDialogTitle>
-            <AlertDialogDescription>{t.deleteGroupOrChannelConfirmDescription}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {mode === "group"
+                ? t.deleteGroupConfirmDescription(displayName)
+                : t.deleteChannelConfirmDescription(displayName)}
+            </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteConfirmationCode !== null && (
+            <div className="space-y-2">
+              <Label htmlFor="delete-conversation-code">
+                {t.deleteConfirmationCodePrompt(deleteConfirmationCode)}
+              </Label>
+              <Input
+                id="delete-conversation-code"
+                inputMode="numeric"
+                autoComplete="off"
+                value={deleteCodeInput}
+                onChange={(e) => setDeleteCodeInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="000"
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
+              disabled={!deleteCodeMatches || deleteMutation.isPending}
               onClick={(e) => {
                 e.preventDefault();
+                if (!deleteCodeMatches) return;
                 deleteMutation.mutate();
               }}
             >
               {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {t.delete}
+              {mode === "group" ? t.deleteGroup : t.deleteChannel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

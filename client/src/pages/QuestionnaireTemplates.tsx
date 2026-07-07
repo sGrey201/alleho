@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useLocation, useRoute } from "wouter";
@@ -12,8 +12,20 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,11 +43,21 @@ import { QuestionnaireTemplatesEmptyState } from "@/components/QuestionnaireTemp
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 
+function generateDeleteConfirmationCode(): number {
+  return Math.floor(100 + Math.random() * 900);
+}
+
 export default function QuestionnaireTemplates() {
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   const [, editParams] = useRoute("/questionnaires/:id/edit");
   const selectedId = editParams?.id ?? null;
+  const [deleteDialog, setDeleteDialog] = useState<{
+    id: string;
+    name: string;
+    code: number;
+  } | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<QuestionnaireTemplate[]>({
     queryKey: ["/api/questionnaire-templates"],
@@ -91,10 +113,31 @@ export default function QuestionnaireTemplates() {
       return id;
     },
     onSuccess: (deletedId) => {
+      setDeleteDialog(null);
+      setDeleteCodeInput("");
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
       navigateAfterDelete(deletedId);
     },
   });
+
+  const openDeleteDialog = (tpl: QuestionnaireTemplate) => {
+    setDeleteDialog({
+      id: tpl.id,
+      name: tpl.name,
+      code: generateDeleteConfirmationCode(),
+    });
+    setDeleteCodeInput("");
+  };
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      setDeleteDialog(null);
+      setDeleteCodeInput("");
+    }
+  };
+
+  const deleteCodeMatches =
+    deleteDialog !== null && deleteCodeInput.trim() === String(deleteDialog.code);
 
   const shareMutation = useMutation({
     mutationFn: async ({ id, isShared }: { id: string; isShared: boolean }) => {
@@ -208,7 +251,7 @@ export default function QuestionnaireTemplates() {
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       disabled={deleteMutation.isPending}
-                      onSelect={() => deleteMutation.mutate(tpl.id)}
+                      onSelect={() => openDeleteDialog(tpl)}
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
                       {t.delete}
@@ -262,6 +305,49 @@ export default function QuestionnaireTemplates() {
         {!isMobile && <div className="flex min-h-0 min-w-0 flex-1 flex-col">{editorPanel}</div>}
         {isMobileEditorOpen && <div className="flex min-h-0 flex-1 flex-col">{editorPanel}</div>}
       </div>
+
+      <AlertDialog open={!!deleteDialog} onOpenChange={handleDeleteDialogOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.deleteQuestionnaireTemplateConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteDialog
+                ? t.deleteQuestionnaireTemplateConfirmDescription(deleteDialog.name)
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteDialog && (
+            <div className="space-y-2">
+              <Label htmlFor="delete-questionnaire-code">
+                {t.deleteConfirmationCodePrompt(deleteDialog.code)}
+              </Label>
+              <Input
+                id="delete-questionnaire-code"
+                inputMode="numeric"
+                autoComplete="off"
+                value={deleteCodeInput}
+                onChange={(e) => setDeleteCodeInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="000"
+              />
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!deleteCodeMatches || deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!deleteDialog || !deleteCodeMatches) return;
+                deleteMutation.mutate(deleteDialog.id);
+              }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t.deleteQuestionnaireTemplate}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

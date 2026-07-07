@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
@@ -730,37 +730,48 @@ export default function Profile({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{t.reportUser}</DialogTitle>
+              <DialogDescription>{t.reportUserDescription}</DialogDescription>
             </DialogHeader>
-            <RadioGroup
-              value={reportCategory}
-              onValueChange={(value) => setReportCategory(value as AccountReportCategory)}
-              className="space-y-2"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="spam" id="report-spam" />
-                <Label htmlFor="report-spam" className="font-normal cursor-pointer">
-                  {t.reportCategorySpam}
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="profanity" id="report-profanity" />
-                <Label htmlFor="report-profanity" className="font-normal cursor-pointer">
-                  {t.reportCategoryProfanity}
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="other" id="report-other" />
-                <Label htmlFor="report-other" className="font-normal cursor-pointer">
-                  {t.reportCategoryOther}
-                </Label>
-              </div>
-            </RadioGroup>
-            <Textarea
-              value={reportDetails}
-              onChange={(e) => setReportDetails(e.target.value)}
-              placeholder={t.reportDetailsPlaceholder}
-              rows={3}
-            />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">{t.reportCategoryLabel}</Label>
+              <RadioGroup
+                value={reportCategory}
+                onValueChange={(value) => setReportCategory(value as AccountReportCategory)}
+                className="space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="spam" id="report-spam" />
+                  <Label htmlFor="report-spam" className="font-normal cursor-pointer">
+                    {t.reportCategorySpam}
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="profanity" id="report-profanity" />
+                  <Label htmlFor="report-profanity" className="font-normal cursor-pointer">
+                    {t.reportCategoryProfanity}
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="other" id="report-other" />
+                  <Label htmlFor="report-other" className="font-normal cursor-pointer">
+                    {t.reportCategoryOther}
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="report-details" className="text-sm font-medium">
+                {t.reportDetailsLabel}
+                {reportCategory === "other" ? " *" : ""}
+              </Label>
+              <Textarea
+                id="report-details"
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder={t.reportDetailsPlaceholder}
+                rows={3}
+              />
+            </div>
             <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => setReportDialogOpen(false)}>
                 {t.cancel}

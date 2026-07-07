@@ -185,6 +185,13 @@ export const t = {
   editQuestionnaireTemplate: 'Редактировать опросник',
   duplicateQuestionnaire: 'Дублировать',
   deleteQuestionnaireTemplate: 'Удалить опросник',
+  deleteQuestionnaireTemplateConfirmTitle: 'Удалить опросник?',
+  deleteQuestionnaireTemplateConfirmDescription: (name: string) =>
+    `Это действие нельзя отменить. Опросник «${name}» будет удалён безвозвратно.`,
+  deleteQuestionnaireTemplateCodePrompt: (code: number) =>
+    `Для подтверждения введите число ${code}`,
+  deleteConfirmationCodePrompt: (code: number) =>
+    `Для подтверждения введите число ${code}`,
   addSection: 'Добавить раздел',
   addSubsection: 'Добавить подраздел',
   exportSection: 'Выгрузить',
@@ -1816,6 +1823,21 @@ export const t = {
   statusSaved: 'сохранено',
   statusNotSaved: 'не сохранено',
 
+  // Account reports
+  reportUser: 'Пожаловаться на аккаунт',
+  reportUserDescription: 'Выберите причину жалобы. Она будет рассмотрена администрацией.',
+  reportCategoryLabel: 'Причина жалобы',
+  reportCategorySpam: 'Спам',
+  reportCategoryProfanity: 'Нецензурная лексика',
+  reportCategoryOther: 'Другое',
+  reportDetailsLabel: 'Подробности',
+  reportDetailsPlaceholder: 'Опишите, что именно нарушает правила',
+  reportSubmit: 'Отправить жалобу',
+  reportSubmitted: 'Жалоба отправлена',
+  reportSubmitError: 'Не удалось отправить жалобу',
+  reportAlreadySubmitted: 'Вы уже отправляли жалобу на этот аккаунт',
+  reportDetailsRequired: 'Укажите подробности (не менее 3 символов)',
+
   // Errors
   unauthorized: 'Не авторизован',
   unauthorizedDescription: 'Вы вышли из системы. Повторный вход...',
@@ -2022,6 +2044,10 @@ export const t = {
   deleteChannel: 'Удалить канал',
   deleteGroupConfirmTitle: 'Удалить группу?',
   deleteChannelConfirmTitle: 'Удалить канал?',
+  deleteGroupConfirmDescription: (name: string) =>
+    `Это действие нельзя отменить. Группа «${name}» будет удалена безвозвратно.`,
+  deleteChannelConfirmDescription: (name: string) =>
+    `Это действие нельзя отменить. Канал «${name}» будет удалён безвозвратно.`,
   deleteGroupOrChannelConfirmDescription: 'Вы уверены, что хотите это сделать?',
   conversationDeleted: 'Удалено',
   channelOwnerLabel: 'Владелец',
