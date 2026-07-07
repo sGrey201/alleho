@@ -2101,6 +2101,7 @@ export const t = {
     return `${n} подписчиков`;
   },
   channelHeaderStats: (subscribers: number) => `Подписчиков: ${subscribers}`,
+  groupHeaderStats: (participants: number) => `Участников: ${participants}`,
   sponsorPaymentSubmitted: 'Чек отправлен.',
   sponsorPaymentApprove: 'Утвердить',
   sponsorPaymentDispute: 'Оспорить',

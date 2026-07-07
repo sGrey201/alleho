@@ -2115,6 +2115,11 @@ export default function ConversationChat({
                 {t.channelHeaderStats(conv.participantCount ?? conv.participants?.length ?? 0)}
               </p>
             )}
+            {conv.type === "group" && (
+              <p className="truncate text-xs leading-tight text-muted-foreground">
+                {t.groupHeaderStats(conv.participantCount ?? conv.participants?.length ?? 0)}
+              </p>
+            )}
           </button>
           {canUseChatSearch && (
           <Button
