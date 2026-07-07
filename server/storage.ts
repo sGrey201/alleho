@@ -316,7 +316,6 @@ export interface IStorage {
   createInvite(invite: InsertInvite): Promise<Invite>;
   getInviteByTokenHash(tokenHash: string): Promise<Invite | undefined>;
   getPendingPatientInviteByConversationId(conversationId: string): Promise<Invite | undefined>;
-  getPendingGroupInviteByConversationId(conversationId: string): Promise<Invite | undefined>;
   renewInviteToken(inviteId: string, tokenHash: string, expiresAt: Date, token: string): Promise<Invite>;
   markInviteAccepted(
     inviteId: string,
@@ -1197,23 +1196,6 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(invites.conversationId, conversationId),
           eq(invites.inviteType, "patient"),
-          eq(invites.status, "pending")
-        )
-      )
-      .orderBy(desc(invites.createdAt));
-    return invite;
-  }
-
-  async getPendingGroupInviteByConversationId(
-    conversationId: string
-  ): Promise<Invite | undefined> {
-    const [invite] = await db
-      .select()
-      .from(invites)
-      .where(
-        and(
-          eq(invites.conversationId, conversationId),
-          eq(invites.inviteType, "group_member"),
           eq(invites.status, "pending")
         )
       )

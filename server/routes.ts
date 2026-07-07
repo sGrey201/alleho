@@ -1844,34 +1844,20 @@ ${allUrls.map(url => `  <url>
       if (role !== "owner") return res.status(403).json({ message: "Access denied" });
 
       const baseUrl = process.env.APP_URL || BASE_URL;
-      const existingInvite = await storage.getPendingGroupInviteByConversationId(id);
-      const now = new Date();
-      if (existingInvite && existingInvite.expiresAt > now && existingInvite.token) {
-        const inviteUrl = `${baseUrl}/invite/accept?token=${existingInvite.token}`;
-        return res.json({
-          inviteUrl,
-          expiresAt: existingInvite.expiresAt.toISOString(),
-        });
-      }
-
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      if (existingInvite) {
-        await storage.renewInviteToken(existingInvite.id, tokenHash, expiresAt, token);
-      } else {
-        await storage.createInvite({
-          email: null,
-          inviteType: "group_member",
-          status: "pending",
-          tokenHash,
-          token,
-          invitedByUserId: currentUserId,
-          conversationId: id,
-          expiresAt,
-        });
-      }
+      await storage.createInvite({
+        email: null,
+        inviteType: "group_member",
+        status: "pending",
+        tokenHash,
+        token,
+        invitedByUserId: currentUserId,
+        conversationId: id,
+        expiresAt,
+      });
 
       const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
       res.json({ inviteUrl, expiresAt: expiresAt.toISOString() });

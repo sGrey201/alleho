@@ -1901,7 +1901,8 @@ export const t = {
   groupVisibilityPublicHint: 'Группу можно найти в поиске и вступить без приглашения.',
   groupVisibilityClosedHint: 'Участников добавляет только владелец; группа скрыта из поиска.',
   groupPublicLinkLabel: 'Ссылка на группу',
-  groupInviteLinkHint: 'Одноразовая ссылка для приглашения гомеопата в закрытую группу.',
+  groupInviteLinkHint:
+    'Одноразовая ссылка для приглашения гомеопата в закрытую группу. Каждое нажатие создаёт новую уникальную ссылку для одного человека.',
   groupInviteGenerateLink: 'Создать ссылку-приглашение',
   inviteLinkForGroup: 'Ссылка-приглашение в группу',
   groupInviteAcceptJoin: (groupName: string) =>
