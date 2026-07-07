@@ -6,6 +6,24 @@ function getPathname(path: string): string {
   return path.split("?")[0] ?? "";
 }
 
+function getSearchParams(path: string): URLSearchParams {
+  const search = path.includes("?") ? (path.split("?")[1] ?? "") : "";
+  return new URLSearchParams(search);
+}
+
+export function isInviteAcceptReturnPath(path: string): boolean {
+  const pathname = getPathname(path);
+  if (pathname !== "/invite/accept") return false;
+  const token = getSearchParams(path).get("token")?.trim();
+  return !!token;
+}
+
+export function getInviteAcceptTokenFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = new URLSearchParams(window.location.search).get("token")?.trim();
+  return token || null;
+}
+
 function normalizeReturnPath(path: string): string {
   const [pathname, search = ""] = path.split("?");
   const query = search ? `?${search}` : "";
@@ -31,6 +49,7 @@ function normalizeReturnPath(path: string): string {
 function isValidReturnPath(path: string): boolean {
   const pathname = getPathname(path);
   if (!pathname || pathname === "/") return false;
+  if (isInviteAcceptReturnPath(path)) return true;
   return !AUTH_FLOW_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
