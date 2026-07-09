@@ -18,6 +18,7 @@ import ChannelSponsorSection from "@/components/ChannelSponsorSection";
 import ChannelSponsorsList from "@/components/ChannelSponsorsList";
 import ChannelSubscribersList from "@/components/ChannelSubscribersList";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { QuestionnaireHintPopover } from "@/components/QuestionnaireHintPopover";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import {
   Dialog,
@@ -65,6 +66,9 @@ type ConversationInfo = {
   participantCount?: number;
   patientAvailable?: boolean;
   isClosed?: boolean;
+  isHidden?: boolean;
+  subscriptionPending?: boolean;
+  myMembershipStatus?: string | null;
   sponsorSettings?: { enabled: boolean } | null;
   isSponsor?: boolean;
   hasContentAccess?: boolean;
@@ -102,6 +106,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [patientAvailable, setPatientAvailable] = useState(false);
   const [isClosed, setIsClosed] = useState(true);
+  const [isHidden, setIsHidden] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState<number | null>(null);
   const [deleteCodeInput, setDeleteCodeInput] = useState("");
@@ -125,7 +130,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     setAvatarDraft(conv.avatarUrl ?? "");
     setPatientAvailable(!!conv.patientAvailable);
     setIsClosed(conv.isClosed ?? true);
-  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed]);
+    setIsHidden(!!conv.isHidden);
+  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed, conv?.isHidden]);
 
   const myRole = conv?.participants?.find((p) => p.userId === currentUserId)?.role;
   const isOwner = myRole === "owner";
@@ -174,7 +180,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   });
 
   const saveVisibilityMutation = useMutation({
-    mutationFn: async (flags: { patientAvailable?: boolean; isClosed?: boolean }) => {
+    mutationFn: async (flags: { patientAvailable?: boolean; isClosed?: boolean; isHidden?: boolean }) => {
       const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, flags);
       return res.json();
     },
@@ -245,6 +251,23 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
 
   const canUnsubscribeFromChannel = mode === "channel" && !!myRole && !isOwner;
   const isPublicProfile = !isClosed;
+  const showChannelShareLink = mode === "channel" && (isPublicProfile || isHidden);
+
+  const approveSubscriptionMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/conversations/${conversationId}/subscription-requests/${userId}/approve`,
+        {}
+      );
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      toast({ title: t.channelSubscriptionApproved });
+    },
+    onError: () => toast({ title: t.error, variant: "destructive" }),
+  });
 
   const openDeleteDialog = () => {
     setDeleteConfirmationCode(generateDeleteConfirmationCode());
@@ -326,6 +349,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const profileReturnTo = `/messenger/${mode}/${conversationId}/settings`;
   const groupConversationPath = `/messenger/group/${conversationId}`;
   const groupConversationUrl = messengerConversationUrl("group", conversationId);
+  const channelConversationPath = `/messenger/channel/${conversationId}`;
+  const channelConversationUrl = messengerConversationUrl("channel", conversationId);
 
   const handleRenewContent = () => {
     setContentRenewalOpen(true);
@@ -359,7 +384,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   };
 
   const renderShareButton = (className?: string) =>
-    isPublicProfile ? (
+    (mode === "group" ? isPublicProfile : showChannelShareLink) ? (
       <Button
         type="button"
         variant="outline"
@@ -563,6 +588,22 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
+        {mode === "channel" && isHidden && isOwner && (
+          <div className="rounded-lg border px-4 py-3">
+            <p className="text-xs text-muted-foreground mb-1">{t.channelPublicLinkLabel}</p>
+            <a
+              href={channelConversationPath}
+              className="text-sm font-medium text-primary hover:underline break-all"
+              onClick={(e) => {
+                e.preventDefault();
+                setLocation(channelConversationPath);
+              }}
+            >
+              {channelConversationUrl}
+            </a>
+          </div>
+        )}
+
         {mode === "group" && isPublicProfile && (
           <div className="rounded-lg border px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1">{t.groupPublicLinkLabel}</p>
@@ -695,6 +736,24 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 {t.channelHomeopathOnly}
               </Label>
             </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="channel-hidden"
+                checked={isHidden}
+                onCheckedChange={(checked) => {
+                  const nextIsHidden = checked === true;
+                  setIsHidden(nextIsHidden);
+                  saveVisibilityMutation.mutate({ isHidden: nextIsHidden });
+                }}
+                disabled={saveVisibilityMutation.isPending}
+              />
+              <div className="flex items-center gap-1">
+                <Label htmlFor="channel-hidden" className="text-sm font-normal cursor-pointer">
+                  {t.channelHidden}
+                </Label>
+                <QuestionnaireHintPopover hints={[t.channelHiddenHint]} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -721,6 +780,11 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
               <ChannelSubscribersList
                 participants={conv.participants ?? []}
                 profileReturnTo={profileReturnTo}
+                conversationId={conversationId}
+                isOwner={isOwner}
+                isHiddenChannel={isHidden}
+                onApproveSubscription={(userId) => approveSubscriptionMutation.mutate(userId)}
+                isApproving={approveSubscriptionMutation.isPending}
               />
             )}
           </>
@@ -782,9 +846,9 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
-        {mode === "channel" && (isPublicProfile || canUnsubscribeFromChannel) && (
+        {mode === "channel" && (showChannelShareLink || canUnsubscribeFromChannel) && (
           <div className="flex gap-2">
-            {isPublicProfile && renderShareButton("w-auto flex-1 min-w-0")}
+            {showChannelShareLink && renderShareButton("w-auto flex-1 min-w-0")}
             {canUnsubscribeFromChannel && (
               <Button
                 type="button"

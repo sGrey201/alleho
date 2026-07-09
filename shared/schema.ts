@@ -320,6 +320,9 @@ export type ConversationType = z.infer<typeof conversationTypeEnum>;
 export const participantRoleEnum = z.enum(["member", "admin", "owner"]);
 export type ParticipantRole = z.infer<typeof participantRoleEnum>;
 
+export const channelMembershipStatusEnum = z.enum(["active", "pending"]);
+export type ChannelMembershipStatus = z.infer<typeof channelMembershipStatusEnum>;
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -333,6 +336,7 @@ export const conversations = pgTable(
     lastMessagePreview: text("last_message_preview"),
     patientAvailable: boolean("patient_available").notNull().default(false),
     isClosed: boolean("is_closed").notNull().default(false),
+    isHidden: boolean("is_hidden").notNull().default(false),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -360,6 +364,7 @@ export const conversationParticipants = pgTable(
     conversationId: varchar("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 20 }).notNull().default("member"),
+    membershipStatus: varchar("membership_status", { length: 20 }).notNull().default("active"),
     /** Per-user chat title (patient chats: doctor and patient may differ). */
     displayName: varchar("display_name", { length: 255 }),
     sponsorExpiresAt: timestamp("sponsor_expires_at"),

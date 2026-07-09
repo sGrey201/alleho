@@ -1917,6 +1917,16 @@ export const t = {
   channelSub: 'Подписка',
   channelVisibilityTitle: 'Видимость канала',
   channelHomeopathOnly: 'Только гомеопатам',
+  channelHidden: 'Скрытый',
+  channelHiddenHint:
+    'Канал доступен только по прямой ссылке. Контент открывается после одобрения подписки владельцем.',
+  channelPublicLinkLabel: 'Ссылка на канал',
+  channelSubscribeRequest: 'Запросить подписку',
+  channelSubscriptionPending:
+    'Заявка на подписку отправлена. Ожидайте одобрения владельца канала.',
+  channelSubscriptionPendingOwner: 'Ожидает одобрения',
+  channelSubscriptionApprove: 'Одобрить',
+  channelSubscriptionApproved: 'Подписка одобрена',
   groupVisibilityTitle: 'Видимость группы',
   groupVisibilityPublic: 'Публичная (доступна всем гомеопатам)',
   groupVisibilityClosed: 'Закрытая (по приглашению)',

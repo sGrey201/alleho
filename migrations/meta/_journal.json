@@ -232,6 +232,13 @@
       "when": 1774200000000,
       "tag": "0032_invites_link_token",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1774210000000,
+      "tag": "0033_channel_hidden",
+      "breakpoints": true
     }
   ]
 }

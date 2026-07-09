@@ -131,9 +131,13 @@ interface ConversationInfo {
   sponsorExpiresAt?: string | null;
   participantCount?: number;
   sponsorCount?: number;
+  isHidden?: boolean;
+  subscriptionPending?: boolean;
+  myMembershipStatus?: string | null;
   participants?: Array<{
     userId: string;
     role: string;
+    membershipStatus?: string | null;
     displayName?: string | null;
     sponsorExpiresAt?: string | null;
     lastSeenAt?: string | null;
@@ -901,14 +905,17 @@ export default function ConversationChat({
 
   const subscribeMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", `/api/conversations/${conversationId}/subscribe`, {});
+      const res = await apiRequest("POST", `/api/conversations/${conversationId}/subscribe`, {});
+      return res.json() as Promise<{ pending?: boolean }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setHideSubscribeButton(true);
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
-      toast({ title: "Вы подписались на канал" });
+      toast({
+        title: data?.pending ? t.channelSubscriptionPending : "Вы подписались на канал",
+      });
     },
     onError: (err: Error) => {
       setHideSubscribeButton(false);
@@ -1559,7 +1566,11 @@ export default function ConversationChat({
   const myRole = myChannelRole;
   const isOwner = myRole === "owner";
   const isChannelMemberReadOnly = conv.type === "channel" && myRole === "member";
-  const isChannelReadOnly = conv.type === "channel" && !myRole;
+  const isChannelSubscriptionPending =
+    conv?.type === "channel" &&
+    (conv.subscriptionPending || conv.myMembershipStatus === "pending");
+  const isChannelReadOnly =
+    conv?.type === "channel" && (!myChannelRole || isChannelSubscriptionPending);
   const isGroupReadOnly = conv.type === "group" && !myRole;
   const showGuestAction = isChannelReadOnly || isGroupReadOnly;
   const showChannelComposer = !isChannelMemberReadOnly;
@@ -2413,7 +2424,11 @@ export default function ConversationChat({
           )}
 
           {showGuestAction ? (
-            isChannelReadOnly && !hideSubscribeButton ? (
+            isChannelReadOnly && isChannelSubscriptionPending ? (
+              <p className="w-full px-2 py-2 text-center text-sm text-muted-foreground">
+                {t.channelSubscriptionPending}
+              </p>
+            ) : isChannelReadOnly && !hideSubscribeButton ? (
               <Button
                 type="button"
                 className="w-full"
@@ -2425,6 +2440,8 @@ export default function ConversationChat({
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {t.actionSubscribe}
                   </>
+                ) : conv.isHidden ? (
+                  t.channelSubscribeRequest
                 ) : (
                   t.subscribeToChannel
                 )}

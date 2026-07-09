@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { differenceInCalendarDays, startOfDay } from "date-fns";
 import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ const ROW_HEIGHT_REM = 2.75;
 export type ChannelSubscriber = {
   userId: string;
   role: string;
+  membershipStatus?: string | null;
   sponsorExpiresAt?: string | null;
   sponsorListingExpiresAt?: string | null;
   user?: {
@@ -24,6 +26,11 @@ export type ChannelSubscriber = {
 type Props = {
   participants: ChannelSubscriber[];
   profileReturnTo?: string;
+  conversationId?: string;
+  isOwner?: boolean;
+  isHiddenChannel?: boolean;
+  onApproveSubscription?: (userId: string) => void;
+  isApproving?: boolean;
 };
 
 type SubscriptionInfo = {
@@ -78,7 +85,14 @@ function compareSubscribers(a: ChannelSubscriber, b: ChannelSubscriber) {
   return displayName(a).localeCompare(displayName(b), "ru", { sensitivity: "base" });
 }
 
-export default function ChannelSubscribersList({ participants, profileReturnTo }: Props) {
+export default function ChannelSubscribersList({
+  participants,
+  profileReturnTo,
+  isOwner = false,
+  isHiddenChannel = false,
+  onApproveSubscription,
+  isApproving = false,
+}: Props) {
   const [, setLocation] = useLocation();
 
   const subscribers = useMemo(
@@ -101,6 +115,10 @@ export default function ChannelSubscribersList({ participants, profileReturnTo }
             const roleLabel = isHomeopath ? t.channelSubscriberHomeopath : t.channelSubscriberPatient;
             const roleLetter = isHomeopath ? t.channelSubscriberRoleHomeopath : t.channelSubscriberRolePatient;
             const { contentDays, sponsorDays } = getSubscriptionInfo(subscriber);
+            const isPending =
+              isHiddenChannel &&
+              subscriber.role === "member" &&
+              subscriber.membershipStatus === "pending";
 
             return (
               <li key={subscriber.userId} className="flex items-start gap-2 py-2.5 first:pt-0 last:pb-0">
@@ -136,7 +154,24 @@ export default function ChannelSubscribersList({ participants, profileReturnTo }
                       )}
                     </div>
                   )}
+                  {isPending && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      {t.channelSubscriptionPendingOwner}
+                    </p>
+                  )}
                 </div>
+                {isOwner && isPending && onApproveSubscription && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={isApproving}
+                    onClick={() => onApproveSubscription(subscriber.userId)}
+                  >
+                    {t.channelSubscriptionApprove}
+                  </Button>
+                )}
               </li>
             );
           })}

@@ -4,7 +4,7 @@ import crypto from "crypto";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
-import { canUserReadChannel, canUserSubscribeToChannel } from "./channelAccess";
+import { canUserReadChannel, canUserSubscribeToChannel, canUserViewChannelProfile, buildChannelAccessContext } from "./channelAccess";
 import { canUserJoinGroup, canUserReadGroup } from "./groupAccess";
 import { db } from "./db";
 import { users, payments } from "@shared/schema";
@@ -1468,6 +1468,7 @@ ${allUrls.map(url => `  <url>
       const discover = await storage.getDiscoverableConversations(currentUserId, {
         type: "channel",
         excludeClosed: true,
+        excludeHidden: true,
         patientAvailableOnly: true,
         excludeConversationIds: subscriptions.map((channel) => channel.id),
       });
@@ -1522,6 +1523,7 @@ ${allUrls.map(url => `  <url>
         type: "channel",
         nameFilter: q || undefined,
         excludeClosed: true,
+        excludeHidden: true,
       });
 
       res.json({
@@ -1654,9 +1656,19 @@ ${allUrls.map(url => `  <url>
       const currentUser = await storage.getUser(currentUserId);
       if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
+      const participantRole = inConv ? await storage.getParticipantRole(id, currentUserId) : undefined;
+      const membershipStatus = inConv
+        ? await storage.getParticipantMembershipStatus(id, currentUserId)
+        : undefined;
+      const channelCtx = buildChannelAccessContext(
+        inConv,
+        !!currentUser.isAdmin,
+        participantRole,
+        membershipStatus
+      );
       const canReadConversation =
         conv.type === "channel"
-          ? canUserReadChannel(conv, inConv, !!currentUser.isAdmin)
+          ? canUserViewChannelProfile(conv, channelCtx)
           : conv.type === "group"
             ? canUserReadGroup(conv, inConv, !!currentUser.isAdmin)
             : inConv;
@@ -1692,7 +1704,13 @@ ${allUrls.map(url => `  <url>
         participants,
         myDisplayName,
         ...(conv.type === "channel"
-          ? { participantCount: participants.length, sponsorCount }
+          ? {
+              participantCount: participants.length,
+              sponsorCount,
+              myMembershipStatus: membershipStatus ?? null,
+              canReadChannelContent: canUserReadChannel(conv, channelCtx),
+              subscriptionPending: membershipStatus === "pending",
+            }
           : {}),
         sponsorSettings: sponsorSettings
           ? {
@@ -1936,6 +1954,7 @@ ${allUrls.map(url => `  <url>
         addParticipantIds?: string[];
         patientAvailable?: boolean;
         isClosed?: boolean;
+        isHidden?: boolean;
       };
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
@@ -1949,11 +1968,12 @@ ${allUrls.map(url => `  <url>
           avatarUrl: body.avatarUrl === undefined ? conv.avatarUrl ?? null : body.avatarUrl,
         });
       }
-      if (conv.type === "channel" && (body.patientAvailable !== undefined || body.isClosed !== undefined)) {
+      if (conv.type === "channel" && (body.patientAvailable !== undefined || body.isClosed !== undefined || body.isHidden !== undefined)) {
         if (role !== "owner") return res.status(403).json({ message: "only_owner_can_edit_conversation" });
         await storage.updateConversation(id, {
           ...(body.patientAvailable !== undefined ? { patientAvailable: body.patientAvailable } : {}),
           ...(body.isClosed !== undefined ? { isClosed: body.isClosed } : {}),
+          ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         });
       }
       if (conv.type === "group" && body.isClosed !== undefined) {
@@ -2049,8 +2069,23 @@ ${allUrls.map(url => `  <url>
       const conv = await storage.getConversation(id);
       if (!conv || conv.type !== "channel") return res.status(404).json({ message: "Not a channel" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
-      if (!canUserSubscribeToChannel(conv, inConv, !!currentUser.isAdmin)) {
+      const participantRole = inConv ? await storage.getParticipantRole(id, currentUserId) : undefined;
+      const membershipStatus = inConv
+        ? await storage.getParticipantMembershipStatus(id, currentUserId)
+        : undefined;
+      const channelCtx = buildChannelAccessContext(
+        inConv,
+        !!currentUser.isAdmin,
+        participantRole,
+        membershipStatus
+      );
+      if (!canUserSubscribeToChannel(conv, channelCtx)) {
         return res.status(403).json({ message: "Cannot subscribe to this channel" });
+      }
+      if (conv.isHidden) {
+        await storage.addConversationParticipant(id, currentUserId, "member", undefined, "pending");
+        await publishDoctorChatsUpdated(currentUserId);
+        return res.json({ success: true, pending: true });
       }
       await storage.addConversationParticipant(id, currentUserId, "member");
       await publishDoctorChatsUpdated(currentUserId);
@@ -2060,6 +2095,32 @@ ${allUrls.map(url => `  <url>
       res.status(500).json({ message: "Failed to subscribe" });
     }
   });
+
+  app.post(
+    "/api/conversations/:id/subscription-requests/:userId/approve",
+    isAuthenticated,
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const { id, userId } = req.params;
+        const currentUserId = await getCurrentUserId(req);
+        if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+        const role = await storage.getParticipantRole(id, currentUserId);
+        if (role !== "owner") return res.status(403).json({ message: "Only owner can approve subscriptions" });
+        const conv = await storage.getConversation(id);
+        if (!conv || conv.type !== "channel" || !conv.isHidden) {
+          return res.status(400).json({ message: "Subscription approval only for hidden channels" });
+        }
+        const approved = await storage.approveChannelSubscription(id, userId);
+        if (!approved) return res.status(404).json({ message: "Pending subscription not found" });
+        await publishDoctorChatsUpdated(userId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error approving channel subscription:", error);
+        res.status(500).json({ message: "Failed to approve subscription" });
+      }
+    }
+  );
 
   // Unsubscribe from channel
   app.delete("/api/conversations/:id/subscribe", isAuthenticated, async (req: any, res) => {
@@ -2270,7 +2331,17 @@ ${allUrls.map(url => `  <url>
         return res.status(404).json({ message: "Channel not found" });
       }
       const inConv = await storage.isUserInConversation(currentUserId, id);
-      if (!canUserReadChannel(conv, inConv, !!currentUser.isAdmin)) {
+      const participantRole = inConv ? await storage.getParticipantRole(id, currentUserId) : undefined;
+      const membershipStatus = inConv
+        ? await storage.getParticipantMembershipStatus(id, currentUserId)
+        : undefined;
+      const channelCtx = buildChannelAccessContext(
+        inConv,
+        !!currentUser.isAdmin,
+        participantRole,
+        membershipStatus
+      );
+      if (!canUserReadChannel(conv, channelCtx)) {
         return res.status(403).json({ message: "Access denied" });
       }
       const body = req.body as {
@@ -2670,9 +2741,19 @@ ${allUrls.map(url => `  <url>
       const currentUser = await storage.getUser(currentUserId);
       if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
       const inConv = await storage.isUserInConversation(currentUserId, id);
+      const participantRole = inConv ? await storage.getParticipantRole(id, currentUserId) : undefined;
+      const membershipStatus = inConv
+        ? await storage.getParticipantMembershipStatus(id, currentUserId)
+        : undefined;
+      const channelCtx = buildChannelAccessContext(
+        inConv,
+        !!currentUser.isAdmin,
+        participantRole,
+        membershipStatus
+      );
       const canReadMessages =
         conv.type === "channel"
-          ? canUserReadChannel(conv, inConv, !!currentUser.isAdmin)
+          ? canUserReadChannel(conv, channelCtx)
           : conv.type === "group"
             ? canUserReadGroup(conv, inConv, !!currentUser.isAdmin)
             : inConv;

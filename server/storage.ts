@@ -52,6 +52,7 @@ import {
   type ChannelSponsorSettings,
   type ChannelSponsorPayment,
   type ChannelSponsorDonationType,
+  type ChannelMembershipStatus,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, lt, isNull } from "drizzle-orm";
@@ -64,7 +65,7 @@ import {
   type QuestionnaireHintsMode,
 } from "@shared/questionnaireTypes";
 import { isPositiveTierAmount, resolveContentTierAmount } from "@shared/sponsorTiers";
-import { canUserReadChannel, canUserSubscribeToChannel } from "./channelAccess";
+import { canUserReadChannel, canUserSubscribeToChannel, buildChannelAccessContext } from "./channelAccess";
 
 export type ArticleWithTags = Article & { tags: Tag[] };
 export type MessengerPersonalContact = {
@@ -340,6 +341,7 @@ export interface IStorage {
       type: "group" | "channel";
       nameFilter?: string;
       excludeClosed?: boolean;
+      excludeHidden?: boolean;
       patientAvailableOnly?: boolean;
       excludeConversationIds?: string[];
     }
@@ -370,6 +372,11 @@ export interface IStorage {
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
+  getParticipantMembershipStatus(
+    conversationId: string,
+    userId: string
+  ): Promise<ChannelMembershipStatus | undefined>;
+  approveChannelSubscription(conversationId: string, userId: string): Promise<boolean>;
   markConversationSeen(conversationId: string, userId: string): Promise<Date | null>;
   getConversationParticipantLastSeenAt(conversationId: string, userId: string): Promise<Date | null>;
   getConversationUnreadCount(conversationId: string, userId: string): Promise<number>;
@@ -432,6 +439,7 @@ export interface IStorage {
       patientUserId?: string | null;
       patientAvailable?: boolean;
       isClosed?: boolean;
+      isHidden?: boolean;
     }
   ): Promise<Conversation | undefined>;
   markConversationDeleted(id: string): Promise<Conversation | undefined>;
@@ -1356,6 +1364,7 @@ export class DatabaseStorage implements IStorage {
       type: "group" | "channel";
       nameFilter?: string;
       excludeClosed?: boolean;
+      excludeHidden?: boolean;
       patientAvailableOnly?: boolean;
       excludeConversationIds?: string[];
     }
@@ -1378,6 +1387,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (options.excludeClosed) {
       conditions.push(eq(conversations.isClosed, false));
+    }
+    if (options.excludeHidden) {
+      conditions.push(eq(conversations.isHidden, false));
     }
     if (options.patientAvailableOnly) {
       conditions.push(eq(conversations.patientAvailable, true));
@@ -1430,7 +1442,8 @@ export class DatabaseStorage implements IStorage {
     conversationId: string,
     userId: string,
     role: string = "member",
-    displayName?: string | null
+    displayName?: string | null,
+    membershipStatus: ChannelMembershipStatus = "active"
   ): Promise<ConversationParticipant> {
     const [p] = await db
       .insert(conversationParticipants)
@@ -1438,6 +1451,7 @@ export class DatabaseStorage implements IStorage {
         conversationId,
         userId,
         role,
+        membershipStatus,
         ...(displayName != null && displayName.trim() ? { displayName: displayName.trim() } : {}),
       })
       .returning();
@@ -1497,6 +1511,38 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return p?.role;
+  }
+
+  async getParticipantMembershipStatus(
+    conversationId: string,
+    userId: string
+  ): Promise<ChannelMembershipStatus | undefined> {
+    const [p] = await db
+      .select({ membershipStatus: conversationParticipants.membershipStatus })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+    const status = p?.membershipStatus;
+    return status === "pending" || status === "active" ? status : undefined;
+  }
+
+  async approveChannelSubscription(conversationId: string, userId: string): Promise<boolean> {
+    const [updated] = await db
+      .update(conversationParticipants)
+      .set({ membershipStatus: "active" })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId),
+          eq(conversationParticipants.membershipStatus, "pending")
+        )
+      )
+      .returning({ id: conversationParticipants.id });
+    return !!updated;
   }
 
   async markConversationSeen(conversationId: string, userId: string): Promise<Date | null> {
@@ -2179,6 +2225,7 @@ export class DatabaseStorage implements IStorage {
       patientUserId?: string | null;
       patientAvailable?: boolean;
       isClosed?: boolean;
+      isHidden?: boolean;
     }
   ): Promise<Conversation | undefined> {
     const [c] = await db
@@ -2392,6 +2439,7 @@ export class DatabaseStorage implements IStorage {
     const discoverRaw = await this.getDiscoverableConversations(userId, {
       type: "channel",
       excludeClosed: true,
+      excludeHidden: true,
       patientAvailableOnly: !isAdmin,
       excludeConversationIds: subscriptionIds,
     });
@@ -3036,9 +3084,10 @@ export class DatabaseStorage implements IStorage {
     if (conv?.type === "channel") {
       const user = await this.getUser(userId);
       const isAdmin = !!user?.isAdmin;
+      const membershipStatus = await this.getParticipantMembershipStatus(conversationId, userId);
+      const ctx = buildChannelAccessContext(false, isAdmin, undefined, membershipStatus);
       const mayJoin =
-        canUserSubscribeToChannel(conv, false, isAdmin) ||
-        canUserReadChannel(conv, false, isAdmin);
+        canUserSubscribeToChannel(conv, ctx) || canUserReadChannel(conv, ctx);
       if (!user || !mayJoin) {
         throw new Error("cannot_join_channel");
       }
