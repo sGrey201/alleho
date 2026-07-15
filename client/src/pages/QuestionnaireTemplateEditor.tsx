@@ -158,7 +158,7 @@ function NodeActionsMenu({
           {t.edit}
         </DropdownMenuItem>
         <DropdownMenuItem className="py-2.5" onSelect={() => actions.onAddTag(path)}>
-          {t.addTag}
+          {t.addQuestion}
         </DropdownMenuItem>
         <DropdownMenuItem className="py-2.5" disabled={!canAddChild} onSelect={() => actions.onAddChild(path)}>
           {t.addSubsection}
@@ -521,7 +521,7 @@ export function QuestionnaireTemplateEditor({
       setStructure(
         updateNodeAtPath(structure, path, (n) => ({
           ...n,
-          tags: [...(n.tags ?? []), { id: newStructureId("tag"), label: "Новый тег" }],
+          tags: [...(n.tags ?? []), { id: newStructureId("tag"), label: t.newQuestionItem }],
         }))
       );
       setEditTarget({ kind: "tag", path, tagIndex });
@@ -685,14 +685,23 @@ export function QuestionnaireTemplateEditor({
         {embedded && showBackButton && (
           <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{name || t.editQuestionnaireTemplate}</h1>
         )}
-        <Button
-          className="ml-auto shrink-0"
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !name.trim()}
-        >
-          {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {t.save}
-        </Button>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <span
+            className={cn(
+              "text-sm",
+              dirty ? "text-destructive" : "text-green-600 dark:text-green-500"
+            )}
+          >
+            {dirty ? t.statusNotSaved : t.statusSaved}
+          </span>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || !name.trim()}
+          >
+            {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {t.save}
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -784,8 +793,6 @@ export function QuestionnaireTemplateEditor({
           </Accordion>
         )}
       </div>
-
-      {dirty && <p className="text-sm text-muted-foreground">{t.statusNotSaved}</p>}
 
       <EditStructureItemDialog
         editTarget={editTarget}

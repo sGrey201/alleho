@@ -1,4 +1,4 @@
-import { ClipboardList, Lightbulb, Users } from "lucide-react";
+import { ClipboardList, Lightbulb, Loader2, Plus, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   className?: string;
+  onCreate?: () => void;
+  isCreating?: boolean;
 };
 
-export function QuestionnaireTemplatesEmptyState({ className }: Props) {
+export function QuestionnaireTemplatesEmptyState({ className, onCreate, isCreating }: Props) {
   return (
     <div className={cn("flex flex-1 flex-col items-center justify-center p-4 sm:p-6", className)}>
       <div className="w-full max-w-md text-center">
@@ -43,6 +45,23 @@ export function QuestionnaireTemplatesEmptyState({ className }: Props) {
             {t.questionnaireTemplatesOpenGroup}
           </Link>
         </Button>
+
+        {onCreate && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={onCreate}
+            disabled={isCreating}
+          >
+            {isCreating ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
+            {t.questionnaireTemplatesCreateNew}
+          </Button>
+        )}
       </div>
     </div>
   );

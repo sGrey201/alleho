@@ -10,6 +10,7 @@ import {
   Loader2,
   ArrowLeft,
   MoreVertical,
+  FileDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,9 @@ import { cn } from "@/lib/utils";
 import type { QuestionnaireTemplate } from "@shared/schema";
 import { QuestionnaireTemplateEditor } from "@/pages/QuestionnaireTemplateEditor";
 import { QuestionnaireTemplatesEmptyState } from "@/components/QuestionnaireTemplatesEmptyState";
+import { exportQuestionnaireTemplateToWord } from "@/lib/questionnaireTemplateWordExport";
+import type { QuestionnaireTemplateStructure } from "@shared/questionnaireTypes";
+import { useToast } from "@/hooks/use-toast";
 import { RouteSeo } from "@/components/RouteSeo";
 import { pageMeta } from "@/lib/pageMeta";
 
@@ -49,6 +53,7 @@ function generateDeleteConfirmationCode(): number {
 
 export default function QuestionnaireTemplates() {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [, editParams] = useRoute("/questionnaires/:id/edit");
   const selectedId = editParams?.id ?? null;
@@ -129,6 +134,17 @@ export default function QuestionnaireTemplates() {
     setDeleteCodeInput("");
   };
 
+  const handleExportToWord = (tpl: QuestionnaireTemplate) => {
+    try {
+      exportQuestionnaireTemplateToWord(
+        tpl.name,
+        tpl.structure as QuestionnaireTemplateStructure
+      );
+    } catch {
+      toast({ title: t.exportQuestionnaireToWordError, variant: "destructive" });
+    }
+  };
+
   const handleDeleteDialogOpenChange = (open: boolean) => {
     if (!open) {
       setDeleteDialog(null);
@@ -193,7 +209,10 @@ export default function QuestionnaireTemplates() {
         </div>
       ) : isEmpty ? (
         isMobile ? (
-          <QuestionnaireTemplatesEmptyState />
+          <QuestionnaireTemplatesEmptyState
+            onCreate={() => createMutation.mutate()}
+            isCreating={createMutation.isPending}
+          />
         ) : (
           <p className="px-4 py-8 text-center text-xs leading-relaxed text-muted-foreground">
             {t.questionnaireTemplatesEmptyTitle}
@@ -241,6 +260,10 @@ export default function QuestionnaireTemplates() {
                       />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => handleExportToWord(tpl)}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      {t.exportQuestionnaireToWord}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={duplicateMutation.isPending}
                       onSelect={() => duplicateMutation.mutate(tpl.id)}
@@ -284,7 +307,10 @@ export default function QuestionnaireTemplates() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : isEmpty ? (
-          <QuestionnaireTemplatesEmptyState />
+          <QuestionnaireTemplatesEmptyState
+            onCreate={() => createMutation.mutate()}
+            isCreating={createMutation.isPending}
+          />
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
             {t.selectQuestionnaireToSend}
