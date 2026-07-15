@@ -218,7 +218,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
           <AccordionItem key={node.id} value={node.id}>
             <AccordionTrigger className={triggerClassName}>
               <span className="flex flex-1 items-center gap-2">
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex min-w-0 items-center gap-1 text-left">
                   {node.title}
                   {renderSectionHintIcon(node.hint)}
                 </span>
@@ -243,9 +243,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
       return (
         <AccordionItem key={node.id} value={node.id}>
           <AccordionTrigger className={triggerClassName}>
-            <span className="inline-flex items-center gap-1">
-              {node.title}
-              {renderSectionHintIcon(node.hint)}
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="inline-flex min-w-0 items-center gap-1 text-left">
+                {node.title}
+                {renderSectionHintIcon(node.hint)}
+              </span>
             </span>
           </AccordionTrigger>
           <AccordionContent>

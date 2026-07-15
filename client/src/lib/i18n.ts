@@ -268,7 +268,7 @@ export const t = {
   weight: 'Вес (кг)',
   city: 'Город проживания',
   
-  describeSelectedTraits: 'Опишите подробно. Ответьте на уточняющие вопросы',
+  describeSelectedTraits: 'Опишите ситуацию подробнее',
 
   questionnaireSections: [
     {
