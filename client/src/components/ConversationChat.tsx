@@ -1574,6 +1574,9 @@ export default function ConversationChat({
   const isGroupReadOnly = conv.type === "group" && !myRole;
   const showGuestAction = isChannelReadOnly || isGroupReadOnly;
   const showChannelComposer = !isChannelMemberReadOnly;
+  const showComposerPanel =
+    showChannelComposer || (isChatSearchOpen && canUseChatSearch);
+  const showChatSearchNav = isChatSearchOpen && !!chatSearchQuery.trim();
   const participantIds = new Set((conv.participants ?? []).map((p) => p.userId));
   const candidates = (doctorSearchData?.doctors ?? []).filter((d) => !participantIds.has(d.userId));
 
@@ -2372,7 +2375,7 @@ export default function ConversationChat({
         </DialogContent>
       </Dialog>
 
-      {showChannelComposer && (
+      {showComposerPanel && (
       <div className="chat-composer-panel absolute inset-x-0 bottom-0 z-20 bg-transparent px-4 pt-2 space-y-2">
           {!isChatSearchOpen && !showGuestAction && (replyTo || editing) && (
             <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/95 px-3 py-2 shadow-sm backdrop-blur-md">
@@ -2423,7 +2426,45 @@ export default function ConversationChat({
             </div>
           )}
 
-          {showGuestAction ? (
+          {showChatSearchNav ? (
+                <div className="border-0 px-0 py-0">
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-[22px] bg-background/90 px-3 text-sm font-medium shadow-sm backdrop-blur-md"
+                      data-testid="text-chat-search-count"
+                    >
+                      <ListOrdered className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="whitespace-nowrap tabular-nums leading-none">
+                        {chatSearchMatches.length > 0
+                          ? `${chatSearchMatchIndex + 1} ${t.chatSearchOf} ${chatSearchMatches.length}`
+                          : t.chatSearchFoundNone}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => goToChatSearchMatch(-1)}
+                      disabled={chatSearchMatches.length === 0}
+                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
+                      aria-label={t.search}
+                      data-testid="button-chat-search-prev"
+                    >
+                      <ChevronUp className="stroke-[2.5]" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => goToChatSearchMatch(1)}
+                      disabled={chatSearchMatches.length === 0}
+                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
+                      aria-label={t.search}
+                      data-testid="button-chat-search-next"
+                    >
+                      <ChevronDown className="stroke-[2.5]" />
+                    </Button>
+                  </div>
+                </div>
+          ) : showGuestAction ? (
             isChannelReadOnly && isChannelSubscriptionPending ? (
               <p className="w-full px-2 py-2 text-center text-sm text-muted-foreground">
                 {t.channelSubscriptionPending}
@@ -2465,49 +2506,6 @@ export default function ConversationChat({
             ) : null
           ) : (
             <div className="pt-1">
-              {isChatSearchOpen ? (
-                chatSearchQuery.trim() ? (
-                <div className="border-0 px-0 py-0">
-                  <div className="flex items-end gap-2">
-                    <div
-                      className="flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-[22px] bg-background/90 px-3 text-sm font-medium shadow-sm backdrop-blur-md"
-                      data-testid="text-chat-search-count"
-                    >
-                      <ListOrdered className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="whitespace-nowrap tabular-nums leading-none">
-                        {chatSearchMatches.length > 0
-                          ? `${chatSearchMatchIndex + 1} ${t.chatSearchOf} ${chatSearchMatches.length}`
-                          : t.chatSearchFoundNone}
-                      </span>
-                    </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => goToChatSearchMatch(-1)}
-                      disabled={chatSearchMatches.length === 0}
-                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
-                      aria-label={t.search}
-                      data-testid="button-chat-search-prev"
-                    >
-                      <ChevronUp className="stroke-[2.5]" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => goToChatSearchMatch(1)}
-                      disabled={chatSearchMatches.length === 0}
-                      className="h-10 w-10 shrink-0 rounded-full border-border bg-[#e8ecf1] text-[#28292c] hover:bg-muted/80 [&_svg]:!size-4"
-                      aria-label={t.search}
-                      data-testid="button-chat-search-next"
-                    >
-                      <ChevronDown className="stroke-[2.5]" />
-                    </Button>
-                    </div>
-                  </div>
-                </div>
-                ) : null
-              ) : (
               <ChatInputBar
                 ref={chatInputRef}
                 value={composerValue}
@@ -2543,7 +2541,6 @@ export default function ConversationChat({
                 onMessageModeChange={setMessageMode}
                 onInputFocus={scrollMessagesForKeyboard}
               />
-              )}
             </div>
           )}
         </div>
