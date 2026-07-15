@@ -29,9 +29,14 @@ function isBoldElement(el: HTMLElement): boolean {
   return !Number.isNaN(numeric) && numeric >= 600;
 }
 
+function normalizeTextNode(text: string): string {
+  // HTML exporters (Word, markdown tools) wrap long lines in source; those \n are not paragraph breaks.
+  return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ");
+}
+
 function walkNode(node: Node, ancestorBold: boolean): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    return (node.textContent ?? "").replace(/\u00a0/g, " ");
+    return normalizeTextNode(node.textContent ?? "");
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return "";
 
