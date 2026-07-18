@@ -2173,6 +2173,8 @@ export const t = {
   messageActionPin: 'Закрепить',
   messageActionUnpin: 'Открепить',
   messageActionCopy: 'Скопировать текст',
+  messageActionView: 'Просмотр',
+  questionnaireEmptySummary: 'Нет заполненных данных',
   messageEdited: 'изменено',
   messageDeleted: 'Сообщение удалено',
   messageReplyingTo: 'Ответ',

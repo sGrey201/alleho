@@ -37,6 +37,7 @@ import {
   Copy,
   Link2,
   Pill,
+  Eye,
   FileText,
   ClipboardList,
   Search,
@@ -438,7 +439,11 @@ export default function ConversationChat({
     messageId: string;
     segmentIndex: number;
   } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<ConversationMessageWithAuthor | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    message: ConversationMessageWithAuthor;
+    code: number;
+  } | null>(null);
+  const [deleteCodeInput, setDeleteCodeInput] = useState("");
   const [activePinnedIndex, setActivePinnedIndex] = useState(-1);
   const [messageLayer, setMessageLayer] = useState<{
     message: ConversationMessageWithAuthor;
@@ -454,6 +459,7 @@ export default function ConversationChat({
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
   const [openQuestionnaireTemplateName, setOpenQuestionnaireTemplateName] = useState<string | null>(null);
+  const [questionnaireFilledOnly, setQuestionnaireFilledOnly] = useState(false);
   const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatSearchMatchIndex, setChatSearchMatchIndex] = useState(0);
@@ -468,6 +474,7 @@ export default function ConversationChat({
   useEffect(() => {
     setOpenQuestionnaireInstanceId(null);
     setOpenQuestionnaireTemplateName(null);
+    setQuestionnaireFilledOnly(false);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
     setIsChatSearchOpen(false);
@@ -850,6 +857,7 @@ export default function ConversationChat({
           )
       );
       setPendingDelete(null);
+      setDeleteCodeInput("");
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
@@ -1692,6 +1700,18 @@ export default function ConversationChat({
 
     return (
       <>
+          {msg.messageType === "questionnaire" && (
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => {
+                openQuestionnaireFromMessage(msg, true);
+                onDone?.();
+              }}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              {t.messageActionView}
+            </button>
+          )}
           {canReplyToChannel && (
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startReply(msg); onDone?.(); }}>
               <Reply className="mr-2 h-4 w-4" />
@@ -1750,7 +1770,14 @@ export default function ConversationChat({
           {canDelete && (
             <button
               className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive hover:bg-muted"
-              onClick={() => { setPendingDelete(msg); onDone?.(); }}
+              onClick={() => {
+                setPendingDelete({
+                  message: msg,
+                  code: Math.floor(100 + Math.random() * 900),
+                });
+                setDeleteCodeInput("");
+                onDone?.();
+              }}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               {t.messageActionDelete}
@@ -1815,18 +1842,23 @@ export default function ConversationChat({
     );
   };
 
-  const openQuestionnaireFromMessage = (msg: ConversationMessageWithAuthor) => {
+  const openQuestionnaireFromMessage = (msg: ConversationMessageWithAuthor, filledOnly = false) => {
     if (msg.messageType === "questionnaire") {
       const payload = parseQuestionnaireMessageContent(msg.content);
       if (payload) {
         setOpenQuestionnaireInstanceId(payload.instanceId);
         setOpenQuestionnaireTemplateName(payload.templateName);
+        setQuestionnaireFilledOnly(filledOnly);
+        setTemplatePreview(null);
       }
       return;
     }
     if (msg.messageType === "questionnaire_template") {
       const payload = parseQuestionnaireTemplateMessageContent(msg.content);
       if (payload?.snapshot) {
+        setQuestionnaireFilledOnly(false);
+        setOpenQuestionnaireInstanceId(null);
+        setOpenQuestionnaireTemplateName(null);
         setTemplatePreview({
           templateId: payload.templateId,
           templateName: payload.templateName,
@@ -2025,6 +2057,7 @@ export default function ConversationChat({
   const closeQuestionnairePanel = () => {
     setOpenQuestionnaireInstanceId(null);
     setOpenQuestionnaireTemplateName(null);
+    setQuestionnaireFilledOnly(false);
     setTemplatePreview(null);
   };
   const questionnairePanelTitle = openQuestionnaireInstanceId
@@ -2553,7 +2586,13 @@ export default function ConversationChat({
           {questionnairePanelHeader}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {openQuestionnaireInstanceId && (
-              <DynamicQuestionnaireForm hideTitle mode="instance" instanceId={openQuestionnaireInstanceId} />
+              <DynamicQuestionnaireForm
+                hideTitle
+                mode="instance"
+                instanceId={openQuestionnaireInstanceId}
+                readOnly={questionnaireFilledOnly}
+                filledOnly={questionnaireFilledOnly}
+              />
             )}
             {templatePreview && !openQuestionnaireInstanceId && (
               <DynamicQuestionnaireForm
@@ -2857,7 +2896,12 @@ export default function ConversationChat({
 
       <AlertDialog
         open={!!pendingDelete}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDelete(null);
+            setDeleteCodeInput("");
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2866,12 +2910,40 @@ export default function ConversationChat({
               {t.messageDeleteConfirmDescription}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingDelete && (
+            <div className="space-y-2">
+              <Label htmlFor="delete-message-code">
+                {t.deleteConfirmationCodePrompt(pendingDelete.code)}
+              </Label>
+              <Input
+                id="delete-message-code"
+                inputMode="numeric"
+                autoComplete="off"
+                value={deleteCodeInput}
+                onChange={(e) => setDeleteCodeInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="000"
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => pendingDelete && deleteMutation.mutate(pendingDelete.id)}
-              disabled={deleteMutation.isPending}
+              disabled={
+                !pendingDelete ||
+                deleteCodeInput.trim() !== String(pendingDelete.code) ||
+                deleteMutation.isPending
+              }
+              onClick={(e) => {
+                e.preventDefault();
+                if (
+                  !pendingDelete ||
+                  deleteCodeInput.trim() !== String(pendingDelete.code)
+                ) {
+                  return;
+                }
+                deleteMutation.mutate(pendingDelete.message.id);
+              }}
             >
               {deleteMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2915,7 +2987,13 @@ export default function ConversationChat({
             {questionnairePanelHeader}
             <div className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
               {openQuestionnaireInstanceId && (
-                <DynamicQuestionnaireForm hideTitle mode="instance" instanceId={openQuestionnaireInstanceId} />
+                <DynamicQuestionnaireForm
+                  hideTitle
+                  mode="instance"
+                  instanceId={openQuestionnaireInstanceId}
+                  readOnly={questionnaireFilledOnly}
+                  filledOnly={questionnaireFilledOnly}
+                />
               )}
               {templatePreview && !openQuestionnaireInstanceId && (
                 <DynamicQuestionnaireForm

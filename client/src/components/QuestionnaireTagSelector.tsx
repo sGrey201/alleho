@@ -32,6 +32,7 @@ export function QuestionnaireTagSelector({
   const [justSelected, setJustSelected] = useState<Set<string>>(new Set());
   const visibleTags = hideUnselected ? tags.filter((tag) => selectedKeys.includes(tag.id)) : tags;
   const showHintsAsIcon = hintsMode === "icon";
+  const summaryMode = !!hideUnselected && !!readOnly;
 
   return (
     <div className="space-y-2">
@@ -39,6 +40,19 @@ export function QuestionnaireTagSelector({
         const isSelected = selectedKeys.includes(tag.id);
         const entry = selectedEntries.find((e) => e.tagKey === tag.id);
         const shouldPulse = justSelected.has(tag.id);
+        const description = (entry?.description ?? "").trim();
+
+        if (summaryMode) {
+          return (
+            <div key={tag.id} className="space-y-1">
+              <p className="text-sm font-medium">{tag.label}</p>
+              {description ? (
+                <p className="whitespace-pre-wrap rounded-md bg-muted p-2 text-sm">{description}</p>
+              ) : null}
+            </div>
+          );
+        }
+
         return (
           <div key={tag.id}>
             <div className="flex items-start gap-2">
