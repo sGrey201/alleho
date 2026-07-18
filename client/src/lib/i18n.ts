@@ -2175,6 +2175,7 @@ export const t = {
   messageActionCopy: 'Скопировать текст',
   messageActionView: 'Просмотр',
   questionnaireEmptySummary: 'Нет заполненных данных',
+  questionnairePrintFormLabel: 'Печатная форма',
   messageEdited: 'изменено',
   messageDeleted: 'Сообщение удалено',
   messageReplyingTo: 'Ответ',

@@ -13,6 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { QuestionnaireTagSelector } from "@/components/QuestionnaireTagSelector";
 import { QuestionnaireHintPopover, QuestionnaireHintText } from "@/components/QuestionnaireHintPopover";
+import { QuestionnaireFilledPrintView } from "@/components/QuestionnaireFilledPrintView";
 import type {
   QuestionnaireInstanceData,
   QuestionnaireNode,
@@ -55,7 +56,7 @@ type Props = {
       mode: "instance";
       instanceId: string;
       readOnly?: boolean;
-      /** Show only filled profile fields and selected tags (implies read-only summary). */
+      /** Printable filled-only summary (no form controls). */
       filledOnly?: boolean;
     }
   | {
@@ -82,35 +83,6 @@ function sectionHasSelectedTag(
 ): boolean {
   if ((sections[node.id]?.length ?? 0) > 0) return true;
   return (node.children ?? []).some((child) => sectionHasSelectedTag(child, sections));
-}
-
-function collectFilledSectionIds(
-  nodes: QuestionnaireNode[],
-  sections: QuestionnaireInstanceData["sections"]
-): string[] {
-  const ids: string[] = [];
-  for (const node of nodes) {
-    if (sectionHasSelectedTag(node, sections)) {
-      ids.push(node.id);
-      if (node.children?.length) {
-        ids.push(...collectFilledSectionIds(node.children, sections));
-      }
-    }
-  }
-  return ids;
-}
-
-function hasFilledProfile(profile: PatientProfileBlock): boolean {
-  return !!(
-    profile.firstName?.trim() ||
-    profile.lastName?.trim() ||
-    profile.birthMonth ||
-    profile.birthYear ||
-    profile.gender ||
-    profile.height ||
-    profile.weight ||
-    profile.city?.trim()
-  );
 }
 
 export default function DynamicQuestionnaireForm(props: Props) {
@@ -140,7 +112,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       : props.structure;
   const templateName = props.mode === "instance" ? instanceQuery.data?.templateName ?? "" : props.templateName;
   const filledOnly = props.mode === "instance" && !!props.filledOnly;
-  const readOnly = props.mode === "preview" ? true : !!props.readOnly || filledOnly;
+  const readOnly = props.mode === "preview" ? true : !!props.readOnly;
   const canEditNotes = props.mode === "instance" && !readOnly && !!user?.isAdmin;
   const hintsMode =
     props.mode === "instance"
@@ -149,13 +121,13 @@ export default function DynamicQuestionnaireForm(props: Props) {
   const showHintsAsIcon = hintsMode === "icon";
 
   const renderSectionHint = (hint?: string) => {
-    if (!hint || filledOnly) return null;
+    if (!hint) return null;
     if (showHintsAsIcon) return null;
     return <QuestionnaireHintText hint={hint} className="mb-2" />;
   };
 
   const renderSectionHintIcon = (hint?: string) => {
-    if (!hint || !showHintsAsIcon || filledOnly) return null;
+    if (!hint || !showHintsAsIcon) return null;
     return <QuestionnaireHintPopover hints={[hint]} />;
   };
 
@@ -243,7 +215,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
       const hasTags = (node.tags?.length ?? 0) > 0;
       const hasChildren = (node.children?.length ?? 0) > 0;
       const hasFilledTag = sectionHasSelectedTag(node, formData.sections);
-      if (filledOnly && !hasFilledTag) return null;
       const triggerClassName = cn("text-sm", hasFilledTag ? "font-bold" : "font-medium");
 
       if (hasTags && !hasChildren) {
@@ -267,7 +238,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
                 onBlur={() => scheduleSave(node.id)}
                 readOnly={readOnly}
-                hideUnselected={filledOnly}
                 hintsMode={hintsMode}
               />
             </AccordionContent>
@@ -286,7 +256,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
           </AccordionTrigger>
           <AccordionContent>
             {renderSectionHint(node.hint)}
-            {hasTags && (!filledOnly || (formData.sections[node.id]?.length ?? 0) > 0) && (
+            {hasTags && (
               <div className="mb-3">
                 <QuestionnaireTagSelector
                   tags={(node.tags ?? []).map((tag) => ({ id: tag.id, label: tag.label, hint: tag.hint }))}
@@ -295,22 +265,12 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
                   onBlur={() => scheduleSave(node.id)}
                   readOnly={readOnly}
-                  hideUnselected={filledOnly}
                   hintsMode={hintsMode}
                 />
               </div>
             )}
             {hasChildren && (
-              <Accordion
-                key={
-                  filledOnly
-                    ? `filled-${node.id}-${collectFilledSectionIds(node.children!, formData.sections).join("-")}`
-                    : `edit-${node.id}`
-                }
-                type="multiple"
-                className="pl-2"
-                defaultValue={filledOnly ? collectFilledSectionIds(node.children!, formData.sections) : undefined}
-              >
+              <Accordion type="multiple" className="pl-2">
                 {renderNodeSections(node.children!, depth + 1)}
               </Accordion>
             )}
@@ -327,25 +287,27 @@ export default function DynamicQuestionnaireForm(props: Props) {
     );
   }
 
+  if (filledOnly && props.mode === "instance") {
+    const instance = instanceQuery.data;
+    if (!instance) {
+      return (
+        <div className="p-6">
+          <p className="text-sm text-muted-foreground">{t.questionnaireEmptySummary}</p>
+        </div>
+      );
+    }
+    return (
+      <QuestionnaireFilledPrintView
+        hideTitle={props.hideTitle}
+        templateName={instance.templateName}
+        structure={instance.structureSnapshot}
+        data={instance.data}
+        showHomeopathNotes={!!user?.isAdmin}
+      />
+    );
+  }
+
   const profile = formData.patientProfile;
-  const showProfileBlock = !filledOnly || hasFilledProfile(profile);
-  const showField = (value: string | number | null | undefined) =>
-    !filledOnly || (value !== null && value !== undefined && String(value).trim() !== "");
-  const filledNotes = (formData.homeopathNotes ?? "").trim();
-  const showNotesReadOnly = readOnly && !!user?.isAdmin && (!filledOnly || !!filledNotes);
-  const filledSectionIds = filledOnly
-    ? collectFilledSectionIds(structure.root, formData.sections)
-    : [];
-  const rootDefaultValue = filledOnly
-    ? [
-        ...(showProfileBlock ? ["patient-profile"] : []),
-        ...filledSectionIds,
-      ]
-    : ["patient-profile"];
-  const hasAnyFilledContent =
-    hasFilledProfile(profile) ||
-    filledSectionIds.length > 0 ||
-    (!!user?.isAdmin && !!filledNotes);
 
   return (
     <div className="space-y-4 p-4">
@@ -359,16 +321,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
         </Button>
       )}
 
-      {filledOnly && !hasAnyFilledContent && (
-        <p className="text-sm text-muted-foreground">{t.questionnaireEmptySummary}</p>
-      )}
-
-      {showProfileBlock && (
-      <Accordion
-        key={filledOnly ? `profile-${showProfileBlock}` : "profile-edit"}
-        type="multiple"
-        defaultValue={rootDefaultValue.includes("patient-profile") ? ["patient-profile"] : []}
-      >
+      <Accordion type="multiple" defaultValue={["patient-profile"]}>
         <AccordionItem value="patient-profile">
           <AccordionTrigger className="text-sm font-medium">
             <span className="flex flex-1 items-center gap-2">
@@ -378,7 +331,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
           </AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-2 gap-4">
-              {showField(profile.lastName) && (
               <div className="space-y-2">
                 <Label>{t.lastName}</Label>
                 {readOnly ? (
@@ -391,8 +343,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-              )}
-              {showField(profile.firstName) && (
               <div className="space-y-2">
                 <Label>{t.firstName}</Label>
                 {readOnly ? (
@@ -405,11 +355,8 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-              )}
             </div>
-            {(showField(profile.birthMonth) || showField(profile.birthYear)) && (
             <div className="mt-4 grid grid-cols-2 gap-4">
-              {showField(profile.birthMonth) && (
               <div className="space-y-2">
                 <Label>{t.birthMonth}</Label>
                 {readOnly ? (
@@ -437,8 +384,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   </Select>
                 )}
               </div>
-              )}
-              {showField(profile.birthYear) && (
               <div className="space-y-2">
                 <Label>{t.birthYear}</Label>
                 {readOnly ? (
@@ -454,10 +399,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-              )}
             </div>
-            )}
-            {showField(profile.gender) && (
             <div className="mt-4 space-y-2">
               <Label>{t.gender}</Label>
               {readOnly ? (
@@ -481,10 +423,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 </Select>
               )}
             </div>
-            )}
-            {(showField(profile.height) || showField(profile.weight)) && (
             <div className="mt-4 grid grid-cols-2 gap-4">
-              {showField(profile.height) && (
               <div className="space-y-2">
                 <Label>{t.height}</Label>
                 {readOnly ? (
@@ -500,8 +439,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-              )}
-              {showField(profile.weight) && (
               <div className="space-y-2">
                 <Label>{t.weight}</Label>
                 {readOnly ? (
@@ -517,10 +454,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-              )}
             </div>
-            )}
-            {showField(profile.city) && (
             <div className="mt-4 space-y-2">
               <Label>{t.city}</Label>
               {readOnly ? (
@@ -533,19 +467,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 />
               )}
             </div>
-            )}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-      )}
 
-      <Accordion
-        key={filledOnly ? `filled-root-${filledSectionIds.join("-")}` : "edit-root"}
-        type="multiple"
-        defaultValue={filledOnly ? filledSectionIds : undefined}
-      >
-        {renderNodeSections(structure.root)}
-      </Accordion>
+      <Accordion type="multiple">{renderNodeSections(structure.root)}</Accordion>
 
       {canEditNotes && (
         <div className="space-y-2 border-t pt-4">
@@ -562,14 +488,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
             onBlur={() => scheduleSave("notes")}
             className="min-h-[100px]"
           />
-        </div>
-      )}
-      {showNotesReadOnly && (
-        <div className="space-y-2 border-t pt-4">
-          <Label>{t.homeopathNotesDescription}</Label>
-          <p className="whitespace-pre-wrap rounded-md bg-muted p-2 text-sm">
-            {filledNotes || "—"}
-          </p>
         </div>
       )}
     </div>
