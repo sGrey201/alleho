@@ -466,6 +466,13 @@ ${allUrls.map(url => `  <url>
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
       const invite = await storage.getInviteByTokenHash(tokenHash);
       if (!invite) return res.status(404).json({ message: "invalid_invite" });
+      if (invite.status !== "pending") {
+        return res.status(400).json({ message: "invite_inactive" });
+      }
+      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+        await storage.markInviteExpired(invite.id);
+        return res.status(400).json({ message: "invite_expired" });
+      }
 
       const inviter = await storage.getUser(invite.invitedByUserId);
       const inviterName =

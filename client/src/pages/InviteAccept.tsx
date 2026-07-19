@@ -39,7 +39,10 @@ type InvitePreview = {
   };
 };
 
-type Step = "account" | "email" | "password" | "roleSelection" | "patientNames";
+type Step = "account" | "email" | "password" | "roleSelection";
+
+const DEFAULT_USER_FIRST_NAME = "Пользователь 1";
+const DEFAULT_PATIENT_NAME = "Пациент 1";
 
 function userDisplayName(firstName?: string | null, lastName?: string | null, email?: string | null): string {
   const name = [lastName, firstName].filter(Boolean).join(" ").trim();
@@ -50,6 +53,21 @@ function userInitials(firstName?: string | null, lastName?: string | null, email
   const fromName = `${firstName?.trim()?.[0] ?? ""}${lastName?.trim()?.[0] ?? ""}`.toUpperCase();
   if (fromName) return fromName;
   return email?.trim()?.[0]?.toUpperCase() ?? "?";
+}
+
+function parseInviteErrorMessage(raw: string): string {
+  const text = raw.trim();
+  let code = text;
+  try {
+    const parsed = JSON.parse(text) as { message?: string };
+    if (parsed?.message) code = parsed.message;
+  } catch {
+    // keep raw text
+  }
+  if (code.includes("invite_expired")) return t.inviteLinkExpired;
+  if (code.includes("invite_inactive")) return t.inviteLinkInactive;
+  if (code.includes("invalid_invite")) return t.inviteLinkInvalid;
+  return t.inviteLinkInvalid;
 }
 
 export default function InviteAccept() {
@@ -68,7 +86,12 @@ export default function InviteAccept() {
     defaultValues: { email: initialEmail, firstName: "", patientName: "" },
   });
 
-  const { data: invitePreview, isLoading: previewLoading } = useQuery<InvitePreview>({
+  const {
+    data: invitePreview,
+    isLoading: previewLoading,
+    isError: previewIsError,
+    error: previewError,
+  } = useQuery<InvitePreview>({
     queryKey: ["/api/invites/preview", token],
     queryFn: async () => {
       const res = await fetch(`/api/invites/preview?token=${encodeURIComponent(token)}`, {
@@ -84,14 +107,15 @@ export default function InviteAccept() {
   const isOpenInvite = invitePreview?.inviteType === "open";
   const isTypedPatientInvite = invitePreview?.inviteType === "patient";
   const isGroupInvite = invitePreview?.inviteType === "group_member";
+  const inviteIsValid = !!token && !!invitePreview && !previewIsError;
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || previewLoading || !inviteIsValid) return;
     setStep((current) => {
       if (current !== null) return current;
       return isAuthenticated ? "account" : "email";
     });
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, previewLoading, inviteIsValid, isAuthenticated]);
 
   useEffect(() => {
     if (user?.email) {
@@ -218,26 +242,23 @@ export default function InviteAccept() {
   const submitAccept = (payload: AcceptInviteFormData, options?: { isHomeopath?: boolean }) => {
     acceptInviteMutation.mutate({
       email: payload.email,
-      firstName: payload.firstName?.trim() ?? "",
-      patientName: payload.patientName?.trim() ?? "",
+      firstName: payload.firstName?.trim() || DEFAULT_USER_FIRST_NAME,
+      patientName: payload.patientName?.trim() || DEFAULT_PATIENT_NAME,
       isHomeopath: options?.isHomeopath,
     });
   };
 
-  const validatePatientNames = (): boolean => {
-    if (isAuthenticated && user) {
-      const resolvedFirstName =
-        user.firstName?.trim() ||
-        userDisplayName(user.firstName, user.lastName, user.email);
-      form.setValue("firstName", resolvedFirstName);
-      return true;
-    }
-    const firstName = form.getValues("firstName")?.trim();
-    if (!firstName) {
-      form.setError("firstName", { message: "Укажите имя пользователя" });
-      return false;
-    }
-    return true;
+  const submitPatientAccept = (options?: { isHomeopath?: boolean }) => {
+    form.setValue("firstName", DEFAULT_USER_FIRST_NAME);
+    form.setValue("patientName", DEFAULT_PATIENT_NAME);
+    submitAccept(
+      {
+        ...form.getValues(),
+        firstName: DEFAULT_USER_FIRST_NAME,
+        patientName: DEFAULT_PATIENT_NAME,
+      },
+      options
+    );
   };
 
   const handleSwitchAccount = async () => {
@@ -261,7 +282,7 @@ export default function InviteAccept() {
       return;
     }
     if (isTypedPatientInvite) {
-      setStep("patientNames");
+      submitPatientAccept();
       return;
     }
     submitAccept(form.getValues());
@@ -279,11 +300,7 @@ export default function InviteAccept() {
       return;
     }
     if (isTypedPatientInvite) {
-      const resolvedFirstName =
-        user.firstName?.trim() ||
-        userDisplayName(user.firstName, user.lastName, user.email);
-      form.setValue("firstName", resolvedFirstName);
-      submitAccept(form.getValues());
+      submitPatientAccept();
       return;
     }
     goAfterAccountOrEmail();
@@ -342,41 +359,47 @@ export default function InviteAccept() {
 
   const handleSelectPatient = () => {
     setIsHomeopath(false);
-    setStep("patientNames");
-  };
-
-  const handlePatientNamesSubmit = () => {
-    if (!validatePatientNames()) return;
     const email = form.getValues("email");
     if (!email?.trim()) {
       form.setError("email", { message: "Укажите email" });
       return;
     }
-    submitAccept(form.getValues(), isOpenInvite ? { isHomeopath: false } : undefined);
+    submitPatientAccept({ isHomeopath: false });
   };
 
   const inviteSeo = <RouteSeo {...pageMeta.inviteAccept} />;
 
-  if (!token) {
-    return (
-      <>
-        {inviteSeo}
+  const renderInvalidInvite = (description: string) => (
+    <>
+      {inviteSeo}
       <div className="min-h-[calc(100vh-200px)] flex flex-col items-center justify-center px-4 py-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center pb-2">
             <AuthLogoLink />
-            <CardTitle className="text-2xl pt-4">Недействительная ссылка</CardTitle>
+            <CardTitle className="text-2xl pt-4">{t.inviteLinkInvalidTitle}</CardTitle>
           </CardHeader>
-          <CardContent className="text-center text-sm text-muted-foreground">
-            В ссылке отсутствует токен приглашения.
+          <CardContent className="space-y-4 text-center">
+            <p className="text-sm text-muted-foreground">{description}</p>
+            <Button type="button" className="w-full" onClick={() => setLocation(APP_HOME_PATH)}>
+              {t.inviteLinkGoHome}
+            </Button>
           </CardContent>
         </Card>
       </div>
-      </>
+    </>
+  );
+
+  if (!token) {
+    return renderInvalidInvite(t.inviteLinkInvalidMissingToken);
+  }
+
+  if (previewIsError) {
+    return renderInvalidInvite(
+      parseInviteErrorMessage(previewError instanceof Error ? previewError.message : "")
     );
   }
 
-  const isPageLoading = authLoading || previewLoading || step === null;
+  const isPageLoading = authLoading || previewLoading || !inviteIsValid || step === null;
 
   return (
     <>
@@ -416,21 +439,6 @@ export default function InviteAccept() {
                           invitePreview?.inviter?.name || "ваш гомеопат"
                         )}
                   </p>
-                  {isTypedPatientInvite && (
-                    <FormField
-                      control={form.control}
-                      name="patientName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t.inviteAcceptPatientNameLabel}</FormLabel>
-                          <FormControl>
-                            <Input {...field} autoFocus />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
                   <div className="flex flex-col gap-2">
                     <Button
                       type="button"
@@ -597,95 +605,6 @@ export default function InviteAccept() {
                   >
                     {t.registrationNoPatient}
                   </Button>
-                </div>
-              )}
-
-              {step === "patientNames" && !isAuthenticated && (
-                <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.inviteAcceptUserNameLabel}</FormLabel>
-                        <FormControl>
-                          <Input {...field} autoComplete="given-name" autoFocus />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="patientName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.inviteAcceptPatientNameLabel}</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      type="button"
-                      className="w-full"
-                      onClick={handlePatientNamesSubmit}
-                      disabled={acceptInviteMutation.isPending}
-                    >
-                      {acceptInviteMutation.isPending ? "Завершение регистрации..." : "Завершить регистрацию"}
-                    </Button>
-                    {!isOpenInvite && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="w-full"
-                        onClick={() => setStep("email")}
-                        disabled={acceptInviteMutation.isPending}
-                      >
-                        Назад
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {step === "patientNames" && isAuthenticated && isOpenInvite && (
-                <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="patientName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t.inviteAcceptPatientNameLabel}</FormLabel>
-                        <FormControl>
-                          <Input {...field} autoFocus />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      type="button"
-                      className="w-full"
-                      onClick={handlePatientNamesSubmit}
-                      disabled={acceptInviteMutation.isPending}
-                    >
-                      {acceptInviteMutation.isPending ? "Завершение регистрации..." : "Завершить регистрацию"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full"
-                      onClick={() => setStep("roleSelection")}
-                      disabled={acceptInviteMutation.isPending}
-                    >
-                      Назад
-                    </Button>
-                  </div>
                 </div>
               )}
             </Form>
