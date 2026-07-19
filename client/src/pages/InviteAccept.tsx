@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,6 +77,8 @@ export default function InviteAccept() {
   const [step, setStep] = useState<Step | null>(null);
   const [isHomeopath, setIsHomeopath] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
+  const [passwordSentViaInvite, setPasswordSentViaInvite] = useState(false);
+  const continueAfterLoginRef = useRef<() => void>(() => {});
 
   const token = useMemo(() => new URLSearchParams(window.location.search).get("token") || "", []);
   const initialEmail = useMemo(() => new URLSearchParams(window.location.search).get("email") || "", []);
@@ -169,10 +171,21 @@ export default function InviteAccept() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
       setPassword("");
-      setStep("account");
+      setPasswordSentViaInvite(false);
+      continueAfterLoginRef.current();
     },
     onError: () => {
       toast({ title: "Неверный email или пароль", variant: "destructive" });
+    },
+  });
+
+  const prepareRegistrationMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/invites/prepare-registration", {
+        email: email.trim().toLowerCase(),
+        token,
+      });
+      return res.json() as Promise<{ message: string; email: string }>;
     },
   });
 
@@ -217,10 +230,8 @@ export default function InviteAccept() {
     onSuccess: async (data: { joinedAsExistingUser?: boolean; conversationId?: string | null }) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       toast({
-        title: data?.joinedAsExistingUser ? "Присоединение завершено" : "Регистрация завершена",
-        description: data?.joinedAsExistingUser
-          ? "Вы добавлены в новый чат с гомеопатом"
-          : "Пароль отправлен на вашу почту",
+        title: "Присоединение завершено",
+        description: "Вы добавлены в чат с гомеопатом",
       });
       setLocation(data.conversationId ? `/messenger/chat/${data.conversationId}` : APP_HOME_PATH);
     },
@@ -232,6 +243,7 @@ export default function InviteAccept() {
       else if (msg.includes("invalid_invite")) title = "Недействительная ссылка-приглашение";
       else if (msg.includes("invalid_invite_email")) title = "Этот email не подходит для данной ссылки";
       else if (msg.includes("user_exists")) title = "Пользователь с таким email уже зарегистрирован";
+      else if (msg.includes("login_required")) title = "Сначала войдите с паролем из письма";
       else if (msg.includes("first_name_required")) title = "Укажите имя пользователя";
       else if (msg.includes("first_name_and_last_name_required")) title = "Укажите имя пользователя";
       else if (msg.includes("role_selection_required")) title = "Укажите, являетесь ли вы гомеопатом";
@@ -261,18 +273,7 @@ export default function InviteAccept() {
     );
   };
 
-  const handleSwitchAccount = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    form.setValue("email", initialEmail);
-    form.setValue("firstName", "");
-    form.setValue("patientName", "");
-    setPassword("");
-    setIsHomeopath(null);
-    setStep("email");
-  };
-
-  const goAfterAccountOrEmail = () => {
+  const continueAfterLogin = () => {
     if (isGroupInvite) {
       setStep("account");
       return;
@@ -286,6 +287,19 @@ export default function InviteAccept() {
       return;
     }
     submitAccept(form.getValues());
+  };
+  continueAfterLoginRef.current = continueAfterLogin;
+
+  const handleSwitchAccount = async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    form.setValue("email", initialEmail);
+    form.setValue("firstName", "");
+    form.setValue("patientName", "");
+    setPassword("");
+    setPasswordSentViaInvite(false);
+    setIsHomeopath(null);
+    setStep("email");
   };
 
   const handleAccountNext = () => {
@@ -303,7 +317,11 @@ export default function InviteAccept() {
       submitPatientAccept();
       return;
     }
-    goAfterAccountOrEmail();
+    if (isOpenInvite) {
+      setStep("roleSelection");
+      return;
+    }
+    submitAccept(form.getValues());
   };
 
   const handleEmailNext = async () => {
@@ -322,15 +340,33 @@ export default function InviteAccept() {
         return;
       }
       if (exists) {
+        setPasswordSentViaInvite(false);
         setPassword("");
         setStep("password");
         return;
       }
-    } catch {
-      toast({ title: t.error, variant: "destructive" });
-      return;
+      await prepareRegistrationMutation.mutateAsync(email);
+      setPasswordSentViaInvite(true);
+      setPassword("");
+      setStep("password");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("user_exists")) {
+        setPasswordSentViaInvite(false);
+        setPassword("");
+        setStep("password");
+        return;
+      }
+      let title = t.error;
+      if (msg.includes("invite_expired")) title = t.inviteLinkExpired;
+      else if (msg.includes("invite_inactive")) title = t.inviteLinkInactive;
+      else if (msg.includes("invalid_invite_email")) title = "Этот email не подходит для данной ссылки";
+      else if (msg.includes("invalid_invite")) title = t.inviteLinkInvalid;
+      else if (msg.includes("Failed to send password email")) {
+        title = "Не удалось отправить письмо с паролем";
+      }
+      toast({ title, variant: "destructive" });
     }
-    goAfterAccountOrEmail();
   };
 
   const handlePasswordNext = () => {
@@ -494,12 +530,16 @@ export default function InviteAccept() {
                     type="button"
                     className="w-full"
                     onClick={() => void handleEmailNext()}
-                    disabled={checkInviteEmailMutation.isPending || acceptInviteMutation.isPending}
+                    disabled={
+                      checkInviteEmailMutation.isPending ||
+                      prepareRegistrationMutation.isPending ||
+                      acceptInviteMutation.isPending
+                    }
                   >
-                    {checkInviteEmailMutation.isPending ? (
+                    {checkInviteEmailMutation.isPending || prepareRegistrationMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Проверка...
+                        {prepareRegistrationMutation.isPending ? "Отправка пароля..." : "Проверка..."}
                       </>
                     ) : (
                       "Далее"
@@ -511,8 +551,9 @@ export default function InviteAccept() {
               {step === "password" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Аккаунт с email <span className="font-medium text-foreground">{form.watch("email")}</span> уже
-                    зарегистрирован. Введите пароль, чтобы войти.
+                    {passwordSentViaInvite
+                      ? t.inviteAcceptPasswordSentHint(form.watch("email"))
+                      : t.inviteAcceptPasswordExistingHint(form.watch("email"))}
                   </p>
                   <div className="space-y-2">
                     <Label>{t.inviteAcceptPasswordLabel}</Label>
@@ -551,12 +592,12 @@ export default function InviteAccept() {
                       type="button"
                       className="w-full"
                       onClick={handlePasswordNext}
-                      disabled={loginMutation.isPending}
+                      disabled={loginMutation.isPending || acceptInviteMutation.isPending}
                     >
-                      {loginMutation.isPending ? (
+                      {loginMutation.isPending || acceptInviteMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Вход...
+                          {acceptInviteMutation.isPending ? "Завершение..." : "Вход..."}
                         </>
                       ) : (
                         t.login
@@ -566,8 +607,11 @@ export default function InviteAccept() {
                       type="button"
                       variant="ghost"
                       className="w-full"
-                      onClick={() => setStep("email")}
-                      disabled={loginMutation.isPending}
+                      onClick={() => {
+                        setPasswordSentViaInvite(false);
+                        setStep("email");
+                      }}
+                      disabled={loginMutation.isPending || acceptInviteMutation.isPending}
                     >
                       Назад
                     </Button>

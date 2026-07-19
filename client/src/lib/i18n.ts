@@ -2011,6 +2011,10 @@ export const t = {
     `Будет создан новый чат пациента с ${homeopathName}`,
   inviteAcceptEmailLabel: 'Укажите ваш email, чтобы войти или зарегистрироваться',
   inviteAcceptPasswordLabel: 'Пароль',
+  inviteAcceptPasswordExistingHint: (email: string) =>
+    `Аккаунт с email ${email} уже зарегистрирован. Введите пароль, чтобы войти.`,
+  inviteAcceptPasswordSentHint: (email: string) =>
+    `Пароль отправлен на ${email}. Введите его ниже, чтобы подтвердить почту и завершить регистрацию.`,
   inviteLinkInvalidTitle: 'Ссылка недействительна',
   inviteLinkInvalidMissingToken: 'В ссылке отсутствует токен приглашения.',
   inviteLinkExpired: 'Ссылка-приглашение истекла',
@@ -2102,8 +2106,6 @@ export const t = {
   sponsorPaymentStepTransfer: (amount: string) =>
     `1. Переведите ${amount} ₽ одним из способов:`,
   sponsorPaymentStepReceipt: '2. Прикрепите чек',
-  sponsorPaymentOutro: 'И всё! Читайте контент сразу, а мы проверим транзакцию позже.',
-  sponsorTrustAccessTagline: 'Д — Доверие 🤝',
   sponsorTierContentTitle: (days: number) => {
     const mod10 = days % 10;
     const mod100 = days % 100;

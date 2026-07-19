@@ -202,12 +202,12 @@ export async function sendInviteAccessEmail(to: string, password: string) {
   await client.emails.send({
     from: fromEmail,
     to: [to],
-    subject: "Добро пожаловать в Hovial ✨",
+    subject: "Ваш пароль для Hovial",
     html: `
       <div style="font-family: 'Source Sans Pro', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Регистрация завершена</h1>
+        <h1 style="color: ${THEME_COLOR}; margin-bottom: 20px;">Подтвердите email</h1>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          Ваш аккаунт создан. Используйте эти данные для входа:
+          Введите этот пароль на странице приглашения, чтобы подтвердить почту и завершить регистрацию:
         </p>
         <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
           <p style="font-size: 15px; color: #333; margin: 4px 0;"><strong>Логин:</strong> ${to}</p>

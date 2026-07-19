@@ -499,6 +499,55 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  app.post('/api/invites/prepare-registration', async (req: any, res) => {
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const token = String(req.body?.token || "").trim();
+      if (!email || !token) {
+        return res.status(400).json({ message: "Email and token are required" });
+      }
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const invite = await storage.getInviteByTokenHash(tokenHash);
+      if (!invite) {
+        return res.status(400).json({ message: "invalid_invite" });
+      }
+      if (invite.email && invite.email !== email) {
+        return res.status(400).json({ message: "invalid_invite_email" });
+      }
+      if (invite.status !== "pending") {
+        return res.status(400).json({ message: "invite_inactive" });
+      }
+      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+        await storage.markInviteExpired(invite.id);
+        return res.status(400).json({ message: "invite_expired" });
+      }
+
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(409).json({ message: "user_exists" });
+      }
+
+      const password = generateAuthPassword();
+      const bcrypt = await import("bcryptjs");
+      const passwordHash = await bcrypt.hash(password, 10);
+      await storage.createUserWithPassword(email, passwordHash);
+
+      try {
+        await sendInviteAccessEmail(email, password);
+      } catch (emailError) {
+        console.error("Failed to send invite access email:", emailError);
+        return res.status(500).json({ message: "Failed to send password email" });
+      }
+
+      // Invite stays pending until the user logs in with this password and accepts.
+      res.status(201).json({ message: "password_sent", email });
+    } catch (error) {
+      console.error("Error preparing invite registration:", error);
+      res.status(500).json({ message: "Failed to prepare registration" });
+    }
+  });
+
   app.post('/api/invites/accept', async (req: any, res) => {
     try {
       const email = String(req.body?.email || "").trim().toLowerCase();
@@ -533,9 +582,15 @@ ${allUrls.map(url => `  <url>
         !!sessionUser &&
         sessionUser.email?.toLowerCase() === email &&
         sessionUser.id === existingUser.id;
-      if (existingUser && !canJoinAsExistingUser) {
+      if (!canJoinAsExistingUser) {
+        // New invitees must verify email by logging in with the mailed password first.
+        if (!existingUser) {
+          return res.status(401).json({ message: "login_required" });
+        }
         return res.status(409).json({ message: "user_exists" });
       }
+
+      const targetUser = existingUser!;
 
       let effectiveInviteType: "patient" | "homeopath";
       if (invite.inviteType === "open") {
@@ -547,18 +602,6 @@ ${allUrls.map(url => `  <url>
         effectiveInviteType = invite.inviteType === "homeopath" ? "homeopath" : "patient";
       }
 
-      let password: string | null = null;
-      let targetUser = existingUser ?? null;
-      if (!targetUser) {
-        password = generateAuthPassword();
-        const bcrypt = await import("bcryptjs");
-        const passwordHash = await bcrypt.hash(password, 10);
-        targetUser = await storage.createUserWithPassword(email, passwordHash);
-      }
-      if (!targetUser) {
-        return res.status(500).json({ message: "Failed to create or resolve user" });
-      }
-
       let conversationId: string | undefined;
       if (effectiveInviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true, requiresRoleSelection: false });
@@ -567,11 +610,16 @@ ${allUrls.map(url => `  <url>
           return res.status(400).json({ message: "first_name_required" });
         }
         const patientChatTitle = patientName || firstName;
-        const patientProfile: { firstName?: string; lastName?: string; isAdmin: boolean; requiresRoleSelection: boolean } = {
+        const patientProfile: {
+          firstName?: string;
+          lastName?: string;
+          isAdmin: boolean;
+          requiresRoleSelection: boolean;
+        } = {
           isAdmin: false,
           requiresRoleSelection: false,
         };
-        if (!canJoinAsExistingUser) {
+        if (!targetUser.firstName?.trim()) {
           patientProfile.firstName = firstName;
           if (lastName) patientProfile.lastName = lastName;
         }
@@ -611,18 +659,12 @@ ${allUrls.map(url => `  <url>
       await storage.markInviteAccepted(invite.id, targetUser.id, email, conversationId, {
         inviteType: effectiveInviteType,
       });
-      if (password) {
-        await sendInviteAccessEmail(email, password);
-      }
-
-      (req.session as any).userId = targetUser.id;
-      (req.session as any).authType = "email";
 
       res.json({
         id: targetUser.id,
         email: targetUser.email,
         isAdmin: effectiveInviteType === "homeopath" ? true : targetUser.isAdmin,
-        joinedAsExistingUser: canJoinAsExistingUser,
+        joinedAsExistingUser: true,
         conversationId: conversationId ?? null,
       });
     } catch (error) {

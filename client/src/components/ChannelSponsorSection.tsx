@@ -640,8 +640,6 @@ export default function ChannelSponsorSection({
                     </div>
                   ) : null}
                   <p>{t.sponsorPaymentStepReceipt}</p>
-                  <p>{t.sponsorPaymentOutro}</p>
-                  <p>{t.sponsorTrustAccessTagline}</p>
                 </div>
                 <input
                   id={receiptInputId}
