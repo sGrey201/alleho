@@ -30,7 +30,7 @@ import { useOfflineRevalidation } from "@/hooks/useOfflineRevalidation";
 import { t } from "@/lib/i18n";
 import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
-import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo, buildAuthRedirectPath, getRequestedReturnPath, getInviteAcceptTokenFromLocation } from "@/lib/authReturnTo";
+import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo, buildAuthRedirectPath, getRequestedReturnPath } from "@/lib/authReturnTo";
 import { APP_HOME_PATH } from "@shared/brand";
 
 function Router() {
@@ -153,7 +153,6 @@ function AppContent() {
 
   const isAuthPage = location === "/auth" || location.startsWith("/auth/register");
   const isInviteAcceptPage = location.startsWith("/invite/accept");
-  const inviteAcceptToken = getInviteAcceptTokenFromLocation();
   const isRoleOnboardingPage = location.startsWith("/onboarding/role");
   const isResetPasswordPage = location.startsWith("/reset-password");
   const isPaymentResultPage =
@@ -189,9 +188,7 @@ function AppContent() {
       />
     );
   }
-  if (!isAuthenticated && isInviteAcceptPage && inviteAcceptToken) {
-    return <Redirect to={buildAuthRedirectPath(getRequestedReturnPath())} />;
-  }
+  // Invite accept has its own email/register/login flow — do not force /auth.
   if (!isAuthenticated && !isPublicPage) {
     return <Redirect to={buildAuthRedirectPath(getRequestedReturnPath())} />;
   }

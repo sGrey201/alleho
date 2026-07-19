@@ -638,6 +638,41 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
+        {mode === "group" && isOwner && (
+          <div className="space-y-3 rounded-lg border px-4 py-3">
+            <p className="text-sm font-medium">{t.groupVisibilityTitle}</p>
+            <RadioGroup
+              value={isClosed ? "closed" : "public"}
+              onValueChange={(value) => {
+                const nextIsClosed = value === "closed";
+                setIsClosed(nextIsClosed);
+                saveVisibilityMutation.mutate({ isClosed: nextIsClosed });
+              }}
+              disabled={saveVisibilityMutation.isPending}
+              className="space-y-2"
+            >
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="public" id="group-visibility-public" className="mt-0.5" />
+                <div>
+                  <Label htmlFor="group-visibility-public" className="cursor-pointer font-normal">
+                    {t.groupVisibilityPublic}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t.groupVisibilityPublicHint}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="closed" id="group-visibility-closed" className="mt-0.5" />
+                <div>
+                  <Label htmlFor="group-visibility-closed" className="cursor-pointer font-normal">
+                    {t.groupVisibilityClosed}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{t.groupVisibilityClosedHint}</p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+        )}
+
         {mode === "group" && (
           <div className="space-y-2">
             <p className="text-sm font-medium">{t.participants}</p>
@@ -680,41 +715,6 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 </button>
               );
             })}
-          </div>
-        )}
-
-        {mode === "group" && isOwner && (
-          <div className="space-y-3 rounded-lg border px-4 py-3">
-            <p className="text-sm font-medium">{t.groupVisibilityTitle}</p>
-            <RadioGroup
-              value={isClosed ? "closed" : "public"}
-              onValueChange={(value) => {
-                const nextIsClosed = value === "closed";
-                setIsClosed(nextIsClosed);
-                saveVisibilityMutation.mutate({ isClosed: nextIsClosed });
-              }}
-              disabled={saveVisibilityMutation.isPending}
-              className="space-y-2"
-            >
-              <div className="flex items-start gap-2">
-                <RadioGroupItem value="public" id="group-visibility-public" className="mt-0.5" />
-                <div>
-                  <Label htmlFor="group-visibility-public" className="cursor-pointer font-normal">
-                    {t.groupVisibilityPublic}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">{t.groupVisibilityPublicHint}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <RadioGroupItem value="closed" id="group-visibility-closed" className="mt-0.5" />
-                <div>
-                  <Label htmlFor="group-visibility-closed" className="cursor-pointer font-normal">
-                    {t.groupVisibilityClosed}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">{t.groupVisibilityClosedHint}</p>
-                </div>
-              </div>
-            </RadioGroup>
           </div>
         )}
 

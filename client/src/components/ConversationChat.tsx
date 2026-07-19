@@ -502,6 +502,7 @@ export default function ConversationChat({
     guardTimer: null,
     start: null,
   });
+  const suppressNextQuestionnaireClickRef = useRef(false);
   const deepLinkHandledRef = useRef<string | null>(null);
   /** While true, keep the viewport pinned to the latest message as content grows. */
   const stickToBottomRef = useRef(true);
@@ -1647,7 +1648,10 @@ export default function ConversationChat({
     handleMessagePointerDown(
       e,
       longPressRefs.current,
-      () => openMessageLayer(msg, targetEl),
+      () => {
+        suppressNextQuestionnaireClickRef.current = true;
+        openMessageLayer(msg, targetEl);
+      },
       true
     );
   };
@@ -1661,7 +1665,10 @@ export default function ConversationChat({
     handleMessageTouchStart(
       e,
       longPressRefs.current,
-      () => openMessageLayer(msg, targetEl),
+      () => {
+        suppressNextQuestionnaireClickRef.current = true;
+        openMessageLayer(msg, targetEl);
+      },
       true
     );
   };
@@ -1921,8 +1928,15 @@ export default function ConversationChat({
           return (
             <button
               type="button"
+              data-allow-long-press="true"
               className="mb-1 w-full rounded-md border border-primary/20 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10"
-              onClick={() => openQuestionnaireFromMessage(msg)}
+              onClick={() => {
+                if (suppressNextQuestionnaireClickRef.current) {
+                  suppressNextQuestionnaireClickRef.current = false;
+                  return;
+                }
+                openQuestionnaireFromMessage(msg);
+              }}
             >
               <Badge variant="secondary" className="mb-1 bg-blue-100 text-xs text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                 <ClipboardList className="mr-1 h-3 w-3" />
