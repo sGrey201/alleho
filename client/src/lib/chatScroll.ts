@@ -43,6 +43,37 @@ export function scrollChatPaneToBottomForKeyboard(scrollRoot: HTMLElement | null
   window.setTimeout(scroll, 550);
 }
 
+/** Position a focused input/textarea just above the on-screen keyboard (one pass). */
+export function adjustFocusedEditableAboveKeyboard(el: HTMLElement): void {
+  const scrollRoot = el.closest(".app-sheet-panel-body");
+  if (!(scrollRoot instanceof HTMLElement)) return;
+  if (document.activeElement !== el) return;
+
+  const vv = window.visualViewport;
+  const rootRect = scrollRoot.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const visibleTop = vv?.offsetTop ?? 0;
+  const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  const effectiveTop = Math.max(visibleTop, rootRect.top) + 12;
+  const effectiveBottom = Math.min(visibleBottom, rootRect.bottom) - 16;
+
+  if (elRect.bottom > effectiveBottom) {
+    scrollRoot.scrollTop += elRect.bottom - effectiveBottom;
+  } else if (elRect.top < effectiveTop) {
+    scrollRoot.scrollTop += elRect.top - effectiveTop;
+  }
+}
+
+/** Re-position while the iOS keyboard animation settles. */
+export function scrollFocusedEditableAboveKeyboard(el: HTMLElement): void {
+  const run = () => adjustFocusedEditableAboveKeyboard(el);
+  run();
+  requestAnimationFrame(run);
+  window.setTimeout(run, 100);
+  window.setTimeout(run, 300);
+  window.setTimeout(run, 550);
+}
+
 /** Scroll an element to the vertical center of a chat pane (instant, no document scroll). */
 export function scrollChatBubbleIntoPane(
   scrollRoot: HTMLElement,

@@ -654,6 +654,18 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Keep full-height sheets (questionnaire) inside the visible viewport above the keyboard. */
+html.keyboard-open .app-sheet-keyboard-aware {
+  top: 0 !important;
+  bottom: auto !important;
+  height: var(--app-height, 100dvh) !important;
+  max-height: var(--app-height, 100dvh) !important;
+}
+
+html.keyboard-open .app-sheet-panel-body {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
 /* Keyboard replaces the home-indicator safe area; fill any Safari accessory strip
    below the composer with scrim (padding keeps ::before inside overflow-hidden).
    max() keeps safe-area when keyboard-gap is 0 after a false keyboard-open (mic permission). */

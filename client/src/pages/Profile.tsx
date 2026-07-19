@@ -614,7 +614,11 @@ export default function Profile({
 
   const questionnairePreviewSheet = (
     <Sheet open={!!previewTemplateId} onOpenChange={(open) => !open && setPreviewTemplateId(null)}>
-      <SheetContent side="right" hideCloseButton className="flex w-full flex-col p-0 sm:max-w-lg">
+      <SheetContent
+        side="right"
+        hideCloseButton
+        className="app-sheet-keyboard-aware flex w-full flex-col p-0 sm:max-w-lg"
+      >
         <SheetHeader className="sr-only">
           <SheetTitle>{previewTemplateMeta?.name ?? t.questionnaireTitle}</SheetTitle>
         </SheetHeader>

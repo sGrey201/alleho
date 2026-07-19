@@ -1,5 +1,10 @@
 import { useEffect } from "react";
-import { CHAT_COMPOSER_INSET_EVENT, VISUAL_VIEWPORT_REFRESH_EVENT } from "@/lib/chatScroll";
+import {
+  CHAT_COMPOSER_INSET_EVENT,
+  VISUAL_VIEWPORT_REFRESH_EVENT,
+  adjustFocusedEditableAboveKeyboard,
+  scrollFocusedEditableAboveKeyboard,
+} from "@/lib/chatScroll";
 
 /** True for elements that summon the on-screen keyboard. */
 function isEditableElement(el: EventTarget | null): boolean {
@@ -7,6 +12,12 @@ function isEditableElement(el: EventTarget | null): boolean {
   const tag = el.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   return el.isContentEditable;
+}
+
+function scheduleSheetFieldScroll(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement) || !isEditableElement(target)) return;
+  if (!target.closest(".app-sheet-panel-body")) return;
+  scrollFocusedEditableAboveKeyboard(target);
 }
 
 /**
@@ -118,6 +129,10 @@ export function useVisualViewportSize(enabled: boolean) {
 
       if (keyboardOpen) {
         pinLayoutScroll();
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active.closest(".app-sheet-panel-body")) {
+          adjustFocusedEditableAboveKeyboard(active);
+        }
       }
 
       requestAnimationFrame(updateComposerInset);
@@ -140,6 +155,7 @@ export function useVisualViewportSize(enabled: boolean) {
       if (isEditableElement(event.target)) {
         pinLayoutScroll();
         scheduleApply();
+        scheduleSheetFieldScroll(event.target);
       }
     };
 

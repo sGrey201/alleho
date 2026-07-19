@@ -2997,7 +2997,11 @@ export default function ConversationChat({
 
       {isMobile && (
         <Sheet open={questionnairePanelOpen} onOpenChange={(open) => !open && closeQuestionnairePanel()}>
-          <SheetContent side="right" hideCloseButton className="flex w-full flex-col p-0 sm:max-w-lg">
+          <SheetContent
+            side="right"
+            hideCloseButton
+            className="app-sheet-keyboard-aware flex w-full flex-col p-0 sm:max-w-lg"
+          >
             {questionnairePanelHeader}
             <div className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
               {openQuestionnaireInstanceId && (
