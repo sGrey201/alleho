@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Bookmark } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { t } from "@/lib/i18n";
 import type { QuestionnaireHintsMode, QuestionnaireTagEntry } from "@shared/questionnaireTypes";
 import { QuestionnaireHintPopover, QuestionnaireHintText } from "@/components/QuestionnaireHintPopover";
+import { cn } from "@/lib/utils";
 
 type TagDef = { id: string; label: string; hint?: string };
 
@@ -16,6 +18,8 @@ type Props = {
   hideUnselected?: boolean;
   readOnly?: boolean;
   hintsMode?: QuestionnaireHintsMode;
+  flaggedTagIds?: string[];
+  onToggleFlag?: (tagKey: string) => void;
 };
 
 export function QuestionnaireTagSelector({
@@ -27,11 +31,14 @@ export function QuestionnaireTagSelector({
   hideUnselected,
   readOnly,
   hintsMode = "icon",
+  flaggedTagIds = [],
+  onToggleFlag,
 }: Props) {
   const selectedKeys = selectedEntries.map((e) => e.tagKey);
   const [justSelected, setJustSelected] = useState<Set<string>>(new Set());
   const visibleTags = hideUnselected ? tags.filter((tag) => selectedKeys.includes(tag.id)) : tags;
   const showHintsAsIcon = hintsMode === "icon";
+  const showFlags = typeof onToggleFlag === "function";
 
   return (
     <div className="space-y-2">
@@ -39,6 +46,7 @@ export function QuestionnaireTagSelector({
         const isSelected = selectedKeys.includes(tag.id);
         const entry = selectedEntries.find((e) => e.tagKey === tag.id);
         const shouldPulse = justSelected.has(tag.id);
+        const isFlagged = flaggedTagIds.includes(tag.id);
         return (
           <div key={tag.id}>
             <div className="flex items-start gap-2">
@@ -82,6 +90,29 @@ export function QuestionnaireTagSelector({
                   </div>
                 )}
               </div>
+              {showFlags && (
+                <button
+                  type="button"
+                  className={cn(
+                    "mt-0.5 shrink-0 rounded p-0.5 transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    readOnly && "pointer-events-none",
+                    isFlagged
+                      ? "text-red-500 hover:text-red-600"
+                      : "text-muted-foreground/50 hover:text-muted-foreground"
+                  )}
+                  aria-label={isFlagged ? t.questionnaireUnbookmark : t.questionnaireBookmark}
+                  aria-pressed={isFlagged}
+                  disabled={readOnly}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!readOnly) onToggleFlag(tag.id);
+                  }}
+                >
+                  <Bookmark className={cn("h-4 w-4", isFlagged && "fill-current")} />
+                </button>
+              )}
             </div>
             {isSelected && (
               <div className="mb-2 mt-1 pl-6">

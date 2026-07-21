@@ -83,9 +83,17 @@ export const questionnaireInstanceDataSchema = z.object({
   patientProfile: patientProfileBlockSchema,
   sections: z.record(z.string(), z.array(questionnaireTagEntrySchema)),
   homeopathNotes: z.string().optional(),
+  /** Bookmark keys as `${sectionNodeId}:${tagId}` for tags marked "return later". */
+  flaggedTagKeys: z.array(z.string()).default([]),
+  /** Section/subsection node ids marked "return later". */
+  flaggedNodeIds: z.array(z.string()).default([]),
 });
 
 export type QuestionnaireInstanceData = z.infer<typeof questionnaireInstanceDataSchema>;
+
+export function questionnaireFlagTagKey(sectionNodeId: string, tagId: string): string {
+  return `${sectionNodeId}:${tagId}`;
+}
 
 export function emptyPatientProfile(): PatientProfileBlock {
   return {
@@ -104,6 +112,18 @@ export function emptyQuestionnaireInstanceData(): QuestionnaireInstanceData {
   return {
     patientProfile: emptyPatientProfile(),
     sections: {},
+    flaggedTagKeys: [],
+    flaggedNodeIds: [],
+  };
+}
+
+export function normalizeQuestionnaireInstanceData(
+  data: QuestionnaireInstanceData
+): QuestionnaireInstanceData {
+  return {
+    ...data,
+    flaggedTagKeys: data.flaggedTagKeys ?? [],
+    flaggedNodeIds: data.flaggedNodeIds ?? [],
   };
 }
 

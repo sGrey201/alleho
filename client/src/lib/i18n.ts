@@ -221,6 +221,8 @@ export const t = {
   questionnaireDescription: 'Заполните информацию о себе',
   questionnaireSaved: 'Опросник сохранён',
   questionnaireSaveError: 'Ошибка сохранения опросника',
+  questionnaireBookmark: 'Отметить закладкой',
+  questionnaireUnbookmark: 'Снять закладку',
   saving: 'Сохранение...',
   saved: 'Сохранено',
   describeProblem: 'Опишите проблему',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, Check, X } from "lucide-react";
+import { Bookmark, Loader2, Check, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +22,12 @@ import type {
   PatientProfileBlock,
   QuestionnaireHintsMode,
 } from "@shared/questionnaireTypes";
-import { emptyQuestionnaireInstanceData, parseQuestionnaireHintsMode } from "@shared/questionnaireTypes";
+import {
+  emptyQuestionnaireInstanceData,
+  normalizeQuestionnaireInstanceData,
+  parseQuestionnaireHintsMode,
+  questionnaireFlagTagKey,
+} from "@shared/questionnaireTypes";
 import { cn } from "@/lib/utils";
 
 const months = [
@@ -85,6 +90,66 @@ function sectionHasSelectedTag(
   return (node.children ?? []).some((child) => sectionHasSelectedTag(child, sections));
 }
 
+function sectionHasBookmark(
+  node: QuestionnaireNode,
+  flaggedNodeIds: string[],
+  flaggedTagKeys: string[]
+): boolean {
+  if (flaggedNodeIds.includes(node.id)) return true;
+  for (const tag of node.tags ?? []) {
+    if (flaggedTagKeys.includes(questionnaireFlagTagKey(node.id, tag.id))) return true;
+  }
+  return (node.children ?? []).some((child) => sectionHasBookmark(child, flaggedNodeIds, flaggedTagKeys));
+}
+
+function toggleIdInList(list: string[], id: string): string[] {
+  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+}
+
+function BookmarkButton({
+  active,
+  inherited,
+  disabled,
+  onToggle,
+}: {
+  active: boolean;
+  inherited?: boolean;
+  disabled?: boolean;
+  onToggle?: () => void;
+}) {
+  const lit = active || !!inherited;
+  const interactive = typeof onToggle === "function" && !disabled;
+  return (
+    <span
+      role="button"
+      tabIndex={interactive ? 0 : -1}
+      className={cn(
+        "shrink-0 rounded p-0.5 transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        !interactive && "pointer-events-none",
+        lit ? "text-red-500 hover:text-red-600" : "text-muted-foreground/50 hover:text-muted-foreground"
+      )}
+      aria-label={active ? t.questionnaireUnbookmark : t.questionnaireBookmark}
+      aria-pressed={active}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (interactive) onToggle();
+      }}
+      onKeyDown={(e) => {
+        if (!interactive) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggle();
+        }
+      }}
+    >
+      <Bookmark className={cn("h-4 w-4", lit && "fill-current")} />
+    </span>
+  );
+}
+
 export default function DynamicQuestionnaireForm(props: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -133,14 +198,16 @@ export default function DynamicQuestionnaireForm(props: Props) {
 
   useEffect(() => {
     if (props.mode === "instance" && instanceQuery.data?.data) {
-      setFormData(instanceQuery.data.data);
+      setFormData(normalizeQuestionnaireInstanceData(instanceQuery.data.data));
     }
   }, [props.mode, instanceQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: QuestionnaireInstanceData) => {
       if (props.mode !== "instance") return;
-      const res = await apiRequest("PATCH", `/api/questionnaire-instances/${props.instanceId}`, { data });
+      const res = await apiRequest("PATCH", `/api/questionnaire-instances/${props.instanceId}`, {
+        data: normalizeQuestionnaireInstanceData(data),
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -198,6 +265,33 @@ export default function DynamicQuestionnaireForm(props: Props) {
     });
   };
 
+  const toggleNodeFlag = (nodeId: string) => {
+    if (readOnly || props.mode !== "instance") return;
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        flaggedNodeIds: toggleIdInList(prev.flaggedNodeIds ?? [], nodeId),
+      };
+      formDataRef.current = next;
+      return next;
+    });
+    scheduleSave(`flag-node-${nodeId}`);
+  };
+
+  const toggleTagFlag = (nodeId: string, tagKey: string) => {
+    if (readOnly || props.mode !== "instance") return;
+    const key = questionnaireFlagTagKey(nodeId, tagKey);
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        flaggedTagKeys: toggleIdInList(prev.flaggedTagKeys ?? [], key),
+      };
+      formDataRef.current = next;
+      return next;
+    });
+    scheduleSave(`flag-tag-${key}`);
+  };
+
   const renderSaveStatus = (key: string) => {
     const status = subSaveStatus[key];
     if (!status || status === "idle") return null;
@@ -210,11 +304,37 @@ export default function DynamicQuestionnaireForm(props: Props) {
     );
   };
 
+  const flaggedNodeIds = formData.flaggedNodeIds ?? [];
+  const flaggedTagKeys = formData.flaggedTagKeys ?? [];
+  const showBookmarks = props.mode === "instance";
+
+  const renderTagSelector = (node: QuestionnaireNode) => (
+    <QuestionnaireTagSelector
+      tags={(node.tags ?? []).map((tag) => ({ id: tag.id, label: tag.label, hint: tag.hint }))}
+      selectedEntries={formData.sections[node.id] ?? []}
+      onToggleTag={(tagKey) => toggleTag(node.id, tagKey)}
+      onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
+      onBlur={() => scheduleSave(node.id)}
+      readOnly={readOnly}
+      hintsMode={hintsMode}
+      flaggedTagIds={
+        showBookmarks
+          ? (node.tags ?? [])
+              .filter((tag) => flaggedTagKeys.includes(questionnaireFlagTagKey(node.id, tag.id)))
+              .map((tag) => tag.id)
+          : undefined
+      }
+      onToggleFlag={showBookmarks ? (tagKey) => toggleTagFlag(node.id, tagKey) : undefined}
+    />
+  );
+
   const renderNodeSections = (nodes: QuestionnaireNode[], depth = 1): ReactNode =>
     nodes.map((node) => {
       const hasTags = (node.tags?.length ?? 0) > 0;
       const hasChildren = (node.children?.length ?? 0) > 0;
       const hasFilledTag = sectionHasSelectedTag(node, formData.sections);
+      const nodeFlagged = flaggedNodeIds.includes(node.id);
+      const hasDescendantBookmark = sectionHasBookmark(node, flaggedNodeIds, flaggedTagKeys);
       const triggerClassName = cn("text-sm", hasFilledTag ? "font-bold" : "font-medium");
 
       if (hasTags && !hasChildren) {
@@ -227,19 +347,19 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   {renderSectionHintIcon(node.hint)}
                 </span>
                 {renderSaveStatus(node.id)}
+                {showBookmarks && (
+                  <BookmarkButton
+                    active={nodeFlagged}
+                    inherited={hasDescendantBookmark && !nodeFlagged}
+                    disabled={readOnly}
+                    onToggle={readOnly ? undefined : () => toggleNodeFlag(node.id)}
+                  />
+                )}
               </span>
             </AccordionTrigger>
             <AccordionContent>
               {renderSectionHint(node.hint)}
-              <QuestionnaireTagSelector
-                tags={(node.tags ?? []).map((tag) => ({ id: tag.id, label: tag.label, hint: tag.hint }))}
-                selectedEntries={formData.sections[node.id] ?? []}
-                onToggleTag={(tagKey) => toggleTag(node.id, tagKey)}
-                onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
-                onBlur={() => scheduleSave(node.id)}
-                readOnly={readOnly}
-                hintsMode={hintsMode}
-              />
+              {renderTagSelector(node)}
             </AccordionContent>
           </AccordionItem>
         );
@@ -252,23 +372,19 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 {node.title}
                 {renderSectionHintIcon(node.hint)}
               </span>
+              {showBookmarks && (
+                <BookmarkButton
+                  active={nodeFlagged}
+                  inherited={hasDescendantBookmark && !nodeFlagged}
+                  disabled={readOnly}
+                  onToggle={readOnly ? undefined : () => toggleNodeFlag(node.id)}
+                />
+              )}
             </span>
           </AccordionTrigger>
           <AccordionContent>
             {renderSectionHint(node.hint)}
-            {hasTags && (
-              <div className="mb-3">
-                <QuestionnaireTagSelector
-                  tags={(node.tags ?? []).map((tag) => ({ id: tag.id, label: tag.label, hint: tag.hint }))}
-                  selectedEntries={formData.sections[node.id] ?? []}
-                  onToggleTag={(tagKey) => toggleTag(node.id, tagKey)}
-                  onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
-                  onBlur={() => scheduleSave(node.id)}
-                  readOnly={readOnly}
-                  hintsMode={hintsMode}
-                />
-              </div>
-            )}
+            {hasTags && <div className="mb-3">{renderTagSelector(node)}</div>}
             {hasChildren && (
               <Accordion type="multiple" className="pl-2">
                 {renderNodeSections(node.children!, depth + 1)}
