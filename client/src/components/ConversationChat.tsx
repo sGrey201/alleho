@@ -20,6 +20,7 @@ import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { messengerProfilePath } from "@/lib/messengerPaths";
+import { clearChatSearchRequest, shouldOpenChatSearch } from "@/lib/chatOpenSearch";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -477,9 +478,16 @@ export default function ConversationChat({
     setQuestionnaireFilledOnly(false);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
-    setIsChatSearchOpen(false);
-    setChatSearchQuery("");
-    setChatSearchMatchIndex(0);
+    const openSearchPending =
+      !!conversationId &&
+      (shouldOpenChatSearch(conversationId) ||
+        (typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("search") === "1"));
+    if (!openSearchPending) {
+      setIsChatSearchOpen(false);
+      setChatSearchQuery("");
+      setChatSearchMatchIndex(0);
+    }
     if (conversationId) {
       setMessage(getChatComposerDraft(conversationId));
     } else {
@@ -629,7 +637,7 @@ export default function ConversationChat({
         myChannelRole === "owner" ||
         myChannelRole === "admin" ||
         (!channelMonetizationEnabled && !!myChannelRole)
-      : hasActiveSubscription;
+      : !!user?.isAdmin || hasActiveSubscription;
 
   useEffect(() => {
     if (canViewSponsorContent) setInlineContentPayment(null);
@@ -1393,7 +1401,8 @@ export default function ConversationChat({
     setIsChatSearchOpen(false);
     setChatSearchQuery("");
     setChatSearchMatchIndex(0);
-  }, []);
+    if (conversationId) clearChatSearchRequest(conversationId);
+  }, [conversationId]);
 
   const openChatSearch = useCallback((initialQuery = "") => {
     if (!canUseChatSearch) return;
@@ -1402,6 +1411,25 @@ export default function ConversationChat({
     setChatSearchMatchIndex(0);
     window.setTimeout(() => chatSearchInputRef.current?.focus(), 50);
   }, [canUseChatSearch]);
+
+  useEffect(() => {
+    if (!conversationId || !canUseChatSearch) return;
+    const fromQuery =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("search") === "1";
+    if (!shouldOpenChatSearch(conversationId) && !fromQuery) return;
+    openChatSearch();
+    if (fromQuery) {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("search");
+      const next = params.toString();
+      const pathOnly = location.split("?")[0] ?? location;
+      setLocation(next ? `${pathOnly}?${next}` : pathOnly, { replace: true });
+    }
+    // Delay clear so React Strict Mode remount still sees the pending flag.
+    const clearTimer = window.setTimeout(() => clearChatSearchRequest(conversationId), 500);
+    return () => window.clearTimeout(clearTimer);
+  }, [canUseChatSearch, conversationId, location, openChatSearch, setLocation]);
 
   const handleTagClick = useCallback(
     (tag: string) => {
@@ -2197,18 +2225,6 @@ export default function ConversationChat({
               </p>
             )}
           </button>
-          {canUseChatSearch && (
-          <Button
-            variant="secondary"
-            size="icon"
-            onClick={() => openChatSearch()}
-            className="h-12 w-12 shrink-0 rounded-full border border-border bg-card text-foreground shadow-sm hover:bg-muted/50"
-            aria-label={t.search}
-            data-testid="button-chat-search-open"
-          >
-            <Search className="h-5 w-5" />
-          </Button>
-          )}
           <button
             type="button"
             onClick={handleHeaderProfileClick}
@@ -2584,15 +2600,6 @@ export default function ConversationChat({
                 onCreatePoll={
                   !editing && canPostToChannel && !isPatientConv
                     ? () => setPollDialogOpen(true)
-                    : undefined
-                }
-                onStartVoiceCall={
-                  !editing && canPostToChannel && conv.type !== "channel" && !voiceCall.roomCall
-                    ? () =>
-                        void voiceCall.startCallFor(conversationId!, {
-                          type: conv.type,
-                          title: headerTitle,
-                        })
                     : undefined
                 }
                 showSponsorFormat={conv.type === "channel" && channelMonetizationEnabled && canPostToChannel}

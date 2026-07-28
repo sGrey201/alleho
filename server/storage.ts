@@ -442,6 +442,7 @@ export interface IStorage {
       patientAvailable?: boolean;
       isClosed?: boolean;
       isHidden?: boolean;
+      allowCalls?: boolean;
     }
   ): Promise<Conversation | undefined>;
   markConversationDeleted(id: string): Promise<Conversation | undefined>;
@@ -2246,6 +2247,7 @@ export class DatabaseStorage implements IStorage {
       patientAvailable?: boolean;
       isClosed?: boolean;
       isHidden?: boolean;
+      allowCalls?: boolean;
     }
   ): Promise<Conversation | undefined> {
     const [c] = await db

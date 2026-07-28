@@ -2047,6 +2047,7 @@ ${allUrls.map(url => `  <url>
         patientAvailable?: boolean;
         isClosed?: boolean;
         isHidden?: boolean;
+        allowCalls?: boolean;
       };
       const conv = await storage.getConversation(id);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
@@ -2068,9 +2069,12 @@ ${allUrls.map(url => `  <url>
           ...(body.isHidden !== undefined ? { isHidden: body.isHidden } : {}),
         });
       }
-      if (conv.type === "group" && body.isClosed !== undefined) {
+      if (conv.type === "group" && (body.isClosed !== undefined || body.allowCalls !== undefined)) {
         if (role !== "owner") return res.status(403).json({ message: "only_owner_can_edit_conversation" });
-        await storage.updateConversation(id, { isClosed: body.isClosed });
+        await storage.updateConversation(id, {
+          ...(body.isClosed !== undefined ? { isClosed: body.isClosed } : {}),
+          ...(body.allowCalls !== undefined ? { allowCalls: body.allowCalls } : {}),
+        });
       }
       if (Array.isArray(body.addParticipantIds)) {
         if (role !== "owner") return res.status(403).json({ message: "only_owner_can_add_members" });
@@ -3137,6 +3141,9 @@ ${allUrls.map(url => `  <url>
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
       if (!isCallableConversationType(conv.type)) {
         return res.status(400).json({ message: "Calls are not allowed in this chat" });
+      }
+      if (conv.type === "group" && !conv.allowCalls) {
+        return res.status(403).json({ message: "calls_disabled_in_group" });
       }
       if (isLiveKitConfigured()) {
         await reconcileConversationCallBeforeStart(id);

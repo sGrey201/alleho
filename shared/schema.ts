@@ -337,6 +337,8 @@ export const conversations = pgTable(
     patientAvailable: boolean("patient_available").notNull().default(false),
     isClosed: boolean("is_closed").notNull().default(false),
     isHidden: boolean("is_hidden").notNull().default(false),
+    /** Groups only: whether members may start voice conferences. Default off. */
+    allowCalls: boolean("allow_calls").notNull().default(false),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),

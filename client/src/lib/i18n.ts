@@ -2236,6 +2236,9 @@ export const t = {
   // Voice conferences (LiveKit)
   voiceCallStart: 'Голосовая конференция',
   voiceCallDial: 'Позвонить',
+  voiceCallCallsDisabledInGroup: 'Звонки в этой группе отключены',
+  allowCalls: 'Разрешить звонки',
+  allowCallsHint: 'Участники группы смогут начинать голосовые конференции',
   voiceCallIncomingTitle: 'Голосовая конференция',
   voiceCallIncomingFrom: 'приглашает в голосовую конференцию',
   voiceCallOngoing: 'Идёт голосовая конференция',

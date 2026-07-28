@@ -22,6 +22,8 @@ import { messengerProfilePath } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { t } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
+import { ChatProfileActionRow } from "@/components/ChatProfileActionRow";
+import { useVoiceCallContext } from "@/components/VoiceCallProvider";
 
 type ConversationInfo = {
   id: string;
@@ -53,11 +55,13 @@ function formatContactFullName(user?: {
 type Props = {
   conversationId: string;
   onBack: () => void;
+  onOpenSearch?: () => void;
 };
 
-export default function PatientChatSettings({ conversationId, onBack }: Props) {
+export default function PatientChatSettings({ conversationId, onBack, onOpenSearch }: Props) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, hasActiveSubscription, isAdmin } = useAuth();
+  const voiceCall = useVoiceCallContext();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState("");
@@ -189,6 +193,24 @@ export default function PatientChatSettings({ conversationId, onBack }: Props) {
             </div>
           )}
         </div>
+
+        <ChatProfileActionRow
+          onCall={
+            !voiceCall.roomCall
+              ? () => {
+                  void voiceCall.startCallFor(conversationId, {
+                    type: "patient",
+                    title: displayName,
+                  });
+                  onBack();
+                }
+              : undefined
+          }
+          callDisabled={voiceCall.isStarting}
+          onSearch={
+            onOpenSearch && (hasActiveSubscription || isAdmin) ? onOpenSearch : undefined
+          }
+        />
 
         <div className="space-y-2">
           <Label>{t.chatNameLabel}</Label>

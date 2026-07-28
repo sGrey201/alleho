@@ -40,6 +40,10 @@ import {
 import { t } from "@/lib/i18n";
 import { messengerProfilePath, messengerConversationUrl, shareMessengerConversation } from "@/lib/messengerPaths";
 import { cn, profileAvatarSrc } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
+import { ChatProfileActionRow } from "@/components/ChatProfileActionRow";
+import { useVoiceCallContext } from "@/components/VoiceCallProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 function generateDeleteConfirmationCode(): number {
   return Math.floor(100 + Math.random() * 900);
@@ -67,6 +71,7 @@ type ConversationInfo = {
   patientAvailable?: boolean;
   isClosed?: boolean;
   isHidden?: boolean;
+  allowCalls?: boolean;
   subscriptionPending?: boolean;
   myMembershipStatus?: string | null;
   sponsorSettings?: { enabled: boolean } | null;
@@ -90,10 +95,13 @@ interface Props {
   mode: "group" | "channel";
   currentUserId?: string;
   onBack: () => void;
+  onOpenSearch?: () => void;
 }
 
-export default function GroupOrChannelSettings({ conversationId, mode, currentUserId, onBack }: Props) {
+export default function GroupOrChannelSettings({ conversationId, mode, currentUserId, onBack, onOpenSearch }: Props) {
   const { toast } = useToast();
+  const { hasActiveSubscription, isAdmin } = useAuth();
+  const voiceCall = useVoiceCallContext();
   const [, setLocation] = useLocation();
   const scrollSponsorSection =
     typeof window !== "undefined" &&
@@ -107,6 +115,7 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   const [patientAvailable, setPatientAvailable] = useState(false);
   const [isClosed, setIsClosed] = useState(true);
   const [isHidden, setIsHidden] = useState(false);
+  const [allowCalls, setAllowCalls] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState<number | null>(null);
   const [deleteCodeInput, setDeleteCodeInput] = useState("");
@@ -131,7 +140,8 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     setPatientAvailable(!!conv.patientAvailable);
     setIsClosed(conv.isClosed ?? true);
     setIsHidden(!!conv.isHidden);
-  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed, conv?.isHidden]);
+    setAllowCalls(!!conv.allowCalls);
+  }, [conv?.id, conv?.name, conv?.avatarUrl, conv?.patientAvailable, conv?.isClosed, conv?.isHidden, conv?.allowCalls]);
 
   const myRole = conv?.participants?.find((p) => p.userId === currentUserId)?.role;
   const isOwner = myRole === "owner";
@@ -180,7 +190,12 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
   });
 
   const saveVisibilityMutation = useMutation({
-    mutationFn: async (flags: { patientAvailable?: boolean; isClosed?: boolean; isHidden?: boolean }) => {
+    mutationFn: async (flags: {
+      patientAvailable?: boolean;
+      isClosed?: boolean;
+      isHidden?: boolean;
+      allowCalls?: boolean;
+    }) => {
       const res = await apiRequest("PATCH", `/api/conversations/${conversationId}`, flags);
       return res.json();
     },
@@ -588,6 +603,26 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
           </div>
         )}
 
+        <ChatProfileActionRow
+          onCall={
+            mode === "group" && allowCalls && !voiceCall.roomCall
+              ? () => {
+                  void voiceCall.startCallFor(conversationId, {
+                    type: "group",
+                    title: displayName,
+                  });
+                  onBack();
+                }
+              : undefined
+          }
+          callDisabled={voiceCall.isStarting}
+          onSearch={
+            onOpenSearch && (mode === "group" ? hasActiveSubscription || isAdmin : true)
+              ? onOpenSearch
+              : undefined
+          }
+        />
+
         {mode === "channel" && isHidden && isOwner && (
           <div className="rounded-lg border px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1">{t.channelPublicLinkLabel}</p>
@@ -670,6 +705,26 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 </div>
               </div>
             </RadioGroup>
+          </div>
+        )}
+
+        {mode === "group" && isOwner && (
+          <div className="flex items-start justify-between gap-3 rounded-lg border px-4 py-3">
+            <div className="min-w-0 space-y-0.5">
+              <Label htmlFor="group-allow-calls" className="cursor-pointer font-medium">
+                {t.allowCalls}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t.allowCallsHint}</p>
+            </div>
+            <Switch
+              id="group-allow-calls"
+              checked={allowCalls}
+              disabled={saveVisibilityMutation.isPending}
+              onCheckedChange={(checked) => {
+                setAllowCalls(checked);
+                saveVisibilityMutation.mutate({ allowCalls: checked });
+              }}
+            />
           </div>
         )}
 

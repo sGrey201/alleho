@@ -26,7 +26,23 @@ import { getMessengerProfileFromSearch } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { profileAvatarSrc } from "@/lib/utils";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { ChatProfileActionRow } from "@/components/ChatProfileActionRow";
+import { useVoiceCallContext } from "@/components/VoiceCallProvider";
+import { requestChatSearch } from "@/lib/chatOpenSearch";
 import { APP_HOME_PATH } from "@shared/brand";
+
+function conversationIdFromReturnPath(path?: string): string | undefined {
+  if (!path) return undefined;
+  const match = path.match(/^\/messenger\/(?:direct|chat)\/([^/?#]+)/);
+  return match?.[1];
+}
+
+function conversationTypeFromReturnPath(path?: string): "direct" | "patient" | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("/messenger/direct/")) return "direct";
+  if (path.startsWith("/messenger/chat/")) return "patient";
+  return undefined;
+}
 
 export type ProfileProps = {
   onSaveSuccess?: () => void;
@@ -239,12 +255,18 @@ export default function Profile({
   const [, setLocation] = useLocation();
   const profileSearch = useSearch();
   const profileReturnTo = getMessengerProfileFromSearch(profileSearch);
+  const returnConversationId = conversationIdFromReturnPath(profileReturnTo);
+  const returnConversationType = conversationTypeFromReturnPath(profileReturnTo);
+  const voiceCall = useVoiceCallContext();
   const [, profileParams] = useRoute("/profile/:userId");
   const [, messengerProfileParams] = useRoute("/messenger/profile/:userId");
   const targetUserId = profileUserIdProp ?? profileParams?.userId ?? messengerProfileParams?.userId;
   const handleBack = () => (onBack ? onBack() : window.history.back());
   const isOwnProfile = !targetUserId || targetUserId === user?.id;
   const { toast } = useToast();
+  const [resolvedDirectConversationId, setResolvedDirectConversationId] = useState<string | null>(
+    returnConversationId ?? null
+  );
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -306,6 +328,18 @@ export default function Profile({
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportCategory, setReportCategory] = useState<AccountReportCategory>("spam");
   const [reportDetails, setReportDetails] = useState("");
+
+  useEffect(() => {
+    setResolvedDirectConversationId(returnConversationId ?? null);
+  }, [returnConversationId]);
+
+  const profileConversationId = returnConversationId ?? resolvedDirectConversationId;
+  const profileConversationType = returnConversationType ?? "direct";
+  const chatPathForProfile = profileConversationId
+    ? profileConversationType === "patient"
+      ? `/messenger/chat/${profileConversationId}`
+      : `/messenger/direct/${profileConversationId}`
+    : null;
 
   const { data: previewTemplate } = useQuery({
     queryKey: ["/api/questionnaire-templates", previewTemplateId],
@@ -543,6 +577,7 @@ export default function Profile({
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as { conversationId?: string };
       if (!data.conversationId) throw new Error("Нет id чата");
+      setResolvedDirectConversationId(data.conversationId);
       setLocation(`/messenger/direct/${data.conversationId}`);
     } catch {
       toast({ title: t.error, description: "Не удалось открыть чат", variant: "destructive" });
@@ -700,6 +735,29 @@ export default function Profile({
         </div>
 
         <div className="p-4 space-y-3">
+          {profileConversationId && chatPathForProfile && (
+            <ChatProfileActionRow
+              onCall={
+                !voiceCall.roomCall
+                  ? () => {
+                      void voiceCall
+                        .startCallFor(profileConversationId, {
+                          type: profileConversationType === "patient" ? "patient" : "direct",
+                          title: displayName,
+                        })
+                        .then(() => {
+                          setLocation(chatPathForProfile);
+                        });
+                    }
+                  : undefined
+              }
+              callDisabled={voiceCall.isStarting}
+              onSearch={() => {
+                requestChatSearch(profileConversationId);
+                setLocation(chatPathForProfile);
+              }}
+            />
+          )}
           {canStartChat && (
             <Button
               type="button"

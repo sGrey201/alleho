@@ -11,7 +11,6 @@ import {
   FileText,
   Mic,
   ArrowUp,
-  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,8 +56,6 @@ type ChatInputBarProps = {
   onSendQuestionnaire?: () => void;
   showQuestionnaireAttach?: boolean;
   onCreatePoll?: () => void;
-  /** When provided, an entry to start a voice conference appears in the attach menu. */
-  onStartVoiceCall?: () => void;
   showMessageModeSelector?: boolean;
   messageMode?: ChatMessageMode;
   onMessageModeChange?: (mode: ChatMessageMode) => void;
@@ -97,7 +94,6 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   onSendQuestionnaire,
   showQuestionnaireAttach = false,
   onCreatePoll,
-  onStartVoiceCall,
   showMessageModeSelector = false,
   messageMode = "message",
   onMessageModeChange,
@@ -129,8 +125,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     !isRecording &&
     (onUploadImages ||
       (showQuestionnaireAttach && onSendQuestionnaire) ||
-      onCreatePoll ||
-      onStartVoiceCall);
+      onCreatePoll);
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
@@ -414,16 +409,6 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                   <DropdownMenuItem className={attachMenuItemClass} onSelect={onCreatePoll}>
                     <ListChecks />
                     {t.pollCreate}
-                  </DropdownMenuItem>
-                )}
-                {onStartVoiceCall && (
-                  <DropdownMenuItem
-                    className={attachMenuItemClass}
-                    onSelect={onStartVoiceCall}
-                    data-testid="menu-start-voice-call"
-                  >
-                    <Phone />
-                    {t.voiceCallDial}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

@@ -396,6 +396,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           await refetchViewingCall(conversationId);
         } else if (msg.startsWith("503")) {
           toast({ title: t.voiceCallNotConfigured ?? "Звонки недоступны", variant: "destructive" });
+        } else if (msg.includes("calls_disabled_in_group")) {
+          toast({
+            title: t.voiceCallCallsDisabledInGroup ?? "Звонки в этой группе отключены",
+            variant: "destructive",
+          });
         } else {
           console.error("[VoiceCall] start error:", err);
           toast({ title: t.voiceCallStartError ?? "Не удалось начать звонок", variant: "destructive" });

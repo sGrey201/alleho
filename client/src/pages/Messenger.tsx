@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfileReturnPath } from "@/lib/messengerPaths";
+import { requestChatSearch } from "@/lib/chatOpenSearch";
 import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, Phone } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
@@ -1409,6 +1410,14 @@ export default function Messenger() {
               mode={isGroupSettings ? "group" : "channel"}
               currentUserId={user?.id}
               onBack={() => setLocation(isGroupSettings ? `/messenger/group/${conversationId}` : `/messenger/channel/${conversationId}`)}
+              onOpenSearch={() => {
+                requestChatSearch(conversationId);
+                setLocation(
+                  isGroupSettings
+                    ? `/messenger/group/${conversationId}`
+                    : `/messenger/channel/${conversationId}`
+                );
+              }}
             />
           </div>
         ) : isPatientChatSettings && conversationId ? (
@@ -1416,6 +1425,10 @@ export default function Messenger() {
             <PatientChatSettings
               conversationId={conversationId}
               onBack={() => setLocation(`/messenger/chat/${conversationId}`)}
+              onOpenSearch={() => {
+                requestChatSearch(conversationId);
+                setLocation(`/messenger/chat/${conversationId}`);
+              }}
             />
           </div>
         ) : isCommentThread && conversationId && threadMessageId ? (
