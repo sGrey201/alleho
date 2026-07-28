@@ -1059,7 +1059,47 @@ ${allUrls.map(url => `  <url>
       const userId = await getCurrentUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const name = req.body?.name ? String(req.body.name).trim() : undefined;
-      const copy = await storage.copySharedQuestionnaireTemplate(req.params.id, userId, name);
+      const conversationId = req.body?.conversationId ? String(req.body.conversationId).trim() : "";
+      const messageId = req.body?.messageId ? String(req.body.messageId).trim() : "";
+
+      let allowUnshared = false;
+      let messagePayload: ReturnType<typeof questionnaireTemplateMessageContentSchema.parse> | null = null;
+      if (conversationId && messageId) {
+        const inConv = await storage.isUserInConversation(userId, conversationId);
+        if (!inConv) return res.status(403).json({ message: "Access denied" });
+        const msg = await storage.getConversationMessageById(messageId);
+        if (!msg || msg.conversationId !== conversationId || msg.deletedAt) {
+          return res.status(404).json({ message: "Message not found" });
+        }
+        if (msg.messageType !== "questionnaire_template") {
+          return res.status(400).json({ message: "Message is not a questionnaire template" });
+        }
+        try {
+          messagePayload = questionnaireTemplateMessageContentSchema.parse(JSON.parse(msg.content || "{}"));
+        } catch {
+          return res.status(400).json({ message: "Invalid template message" });
+        }
+        if (messagePayload.templateId !== req.params.id) {
+          return res.status(400).json({ message: "Template does not match message" });
+        }
+        allowUnshared = true;
+      }
+
+      let copy = await storage.copySharedQuestionnaireTemplate(req.params.id, userId, name, {
+        allowUnshared,
+      });
+
+      // Fallback: source template may be gone, but the chat message still has a snapshot.
+      if (!copy && allowUnshared && messagePayload?.snapshot) {
+        copy = await storage.createQuestionnaireTemplate({
+          ownerUserId: userId,
+          name: name || `${messagePayload.templateName} (копия)`,
+          structure: deepCloneQuestionnaireStructure(messagePayload.snapshot),
+          hintsMode: parseQuestionnaireHintsMode(messagePayload.hintsMode),
+          isShared: false,
+        });
+      }
+
       if (!copy) return res.status(404).json({ message: "Template not found or not shared" });
       res.status(201).json(copy);
     } catch (error) {
@@ -2991,6 +3031,9 @@ ${allUrls.map(url => `  <url>
         const template = await storage.getQuestionnaireTemplate(String(body.templateId));
         if (!template || template.ownerUserId !== currentUserId) {
           return res.status(404).json({ message: "Template not found" });
+        }
+        if (!template.isShared) {
+          await storage.updateQuestionnaireTemplate(template.id, currentUserId, { isShared: true });
         }
         const payload = questionnaireTemplateMessageContentSchema.parse({
           templateId: template.id,

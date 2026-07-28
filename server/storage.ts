@@ -290,7 +290,8 @@ export interface IStorage {
   copySharedQuestionnaireTemplate(
     sourceId: string,
     newOwnerUserId: string,
-    name?: string
+    name?: string,
+    options?: { allowUnshared?: boolean }
   ): Promise<QuestionnaireTemplate | undefined>;
   incrementTemplatePatientSendCount(templateId: string): Promise<void>;
   listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]>;
@@ -1080,12 +1081,13 @@ export class DatabaseStorage implements IStorage {
   async copySharedQuestionnaireTemplate(
     sourceId: string,
     newOwnerUserId: string,
-    name?: string
+    name?: string,
+    options?: { allowUnshared?: boolean }
   ): Promise<QuestionnaireTemplate | undefined> {
     const source = await this.getQuestionnaireTemplate(sourceId);
     if (!source) return undefined;
     const isOwner = source.ownerUserId === newOwnerUserId;
-    if (!isOwner && !source.isShared) return undefined;
+    if (!isOwner && !source.isShared && !options?.allowUnshared) return undefined;
 
     const created = await this.createQuestionnaireTemplate({
       ownerUserId: newOwnerUserId,

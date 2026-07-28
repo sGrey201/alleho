@@ -464,6 +464,7 @@ export default function ConversationChat({
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [chatSearchMatchIndex, setChatSearchMatchIndex] = useState(0);
   const [templatePreview, setTemplatePreview] = useState<{
+    messageId: string;
     templateId: string;
     templateName: string;
     snapshot: { root: import("@shared/questionnaireTypes").QuestionnaireNode[] };
@@ -695,13 +696,20 @@ export default function ConversationChat({
   });
 
   const copyTemplateMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      const res = await apiRequest("POST", `/api/questionnaire-templates/${templateId}/copy`);
+    mutationFn: async (params: { templateId: string; messageId: string }) => {
+      if (!conversationId) throw new Error("Missing conversation");
+      const res = await apiRequest("POST", `/api/questionnaire-templates/${params.templateId}/copy`, {
+        conversationId,
+        messageId: params.messageId,
+      });
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: t.questionnaireSaved });
+      toast({ title: t.questionnaireTemplateCopied });
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
+    },
+    onError: () => {
+      toast({ title: t.questionnaireTemplateCopyError, variant: "destructive" });
     },
   });
 
@@ -1867,6 +1875,7 @@ export default function ConversationChat({
         setOpenQuestionnaireInstanceId(null);
         setOpenQuestionnaireTemplateName(null);
         setTemplatePreview({
+          messageId: msg.id,
           templateId: payload.templateId,
           templateName: payload.templateName,
           snapshot: payload.snapshot as { root: import("@shared/questionnaireTypes").QuestionnaireNode[] },
@@ -2616,7 +2625,12 @@ export default function ConversationChat({
                 templateName={templatePreview.templateName}
                 templateId={templatePreview.templateId}
                 hintsMode={templatePreview.hintsMode}
-                onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
+                onCopy={() =>
+                  copyTemplateMutation.mutate({
+                    templateId: templatePreview.templateId,
+                    messageId: templatePreview.messageId,
+                  })
+                }
                 isCopying={copyTemplateMutation.isPending}
               />
             )}
@@ -3021,7 +3035,12 @@ export default function ConversationChat({
                   templateName={templatePreview.templateName}
                   templateId={templatePreview.templateId}
                   hintsMode={templatePreview.hintsMode}
-                  onCopy={() => copyTemplateMutation.mutate(templatePreview.templateId)}
+                  onCopy={() =>
+                    copyTemplateMutation.mutate({
+                      templateId: templatePreview.templateId,
+                      messageId: templatePreview.messageId,
+                    })
+                  }
                   isCopying={copyTemplateMutation.isPending}
                 />
               )}

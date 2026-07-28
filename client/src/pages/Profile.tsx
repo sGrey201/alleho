@@ -323,8 +323,11 @@ export default function Profile({
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: t.questionnaireSaved });
+      toast({ title: t.questionnaireTemplateCopied });
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
+    },
+    onError: () => {
+      toast({ title: t.questionnaireTemplateCopyError, variant: "destructive" });
     },
   });
 

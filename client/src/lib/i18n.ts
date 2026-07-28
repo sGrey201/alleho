@@ -169,6 +169,9 @@ export const t = {
   questionnaireTitle: 'Опросник',
   sendQuestionnaire: 'Отправить опросник',
   copyQuestionnaireTemplate: 'Скопировать себе',
+  questionnaireTemplateCopied:
+    'Шаблон скопирован. Теперь вы можете редактировать его и отправлять своим пациентам.',
+  questionnaireTemplateCopyError: 'Не удалось скопировать шаблон',
   shareQuestionnaire: 'Поделиться',
   shareConversation: 'Поделиться',
   conversationLinkCopied: 'Ссылка скопирована',
