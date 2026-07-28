@@ -67,6 +67,14 @@ import {
   validateMergedSectionDepth,
 } from "@/lib/questionnaireSectionImportExport";
 
+type TemplateSavePayload = {
+  name: string;
+  structure: QuestionnaireTemplateStructure;
+  hintsMode: QuestionnaireHintsMode;
+};
+
+const NAME_AUTOSAVE_MS = 500;
+
 type EditTarget =
   | { kind: "node"; path: number[] }
   | { kind: "tag"; path: number[]; tagIndex: number }
@@ -449,14 +457,22 @@ export function QuestionnaireTemplateEditor({
   const { toast } = useToast();
   const importInputRef = useRef<HTMLInputElement>(null);
   const importPathRef = useRef<number[] | null>(null);
+  const nameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCreateRef = useRef<EditTarget>(null);
   const [name, setName] = useState("");
   const [hintsMode, setHintsMode] = useState<QuestionnaireHintsMode>(DEFAULT_QUESTIONNAIRE_HINTS_MODE);
   const [structure, setStructure] = useState<QuestionnaireTemplateStructure>({ root: [] });
-  const [dirty, setDirty] = useState(false);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [importTargetPath, setImportTargetPath] = useState<number[] | null>(null);
   const [pendingImportedNode, setPendingImportedNode] = useState<QuestionnaireNode | null>(null);
+
+  const stateRef = useRef<TemplateSavePayload>({
+    name: "",
+    structure: { root: [] },
+    hintsMode: DEFAULT_QUESTIONNAIRE_HINTS_MODE,
+  });
+  stateRef.current = { name, structure, hintsMode };
 
   const { data, isLoading } = useQuery<QuestionnaireTemplate>({
     queryKey: ["/api/questionnaire-templates", templateId],
@@ -469,37 +485,37 @@ export function QuestionnaireTemplateEditor({
   });
 
   useEffect(() => {
-    if (data) {
-      setName(data.name);
-      setHintsMode(parseQuestionnaireHintsMode(data.hintsMode));
-      setStructure(data.structure as QuestionnaireTemplateStructure);
-      setDirty(false);
-    }
-  }, [data]);
+    if (!data) return;
+    setName(data.name);
+    setHintsMode(parseQuestionnaireHintsMode(data.hintsMode));
+    setStructure(data.structure as QuestionnaireTemplateStructure);
+  }, [data?.id]);
 
-  const markDirty = () => setDirty(true);
+  useEffect(() => {
+    return () => {
+      if (nameSaveTimerRef.current) clearTimeout(nameSaveTimerRef.current);
+    };
+  }, []);
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      const trimmed = name.trim();
+    mutationFn: async (payload: TemplateSavePayload) => {
+      const trimmed = payload.name.trim();
       if (!trimmed) throw new Error("empty name");
-      for (const node of structure.root) {
+      for (const node of payload.structure.root) {
         if (getQuestionnaireNodeDepth(node) > MAX_QUESTIONNAIRE_DEPTH) {
           throw new Error("depth");
         }
       }
       const res = await apiRequest("PATCH", `/api/questionnaire-templates/${templateId}`, {
         name: trimmed,
-        structure,
-        hintsMode,
+        structure: payload.structure,
+        hintsMode: payload.hintsMode,
       });
-      return res.json();
+      return res.json() as Promise<QuestionnaireTemplate>;
     },
-    onSuccess: () => {
-      setDirty(false);
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["/api/questionnaire-templates", templateId], saved);
       void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates"] });
-      void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-templates", templateId] });
-      toast({ title: t.questionnaireSaved });
     },
     onError: (err: Error) => {
       toast({
@@ -509,44 +525,66 @@ export function QuestionnaireTemplateEditor({
     },
   });
 
+  const persist = (overrides?: Partial<TemplateSavePayload>) => {
+    const payload: TemplateSavePayload = {
+      name: overrides?.name ?? stateRef.current.name,
+      structure: overrides?.structure ?? stateRef.current.structure,
+      hintsMode: overrides?.hintsMode ?? stateRef.current.hintsMode,
+    };
+    if (!payload.name.trim()) return;
+    saveMutation.mutate(payload);
+  };
+
+  const applyStructure = (next: QuestionnaireTemplateStructure) => {
+    setStructure(next);
+    stateRef.current = { ...stateRef.current, structure: next };
+    persist({ structure: next });
+  };
+
   const structureActions: StructureActions = {
-    onEditNode: (path) => setEditTarget({ kind: "node", path }),
-    onEditTag: (path, tagIndex) => setEditTarget({ kind: "tag", path, tagIndex }),
+    onEditNode: (path) => {
+      pendingCreateRef.current = null;
+      setEditTarget({ kind: "node", path });
+    },
+    onEditTag: (path, tagIndex) => {
+      pendingCreateRef.current = null;
+      setEditTarget({ kind: "tag", path, tagIndex });
+    },
     onDeleteNode: (path) => setDeleteTarget({ kind: "node", path }),
     onDeleteTag: (path, tagIndex) => setDeleteTarget({ kind: "tag", path, tagIndex }),
     onAddTag: (path) => {
       const node = getNodeAtPath(structure.root, path);
       if (!node) return;
       const tagIndex = (node.tags ?? []).length;
+      const target: EditTarget = { kind: "tag", path, tagIndex };
+      pendingCreateRef.current = target;
       setStructure(
         updateNodeAtPath(structure, path, (n) => ({
           ...n,
           tags: [...(n.tags ?? []), { id: newStructureId("tag"), label: t.newQuestionItem }],
         }))
       );
-      setEditTarget({ kind: "tag", path, tagIndex });
-      markDirty();
+      setEditTarget(target);
     },
     onAddChild: (path) => {
       const node = getNodeAtPath(structure.root, path);
       if (!node) return;
       const childIndex = (node.children ?? []).length;
+      const target: EditTarget = { kind: "node", path: [...path, childIndex] };
+      pendingCreateRef.current = target;
       setStructure(
         updateNodeAtPath(structure, path, (n) => ({
           ...n,
           children: [...(n.children ?? []), { id: newStructureId("sec"), title: "Новый подраздел" }],
         }))
       );
-      setEditTarget({ kind: "node", path: [...path, childIndex] });
-      markDirty();
+      setEditTarget(target);
     },
     onMoveNode: (path, delta) => {
-      setStructure(moveNodeAtPath(structure, path, delta));
-      markDirty();
+      applyStructure(moveNodeAtPath(structure, path, delta));
     },
     onMoveTag: (path, tagIndex, delta) => {
-      setStructure(moveTagAtPath(structure, path, tagIndex, delta));
-      markDirty();
+      applyStructure(moveTagAtPath(structure, path, tagIndex, delta));
     },
     canMoveNodeUp: (path) => path[path.length - 1] > 0,
     canMoveNodeDown: (path) => path[path.length - 1] < getParentListLength(structure, path) - 1,
@@ -613,54 +651,66 @@ export function QuestionnaireTemplateEditor({
       setPendingImportedNode(null);
       return;
     }
-    setStructure(updateNodeAtPath(structure, importTargetPath, () => merged));
+    applyStructure(updateNodeAtPath(structure, importTargetPath, () => merged));
     setImportTargetPath(null);
     setPendingImportedNode(null);
-    markDirty();
     toast({ title: t.importSectionSuccess });
   };
 
   const handleAddRootSection = () => {
     const path = [structure.root.length];
+    const target: EditTarget = { kind: "node", path };
+    pendingCreateRef.current = target;
     setStructure({
       root: [...structure.root, { id: newStructureId("sec"), title: "Новый раздел" }],
     });
-    setEditTarget({ kind: "node", path });
-    markDirty();
+    setEditTarget(target);
+  };
+
+  const discardPendingCreate = () => {
+    const pending = pendingCreateRef.current;
+    pendingCreateRef.current = null;
+    if (!pending) return;
+    if (pending.kind === "tag") {
+      setStructure((prev) => removeTagAtPath(prev, pending.path, pending.tagIndex));
+    } else {
+      setStructure((prev) => removeNodeAtPath(prev, pending.path));
+    }
+  };
+
+  const handleEditDialogOpenChange = (open: boolean) => {
+    if (open) return;
+    discardPendingCreate();
+    setEditTarget(null);
   };
 
   const handleEditSave = (values: { title: string; hint: string }) => {
     if (!editTarget) return;
-    if (editTarget.kind === "node") {
-      setStructure(
-        updateNodeAtPath(structure, editTarget.path, (node) => ({
-          ...node,
-          title: values.title,
-          hint: values.hint || undefined,
-        }))
-      );
-    } else {
-      setStructure(
-        updateTagAtPath(structure, editTarget.path, editTarget.tagIndex, (tag) => ({
-          ...tag,
-          label: values.title,
-          hint: values.hint || undefined,
-        }))
-      );
-    }
+    const next =
+      editTarget.kind === "node"
+        ? updateNodeAtPath(structure, editTarget.path, (node) => ({
+            ...node,
+            title: values.title,
+            hint: values.hint || undefined,
+          }))
+        : updateTagAtPath(structure, editTarget.path, editTarget.tagIndex, (tag) => ({
+            ...tag,
+            label: values.title,
+            hint: values.hint || undefined,
+          }));
+    pendingCreateRef.current = null;
     setEditTarget(null);
-    markDirty();
+    applyStructure(next);
   };
 
   const handleDeleteConfirm = () => {
     if (!deleteTarget) return;
-    if (deleteTarget.kind === "node") {
-      setStructure(removeNodeAtPath(structure, deleteTarget.path));
-    } else {
-      setStructure(removeTagAtPath(structure, deleteTarget.path, deleteTarget.tagIndex));
-    }
+    const next =
+      deleteTarget.kind === "node"
+        ? removeNodeAtPath(structure, deleteTarget.path)
+        : removeTagAtPath(structure, deleteTarget.path, deleteTarget.tagIndex);
     setDeleteTarget(null);
-    markDirty();
+    applyStructure(next);
   };
 
   const showHintsAsIcon = hintsMode === "icon";
@@ -685,22 +735,15 @@ export function QuestionnaireTemplateEditor({
         {embedded && showBackButton && (
           <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{name || t.editQuestionnaireTemplate}</h1>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          <span
-            className={cn(
-              "text-sm",
-              dirty ? "text-destructive" : "text-green-600 dark:text-green-500"
-            )}
-          >
-            {dirty ? t.statusNotSaved : t.statusSaved}
-          </span>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !name.trim()}
-          >
-            {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {t.save}
-          </Button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {saveMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{t.saving}</span>
+            </>
+          ) : (
+            <span className="text-sm text-green-600 dark:text-green-500">{t.statusSaved}</span>
+          )}
         </div>
       </div>
 
@@ -709,8 +752,13 @@ export function QuestionnaireTemplateEditor({
         <Input
           value={name}
           onChange={(e) => {
-            setName(e.target.value);
-            markDirty();
+            const nextName = e.target.value;
+            setName(nextName);
+            stateRef.current = { ...stateRef.current, name: nextName };
+            if (nameSaveTimerRef.current) clearTimeout(nameSaveTimerRef.current);
+            nameSaveTimerRef.current = setTimeout(() => {
+              persist({ name: nextName });
+            }, NAME_AUTOSAVE_MS);
           }}
           required
         />
@@ -721,8 +769,10 @@ export function QuestionnaireTemplateEditor({
         <RadioGroup
           value={hintsMode}
           onValueChange={(value) => {
-            setHintsMode(value as QuestionnaireHintsMode);
-            markDirty();
+            const nextMode = value as QuestionnaireHintsMode;
+            setHintsMode(nextMode);
+            stateRef.current = { ...stateRef.current, hintsMode: nextMode };
+            persist({ hintsMode: nextMode });
           }}
         >
           <div className="flex items-center gap-2">
@@ -798,7 +848,7 @@ export function QuestionnaireTemplateEditor({
         editTarget={editTarget}
         structure={structure}
         open={!!editTarget}
-        onOpenChange={(open) => !open && setEditTarget(null)}
+        onOpenChange={handleEditDialogOpenChange}
         onSave={handleEditSave}
       />
 

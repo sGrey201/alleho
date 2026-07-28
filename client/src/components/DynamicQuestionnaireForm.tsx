@@ -534,7 +534,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   <SelectContent>
                     <SelectItem value="male">{t.genderMale}</SelectItem>
                     <SelectItem value="female">{t.genderFemale}</SelectItem>
-                    <SelectItem value="other">{t.genderOther}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
