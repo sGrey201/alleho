@@ -2255,4 +2255,6 @@ export const t = {
   voiceCallNotConfigured: 'Звонки недоступны',
   voiceCallInProgress: 'В разговоре',
   voiceCallRinging: 'Звонок…',
+  voiceCallMinimize: 'Свернуть',
+  voiceCallOpenChat: 'Открыть чат',
 };

@@ -884,3 +884,77 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   font-size: 16px;
   line-height: 22px;
 }
+
+/* Active voice call: Telegram-like green safe-area strip */
+:root {
+  --voice-call-strip-label-height: 1.625rem;
+  --voice-call-green: #31b545;
+}
+
+.voice-call-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: calc(env(safe-area-inset-top, 0px) + var(--voice-call-strip-label-height));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: 0.2rem;
+  border: 0;
+  background: var(--voice-call-green);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.voice-call-strip__label {
+  max-width: min(70vw, 20rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.voice-call-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--voice-call-green);
+  color: #fff;
+}
+
+.voice-call-fullscreen__safe {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+html.app-voice-call-active .app-viewport-content {
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--voice-call-strip-label-height));
+}
+
+html.app-immersive.app-shell-chat.app-voice-call-active .chat-header-panel {
+  padding-top: calc(0.875rem + env(safe-area-inset-top, 0px) + var(--voice-call-strip-label-height));
+}
+
+html.app-immersive.app-shell-chat.app-voice-call-active .app-viewport-content {
+  /* Chat shell owns header safe-area; strip overlays the top — keep content padding 0. */
+  padding-top: 0;
+}
+
+@media (min-width: 768px) {
+  html.app-immersive:not(.app-shell-chat).app-voice-call-active .chat-header-panel {
+    padding-top: calc(0.75rem + var(--voice-call-strip-label-height));
+  }
+}

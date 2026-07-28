@@ -7,6 +7,8 @@ import { useIsRestoring } from "@tanstack/react-query";
 import { offlinePersistOptions } from "@/lib/queryPersister";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { VoiceCallProvider } from "@/components/VoiceCallProvider";
+import { VoiceCallChrome } from "@/components/VoiceCallChrome";
 import { useAuth } from "@/hooks/useAuth";
 import { Footer } from "@/components/Footer";
 import NotFound from "@/pages/not-found";
@@ -229,11 +231,14 @@ function App() {
     <HelmetProvider>
       <PersistQueryClientProvider client={queryClient} persistOptions={offlinePersistOptions}>
         <TooltipProvider>
-          <div className="app-root-shell">
-            <AppContent />
-            <Toaster />
-            <AppUpdatePrompt />
-          </div>
+          <VoiceCallProvider>
+            <div className="app-root-shell">
+              <AppContent />
+              <VoiceCallChrome />
+              <Toaster />
+              <AppUpdatePrompt />
+            </div>
+          </VoiceCallProvider>
         </TooltipProvider>
       </PersistQueryClientProvider>
     </HelmetProvider>

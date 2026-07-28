@@ -77,9 +77,8 @@ import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
 import { flattenSponsorMarkersForDisplay, hasSponsorSections, stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
-import { useVoiceCall } from "@/hooks/useVoiceCall";
+import { useVoiceCallContext } from "@/components/VoiceCallProvider";
 import { VoiceCallBanner } from "@/components/VoiceCallBanner";
-import { VoiceCallRoom } from "@/components/VoiceCallRoom";
 import {
   CHAT_COMPOSER_INSET_EVENT,
   scrollChatPaneToBottom,
@@ -641,8 +640,15 @@ export default function ConversationChat({
     scrollToInlinePayment(inlineContentPayment);
   }, [inlineContentPayment, scrollToInlinePayment]);
 
-  const voiceCall = useVoiceCall(conversationId, user?.id);
+  const voiceCall = useVoiceCallContext();
   const inboxUnreadMessages = useInboxUnreadMessages();
+
+  useEffect(() => {
+    voiceCall.setViewingConversationId(conversationId);
+    return () => voiceCall.setViewingConversationId(undefined);
+    // Only rebind when the open conversation changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   useConversationWs(conversationId, !!conversationId, user?.id, voiceCall.handleCallWsEvent, {
     refetchMessagesOnNewMessage:
@@ -2245,25 +2251,14 @@ export default function ConversationChat({
           </div>
         )}
         {(() => {
-          const vc = voiceCall.call;
+          const vc = voiceCall.viewingCall;
           if (!vc) return null;
-          if (voiceCall.isInRoom || voiceCall.isConnecting) {
-            return (
-              <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
-                <VoiceCallRoom
-                  call={vc}
-                  currentUserId={user?.id}
-                  connectedUserIds={voiceCall.connectedUserIds}
-                  speakingUserIds={voiceCall.speakingUserIds}
-                  micEnabled={voiceCall.micEnabled}
-                  isConnecting={voiceCall.isConnecting}
-                  isInitiator={vc.initiatedByUserId === user?.id}
-                  onToggleMic={() => voiceCall.toggleMic()}
-                  onLeave={() => voiceCall.leaveCall()}
-                  onEnd={() => voiceCall.endCall()}
-                />
-              </div>
-            );
+          // In-call chrome is global (green strip / fullscreen).
+          if (
+            (voiceCall.isInRoom || voiceCall.isConnecting) &&
+            voiceCall.roomCall?.conversationId === vc.conversationId
+          ) {
+            return null;
           }
           const myStatus = vc.participants.find((p) => p.userId === user?.id)?.status;
           if (myStatus === "declined" || myStatus === "left") return null;
@@ -2278,8 +2273,13 @@ export default function ConversationChat({
               <VoiceCallBanner
                 initiatorName={initiatorName}
                 isActive={vc.status === "active"}
-                onAccept={() => voiceCall.acceptCall()}
-                onDecline={() => voiceCall.declineCall()}
+                onAccept={() => {
+                  void voiceCall.acceptCallFor(conversationId!, {
+                    type: conv?.type,
+                    title: headerTitle,
+                  });
+                }}
+                onDecline={() => void voiceCall.declineCallFor(conversationId!)}
               />
             </div>
           );
@@ -2587,8 +2587,12 @@ export default function ConversationChat({
                     : undefined
                 }
                 onStartVoiceCall={
-                  !editing && canPostToChannel && conv.type !== "channel" && !voiceCall.call
-                    ? () => voiceCall.startCall()
+                  !editing && canPostToChannel && conv.type !== "channel" && !voiceCall.roomCall
+                    ? () =>
+                        void voiceCall.startCallFor(conversationId!, {
+                          type: conv.type,
+                          title: headerTitle,
+                        })
                     : undefined
                 }
                 showSponsorFormat={conv.type === "channel" && channelMonetizationEnabled && canPostToChannel}
