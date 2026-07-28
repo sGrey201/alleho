@@ -1091,9 +1091,12 @@ ${allUrls.map(url => `  <url>
 
       // Fallback: source template may be gone, but the chat message still has a snapshot.
       if (!copy && allowUnshared && messagePayload?.snapshot) {
+        const resolvedName =
+          name ||
+          (await storage.resolveQuestionnaireTemplateCopyName(userId, messagePayload.templateName));
         copy = await storage.createQuestionnaireTemplate({
           ownerUserId: userId,
-          name: name || `${messagePayload.templateName} (копия)`,
+          name: resolvedName,
           structure: deepCloneQuestionnaireStructure(messagePayload.snapshot),
           hintsMode: parseQuestionnaireHintsMode(messagePayload.hintsMode),
           isShared: false,

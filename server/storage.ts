@@ -287,6 +287,7 @@ export interface IStorage {
   ): Promise<QuestionnaireTemplate | undefined>;
   deleteQuestionnaireTemplate(id: string, ownerUserId: string): Promise<boolean>;
   duplicateQuestionnaireTemplate(id: string, ownerUserId: string): Promise<QuestionnaireTemplate | undefined>;
+  resolveQuestionnaireTemplateCopyName(ownerUserId: string, desiredName: string): Promise<string>;
   copySharedQuestionnaireTemplate(
     sourceId: string,
     newOwnerUserId: string,
@@ -1069,13 +1070,26 @@ export class DatabaseStorage implements IStorage {
   ): Promise<QuestionnaireTemplate | undefined> {
     const source = await this.getQuestionnaireTemplate(id);
     if (!source || source.ownerUserId !== ownerUserId) return undefined;
+    const name = await this.resolveQuestionnaireTemplateCopyName(ownerUserId, source.name);
     return this.createQuestionnaireTemplate({
       ownerUserId,
-      name: `${source.name} (копия)`,
+      name,
       structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
       hintsMode: parseQuestionnaireHintsMode(source.hintsMode),
       isShared: false,
     });
+  }
+
+  async resolveQuestionnaireTemplateCopyName(ownerUserId: string, desiredName: string): Promise<string> {
+    const base = desiredName.trim() || "Опросник";
+    const existing = await this.listQuestionnaireTemplates(ownerUserId);
+    const taken = new Set(existing.map((t) => t.name.trim().toLowerCase()));
+    if (!taken.has(base.toLowerCase())) return base;
+    const copyName = `${base} (копия)`;
+    if (!taken.has(copyName.toLowerCase())) return copyName;
+    let n = 2;
+    while (taken.has(`${base} (копия ${n})`.toLowerCase())) n += 1;
+    return `${base} (копия ${n})`;
   }
 
   async copySharedQuestionnaireTemplate(
@@ -1089,9 +1103,13 @@ export class DatabaseStorage implements IStorage {
     const isOwner = source.ownerUserId === newOwnerUserId;
     if (!isOwner && !source.isShared && !options?.allowUnshared) return undefined;
 
+    const resolvedName = name?.trim()
+      ? name.trim()
+      : await this.resolveQuestionnaireTemplateCopyName(newOwnerUserId, source.name);
+
     const created = await this.createQuestionnaireTemplate({
       ownerUserId: newOwnerUserId,
-      name: name?.trim() || `${source.name} (копия)`,
+      name: resolvedName,
       structure: deepCloneQuestionnaireStructure(source.structure as QuestionnaireTemplateStructure),
       hintsMode: parseQuestionnaireHintsMode(source.hintsMode),
       isShared: false,
