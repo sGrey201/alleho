@@ -158,15 +158,8 @@ export function QuestionnaireFilledPrintView({
       {!hideTitle && templateName ? (
         <header>
           <h2 className="text-xl font-semibold tracking-tight">{templateName}</h2>
-          <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-            {t.questionnairePrintFormLabel}
-          </p>
         </header>
-      ) : (
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          {t.questionnairePrintFormLabel}
-        </p>
-      )}
+      ) : null}
 
       {profileFilled && (
         <section>

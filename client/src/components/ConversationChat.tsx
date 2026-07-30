@@ -48,6 +48,9 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
+import { exportQuestionnaireTemplateToWord, exportQuestionnaireFilledToWord } from "@/lib/questionnaireTemplateWordExport";
+import type { QuestionnaireInstanceData, QuestionnaireTemplateStructure } from "@shared/questionnaireTypes";
+import { normalizeQuestionnaireInstanceData } from "@shared/questionnaireTypes";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -1895,9 +1898,12 @@ export default function ConversationChat({
     if (msg.messageType === "questionnaire") {
       const payload = parseQuestionnaireMessageContent(msg.content);
       if (payload) {
+        // Edit only in the original patient chat; forwarded copies and other chats are view-only.
+        const viewOnly =
+          filledOnly || conv?.type !== "patient" || !!msg.forwardedFromMessageId;
         setOpenQuestionnaireInstanceId(payload.instanceId);
         setOpenQuestionnaireTemplateName(payload.templateName);
-        setQuestionnaireFilledOnly(filledOnly);
+        setQuestionnaireFilledOnly(viewOnly);
         setTemplatePreview(null);
       }
       return;
@@ -2121,6 +2127,37 @@ export default function ConversationChat({
     ? openQuestionnaireTemplateName ?? t.questionnaireTitle
     : templatePreview?.templateName ?? t.questionnaireTitle;
 
+  const handleExportQuestionnaireToWord = async () => {
+    try {
+      if (openQuestionnaireInstanceId) {
+        const res = await fetch(`/api/questionnaire-instances/${openQuestionnaireInstanceId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("fetch failed");
+        const instance = (await res.json()) as {
+          templateName?: string;
+          structureSnapshot: QuestionnaireTemplateStructure;
+          data: QuestionnaireInstanceData;
+        };
+        exportQuestionnaireFilledToWord(
+          openQuestionnaireTemplateName ?? instance.templateName ?? t.questionnaireTitle,
+          instance.structureSnapshot,
+          normalizeQuestionnaireInstanceData(instance.data),
+          { includeHomeopathNotes: !!user?.isAdmin }
+        );
+        return;
+      }
+      if (templatePreview) {
+        exportQuestionnaireTemplateToWord(
+          templatePreview.templateName,
+          templatePreview.snapshot as QuestionnaireTemplateStructure
+        );
+      }
+    } catch {
+      toast({ title: t.exportQuestionnaireToWordError, variant: "destructive" });
+    }
+  };
+
   const questionnairePanelHeader = (
     <div className="app-sheet-panel-header flex shrink-0 items-center gap-2 border-b">
       <Button
@@ -2135,6 +2172,33 @@ export default function ConversationChat({
         <ArrowLeft className="h-5 w-5" />
       </Button>
       <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{questionnairePanelTitle}</h2>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0 [&_svg]:!size-6"
+        onClick={() => void handleExportQuestionnaireToWord()}
+        aria-label={t.exportQuestionnaireToWord}
+        title={t.exportQuestionnaireToWord}
+        data-testid="button-questionnaire-export-word"
+      >
+        <svg
+          viewBox="3 1 18 22"
+          className="size-6"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="#2B579A"
+            d="M14.5 2.5H6.25A1.75 1.75 0 0 0 4.5 4.25v15.5c0 .966.784 1.75 1.75 1.75h11.5a1.75 1.75 0 0 0 1.75-1.75V8.5L14.5 2.5Z"
+          />
+          <path fill="#1B3F6E" d="M14.5 2.5V7a1.5 1.5 0 0 0 1.5 1.5h4.5L14.5 2.5Z" />
+          <path
+            fill="#fff"
+            d="M7.35 16.75 8.9 9.85h1.55l.95 3.95.25 1.2h.04l.25-1.2.95-3.95h1.55l1.55 6.9h-1.45l-.75-3.55-.25-1.35h-.04l-.25 1.35-.75 3.55h-1.55l-.75-3.55-.25-1.35h-.04l-.25 1.35-.75 3.55H7.35Z"
+          />
+        </svg>
+      </Button>
     </div>
   );
 

@@ -446,31 +446,17 @@ export default function DynamicQuestionnaireForm(props: Props) {
             </span>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t.lastName}</Label>
-                {readOnly ? (
-                  <div className="rounded-md bg-muted p-2 text-sm">{profile.lastName || "—"}</div>
-                ) : (
-                  <Input
-                    value={profile.lastName}
-                    onChange={(e) => updateProfile({ lastName: e.target.value })}
-                    onBlur={() => scheduleSave("profile")}
-                  />
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>{t.firstName}</Label>
-                {readOnly ? (
-                  <div className="rounded-md bg-muted p-2 text-sm">{profile.firstName || "—"}</div>
-                ) : (
-                  <Input
-                    value={profile.firstName}
-                    onChange={(e) => updateProfile({ firstName: e.target.value })}
-                    onBlur={() => scheduleSave("profile")}
-                  />
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label>{t.firstName}</Label>
+              {readOnly ? (
+                <div className="rounded-md bg-muted p-2 text-sm">{profile.firstName || "—"}</div>
+              ) : (
+                <Input
+                  value={profile.firstName}
+                  onChange={(e) => updateProfile({ firstName: e.target.value })}
+                  onBlur={() => scheduleSave("profile")}
+                />
+              )}
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -569,18 +555,6 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   />
                 )}
               </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              <Label>{t.city}</Label>
-              {readOnly ? (
-                <div className="rounded-md bg-muted p-2 text-sm">{profile.city || "—"}</div>
-              ) : (
-                <Input
-                  value={profile.city ?? ""}
-                  onChange={(e) => updateProfile({ city: e.target.value || null })}
-                  onBlur={() => scheduleSave("profile")}
-                />
-              )}
             </div>
           </AccordionContent>
         </AccordionItem>

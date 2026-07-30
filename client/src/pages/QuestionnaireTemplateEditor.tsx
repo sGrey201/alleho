@@ -804,14 +804,12 @@ export function QuestionnaireTemplateEditor({
               <QuestionnaireHintText hint={t.questionnairePatientBlockHint} className="mb-3" />
             )}
             <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-              <span>{t.lastName}</span>
               <span>{t.firstName}</span>
               <span>{t.birthMonth}</span>
               <span>{t.birthYear}</span>
               <span>{t.gender}</span>
               <span>{t.height}</span>
               <span>{t.weight}</span>
-              <span>{t.city}</span>
             </div>
           </AccordionContent>
         </AccordionItem>

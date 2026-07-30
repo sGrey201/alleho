@@ -1,5 +1,11 @@
 import { t } from "@/lib/i18n";
-import type { QuestionnaireNode, QuestionnaireTemplateStructure } from "@shared/questionnaireTypes";
+import type {
+  PatientProfileBlock,
+  QuestionnaireInstanceData,
+  QuestionnaireNode,
+  QuestionnaireTemplateStructure,
+} from "@shared/questionnaireTypes";
+import { normalizeQuestionnaireInstanceData } from "@shared/questionnaireTypes";
 
 function sanitizeFilename(title: string): string {
   const sanitized = title
@@ -17,6 +23,10 @@ function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function escapeHtmlMultiline(text: string): string {
+  return escapeHtml(text).replace(/\n/g, "<br>");
 }
 
 function headingTag(depth: number): string {
@@ -50,21 +60,19 @@ function renderNode(node: QuestionnaireNode, depth: number): string {
   return parts.join("\n");
 }
 
-function buildQuestionnaireWordHtml(name: string, structure: QuestionnaireTemplateStructure): string {
-  const patientBlock = [
-    `<h2>${escapeHtml(t.questionnairePatientBlockTitle)}</h2>`,
-    renderBlankField(t.lastName),
-    renderBlankField(t.firstName),
-    renderBlankField(t.birthMonth),
-    renderBlankField(t.birthYear),
-    renderBlankField(t.gender),
-    renderBlankField(t.height),
-    renderBlankField(t.weight),
-    renderBlankField(t.city),
-  ].join("\n");
+function downloadWordDoc(name: string, html: string): void {
+  const blob = new Blob(["\ufeff", html], {
+    type: "application/msword;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${sanitizeFilename(name)}.doc`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
-  const sections = structure.root.map((node) => renderNode(node, 1)).join("\n");
-
+function wordDocumentShell(name: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
   xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -91,28 +99,187 @@ function buildQuestionnaireWordHtml(name: string, structure: QuestionnaireTempla
     .hint, .tag-hint { color: #555555; font-style: italic; font-size: 10pt; }
     .tag { margin: 8pt 0 2pt 12pt; }
     .answer { border-bottom: 1px solid #999999; min-height: 14pt; margin: 0 0 10pt 24pt; }
+    .field { margin: 0 0 4pt; }
+    .entry-label { margin: 8pt 0 2pt 0; font-weight: 600; }
+    .entry-desc { margin: 0 0 8pt 18pt; color: #444444; }
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(name)}</h1>
-  ${patientBlock}
-  ${sections}
+  ${bodyHtml}
 </body>
 </html>`;
+}
+
+function buildQuestionnaireWordHtml(name: string, structure: QuestionnaireTemplateStructure): string {
+  const patientBlock = [
+    `<h2>${escapeHtml(t.questionnairePatientBlockTitle)}</h2>`,
+    renderBlankField(t.firstName),
+    renderBlankField(t.birthMonth),
+    renderBlankField(t.birthYear),
+    renderBlankField(t.gender),
+    renderBlankField(t.height),
+    renderBlankField(t.weight),
+  ].join("\n");
+
+  const sections = structure.root.map((node) => renderNode(node, 1)).join("\n");
+
+  return wordDocumentShell(
+    name,
+    `<h1>${escapeHtml(name)}</h1>\n${patientBlock}\n${sections}`
+  );
+}
+
+const months = [
+  { value: 1, label: t.january },
+  { value: 2, label: t.february },
+  { value: 3, label: t.march },
+  { value: 4, label: t.april },
+  { value: 5, label: t.may },
+  { value: 6, label: t.june },
+  { value: 7, label: t.july },
+  { value: 8, label: t.august },
+  { value: 9, label: t.september },
+  { value: 10, label: t.october },
+  { value: 11, label: t.november },
+  { value: 12, label: t.december },
+];
+
+function getGenderLabel(gender: string | null): string | null {
+  if (gender === "male") return t.genderMale;
+  if (gender === "female") return t.genderFemale;
+  if (gender === "other") return t.genderOther;
+  return null;
+}
+
+function hasFilledProfile(profile: PatientProfileBlock): boolean {
+  return !!(
+    profile.firstName?.trim() ||
+    profile.lastName?.trim() ||
+    profile.birthMonth ||
+    profile.birthYear ||
+    profile.gender ||
+    profile.height ||
+    profile.weight ||
+    profile.city?.trim()
+  );
+}
+
+function sectionHasSelectedTag(
+  node: QuestionnaireNode,
+  sections: QuestionnaireInstanceData["sections"]
+): boolean {
+  if ((sections[node.id]?.length ?? 0) > 0) return true;
+  return (node.children ?? []).some((child) => sectionHasSelectedTag(child, sections));
+}
+
+function renderFilledField(label: string, value: string): string {
+  return `<p class="field"><strong>${escapeHtml(label)}:</strong> ${escapeHtmlMultiline(value)}</p>`;
+}
+
+function renderFilledNodes(
+  nodes: QuestionnaireNode[],
+  sections: QuestionnaireInstanceData["sections"],
+  depth: number
+): string[] {
+  const out: string[] = [];
+
+  for (const node of nodes) {
+    if (!sectionHasSelectedTag(node, sections)) continue;
+
+    const entries = sections[node.id] ?? [];
+    const tagById = new Map((node.tags ?? []).map((tag) => [tag.id, tag]));
+
+    out.push(`<${headingTag(depth)}>${escapeHtml(node.title)}</${headingTag(depth)}>`);
+
+    for (const entry of entries) {
+      const label = tagById.get(entry.tagKey)?.label ?? entry.tagKey;
+      const description = entry.description.trim();
+      out.push(`<p class="entry-label">• ${escapeHtml(label)}</p>`);
+      if (description) {
+        out.push(`<p class="entry-desc">${escapeHtmlMultiline(description)}</p>`);
+      }
+    }
+
+    if (node.children?.length) {
+      out.push(...renderFilledNodes(node.children, sections, depth + 1));
+    }
+  }
+
+  return out;
+}
+
+function buildFilledQuestionnaireWordHtml(
+  name: string,
+  structure: QuestionnaireTemplateStructure,
+  data: QuestionnaireInstanceData,
+  options?: { includeHomeopathNotes?: boolean }
+): string {
+  const normalized = normalizeQuestionnaireInstanceData(data);
+  const profile = normalized.patientProfile;
+  const notes = (normalized.homeopathNotes ?? "").trim();
+  const profileFilled = hasFilledProfile(profile);
+  const sectionHtml = renderFilledNodes(structure.root, normalized.sections, 1);
+  const includeNotes = !!options?.includeHomeopathNotes && !!notes;
+
+  if (!profileFilled && sectionHtml.length === 0 && !includeNotes) {
+    return wordDocumentShell(
+      name,
+      `<h1>${escapeHtml(name)}</h1>\n<p>${escapeHtml(t.questionnaireEmptySummary)}</p>`
+    );
+  }
+
+  const parts: string[] = [`<h1>${escapeHtml(name)}</h1>`];
+
+  if (profileFilled) {
+    parts.push(`<h2>${escapeHtml(t.questionnairePatientBlockTitle)}</h2>`);
+    if (profile.lastName?.trim()) {
+      parts.push(renderFilledField(t.lastName, profile.lastName.trim()));
+    }
+    if (profile.firstName?.trim()) {
+      parts.push(renderFilledField(t.firstName, profile.firstName.trim()));
+    }
+    if (profile.birthMonth) {
+      const monthLabel = months.find((m) => m.value === profile.birthMonth)?.label;
+      if (monthLabel) parts.push(renderFilledField(t.birthMonth, monthLabel));
+    }
+    if (profile.birthYear != null) {
+      parts.push(renderFilledField(t.birthYear, String(profile.birthYear)));
+    }
+    const genderLabel = getGenderLabel(profile.gender);
+    if (genderLabel) parts.push(renderFilledField(t.gender, genderLabel));
+    if (profile.height != null) {
+      parts.push(renderFilledField(t.height, String(profile.height)));
+    }
+    if (profile.weight != null) {
+      parts.push(renderFilledField(t.weight, String(profile.weight)));
+    }
+    if (profile.city?.trim()) {
+      parts.push(renderFilledField(t.city, profile.city.trim()));
+    }
+  }
+
+  parts.push(...sectionHtml);
+
+  if (includeNotes) {
+    parts.push(`<h2>${escapeHtml(t.homeopathNotesDescription)}</h2>`);
+    parts.push(`<p>${escapeHtmlMultiline(notes)}</p>`);
+  }
+
+  return wordDocumentShell(name, parts.join("\n"));
 }
 
 export function exportQuestionnaireTemplateToWord(
   name: string,
   structure: QuestionnaireTemplateStructure
 ): void {
-  const html = buildQuestionnaireWordHtml(name, structure);
-  const blob = new Blob(["\ufeff", html], {
-    type: "application/msword;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${sanitizeFilename(name)}.doc`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadWordDoc(name, buildQuestionnaireWordHtml(name, structure));
+}
+
+export function exportQuestionnaireFilledToWord(
+  name: string,
+  structure: QuestionnaireTemplateStructure,
+  data: QuestionnaireInstanceData,
+  options?: { includeHomeopathNotes?: boolean }
+): void {
+  downloadWordDoc(name, buildFilledQuestionnaireWordHtml(name, structure, data, options));
 }

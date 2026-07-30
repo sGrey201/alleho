@@ -1159,6 +1159,10 @@ ${allUrls.map(url => `  <url>
       if (!(await storage.canAccessQuestionnaireInstance(instance, userId))) {
         return res.status(403).json({ message: "Access denied" });
       }
+      // Edits only from participants of the original patient chat (not via forwarded copies).
+      if (!(await storage.isUserInConversation(userId, instance.conversationId))) {
+        return res.status(403).json({ message: "Questionnaire is read-only outside the patient chat" });
+      }
       const parsed = questionnaireInstanceDataSchema.parse(req.body?.data ?? req.body);
       const toSave = currentUser?.isAdmin
         ? parsed
