@@ -51,7 +51,6 @@ import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
 import { exportQuestionnaireTemplateToWord, exportQuestionnaireFilledToWord } from "@/lib/questionnaireTemplateWordExport";
 import type { QuestionnaireInstanceData, QuestionnaireTemplateStructure } from "@shared/questionnaireTypes";
 import { normalizeQuestionnaireInstanceData } from "@shared/questionnaireTypes";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useUpload } from "@/hooks/use-upload";
@@ -474,6 +473,7 @@ export default function ConversationChat({
     hintsMode?: import("@shared/questionnaireTypes").QuestionnaireHintsMode;
   } | null>(null);
   const [questionnairePickerOpen, setQuestionnairePickerOpen] = useState(false);
+  const [questionnairePanelVisible, setQuestionnairePanelVisible] = useState(false);
 
   useEffect(() => {
     setOpenQuestionnaireInstanceId(null);
@@ -481,6 +481,8 @@ export default function ConversationChat({
     setQuestionnaireFilledOnly(false);
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
+    setQuestionnairePanelVisible(false);
+    questionnaireScrollCacheRef.current.clear();
     const openSearchPending =
       !!conversationId &&
       (shouldOpenChatSearch(conversationId) ||
@@ -515,6 +517,8 @@ export default function ConversationChat({
   });
   const suppressNextQuestionnaireClickRef = useRef(false);
   const deepLinkHandledRef = useRef<string | null>(null);
+  const questionnaireScrollRef = useRef<HTMLDivElement>(null);
+  const questionnaireScrollCacheRef = useRef<Map<string, number>>(new Map());
   /** While true, keep the viewport pinned to the latest message as content grows. */
   const stickToBottomRef = useRef(true);
   /** True after the user scrolls the pane (blocks pagination at open on short threads). */
@@ -1547,6 +1551,17 @@ export default function ConversationChat({
     });
   }, [pinnedMessages]);
 
+  const questionnaireFormKey =
+    openQuestionnaireInstanceId ?? templatePreview?.messageId ?? "questionnaire";
+
+  useLayoutEffect(() => {
+    if (!questionnairePanelVisible) return;
+    const el = questionnaireScrollRef.current;
+    if (!el) return;
+    const saved = questionnaireScrollCacheRef.current.get(questionnaireFormKey);
+    if (saved != null) el.scrollTop = saved;
+  }, [questionnairePanelVisible, questionnaireFormKey]);
+
   const handlePinnedBannerClick = () => {
     if (pinnedMessages.length === 0) return;
     setActivePinnedIndex((prev) => {
@@ -1905,6 +1920,7 @@ export default function ConversationChat({
         setOpenQuestionnaireTemplateName(payload.templateName);
         setQuestionnaireFilledOnly(viewOnly);
         setTemplatePreview(null);
+        setQuestionnairePanelVisible(true);
       }
       return;
     }
@@ -1921,6 +1937,7 @@ export default function ConversationChat({
           snapshot: payload.snapshot as { root: import("@shared/questionnaireTypes").QuestionnaireNode[] },
           hintsMode: payload.hintsMode,
         });
+        setQuestionnairePanelVisible(true);
       }
     }
   };
@@ -2116,13 +2133,16 @@ export default function ConversationChat({
   };
   const isComposerSending = sendMutation.isPending || editMutation.isPending;
 
-  const questionnairePanelOpen = !!openQuestionnaireInstanceId || !!templatePreview;
-  const closeQuestionnairePanel = () => {
-    setOpenQuestionnaireInstanceId(null);
-    setOpenQuestionnaireTemplateName(null);
-    setQuestionnaireFilledOnly(false);
-    setTemplatePreview(null);
+  const hasQuestionnaireSelection = !!openQuestionnaireInstanceId || !!templatePreview;
+  const persistQuestionnaireScroll = () => {
+    const el = questionnaireScrollRef.current;
+    if (el) questionnaireScrollCacheRef.current.set(questionnaireFormKey, el.scrollTop);
   };
+  const closeQuestionnairePanel = () => {
+    persistQuestionnaireScroll();
+    setQuestionnairePanelVisible(false);
+  };
+
   const questionnairePanelTitle = openQuestionnaireInstanceId
     ? openQuestionnaireTemplateName ?? t.questionnaireTitle
     : templatePreview?.templateName ?? t.questionnaireTitle;
@@ -2157,6 +2177,39 @@ export default function ConversationChat({
       toast({ title: t.exportQuestionnaireToWordError, variant: "destructive" });
     }
   };
+
+  const questionnaireFormBody = (
+    <>
+      {openQuestionnaireInstanceId && (
+        <DynamicQuestionnaireForm
+          key={questionnaireFormKey}
+          hideTitle
+          mode="instance"
+          instanceId={openQuestionnaireInstanceId}
+          readOnly={questionnaireFilledOnly}
+          filledOnly={questionnaireFilledOnly}
+        />
+      )}
+      {templatePreview && !openQuestionnaireInstanceId && (
+        <DynamicQuestionnaireForm
+          key={questionnaireFormKey}
+          hideTitle
+          mode="preview"
+          structure={templatePreview.snapshot}
+          templateName={templatePreview.templateName}
+          templateId={templatePreview.templateId}
+          hintsMode={templatePreview.hintsMode}
+          onCopy={() =>
+            copyTemplateMutation.mutate({
+              templateId: templatePreview.templateId,
+              messageId: templatePreview.messageId,
+            })
+          }
+          isCopying={copyTemplateMutation.isPending}
+        />
+      )}
+    </>
+  );
 
   const questionnairePanelHeader = (
     <div className="app-sheet-panel-header flex shrink-0 items-center gap-2 border-b">
@@ -2301,6 +2354,20 @@ export default function ConversationChat({
               <AvatarFallback className="text-sm font-semibold">{headerInitials}</AvatarFallback>
             </Avatar>
           </button>
+          {isMobile &&
+            hasQuestionnaireSelection &&
+            !questionnairePanelVisible && (
+              <button
+                type="button"
+                onClick={() => setQuestionnairePanelVisible(true)}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm animate-in fade-in zoom-in-75 duration-300"
+                aria-label={questionnairePanelTitle}
+                title={questionnairePanelTitle}
+                data-testid="button-questionnaire-minimized"
+              >
+                <ClipboardList className="h-5 w-5" />
+              </button>
+            )}
         </div>
         )}
         {activePinnedMessage && !isChatSearchOpen && (
@@ -2679,36 +2746,17 @@ export default function ConversationChat({
 
       </div>
 
-      {!isMobile && questionnairePanelOpen && (
-        <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-background md:w-[min(32rem,45%)] md:max-w-lg">
+      {!isMobile && hasQuestionnaireSelection && (
+        <aside
+          className={cn(
+            "flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-background md:w-[min(32rem,45%)] md:max-w-lg",
+            !questionnairePanelVisible && "hidden"
+          )}
+          aria-hidden={!questionnairePanelVisible}
+        >
           {questionnairePanelHeader}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {openQuestionnaireInstanceId && (
-              <DynamicQuestionnaireForm
-                hideTitle
-                mode="instance"
-                instanceId={openQuestionnaireInstanceId}
-                readOnly={questionnaireFilledOnly}
-                filledOnly={questionnaireFilledOnly}
-              />
-            )}
-            {templatePreview && !openQuestionnaireInstanceId && (
-              <DynamicQuestionnaireForm
-                hideTitle
-                mode="preview"
-                structure={templatePreview.snapshot}
-                templateName={templatePreview.templateName}
-                templateId={templatePreview.templateId}
-                hintsMode={templatePreview.hintsMode}
-                onCopy={() =>
-                  copyTemplateMutation.mutate({
-                    templateId: templatePreview.templateId,
-                    messageId: templatePreview.messageId,
-                  })
-                }
-                isCopying={copyTemplateMutation.isPending}
-              />
-            )}
+          <div ref={questionnaireScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+            {questionnaireFormBody}
           </div>
         </aside>
       )}
@@ -3084,44 +3132,36 @@ export default function ConversationChat({
         </DialogContent>
       </Dialog>
 
-      {isMobile && (
-        <Sheet open={questionnairePanelOpen} onOpenChange={(open) => !open && closeQuestionnairePanel()}>
-          <SheetContent
-            side="right"
-            hideCloseButton
-            className="app-sheet-keyboard-aware flex w-full flex-col p-0 sm:max-w-lg"
+      {isMobile && hasQuestionnaireSelection && (
+        <>
+          <button
+            type="button"
+            tabIndex={questionnairePanelVisible ? 0 : -1}
+            className={cn(
+              "fixed inset-0 z-40 bg-black/80 transition-opacity duration-500 ease-out",
+              questionnairePanelVisible ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+            aria-label={t.backToHealthWall}
+            aria-hidden={!questionnairePanelVisible}
+            onClick={closeQuestionnairePanel}
+          />
+          <div
+            role="dialog"
+            aria-modal={questionnairePanelVisible}
+            aria-hidden={!questionnairePanelVisible}
+            className={cn(
+              "app-sheet-keyboard-aware questionnaire-mobile-panel fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-hidden bg-background shadow-lg",
+              questionnairePanelVisible
+                ? "questionnaire-mobile-panel-open"
+                : "questionnaire-mobile-panel-minimized pointer-events-none"
+            )}
           >
             {questionnairePanelHeader}
-            <div className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
-              {openQuestionnaireInstanceId && (
-                <DynamicQuestionnaireForm
-                  hideTitle
-                  mode="instance"
-                  instanceId={openQuestionnaireInstanceId}
-                  readOnly={questionnaireFilledOnly}
-                  filledOnly={questionnaireFilledOnly}
-                />
-              )}
-              {templatePreview && !openQuestionnaireInstanceId && (
-                <DynamicQuestionnaireForm
-                  hideTitle
-                  mode="preview"
-                  structure={templatePreview.snapshot}
-                  templateName={templatePreview.templateName}
-                  templateId={templatePreview.templateId}
-                  hintsMode={templatePreview.hintsMode}
-                  onCopy={() =>
-                    copyTemplateMutation.mutate({
-                      templateId: templatePreview.templateId,
-                      messageId: templatePreview.messageId,
-                    })
-                  }
-                  isCopying={copyTemplateMutation.isPending}
-                />
-              )}
+            <div ref={questionnaireScrollRef} className="app-sheet-panel-body min-h-0 flex-1 overflow-y-auto">
+              {questionnaireFormBody}
             </div>
-          </SheetContent>
-        </Sheet>
+          </div>
+        </>
       )}
 
     </div>

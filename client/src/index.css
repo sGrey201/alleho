@@ -316,6 +316,28 @@
   animation: hint-pulse 1s ease-in-out 1;
 }
 
+/* Mobile questionnaire panel: collapse toward top-right (avatar / minimize bubble). */
+.questionnaire-mobile-panel {
+  transform-origin: top right;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 380ms ease,
+    border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.questionnaire-mobile-panel-open {
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+  border-radius: 0;
+}
+
+.questionnaire-mobile-panel-minimized {
+  /* Shrink into the header avatar / minimize bubble area (top-right). */
+  transform: translate3d(8%, calc(-1 * env(safe-area-inset-top, 0px) - 2px), 0) scale(0.08);
+  opacity: 0;
+  border-radius: 1.5rem;
+}
+
 /* Mobile PWA / fullscreen chat: edge-to-edge background, content in safe areas, no rubber-band */
 html.app-immersive {
   height: var(--app-height, 100dvh);
