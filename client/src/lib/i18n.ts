@@ -218,7 +218,7 @@ export const t = {
   questionnaireSectionsTitle: 'Разделы опросника',
   tagLabel: 'Метка',
   sectionHintLabel: 'Подсказка',
-  maxDepthReached: 'Максимальная глубина (3 уровня)',
+  maxDepthReached: 'Максимальная глубина (4 уровня)',
   selectQuestionnaireToSend: 'Выберите опросник для отправки',
   questionnaireMessageLabel: 'Опросник',
   questionnaireDescription: 'Заполните информацию о себе',

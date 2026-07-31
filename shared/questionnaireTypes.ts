@@ -10,7 +10,7 @@ export function parseQuestionnaireHintsMode(value: unknown): QuestionnaireHintsM
 
 export const questionnaireHintsModeSchema = z.enum(QUESTIONNAIRE_HINTS_MODES);
 
-export const MAX_QUESTIONNAIRE_DEPTH = 3;
+export const MAX_QUESTIONNAIRE_DEPTH = 4;
 
 export const questionnaireTagSchema = z.object({
   id: z.string().min(1),
