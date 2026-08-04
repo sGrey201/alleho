@@ -605,6 +605,29 @@ ${allUrls.map(url => `  <url>
       let conversationId: string | undefined;
       if (effectiveInviteType === "homeopath") {
         await storage.updateUserProfile(targetUser.id, { isAdmin: true, requiresRoleSelection: false });
+
+        let directConversationId = await storage.getDirectConversationBetween(
+          invite.invitedByUserId,
+          targetUser.id
+        );
+        if (!directConversationId) {
+          const conv = await storage.createConversation({
+            type: "direct",
+            name: null,
+            patientUserId: null,
+          });
+          await storage.addConversationParticipant(conv.id, invite.invitedByUserId, "owner");
+          await storage.addConversationParticipant(conv.id, targetUser.id, "member");
+          directConversationId = conv.id;
+        }
+        conversationId = directConversationId;
+        await postPatientChatStatusMessage(
+          directConversationId,
+          targetUser.id,
+          PATIENT_INVITE_ACCEPTED_MESSAGE
+        );
+        await publishDoctorChatsUpdated(invite.invitedByUserId);
+        await publishDoctorChatsUpdated(targetUser.id);
       } else {
         if (!firstName) {
           return res.status(400).json({ message: "first_name_required" });

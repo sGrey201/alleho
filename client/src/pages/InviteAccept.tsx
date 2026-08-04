@@ -229,9 +229,12 @@ export default function InviteAccept() {
     },
     onSuccess: async (data: { joinedAsExistingUser?: boolean; conversationId?: string | null }) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       toast({
         title: "Присоединение завершено",
-        description: "Вы добавлены в чат с гомеопатом",
+        description: t.inviteAcceptJoinedChatWith(
+          invitePreview?.inviter?.name || "гомеопатом"
+        ),
       });
       setLocation(data.conversationId ? `/messenger/chat/${data.conversationId}` : APP_HOME_PATH);
     },
@@ -289,18 +292,6 @@ export default function InviteAccept() {
     submitAccept(form.getValues());
   };
   continueAfterLoginRef.current = continueAfterLogin;
-
-  const handleSwitchAccount = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-    form.setValue("email", initialEmail);
-    form.setValue("firstName", "");
-    form.setValue("patientName", "");
-    setPassword("");
-    setPasswordSentViaInvite(false);
-    setIsHomeopath(null);
-    setStep("email");
-  };
 
   const handleAccountNext = () => {
     if (!user?.email) return;
@@ -488,7 +479,7 @@ export default function InviteAccept() {
                           Завершение...
                         </>
                       ) : isGroupInvite ? (
-                        t.groupInviteAcceptJoin(invitePreview?.groupName ?? "")
+                        t.actionJoinGroup
                       ) : isTypedPatientInvite ? (
                         "Завершить регистрацию"
                       ) : (
@@ -499,10 +490,10 @@ export default function InviteAccept() {
                       type="button"
                       variant="outline"
                       className="w-full"
-                      onClick={() => void handleSwitchAccount()}
+                      onClick={() => setLocation("/messenger")}
                       disabled={acceptInviteMutation.isPending || groupInviteAcceptMutation.isPending}
                     >
-                      Сменить аккаунт
+                      {t.cancel}
                     </Button>
                   </div>
                 </div>

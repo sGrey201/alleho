@@ -1948,7 +1948,7 @@ export const t = {
   groupInviteGenerateLink: 'Создать ссылку-приглашение',
   inviteLinkForGroup: 'Ссылка-приглашение в группу',
   groupInviteAcceptJoin: (groupName: string) =>
-    `Вступить в группу «${groupName || "группа"}»`,
+    `Вступить в группу «${groupName || "группа"}»?`,
   groupInvitePatientsNotAllowed: 'Эта ссылка только для гомеопатов',
   groupInviteJoined: 'Вы добавлены в группу',
   groupMyDivider: 'Мои группы 👆',
@@ -2014,6 +2014,7 @@ export const t = {
   inviteAcceptPatientNameLabel: 'Укажите имя пациента',
   inviteAcceptJoinPrecreatedChat: (homeopathName: string) =>
     `Будет создан новый чат пациента с ${homeopathName}`,
+  inviteAcceptJoinedChatWith: (name: string) => `Вы добавлены в чат с ${name}`,
   inviteAcceptEmailLabel: 'Укажите ваш email, чтобы войти или зарегистрироваться',
   inviteAcceptPasswordLabel: 'Пароль',
   inviteAcceptPasswordExistingHint: (email: string) =>
