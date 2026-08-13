@@ -4,6 +4,7 @@ import {
   Send,
   Paperclip,
   Image,
+  File,
   ClipboardList,
   ListChecks,
   MessageCircle,
@@ -51,8 +52,14 @@ type ChatInputBarProps = {
   isSending?: boolean;
   disabled?: boolean;
   wrapperClassName?: string;
-  onUploadImages?: (files: File[]) => Promise<void> | void;
-  isUploadingImages?: boolean;
+  /** Photos and videos (single picker). */
+  onUploadMedia?: (files: File[]) => Promise<void> | void;
+  isUploadingMedia?: boolean;
+  /** Override accept for the media picker (default: image + video). */
+  mediaAccept?: string;
+  /** Documents / archives. */
+  onUploadFiles?: (files: File[]) => Promise<void> | void;
+  isUploadingFiles?: boolean;
   onSendQuestionnaire?: () => void;
   showQuestionnaireAttach?: boolean;
   onCreatePoll?: () => void;
@@ -89,8 +96,11 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   isSending = false,
   disabled = false,
   wrapperClassName = "border-t px-4 py-3 shrink-0",
-  onUploadImages,
-  isUploadingImages = false,
+  onUploadMedia,
+  isUploadingMedia = false,
+  mediaAccept = "image/*,video/mp4,video/webm,video/quicktime,video/*",
+  onUploadFiles,
+  isUploadingFiles = false,
   onSendQuestionnaire,
   showQuestionnaireAttach = false,
   onCreatePoll,
@@ -123,9 +133,12 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   const showAttachMenu =
     !hasText &&
     !isRecording &&
-    (onUploadImages ||
+    (onUploadMedia ||
+      onUploadFiles ||
       (showQuestionnaireAttach && onSendQuestionnaire) ||
       onCreatePoll);
+
+  const isUploadingAttachment = isUploadingMedia || isUploadingFiles;
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
@@ -308,11 +321,19 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!onUploadImages) return;
+  const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onUploadMedia) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    await onUploadImages(Array.from(files));
+    await onUploadMedia(Array.from(files));
+    e.target.value = "";
+  };
+
+  const handleDocumentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!onUploadFiles) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await onUploadFiles(Array.from(files));
     e.target.value = "";
   };
 
@@ -378,11 +399,11 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                 <Button
                   variant="outline"
                   size="icon"
-                  disabled={disabled || isSending || isUploadingImages}
+                  disabled={disabled || isSending || isUploadingAttachment}
                   className="h-10 w-10 shrink-0 rounded-full bg-[#e8ecf1] text-[#28292c]"
                   data-testid="button-attach-menu"
                 >
-                  {isUploadingImages ? (
+                  {isUploadingAttachment ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Paperclip className="h-4 w-4" />
@@ -390,13 +411,24 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-[12rem] p-1.5">
-                {onUploadImages && (
+                {onUploadMedia && (
                   <DropdownMenuItem
                     className={attachMenuItemClass}
-                    onSelect={() => document.getElementById("chat-image-upload")?.click()}
+                    onSelect={() => document.getElementById("chat-media-upload")?.click()}
                   >
                     <Image />
-                    {t.messagePhotoLabel ?? "Фото"}
+                    {mediaAccept === "image/*"
+                      ? (t.messagePhotoLabel ?? "Фото")
+                      : (t.messagePhotoOrVideoLabel ?? "Фото или видео")}
+                  </DropdownMenuItem>
+                )}
+                {onUploadFiles && (
+                  <DropdownMenuItem
+                    className={attachMenuItemClass}
+                    onSelect={() => document.getElementById("chat-file-upload")?.click()}
+                  >
+                    <File />
+                    {t.messageFileLabel ?? "Файл"}
                   </DropdownMenuItem>
                 )}
                 {showQuestionnaireAttach && onSendQuestionnaire && (
@@ -413,14 +445,24 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            {onUploadImages && (
+            {onUploadMedia && (
               <input
-                id="chat-image-upload"
+                id="chat-media-upload"
                 type="file"
-                accept="image/*"
+                accept={mediaAccept}
                 multiple
                 className="hidden"
-                onChange={handleFileChange}
+                onChange={handleMediaChange}
+              />
+            )}
+            {onUploadFiles && (
+              <input
+                id="chat-file-upload"
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.odt,.ods,.odp,.zip,.rar,.7z,.gz,.tar,.tgz,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,application/x-zip-compressed,application/x-rar-compressed,application/vnd.rar,application/x-7z-compressed,application/gzip,application/x-tar,text/plain,text/csv"
+                multiple
+                className="hidden"
+                onChange={handleDocumentChange}
               />
             )}
           </>

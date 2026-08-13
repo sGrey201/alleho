@@ -69,6 +69,23 @@ export function formatConversationMessagePreview(
     return "Голосовое сообщение";
   }
 
+  if (messageType === "video") {
+    return "Видео";
+  }
+
+  if (messageType === "file") {
+    if (text) {
+      try {
+        const parsed = JSON.parse(text) as { name?: string };
+        const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
+        if (name) return truncate(name);
+      } catch {
+        // fall through
+      }
+    }
+    return "Файл";
+  }
+
   if (messageType === "poll" && text) {
     try {
       const parsed = JSON.parse(text) as { question?: string };

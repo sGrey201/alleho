@@ -265,6 +265,8 @@ export const conversationMessageTypeEnum = z.enum([
   'questionnaire',
   'questionnaire_template',
   'voice',
+  'video',
+  'file',
 ]);
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 
@@ -312,6 +314,22 @@ export const voicePayloadSchema = z.object({
   durationSec: z.number().int().min(0).max(36000),
 });
 export type VoicePayload = z.infer<typeof voicePayloadSchema>;
+
+/**
+ * Video attachments reuse `image_url` as the object path (same as voice).
+ * No extra payload is required; `content` stays empty.
+ */
+
+/**
+ * JSON stored in conversation_messages.content when message_type is `file`.
+ * The object path is stored in `image_url` (generic attachment URL).
+ */
+export const filePayloadSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  size: z.number().int().min(0).max(500 * 1024 * 1024),
+  mimeType: z.string().trim().min(1).max(200).default("application/octet-stream"),
+});
+export type FilePayload = z.infer<typeof filePayloadSchema>;
 
 // Messenger: conversation types (doctor-to-doctor, patient chats, groups, consiliums, channels)
 export const conversationTypeEnum = z.enum(["direct", "patient", "group", "consilium", "channel"]);

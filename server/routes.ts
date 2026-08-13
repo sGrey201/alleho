@@ -33,6 +33,7 @@ import {
   insertConversationMessageCommentSchema,
   pollPayloadSchema,
   voicePayloadSchema,
+  filePayloadSchema,
   type User,
   type ConversationMessage,
 } from "@shared/schema";
@@ -2941,6 +2942,9 @@ ${allUrls.map(url => `  <url>
         replyToMessageId?: string;
         poll?: unknown;
         voiceDurationSec?: number;
+        fileName?: string;
+        fileSize?: number;
+        fileMimeType?: string;
         forwardSource?: { conversationId?: string; patientUserId?: string; messageId: string };
       };
 
@@ -3007,6 +3011,21 @@ ${allUrls.map(url => `  <url>
           }
           const parsed = voicePayloadSchema.parse({
             durationSec: Math.round(Number(body.voiceDurationSec ?? 0)),
+          });
+          content = JSON.stringify(parsed);
+        } else if (messageType === "video") {
+          if (!imageUrl) {
+            return res.status(400).json({ message: "Video message requires video" });
+          }
+          content = content?.trim() ? content : null;
+        } else if (messageType === "file") {
+          if (!imageUrl) {
+            return res.status(400).json({ message: "File message requires attachment" });
+          }
+          const parsed = filePayloadSchema.parse({
+            name: body.fileName,
+            size: Math.round(Number(body.fileSize ?? 0)),
+            mimeType: body.fileMimeType || "application/octet-stream",
           });
           content = JSON.stringify(parsed);
         } else if (messageType === "questionnaire" || messageType === "questionnaire_template") {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2 } from "lucide-react";
+import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2, File as FileIcon } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -146,7 +146,13 @@ export default function PostCommentsThread({
 
   const galleryImages = useMemo(() => {
     const urls: string[] = [];
-    if (anchorPost?.imageUrl && !anchorPost.deletedAt && anchorPost.messageType !== "voice") {
+    if (
+      anchorPost?.imageUrl &&
+      !anchorPost.deletedAt &&
+      anchorPost.messageType !== "voice" &&
+      anchorPost.messageType !== "video" &&
+      anchorPost.messageType !== "file"
+    ) {
       urls.push(anchorPost.imageUrl);
     }
     for (const comment of sortedComments) {
@@ -613,7 +619,40 @@ export default function PostCommentsThread({
             <div className="flex w-full justify-start">
               <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border bg-background px-2 pt-1 pb-1.5">
                 <p className="mb-0.5 text-[10px] text-muted-foreground">Публикация</p>
-                {anchorPost.imageUrl && (
+                {anchorPost.imageUrl && anchorPost.messageType === "video" && (
+                  <video
+                    src={anchorPost.imageUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="mb-0.5 max-h-64 max-w-full rounded bg-black/90 object-contain"
+                  />
+                )}
+                {anchorPost.imageUrl && anchorPost.messageType === "file" && (() => {
+                  let name = "Файл";
+                  try {
+                    const parsed = anchorPost.content ? JSON.parse(anchorPost.content) : null;
+                    if (typeof parsed?.name === "string" && parsed.name.trim()) name = parsed.name.trim();
+                  } catch {
+                    // ignore
+                  }
+                  return (
+                    <a
+                      href={anchorPost.imageUrl}
+                      download={name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted"
+                    >
+                      <FileIcon className="h-5 w-5 shrink-0" />
+                      <span className="truncate font-medium">{name}</span>
+                    </a>
+                  );
+                })()}
+                {anchorPost.imageUrl &&
+                  anchorPost.messageType !== "voice" &&
+                  anchorPost.messageType !== "video" &&
+                  anchorPost.messageType !== "file" && (
                   <img
                     src={getThumbUrl(anchorPost.imageUrl)}
                     alt=""
@@ -622,7 +661,9 @@ export default function PostCommentsThread({
                     onClick={() => setSelectedImage(anchorPost.imageUrl!)}
                   />
                 )}
-                {anchorPost.content ? (
+                {anchorPost.content &&
+                anchorPost.messageType !== "file" &&
+                anchorPost.messageType !== "voice" ? (
                   <SponsorAwareMessageText
                     text={anchorPost.content}
                     canViewSponsorContent={canViewSponsorContent}
@@ -774,13 +815,17 @@ export default function PostCommentsThread({
           onChange={setMessage}
           onSend={handleSend}
           isSending={createCommentMutation.isPending || editCommentMutation.isPending}
-          onUploadImages={editing ? undefined : async (files: File[]) => {
+          onUploadMedia={editing ? undefined : async (files: File[]) => {
             for (const file of files) {
+              if (!file.type.startsWith("image/") && !/\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name)) {
+                continue;
+              }
               const normalizedFile = await normalizeChatImageFile(file);
               await uploadFile(normalizedFile);
             }
           }}
-          isUploadingImages={isUploading}
+          isUploadingMedia={isUploading}
+          mediaAccept="image/*"
           wrapperClassName=""
         />
       </div>

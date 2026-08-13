@@ -94,6 +94,17 @@ export function messagePreview(
   messageType?: string | null,
 ): string {
   if (messageType === "voice") return "Голосовое сообщение";
+  if (messageType === "video") return "Видео";
+  if (messageType === "file") {
+    try {
+      const parsed = content?.trim() ? (JSON.parse(content) as { name?: string }) : null;
+      const name = typeof parsed?.name === "string" ? parsed.name.trim() : "";
+      if (name) return name.length > 120 ? `${name.slice(0, 117)}…` : name;
+    } catch {
+      // fall through
+    }
+    return "Файл";
+  }
   if (imageUrl && !content?.trim()) return "Фото";
   const text = stripMessageFormatting((content ?? "").trim());
   if (!text) return "Новое сообщение";

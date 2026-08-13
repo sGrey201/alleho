@@ -45,6 +45,8 @@ import {
   ListOrdered,
   ChevronUp,
   ChevronDown,
+  File as FileIcon,
+  Download,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
@@ -166,6 +168,81 @@ function getThumbUrl(url: string): string {
   return url + (url.includes("?") ? "&" : "?") + "size=thumb";
 }
 
+const MAX_CHAT_VIDEO_BYTES = 100 * 1024 * 1024;
+const MAX_CHAT_FILE_BYTES = 100 * 1024 * 1024;
+
+function isSupportedChatVideoFile(file: File): boolean {
+  if (file.type.startsWith("video/")) return true;
+  // Some mobile pickers omit MIME; allow common extensions.
+  return /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+}
+
+function isSupportedChatImageFile(file: File): boolean {
+  if (file.type.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(file.name);
+}
+
+const CHAT_FILE_EXT_RE =
+  /\.(pdf|docx?|xlsx?|pptx?|txt|rtf|csv|odt|ods|odp|zip|rar|7z|gz|tgz|tar)$/i;
+
+function isSupportedChatDocumentFile(file: File): boolean {
+  if (CHAT_FILE_EXT_RE.test(file.name)) return true;
+  const mime = file.type.toLowerCase();
+  if (!mime || mime === "application/octet-stream") return CHAT_FILE_EXT_RE.test(file.name);
+  if (mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/")) {
+    return false;
+  }
+  return (
+    mime === "application/pdf" ||
+    mime.startsWith("application/msword") ||
+    mime.includes("officedocument") ||
+    mime.includes("ms-excel") ||
+    mime.includes("ms-powerpoint") ||
+    mime === "application/zip" ||
+    mime === "application/x-zip-compressed" ||
+    mime.includes("rar") ||
+    mime.includes("7z") ||
+    mime === "application/gzip" ||
+    mime === "application/x-tar" ||
+    mime === "text/plain" ||
+    mime === "text/csv" ||
+    mime === "application/rtf" ||
+    mime.startsWith("text/")
+  );
+}
+
+function isNonImageAttachment(messageType: string | null | undefined): boolean {
+  return messageType === "voice" || messageType === "video" || messageType === "file";
+}
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} МБ`;
+}
+
+function parseFilePayload(content: string | null | undefined): {
+  name: string;
+  size: number;
+  mimeType: string;
+} | null {
+  if (!content?.trim()) return null;
+  try {
+    const parsed = JSON.parse(content) as { name?: unknown; size?: unknown; mimeType?: unknown };
+    const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
+    if (!name) return null;
+    const size = typeof parsed.size === "number" ? parsed.size : Number(parsed.size ?? 0);
+    const mimeType =
+      typeof parsed.mimeType === "string" && parsed.mimeType.trim()
+        ? parsed.mimeType.trim()
+        : "application/octet-stream";
+    return { name, size: Number.isFinite(size) ? size : 0, mimeType };
+  } catch {
+    return null;
+  }
+}
+
 type MyChatItem = {
   source: "conversation";
   folder: "personal" | "groups" | "channels";
@@ -267,6 +344,10 @@ function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["reply
     return shouldShowDeletedMessagePlaque(reply.deletedAt) ? t.messageDeleted : "";
   }
   if (reply.messageType === "voice") return t.voiceMessageLabel;
+  if (reply.messageType === "video") return t.messageVideoLabel;
+  if (reply.messageType === "file") {
+    return parseFilePayload(reply.content)?.name ?? t.messageFileLabel;
+  }
   const poll = parsePollPayload(reply.content ?? undefined);
   if (poll) {
     const q = poll.question.trim();
@@ -761,6 +842,9 @@ export default function ConversationChat({
       templateId?: string;
       replyToMessageId?: string;
       voiceDurationSec?: number;
+      fileName?: string;
+      fileSize?: number;
+      fileMimeType?: string;
       poll?: PollPayload;
     }) => {
       const body =
@@ -777,6 +861,9 @@ export default function ConversationChat({
               templateId: data.templateId,
               replyToMessageId: data.replyToMessageId,
               voiceDurationSec: data.voiceDurationSec,
+              fileName: data.fileName,
+              fileSize: data.fileSize,
+              fileMimeType: data.fileMimeType,
             };
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, body);
       return res.json();
@@ -1089,14 +1176,7 @@ export default function ConversationChat({
     });
   }, [forwardChats, forwardSearch]);
 
-  const { uploadFile, isUploading: isUploadingPhoto } = useUpload({
-    onSuccess: async (response) => {
-      await sendMutation.mutateAsync({
-        content: "",
-        imageUrl: response.objectPath,
-        messageType: "message",
-      });
-    },
+  const { uploadFile: uploadPhotoFile, isUploading: isUploadingPhoto } = useUpload({
     onError: (error) => {
       toast({
         title: t.error,
@@ -1107,6 +1187,18 @@ export default function ConversationChat({
   });
 
   const { uploadFile: uploadVoiceFile, isUploading: isUploadingVoice } = useUpload({
+    onError: (error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { uploadFile: uploadVideoFile, isUploading: isUploadingVideo } = useUpload({
+    onError: (error) => {
+      toast({ title: t.error, description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { uploadFile: uploadDocFile, isUploading: isUploadingDoc } = useUpload({
     onError: (error) => {
       toast({ title: t.error, description: error.message, variant: "destructive" });
     },
@@ -1125,6 +1217,80 @@ export default function ConversationChat({
       voiceDurationSec: clip.durationSec,
       replyToMessageId: replyTo?.id,
     });
+  };
+
+  const handleUploadMedia = async (files: File[]) => {
+    if (!canPostToChannel) return;
+    for (const file of files) {
+      if (isSupportedChatVideoFile(file) && !isSupportedChatImageFile(file)) {
+        if (file.size > MAX_CHAT_VIDEO_BYTES) {
+          toast({
+            title: t.error,
+            description: t.messageVideoTooLarge,
+            variant: "destructive",
+          });
+          continue;
+        }
+        const uploaded = await uploadVideoFile(file);
+        if (!uploaded) continue;
+        await sendMutation.mutateAsync({
+          content: "",
+          imageUrl: uploaded.objectPath,
+          messageType: "video",
+          replyToMessageId: replyTo?.id,
+        });
+        continue;
+      }
+      if (isSupportedChatImageFile(file)) {
+        const normalizedFile = await normalizeChatImageFile(file);
+        const uploaded = await uploadPhotoFile(normalizedFile);
+        if (!uploaded) continue;
+        await sendMutation.mutateAsync({
+          content: "",
+          imageUrl: uploaded.objectPath,
+          messageType: "message",
+          replyToMessageId: replyTo?.id,
+        });
+        continue;
+      }
+      toast({
+        title: t.error,
+        description: t.messageMediaUnsupported,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUploadFiles = async (files: File[]) => {
+    if (!canPostToChannel) return;
+    for (const file of files) {
+      if (!isSupportedChatDocumentFile(file)) {
+        toast({
+          title: t.error,
+          description: t.messageFileUnsupported,
+          variant: "destructive",
+        });
+        continue;
+      }
+      if (file.size > MAX_CHAT_FILE_BYTES) {
+        toast({
+          title: t.error,
+          description: t.messageFileTooLarge,
+          variant: "destructive",
+        });
+        continue;
+      }
+      const uploaded = await uploadDocFile(file);
+      if (!uploaded) continue;
+      await sendMutation.mutateAsync({
+        imageUrl: uploaded.objectPath,
+        messageType: "file",
+        fileName: file.name || "file",
+        fileSize: file.size,
+        fileMimeType: file.type || "application/octet-stream",
+        replyToMessageId: replyTo?.id,
+      });
+    }
   };
 
   const addMemberMutation = useMutation({
@@ -1193,14 +1359,6 @@ export default function ConversationChat({
       replyToMessageId: replyTo?.id,
     });
     if (messageMode !== "message") setMessageMode("message");
-  };
-
-  const handleUploadImages = async (files: File[]) => {
-    if (!canPostToChannel) return;
-    for (const file of files) {
-      const normalizedFile = await normalizeChatImageFile(file);
-      await uploadFile(normalizedFile);
-    }
   };
 
   /** Compact time in message bubble (no year) */
@@ -1492,7 +1650,7 @@ export default function ConversationChat({
   const galleryImages = useMemo(
     () =>
       sortedMessages
-        .filter((m) => m.imageUrl && !m.deletedAt && m.messageType !== "voice")
+        .filter((m) => m.imageUrl && !m.deletedAt && !isNonImageAttachment(m.messageType))
         .map((m) => m.imageUrl!),
     [sortedMessages]
   );
@@ -1751,6 +1909,8 @@ export default function ConversationChat({
       !!msg.content &&
       msg.messageType !== "poll" &&
       msg.messageType !== "voice" &&
+      msg.messageType !== "video" &&
+      msg.messageType !== "file" &&
       (conv.type === "channel" || withinEditWindow);
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
@@ -1808,7 +1968,8 @@ export default function ConversationChat({
               </>
             )}
           </button>
-          {((msg.content && msg.messageType !== "voice") || msg.messageType === "poll") && (
+          {((msg.content && msg.messageType !== "voice" && msg.messageType !== "file") ||
+            msg.messageType === "poll") && (
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { void copyMessageContent(msg); onDone?.(); }}>
               <Copy className="mr-2 h-4 w-4" />
               {t.messageActionCopy}
@@ -1954,7 +2115,55 @@ export default function ConversationChat({
       )}
       {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
       {renderForwardedHeader(msg)}
-      {msg.imageUrl && msg.messageType !== "voice" && (
+      {msg.imageUrl && msg.messageType === "video" && (
+        <video
+          src={msg.imageUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="mb-0.5 max-h-64 max-w-full rounded bg-black/90 object-contain"
+          data-testid={`video-${msg.id}`}
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+      {msg.imageUrl && msg.messageType === "file" && (() => {
+        const meta = parseFilePayload(msg.content);
+        const name = meta?.name ?? t.messageFileLabel;
+        const sizeLabel = meta?.size ? formatFileSize(meta.size) : "";
+        return (
+          <a
+            href={msg.imageUrl}
+            download={name}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "mb-0.5 flex max-w-full items-center gap-2.5 rounded-xl px-2.5 py-2 no-underline transition-colors",
+              isOwn
+                ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
+                : "bg-muted/80 hover:bg-muted"
+            )}
+            data-testid={`file-${msg.id}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                isOwn ? "bg-primary-foreground/20" : "bg-background"
+              )}
+            >
+              <FileIcon className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-foreground">{name}</span>
+              {sizeLabel ? (
+                <span className="block text-[11px] text-muted-foreground">{sizeLabel}</span>
+              ) : null}
+            </span>
+            <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </a>
+        );
+      })()}
+      {msg.imageUrl && !isNonImageAttachment(msg.messageType) && (
         <img
           src={getThumbUrl(msg.imageUrl)}
           alt=""
@@ -1973,7 +2182,7 @@ export default function ConversationChat({
           durationSec={parseVoiceDurationSec(msg.content)}
           isOwn={isOwn}
         />
-      ) : msg.messageType === "poll" ? (
+      ) : msg.messageType === "video" || msg.messageType === "file" ? null : msg.messageType === "poll" ? (
         <PollMessageBlock
           msg={msg}
           disabled={!!msg.deletedAt || !canInteractWithChannel}
@@ -2377,6 +2586,10 @@ export default function ConversationChat({
               preview={
                 activePinnedMessage.messageType === "voice"
                   ? t.voiceMessageLabel
+                  : activePinnedMessage.messageType === "video"
+                  ? t.messageVideoLabel
+                  : activePinnedMessage.messageType === "file"
+                  ? parseFilePayload(activePinnedMessage.content)?.name ?? t.messageFileLabel
                   : activePinnedMessage.messageType === "poll"
                   ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
                   : activePinnedMessage.messageType === "questionnaire" ||
@@ -2606,6 +2819,10 @@ export default function ConversationChat({
                     : replyTo
                       ? replyTo.messageType === "voice"
                         ? t.voiceMessageLabel
+                        : replyTo.messageType === "video"
+                        ? t.messageVideoLabel
+                        : replyTo.messageType === "file"
+                        ? parseFilePayload(replyTo.content)?.name ?? t.messageFileLabel
                         : replyTo.messageType === "poll"
                         ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
                         : replyTo.content
@@ -2717,8 +2934,10 @@ export default function ConversationChat({
                 onSend={handleSend}
                 isSending={isComposerSending}
                 disabled={!canPostToChannel}
-                onUploadImages={editing || !canPostToChannel ? undefined : handleUploadImages}
-                isUploadingImages={isUploadingPhoto}
+                onUploadMedia={editing || !canPostToChannel ? undefined : handleUploadMedia}
+                isUploadingMedia={isUploadingPhoto || isUploadingVideo}
+                onUploadFiles={editing || !canPostToChannel ? undefined : handleUploadFiles}
+                isUploadingFiles={isUploadingDoc}
                 onSendVoice={editing || !canPostToChannel ? undefined : handleSendVoice}
                 isSendingVoice={isUploadingVoice || sendMutation.isPending}
                 wrapperClassName="border-0 px-0 py-0"
