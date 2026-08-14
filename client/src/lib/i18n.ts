@@ -2167,6 +2167,8 @@ export const t = {
   sponsorReceiptPreview: 'Просмотр чека',
   imageViewerZoom100: '100%',
   imageViewerZoomFit: 'Уместить',
+  videoPlayerFullscreen: 'На весь экран',
+  videoPlayerExitFullscreen: 'Свернуть',
   sponsorDisputeReasonPlaceholder: 'Причина оспаривания (необязательно)',
   sponsorFormatHint: 'Выделите текст и нажмите $$ — этот фрагмент увидят только спонсоры',
   searchDoctors: 'Врачи',

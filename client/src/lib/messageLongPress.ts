@@ -129,7 +129,7 @@ function clearMessageLongPressTimers(refs: MessageLongPressRefs): void {
 }
 
 export function isInteractiveMessageTarget(target: HTMLElement): boolean {
-  const interactive = target.closest("a,button,input,textarea,video,audio");
+  const interactive = target.closest("a,button,input,textarea,video,audio,[data-chat-video]");
   if (!interactive || !(interactive instanceof HTMLElement)) return false;
   // Message action cards (e.g. questionnaire) still need long-press for the context menu.
   if (interactive.dataset.allowLongPress === "true") return false;
