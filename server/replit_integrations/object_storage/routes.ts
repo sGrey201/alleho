@@ -80,7 +80,13 @@ export function registerObjectStorageRoutes(app: Express): void {
       } else if (size === "thumb") {
         await objectStorageService.downloadObjectAsThumb(objectFile, res);
       } else {
-        await objectStorageService.downloadObject(objectFile, res);
+        const rangeHeader = req.headers.range;
+        await objectStorageService.downloadObject(
+          objectFile,
+          res,
+          3600,
+          typeof rangeHeader === "string" ? rangeHeader : undefined
+        );
       }
     } catch (error) {
       console.error("Error serving object:", error);

@@ -139,15 +139,26 @@ export class ObjectStorageService {
 
   /**
    * Stream S3 object to HTTP response.
+   * Supports `Range` so desktop browsers can seek audio/video.
    */
   async downloadObject(
     ref: S3ObjectRef,
     res: Response,
-    cacheTtlSec: number = 3600
+    cacheTtlSec: number = 3600,
+    rangeHeader?: string
   ): Promise<void> {
     try {
+      const rangeValue =
+        typeof rangeHeader === "string" && /^bytes=/i.test(rangeHeader.trim())
+          ? rangeHeader.trim().split(",")[0]!.trim()
+          : undefined;
+
       const response = await this.client.send(
-        new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
+        new GetObjectCommand({
+          Bucket: ref.bucket,
+          Key: ref.key,
+          ...(rangeValue ? { Range: rangeValue } : {}),
+        })
       );
       const contentType =
         response.ContentType || "application/octet-stream";
@@ -170,20 +181,37 @@ export class ObjectStorageService {
       }
 
       const contentLength = response.ContentLength;
-      res.set({
+      const headers: Record<string, string> = {
         "Content-Type": contentType,
+        "Accept-Ranges": "bytes",
         "Cache-Control": `private, max-age=${cacheTtlSec}`,
-        ...(contentLength != null && { "Content-Length": String(contentLength) }),
-      });
+      };
+      if (contentLength != null) {
+        headers["Content-Length"] = String(contentLength);
+      }
+      if (response.ContentRange) {
+        headers["Content-Range"] = response.ContentRange;
+        res.status(206);
+      }
+      res.set(headers);
       if (response.Body && typeof (response.Body as NodeJS.ReadableStream).pipe === "function") {
         (response.Body as NodeJS.ReadableStream).pipe(res);
       } else {
         res.end();
       }
     } catch (error) {
+      const statusCode =
+        typeof error === "object" &&
+        error !== null &&
+        "name" in error &&
+        (error as { name?: string }).name === "InvalidRange"
+          ? 416
+          : 500;
       console.error("Error downloading file:", error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Error downloading file" });
+        res.status(statusCode).json({
+          error: statusCode === 416 ? "Range not satisfiable" : "Error downloading file",
+        });
       }
     }
   }
