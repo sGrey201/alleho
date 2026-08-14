@@ -16,6 +16,7 @@ import {
 import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
+import { MicrosoftWordIcon } from "@/components/MicrosoftWordIcon";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { postConversationSeen } from "@/lib/markConversationSeen";
@@ -96,6 +97,8 @@ import {
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
+import { captureVideoPosterFromFile } from "@/lib/captureVideoPoster";
+import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -112,6 +115,7 @@ import {
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
+import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
 import { pollPayloadSchema, voicePayloadSchema, type PollPayload } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
@@ -607,6 +611,8 @@ export default function ConversationChat({
   const needsInitialPinRef = useRef(true);
   const ignoreScrollRef = useRef(false);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
+  const videoReplaceInputRef = useRef<HTMLInputElement>(null);
+  const replacingVideoMessageRef = useRef<ConversationMessageWithAuthor | null>(null);
   const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const setMessageRef = (id: string) => (el: HTMLDivElement | null) => {
@@ -842,6 +848,7 @@ export default function ConversationChat({
       templateId?: string;
       replyToMessageId?: string;
       voiceDurationSec?: number;
+      videoPosterUrl?: string;
       fileName?: string;
       fileSize?: number;
       fileMimeType?: string;
@@ -861,6 +868,7 @@ export default function ConversationChat({
               templateId: data.templateId,
               replyToMessageId: data.replyToMessageId,
               voiceDurationSec: data.voiceDurationSec,
+              videoPosterUrl: data.videoPosterUrl,
               fileName: data.fileName,
               fileSize: data.fileSize,
               fileMimeType: data.fileMimeType,
@@ -928,22 +936,67 @@ export default function ConversationChat({
         `/api/conversations/${conversationId}/messages/${messageId}`,
         { content }
       );
-      return res.json();
+      return res.json() as Promise<{ content: string | null; editedAt: string }>;
     },
-    onSuccess: (_resp, variables) => {
+    onSuccess: (resp, variables) => {
       queryClient.setQueryData<ConversationMessagesInfiniteData>(
         conversationMessagesQueryKey(conversationId),
         (old) =>
           updateConversationMessagesList(old, (list) =>
             list.map((m) =>
               m.id === variables.messageId
-                ? { ...m, content: variables.content, editedAt: new Date().toISOString() }
+                ? { ...m, content: resp.content, editedAt: resp.editedAt }
                 : m
             )
           )
       );
       setEditing(null);
       setEditText("");
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const replaceVideoMutation = useMutation({
+    mutationFn: async ({
+      messageId,
+      imageUrl,
+      videoPosterUrl,
+    }: {
+      messageId: string;
+      imageUrl: string;
+      videoPosterUrl?: string;
+    }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/conversations/${conversationId}/messages/${messageId}`,
+        { imageUrl, videoPosterUrl }
+      );
+      return res.json() as Promise<{
+        content: string | null;
+        imageUrl: string | null;
+        editedAt: string;
+      }>;
+    },
+    onSuccess: (resp, variables) => {
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(
+        conversationMessagesQueryKey(conversationId),
+        (old) =>
+          updateConversationMessagesList(old, (list) =>
+            list.map((m) =>
+              m.id === variables.messageId
+                ? {
+                    ...m,
+                    content: resp.content,
+                    imageUrl: resp.imageUrl,
+                    editedAt: resp.editedAt,
+                  }
+                : m
+            )
+          )
+      );
+      toast({ title: t.messageVideoReplaced });
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
@@ -1231,12 +1284,18 @@ export default function ConversationChat({
           });
           continue;
         }
+        const posterFile = await captureVideoPosterFromFile(file);
         const uploaded = await uploadVideoFile(file);
         if (!uploaded) continue;
+        let videoPosterUrl: string | undefined;
+        if (posterFile) {
+          const posterUploaded = await uploadPhotoFile(posterFile);
+          videoPosterUrl = posterUploaded?.objectPath;
+        }
         await sendMutation.mutateAsync({
-          content: "",
           imageUrl: uploaded.objectPath,
           messageType: "video",
+          videoPosterUrl,
           replyToMessageId: replyTo?.id,
         });
         continue;
@@ -1814,11 +1873,61 @@ export default function ConversationChat({
     chatInputRef.current?.focusInput();
   };
 
-  const startEdit = (msg: ConversationMessageWithAuthor) => {
+  const startEdit = (msg: ConversationMessageWithAuthor, onDone?: () => void) => {
     if (!canInteractWithChannel) return;
     setReplyTo(null);
+    if (msg.messageType === "video") {
+      onDone?.();
+      replacingVideoMessageRef.current = msg;
+      videoReplaceInputRef.current?.click();
+      return;
+    }
     setEditing(msg);
     setEditText(msg.content ?? "");
+  };
+
+  const handleReplaceVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const msg = replacingVideoMessageRef.current;
+    replacingVideoMessageRef.current = null;
+    if (!file || !msg || !canPostToChannel) return;
+
+    if (!isSupportedChatVideoFile(file)) {
+      toast({
+        title: t.error,
+        description: t.messageVideoUnsupported,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > MAX_CHAT_VIDEO_BYTES) {
+      toast({
+        title: t.error,
+        description: t.messageVideoTooLarge,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const toastRef = toast({ title: t.messageVideoReplacing });
+    try {
+      const posterFile = await captureVideoPosterFromFile(file);
+      const uploaded = await uploadVideoFile(file);
+      if (!uploaded) return;
+      let videoPosterUrl: string | undefined;
+      if (posterFile) {
+        const posterUploaded = await uploadPhotoFile(posterFile);
+        videoPosterUrl = posterUploaded?.objectPath;
+      }
+      await replaceVideoMutation.mutateAsync({
+        messageId: msg.id,
+        imageUrl: uploaded.objectPath,
+        videoPosterUrl,
+      });
+    } finally {
+      toastRef.dismiss?.();
+    }
   };
 
   const cancelComposerContext = () => {
@@ -1904,7 +2013,7 @@ export default function ConversationChat({
     const isOwn = msg.authorUserId === user?.id;
     const createdAt = new Date(msg.createdAt).getTime();
     const withinEditWindow = Date.now() - createdAt < EDIT_WINDOW_MS;
-    const canEdit =
+    const canEditText =
       isOwn &&
       !!msg.content &&
       msg.messageType !== "poll" &&
@@ -1912,6 +2021,11 @@ export default function ConversationChat({
       msg.messageType !== "video" &&
       msg.messageType !== "file" &&
       (conv.type === "channel" || withinEditWindow);
+    const canEditVideo =
+      isOwn &&
+      msg.messageType === "video" &&
+      (conv.type === "channel" || withinEditWindow);
+    const canEdit = canEditText || canEditVideo;
     const canDelete = isOwn || isOwner;
     const isPinned = !!msg.pinnedAt;
     const routeType =
@@ -1990,7 +2104,7 @@ export default function ConversationChat({
           )}
           {(canEdit || canDelete) && <div className="my-1 h-px bg-border" />}
           {canEdit && (
-            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startEdit(msg); onDone?.(); }}>
+            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => { startEdit(msg, onDone); }}>
               <Pencil className="mr-2 h-4 w-4" />
               {t.messageActionEdit}
             </button>
@@ -2116,14 +2230,10 @@ export default function ConversationChat({
       {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
       {renderForwardedHeader(msg)}
       {msg.imageUrl && msg.messageType === "video" && (
-        <video
+        <ChatVideoPlayer
           src={msg.imageUrl}
-          controls
-          playsInline
-          preload="metadata"
-          className="mb-0.5 max-h-64 max-w-full rounded bg-black/90 object-contain"
-          data-testid={`video-${msg.id}`}
-          onClick={(e) => e.stopPropagation()}
+          posterUrl={parseVideoMessagePayload(msg.content)?.posterUrl}
+          testId={`video-${msg.id}`}
         />
       )}
       {msg.imageUrl && msg.messageType === "file" && (() => {
@@ -2340,7 +2450,8 @@ export default function ConversationChat({
       if (conversationId) setChatComposerDraft(conversationId, v);
     }
   };
-  const isComposerSending = sendMutation.isPending || editMutation.isPending;
+  const isComposerSending =
+    sendMutation.isPending || editMutation.isPending || replaceVideoMutation.isPending;
 
   const hasQuestionnaireSelection = !!openQuestionnaireInstanceId || !!templatePreview;
   const persistQuestionnaireScroll = () => {
@@ -2438,28 +2549,13 @@ export default function ConversationChat({
         type="button"
         variant="ghost"
         size="icon"
-        className="shrink-0 [&_svg]:!size-6"
+        className="shrink-0 [&_img]:!size-6"
         onClick={() => void handleExportQuestionnaireToWord()}
         aria-label={t.exportQuestionnaireToWord}
         title={t.exportQuestionnaireToWord}
         data-testid="button-questionnaire-export-word"
       >
-        <svg
-          viewBox="3 1 18 22"
-          className="size-6"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path
-            fill="#2B579A"
-            d="M14.5 2.5H6.25A1.75 1.75 0 0 0 4.5 4.25v15.5c0 .966.784 1.75 1.75 1.75h11.5a1.75 1.75 0 0 0 1.75-1.75V8.5L14.5 2.5Z"
-          />
-          <path fill="#1B3F6E" d="M14.5 2.5V7a1.5 1.5 0 0 0 1.5 1.5h4.5L14.5 2.5Z" />
-          <path
-            fill="#fff"
-            d="M7.35 16.75 8.9 9.85h1.55l.95 3.95.25 1.2h.04l.25-1.2.95-3.95h1.55l1.55 6.9h-1.45l-.75-3.55-.25-1.35h-.04l-.25 1.35-.75 3.55h-1.55l-.75-3.55-.25-1.35h-.04l-.25 1.35-.75 3.55H7.35Z"
-          />
-        </svg>
+        <MicrosoftWordIcon />
       </Button>
     </div>
   );
@@ -2958,9 +3054,16 @@ export default function ConversationChat({
                 onMessageModeChange={setMessageMode}
                 onInputFocus={scrollMessagesForKeyboard}
               />
+              <input
+                ref={videoReplaceInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/*"
+                className="hidden"
+                onChange={handleReplaceVideoFileChange}
+              />
             </div>
           )}
-        </div>
+      </div>
       )}
 
       </div>

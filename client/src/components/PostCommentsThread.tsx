@@ -25,6 +25,8 @@ import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
+import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -620,12 +622,9 @@ export default function PostCommentsThread({
               <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border bg-background px-2 pt-1 pb-1.5">
                 <p className="mb-0.5 text-[10px] text-muted-foreground">Публикация</p>
                 {anchorPost.imageUrl && anchorPost.messageType === "video" && (
-                  <video
+                  <ChatVideoPlayer
                     src={anchorPost.imageUrl}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="mb-0.5 max-h-64 max-w-full rounded bg-black/90 object-contain"
+                    posterUrl={parseVideoMessagePayload(anchorPost.content)?.posterUrl}
                   />
                 )}
                 {anchorPost.imageUrl && anchorPost.messageType === "file" && (() => {

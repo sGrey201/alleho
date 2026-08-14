@@ -316,9 +316,13 @@ export const voicePayloadSchema = z.object({
 export type VoicePayload = z.infer<typeof voicePayloadSchema>;
 
 /**
- * Video attachments reuse `image_url` as the object path (same as voice).
- * No extra payload is required; `content` stays empty.
+ * JSON stored in conversation_messages.content when message_type is `video`.
+ * The video object path is in `image_url`; optional poster preview URL is stored here.
  */
+export const videoPayloadSchema = z.object({
+  posterUrl: z.string().trim().min(1).optional(),
+});
+export type VideoPayload = z.infer<typeof videoPayloadSchema>;
 
 /**
  * JSON stored in conversation_messages.content when message_type is `file`.

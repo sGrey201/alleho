@@ -2213,6 +2213,8 @@ export const t = {
   messageVideoLabel: 'Видео',
   messageVideoTooLarge: 'Видео слишком большое (макс. 100 МБ)',
   messageVideoUnsupported: 'Этот формат видео не поддерживается',
+  messageVideoReplacing: 'Замена видео…',
+  messageVideoReplaced: 'Видео обновлено',
   messageFileLabel: 'Файл',
   messageFileTooLarge: 'Файл слишком большой (макс. 100 МБ)',
   messageFileUnsupported: 'Этот тип файла не поддерживается',

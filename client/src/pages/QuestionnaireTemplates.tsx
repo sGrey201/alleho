@@ -10,7 +10,6 @@ import {
   Loader2,
   ArrowLeft,
   MoreVertical,
-  FileDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +37,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { MicrosoftWordIcon } from "@/components/MicrosoftWordIcon";
 import type { QuestionnaireTemplate } from "@shared/schema";
 import { QuestionnaireTemplateEditor } from "@/pages/QuestionnaireTemplateEditor";
 import { QuestionnaireTemplatesEmptyState } from "@/components/QuestionnaireTemplatesEmptyState";
@@ -261,7 +261,7 @@ export default function QuestionnaireTemplates() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => handleExportToWord(tpl)}>
-                      <FileDown className="mr-2 h-4 w-4" />
+                      <MicrosoftWordIcon className="mr-2 size-4" />
                       {t.exportQuestionnaireToWord}
                     </DropdownMenuItem>
                     <DropdownMenuItem

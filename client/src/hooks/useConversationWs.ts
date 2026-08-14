@@ -82,6 +82,7 @@ type ConversationMessageEditedPayload = {
   conversationId: string;
   messageId: string;
   content: string | null;
+  imageUrl?: string | null;
   editedAt: string;
 };
 
@@ -282,7 +283,12 @@ export function useConversationWs(
             updateMessages((list) =>
               list.map((m) =>
                 m.id === payload.messageId
-                  ? { ...m, content: payload.content, editedAt: payload.editedAt }
+                  ? {
+                      ...m,
+                      content: payload.content,
+                      ...(payload.imageUrl !== undefined ? { imageUrl: payload.imageUrl } : {}),
+                      editedAt: payload.editedAt,
+                    }
                   : {
                       ...m,
                       replyTo:

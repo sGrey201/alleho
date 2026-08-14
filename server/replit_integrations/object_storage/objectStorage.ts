@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Response } from "express";
@@ -227,6 +228,23 @@ export class ObjectStorageService {
       if (!res.headersSent) {
         res.status(500).json({ error: "Error downloading file" });
       }
+    }
+  }
+
+  /**
+   * Delete S3 object by app path (/objects/uploads/<id>).
+   * No-op for invalid paths; ignores missing objects.
+   */
+  async deleteObjectByPath(objectPath: string): Promise<void> {
+    if (!objectPath.startsWith("/objects/")) return;
+    const key = objectPath.slice("/objects/".length);
+    if (!key) return;
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+    } catch (error) {
+      console.error("[objectStorage] deleteObjectByPath failed:", objectPath, error);
     }
   }
 

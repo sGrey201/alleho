@@ -33,6 +33,7 @@ import {
   insertConversationMessageCommentSchema,
   pollPayloadSchema,
   voicePayloadSchema,
+  videoPayloadSchema,
   filePayloadSchema,
   type User,
   type ConversationMessage,
@@ -83,6 +84,11 @@ import {
   filterMessageForNonSponsor,
   hasSponsorSections,
 } from "@shared/messageFormatting";
+import {
+  cleanupCommentAttachments,
+  cleanupMessageAttachments,
+  cleanupReplacedMessageAttachments,
+} from "./utils/messageAttachmentCleanup";
 
 let robokassaModulePromise: Promise<typeof import("./robokassa")> | null = null;
 let objectStorageModulePromise: Promise<typeof import("./replit_integrations/object_storage")> | null = null;
@@ -2942,6 +2948,7 @@ ${allUrls.map(url => `  <url>
         replyToMessageId?: string;
         poll?: unknown;
         voiceDurationSec?: number;
+        videoPosterUrl?: string;
         fileName?: string;
         fileSize?: number;
         fileMimeType?: string;
@@ -3017,7 +3024,10 @@ ${allUrls.map(url => `  <url>
           if (!imageUrl) {
             return res.status(400).json({ message: "Video message requires video" });
           }
-          content = content?.trim() ? content : null;
+          const parsed = videoPayloadSchema.parse({
+            posterUrl: body.videoPosterUrl?.trim() || undefined,
+          });
+          content = parsed.posterUrl ? JSON.stringify(parsed) : null;
         } else if (messageType === "file") {
           if (!imageUrl) {
             return res.status(400).json({ message: "File message requires attachment" });
@@ -3129,7 +3139,7 @@ ${allUrls.map(url => `  <url>
             templateName: template.name,
           });
           const updatedContent = JSON.stringify(payload);
-          await storage.editConversationMessage(message.id, updatedContent);
+          await storage.editConversationMessage(message.id, { content: updatedContent });
           finalMessage = (await storage.getConversationMessageById(message.id)) ?? message;
           finalMessage.content = updatedContent;
           await storage.incrementTemplatePatientSendCount(template.id);
@@ -3348,23 +3358,71 @@ ${allUrls.map(url => `  <url>
       if (existing.messageType === "poll") {
         return res.status(400).json({ message: "Cannot edit poll" });
       }
+      if (existing.messageType === "voice" || existing.messageType === "file") {
+        return res.status(400).json({ message: "Cannot edit this message type" });
+      }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
       if (conv?.type !== "channel" && Date.now() - createdAt > EDIT_WINDOW_MS) {
         return res.status(400).json({ message: "Edit window expired" });
       }
-      const content = (req.body?.content ?? "").toString().trim();
+
+      const body = req.body as {
+        content?: string;
+        imageUrl?: string;
+        videoPosterUrl?: string;
+      };
+
+      if (existing.messageType === "video" && body.imageUrl) {
+        const parsed = videoPayloadSchema.parse({
+          posterUrl: body.videoPosterUrl?.trim() || undefined,
+        });
+        const content = parsed.posterUrl ? JSON.stringify(parsed) : null;
+        const attachmentBefore = {
+          imageUrl: existing.imageUrl,
+          content: existing.content,
+          messageType: existing.messageType,
+        };
+        const updated = await storage.editConversationMessage(messageId, {
+          content,
+          imageUrl: body.imageUrl,
+        });
+        if (!updated) return res.status(404).json({ message: "Message not found" });
+        await cleanupReplacedMessageAttachments(attachmentBefore, {
+          imageUrl: updated.imageUrl,
+          content: updated.content,
+          messageType: updated.messageType,
+        });
+        const editedAt = (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString();
+        await syncConversationRecentCache(id, currentUserId);
+        await publishConversationMessageEdited(id, {
+          conversationId: id,
+          messageId,
+          content: updated.content ?? null,
+          imageUrl: updated.imageUrl ?? null,
+          editedAt,
+        });
+        return res.json({
+          ok: true,
+          content: updated.content ?? null,
+          imageUrl: updated.imageUrl ?? null,
+          editedAt,
+        });
+      }
+
+      const content = (body.content ?? "").toString().trim();
       if (!content) return res.status(400).json({ message: "Content required" });
-      const updated = await storage.editConversationMessage(messageId, content);
+      const updated = await storage.editConversationMessage(messageId, { content });
       if (!updated) return res.status(404).json({ message: "Message not found" });
+      const editedAt = (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString();
       await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessageEdited(id, {
         conversationId: id,
         messageId,
         content: updated.content ?? null,
-        editedAt: (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString(),
+        editedAt,
       });
-      res.json({ ok: true });
+      res.json({ ok: true, content: updated.content ?? null, editedAt });
     } catch (error) {
       console.error("Error editing conversation message:", error);
       res.status(500).json({ message: "Failed to edit message" });
@@ -3389,8 +3447,14 @@ ${allUrls.map(url => `  <url>
       const myRole = await storage.getParticipantRole(id, currentUserId);
       const canDelete = existing.authorUserId === currentUserId || myRole === "owner";
       if (!canDelete) return res.status(403).json({ message: "Forbidden" });
+      const attachmentSnapshot = {
+        imageUrl: existing.imageUrl,
+        content: existing.content,
+        messageType: existing.messageType,
+      };
       const updated = await storage.softDeleteConversationMessage(messageId);
       if (!updated) return res.status(404).json({ message: "Message not found" });
+      await cleanupMessageAttachments(attachmentSnapshot);
       await syncConversationRecentCache(id, currentUserId);
       await publishConversationMessageDeleted(id, {
         conversationId: id,
@@ -3689,8 +3753,10 @@ ${allUrls.map(url => `  <url>
         const myRole = await storage.getParticipantRole(id, currentUserId);
         const canDelete = comment.authorUserId === currentUserId || myRole === "owner";
         if (!canDelete) return res.status(403).json({ message: "Forbidden" });
+        const attachmentSnapshot = { imageUrl: comment.imageUrl };
         const updated = await storage.softDeleteConversationMessageComment(commentId);
         if (!updated) return res.status(404).json({ message: "Comment not found" });
+        await cleanupCommentAttachments(attachmentSnapshot);
         await publishConversationCommentDeleted(id, {
           conversationId: id,
           messageId,

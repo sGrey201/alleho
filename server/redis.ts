@@ -160,6 +160,7 @@ export type ConversationMessageEditedPayload = {
   conversationId: string;
   messageId: string;
   content: string | null;
+  imageUrl?: string | null;
   editedAt: string;
 };
 

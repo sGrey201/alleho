@@ -412,7 +412,10 @@ export interface IStorage {
   ): Promise<Map<string, MessageReactionSummary[]>>;
   getConversationMessageCommentCounts(messageIds: string[]): Promise<Map<string, number>>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
-  editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined>;
+  editConversationMessage(
+    messageId: string,
+    updates: { content?: string | null; imageUrl?: string | null }
+  ): Promise<ConversationMessage | undefined>;
   softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
   pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined>;
   unpinConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
@@ -2003,10 +2006,19 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async editConversationMessage(messageId: string, content: string): Promise<ConversationMessage | undefined> {
+  async editConversationMessage(
+    messageId: string,
+    updates: { content?: string | null; imageUrl?: string | null }
+  ): Promise<ConversationMessage | undefined> {
+    const patch: { content?: string | null; imageUrl?: string | null; editedAt: Date } = {
+      editedAt: new Date(),
+    };
+    if (updates.content !== undefined) patch.content = updates.content;
+    if (updates.imageUrl !== undefined) patch.imageUrl = updates.imageUrl;
+
     const [m] = await db
       .update(conversationMessages)
-      .set({ content, editedAt: new Date() })
+      .set(patch)
       .where(eq(conversationMessages.id, messageId))
       .returning();
     if (!m) return undefined;
