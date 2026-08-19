@@ -1,11 +1,14 @@
-import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
-
 function isIosDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
   );
+}
+
+function isAndroidDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent);
 }
 
 function mimeFromFilename(name: string): string {
@@ -25,11 +28,39 @@ function mimeFromFilename(name: string): string {
   return types[ext] || "application/octet-stream";
 }
 
-function prefersShareSheet(): boolean {
-  return isIosDevice() || isInstalledPwaSession();
+function shouldUseShareSheet(): boolean {
+  return isIosDevice() || isAndroidDevice();
+}
+
+function triggerDownload(url: string, filename: string, openInNewTab: boolean) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener noreferrer";
+  if (openInNewTab) a.target = "_blank";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function canShareData(
+  nav: Navigator & { canShare?: (data: ShareData) => boolean },
+  data: ShareData
+): boolean {
+  if (typeof nav.canShare !== "function") return Boolean(nav.share);
+  try {
+    return nav.canShare(data);
+  } catch {
+    return false;
+  }
 }
 
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
+  if (!shouldUseShareSheet()) {
+    triggerDownload(url, filename, true);
+    return;
+  }
+
   const res = await fetch(url, { credentials: "include" });
   if (!res.ok) {
     throw new Error(`Failed to fetch file (${res.status})`);
@@ -47,10 +78,9 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
     share?: (data: ShareData) => Promise<void>;
   };
   const shareData: ShareData = { files: [file], title: filename };
-  const canShareFiles = typeof nav.canShare === "function" ? nav.canShare(shareData) : Boolean(nav.share);
-  const keepInApp = prefersShareSheet();
+  const canShareFiles = canShareData(nav, shareData);
 
-  if (nav.share && (canShareFiles || keepInApp)) {
+  if (nav.share) {
     try {
       if (canShareFiles) {
         await nav.share(shareData);
@@ -63,23 +93,12 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
       return;
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
-      if (keepInApp) throw error;
     }
-  }
-
-  if (keepInApp) {
-    throw new Error("Share is not available");
   }
 
   const objectUrl = URL.createObjectURL(file);
   try {
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    triggerDownload(objectUrl, filename, false);
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2_000);
   }
