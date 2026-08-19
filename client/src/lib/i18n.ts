@@ -2218,6 +2218,7 @@ export const t = {
   messageVideoReplacing: 'Замена видео…',
   messageVideoReplaced: 'Видео обновлено',
   messageFileLabel: 'Файл',
+  messageFileOpenError: 'Не удалось открыть файл',
   messageFileTooLarge: 'Файл слишком большой (макс. 100 МБ)',
   messageFileUnsupported: 'Этот тип файла не поддерживается',
   messageMediaUnsupported: 'Можно прикрепить только фото или видео',

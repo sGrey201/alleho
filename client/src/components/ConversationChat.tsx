@@ -114,6 +114,7 @@ import {
   setChatComposerDraft,
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
@@ -2244,7 +2245,6 @@ export default function ConversationChat({
           <a
             href={msg.imageUrl}
             download={name}
-            target="_blank"
             rel="noopener noreferrer"
             className={cn(
               "mb-0.5 flex max-w-full items-center gap-2.5 rounded-xl px-2.5 py-2 no-underline transition-colors",
@@ -2253,7 +2253,17 @@ export default function ConversationChat({
                 : "bg-muted/80 hover:bg-muted"
             )}
             data-testid={`file-${msg.id}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void saveOrShareChatFile(msg.imageUrl!, name).catch(() => {
+                toast({
+                  title: t.error,
+                  description: t.messageFileOpenError,
+                  variant: "destructive",
+                });
+              });
+            }}
           >
             <span
               className={cn(

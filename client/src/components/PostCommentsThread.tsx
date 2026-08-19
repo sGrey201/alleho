@@ -25,6 +25,8 @@ import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { t } from "@/lib/i18n";
+import { saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
@@ -639,9 +641,19 @@ export default function PostCommentsThread({
                     <a
                       href={anchorPost.imageUrl}
                       download={name}
-                      target="_blank"
                       rel="noopener noreferrer"
                       className="mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void saveOrShareChatFile(anchorPost.imageUrl!, name).catch(() => {
+                          toast({
+                            title: t.error,
+                            description: t.messageFileOpenError,
+                            variant: "destructive",
+                          });
+                        });
+                      }}
                     >
                       <FileIcon className="h-5 w-5 shrink-0" />
                       <span className="truncate font-medium">{name}</span>
