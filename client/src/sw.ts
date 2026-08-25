@@ -38,10 +38,22 @@ registerRoute(
 );
 
 registerRoute(
-  ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/objects/"),
+  ({ url, request }) => {
+    if (request.method !== "GET" || !url.pathname.startsWith("/objects/")) return false;
+    if (url.searchParams.get("size") === "thumb") return false;
+    // Range / media-element requests must hit the network: caching 206 slices
+    // makes large audio/video fail to play (especially on desktop Chrome).
+    if (request.headers.has("Range") || request.headers.has("range")) return false;
+    if (request.destination === "audio" || request.destination === "video") return false;
+    return true;
+  },
   new StaleWhileRevalidate({
     cacheName: MEDIA_FILES_CACHE,
     plugins: [
+      {
+        cacheWillUpdate: async ({ response }) =>
+          response.status === 200 ? response : null,
+      },
       new ExpirationPlugin({
         maxEntries: 300,
         maxAgeSeconds: 60 * 60 * 24 * 14,
@@ -57,7 +69,12 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      await caches.delete("media-files-v1");
+    })()
+  );
 });
 
 type PushPayload = {

@@ -12,4 +12,5 @@ export const MAX_PERSISTED_CONVERSATIONS = 50;
 export const MAX_MESSAGE_PAGES_PER_CONVERSATION = 10;
 
 export const MEDIA_THUMB_CACHE = "media-thumbs-v1";
-export const MEDIA_FILES_CACHE = "media-files-v1";
+/** Bump when object-cache policy changes (e.g. stop storing HTTP 206 Range slices). */
+export const MEDIA_FILES_CACHE = "media-files-v2";
