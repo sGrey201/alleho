@@ -13,6 +13,7 @@ import { isAuthenticated, isAdmin } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { generateAuthPassword } from "./authPassword";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
+import { getClientAppVersion } from "./appVersion";
 import { BASE_URL, APP_HOME_PATH } from "@shared/brand";
 import { isPositiveTierAmount, clampDiscountPercent, resolveContentTierAmount } from "@shared/sponsorTiers";
 import { tagCategoryEnum } from "@shared/schema";
@@ -261,6 +262,11 @@ ${allUrls.map(url => `  <url>
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  app.get("/api/app-version", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.json({ version: getClientAppVersion() });
   });
 
   app.get("/api/push/vapid-public-key", (_req, res) => {

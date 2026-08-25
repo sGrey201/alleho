@@ -3,11 +3,38 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
+import fs from "fs";
+import { execSync } from "child_process";
+
+function resolveAppBuildId(): string {
+  const fromEnv = process.env.APP_BUILD_ID?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    return String(Date.now());
+  }
+}
+
+function appVersionPlugin(outDir: string) {
+  return {
+    name: "app-version-json",
+    closeBundle() {
+      const version = resolveAppBuildId();
+      fs.writeFileSync(
+        path.join(outDir, "app-version.json"),
+        JSON.stringify({ version }),
+        "utf-8"
+      );
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
     runtimeErrorOverlay(),
+    appVersionPlugin(path.resolve(import.meta.dirname, "dist/public")),
     VitePWA({
       registerType: "prompt",
       strategies: "injectManifest",
