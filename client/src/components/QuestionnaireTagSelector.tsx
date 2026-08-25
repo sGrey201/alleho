@@ -2,6 +2,16 @@ import { useState } from "react";
 import { Bookmark } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { t } from "@/lib/i18n";
 import type { QuestionnaireHintsMode, QuestionnaireTagEntry } from "@shared/questionnaireTypes";
 import { QuestionnaireHintPopover, QuestionnaireHintText } from "@/components/QuestionnaireHintPopover";
@@ -36,9 +46,28 @@ export function QuestionnaireTagSelector({
 }: Props) {
   const selectedKeys = selectedEntries.map((e) => e.tagKey);
   const [justSelected, setJustSelected] = useState<Set<string>>(new Set());
+  const [pendingUncheckTagId, setPendingUncheckTagId] = useState<string | null>(null);
   const visibleTags = hideUnselected ? tags.filter((tag) => selectedKeys.includes(tag.id)) : tags;
   const showHintsAsIcon = hintsMode === "icon";
   const showFlags = typeof onToggleFlag === "function";
+  const pendingUncheckTag = pendingUncheckTagId
+    ? tags.find((tag) => tag.id === pendingUncheckTagId)
+    : undefined;
+
+  const requestToggleTag = (tagId: string, isSelected: boolean, description: string) => {
+    if (readOnly) return;
+    if (isSelected && description.trim().length > 0) {
+      setPendingUncheckTagId(tagId);
+      return;
+    }
+    if (!isSelected && showHintsAsIcon) {
+      const tag = tags.find((item) => item.id === tagId);
+      if (tag?.hint) {
+        setJustSelected((prev) => new Set(prev).add(tagId));
+      }
+    }
+    onToggleTag(tagId);
+  };
 
   return (
     <div className="space-y-2">
@@ -56,11 +85,7 @@ export function QuestionnaireTagSelector({
                 disabled={readOnly}
                 className="mt-0.5"
                 onCheckedChange={() => {
-                  if (readOnly) return;
-                  if (!isSelected && showHintsAsIcon && tag.hint) {
-                    setJustSelected((prev) => new Set(prev).add(tag.id));
-                  }
-                  onToggleTag(tag.id);
+                  requestToggleTag(tag.id, isSelected, entry?.description ?? "");
                 }}
               />
               <div className="min-w-0 flex-1">
@@ -137,6 +162,34 @@ export function QuestionnaireTagSelector({
           </div>
         );
       })}
+      <AlertDialog
+        open={!!pendingUncheckTagId}
+        onOpenChange={(open) => {
+          if (!open) setPendingUncheckTagId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.questionnaireUncheckTagTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.questionnaireUncheckTagDescription}
+              {pendingUncheckTag?.label ? ` «${pendingUncheckTag.label}»` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingUncheckTagId) onToggleTag(pendingUncheckTagId);
+                setPendingUncheckTagId(null);
+              }}
+            >
+              {t.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

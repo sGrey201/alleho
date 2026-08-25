@@ -226,6 +226,8 @@ export const t = {
   questionnaireSaveError: 'Ошибка сохранения опросника',
   questionnaireBookmark: 'Отметить закладкой',
   questionnaireUnbookmark: 'Снять закладку',
+  questionnaireUncheckTagTitle: 'Удалить описание?',
+  questionnaireUncheckTagDescription: 'Если снять отметку, введённый текст будет удалён.',
   saving: 'Сохранение...',
   saved: 'Сохранено',
   describeProblem: 'Опишите проблему',
