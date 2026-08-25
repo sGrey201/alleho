@@ -59,14 +59,32 @@ export function validateQuestionnaireStructureDepth(structure: QuestionnaireTemp
   return true;
 }
 
+function nullableFiniteNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function nullableBirthYear(value: unknown): number | null {
+  const n = nullableFiniteNumber(value);
+  if (n == null || !Number.isInteger(n) || n < 1900 || n > 2100) return null;
+  return n;
+}
+
+function nullableBirthMonth(value: unknown): number | null {
+  const n = nullableFiniteNumber(value);
+  if (n == null || !Number.isInteger(n) || n < 1 || n > 12) return null;
+  return n;
+}
+
 export const patientProfileBlockSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
-  birthMonth: z.number().min(1).max(12).nullable(),
-  birthYear: z.number().min(1900).max(2100).nullable(),
+  birthMonth: z.preprocess(nullableBirthMonth, z.number().min(1).max(12).nullable()),
+  birthYear: z.preprocess(nullableBirthYear, z.number().min(1900).max(2100).nullable()),
   gender: z.string().nullable(),
-  height: z.number().nullable(),
-  weight: z.number().nullable(),
+  height: z.preprocess(nullableFiniteNumber, z.number().nullable()),
+  weight: z.preprocess(nullableFiniteNumber, z.number().nullable()),
   city: z.string().nullable(),
 });
 
@@ -124,6 +142,23 @@ export function normalizeQuestionnaireInstanceData(
     ...data,
     flaggedTagKeys: data.flaggedTagKeys ?? [],
     flaggedNodeIds: data.flaggedNodeIds ?? [],
+  };
+}
+
+/** Drop incomplete / invalid numbers so a draft year does not fail the whole PATCH. */
+export function sanitizeQuestionnaireInstanceDataForSave(
+  data: QuestionnaireInstanceData
+): QuestionnaireInstanceData {
+  const normalized = normalizeQuestionnaireInstanceData(data);
+  return {
+    ...normalized,
+    patientProfile: {
+      ...normalized.patientProfile,
+      birthMonth: nullableBirthMonth(normalized.patientProfile.birthMonth),
+      birthYear: nullableBirthYear(normalized.patientProfile.birthYear),
+      height: nullableFiniteNumber(normalized.patientProfile.height),
+      weight: nullableFiniteNumber(normalized.patientProfile.weight),
+    },
   };
 }
 

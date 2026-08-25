@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Bookmark, Loader2, Check, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,11 @@ import {
   normalizeQuestionnaireInstanceData,
   parseQuestionnaireHintsMode,
   questionnaireFlagTagKey,
+  sanitizeQuestionnaireInstanceDataForSave,
 } from "@shared/questionnaireTypes";
 import { cn } from "@/lib/utils";
+
+const SAVE_DEBOUNCE_MS = 400;
 
 const months = [
   { value: 1, label: t.january },
@@ -159,6 +162,16 @@ export default function DynamicQuestionnaireForm(props: Props) {
 
   type SubSaveStatus = "idle" | "saving" | "saved" | "error";
   const [subSaveStatus, setSubSaveStatus] = useState<Record<string, SubSaveStatus>>({});
+  const hydratedInstanceIdRef = useRef<string | null>(null);
+  const lastSavedJsonRef = useRef("");
+  const savingRef = useRef(false);
+  const queuedSaveRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStatusKeysRef = useRef<Set<string>>(new Set());
+  const instanceIdRef = useRef(props.mode === "instance" ? props.instanceId : "");
+  const canSaveRef = useRef(false);
+  const persistLatestRef = useRef<(opts?: { keepalive?: boolean }) => Promise<void>>(async () => {});
+  const toastErrorRef = useRef(toast);
 
   const instanceQuery = useQuery<InstanceResponse>({
     queryKey: ["/api/questionnaire-instances", props.mode === "instance" ? props.instanceId : null],
@@ -184,6 +197,10 @@ export default function DynamicQuestionnaireForm(props: Props) {
       ? parseQuestionnaireHintsMode(instanceQuery.data?.hintsModeSnapshot)
       : parseQuestionnaireHintsMode(props.hintsMode);
   const showHintsAsIcon = hintsMode === "icon";
+  const canSave = props.mode === "instance" && !readOnly && !filledOnly;
+  instanceIdRef.current = props.mode === "instance" ? props.instanceId : "";
+  canSaveRef.current = canSave;
+  toastErrorRef.current = toast;
 
   const renderSectionHint = (hint?: string) => {
     if (!hint) return null;
@@ -196,41 +213,137 @@ export default function DynamicQuestionnaireForm(props: Props) {
     return <QuestionnaireHintPopover hints={[hint]} />;
   };
 
-  useEffect(() => {
-    if (props.mode === "instance" && instanceQuery.data?.data) {
-      setFormData(normalizeQuestionnaireInstanceData(instanceQuery.data.data));
+  const markStatuses = (keys: string[], status: SubSaveStatus) => {
+    if (keys.length === 0) return;
+    setSubSaveStatus((prev) => {
+      const next = { ...prev };
+      for (const key of keys) next[key] = status;
+      return next;
+    });
+  };
+
+  persistLatestRef.current = async (opts) => {
+    const keepalive = !!opts?.keepalive;
+    if (!canSaveRef.current) return;
+    const instanceId = instanceIdRef.current;
+    if (!instanceId) return;
+    if (hydratedInstanceIdRef.current !== instanceId) return;
+
+    const payload = sanitizeQuestionnaireInstanceDataForSave(formDataRef.current);
+    const json = JSON.stringify(payload);
+
+    if (!keepalive && json === lastSavedJsonRef.current) {
+      const keys = [...pendingStatusKeysRef.current];
+      pendingStatusKeysRef.current.clear();
+      markStatuses(keys, "saved");
+      return;
     }
-  }, [props.mode, instanceQuery.data]);
 
-  const saveMutation = useMutation({
-    mutationFn: async (data: QuestionnaireInstanceData) => {
-      if (props.mode !== "instance") return;
-      const res = await apiRequest("PATCH", `/api/questionnaire-instances/${props.instanceId}`, {
-        data: normalizeQuestionnaireInstanceData(data),
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      if (props.mode === "instance") {
-        void queryClient.invalidateQueries({ queryKey: ["/api/questionnaire-instances", props.instanceId] });
+    if (!keepalive && savingRef.current) {
+      queuedSaveRef.current = true;
+      return;
+    }
+
+    if (keepalive) {
+      if (json === lastSavedJsonRef.current) return;
+      try {
+        await fetch(`/api/questionnaire-instances/${instanceId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: payload }),
+          credentials: "include",
+          keepalive: true,
+          cache: "no-store",
+        });
+      } catch {
+        /* unload / network — next persist retries */
       }
-    },
-    onError: () => {
-      toast({ title: t.questionnaireSaveError, variant: "destructive" });
-    },
-  });
+      return;
+    }
 
-  const scheduleSave = useCallback(
-    (statusKey: string) => {
-      if (readOnly || props.mode !== "instance") return;
-      setSubSaveStatus((s) => ({ ...s, [statusKey]: "saving" }));
-      saveMutation.mutate(formDataRef.current, {
-        onSuccess: () => setSubSaveStatus((s) => ({ ...s, [statusKey]: "saved" })),
-        onError: () => setSubSaveStatus((s) => ({ ...s, [statusKey]: "error" })),
+    savingRef.current = true;
+    const keysThisAttempt = [...pendingStatusKeysRef.current];
+    pendingStatusKeysRef.current.clear();
+    try {
+      const res = await apiRequest("PATCH", `/api/questionnaire-instances/${instanceId}`, {
+        data: payload,
       });
-    },
-    [readOnly, props, saveMutation]
-  );
+      const updated = (await res.json()) as InstanceResponse;
+      lastSavedJsonRef.current = json;
+      queryClient.setQueryData<InstanceResponse>(
+        ["/api/questionnaire-instances", instanceId],
+        (prev) => ({
+          ...(prev ?? updated),
+          ...updated,
+          templateName: prev?.templateName ?? updated.templateName ?? "",
+        })
+      );
+      markStatuses(keysThisAttempt, "saved");
+    } catch {
+      markStatuses(keysThisAttempt, "error");
+      toastErrorRef.current({ title: t.questionnaireSaveError, variant: "destructive" });
+    } finally {
+      savingRef.current = false;
+      if (queuedSaveRef.current) {
+        queuedSaveRef.current = false;
+        void persistLatestRef.current();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (props.mode !== "instance" || !instanceQuery.data?.data) return;
+    if (hydratedInstanceIdRef.current === props.instanceId) return;
+    const next = normalizeQuestionnaireInstanceData(instanceQuery.data.data);
+    setFormData(next);
+    formDataRef.current = next;
+    lastSavedJsonRef.current = JSON.stringify(sanitizeQuestionnaireInstanceDataForSave(next));
+    hydratedInstanceIdRef.current = props.instanceId;
+  }, [props.mode, props.mode === "instance" ? props.instanceId : null, instanceQuery.data]);
+
+  useEffect(() => {
+    const flushKeepalive = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      void persistLatestRef.current({ keepalive: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushKeepalive();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flushKeepalive);
+    window.addEventListener("beforeunload", flushKeepalive);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flushKeepalive);
+      window.removeEventListener("beforeunload", flushKeepalive);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      void persistLatestRef.current({ keepalive: true });
+    };
+  }, [props.mode === "instance" ? props.instanceId : ""]);
+
+  const scheduleSave = useCallback((statusKey: string, mode: "debounce" | "immediate" = "immediate") => {
+    if (!canSaveRef.current) return;
+    pendingStatusKeysRef.current.add(statusKey);
+    setSubSaveStatus((s) => ({ ...s, [statusKey]: "saving" }));
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (mode === "immediate") {
+      void persistLatestRef.current();
+      return;
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      void persistLatestRef.current();
+    }, SAVE_DEBOUNCE_MS);
+  }, []);
 
   const updateProfile = (patch: Partial<PatientProfileBlock>) => {
     setFormData((prev) => {
@@ -251,7 +364,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       formDataRef.current = next;
       return next;
     });
-    scheduleSave(nodeId);
+    scheduleSave(nodeId, "immediate");
   };
 
   const updateTagDescription = (nodeId: string, tagKey: string, description: string) => {
@@ -263,6 +376,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       formDataRef.current = next;
       return next;
     });
+    scheduleSave(nodeId, "debounce");
   };
 
   const toggleNodeFlag = (nodeId: string) => {
@@ -275,7 +389,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       formDataRef.current = next;
       return next;
     });
-    scheduleSave(`flag-node-${nodeId}`);
+    scheduleSave(`flag-node-${nodeId}`, "immediate");
   };
 
   const toggleTagFlag = (nodeId: string, tagKey: string) => {
@@ -289,7 +403,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       formDataRef.current = next;
       return next;
     });
-    scheduleSave(`flag-tag-${key}`);
+    scheduleSave(`flag-tag-${key}`, "immediate");
   };
 
   const renderSaveStatus = (key: string) => {
@@ -314,7 +428,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
       selectedEntries={formData.sections[node.id] ?? []}
       onToggleTag={(tagKey) => toggleTag(node.id, tagKey)}
       onUpdateDescription={(tagKey, desc) => updateTagDescription(node.id, tagKey, desc)}
-      onBlur={() => scheduleSave(node.id)}
+      onBlur={() => scheduleSave(node.id, "immediate")}
       readOnly={readOnly}
       hintsMode={hintsMode}
       flaggedTagIds={
@@ -453,8 +567,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
               ) : (
                 <Input
                   value={profile.firstName}
-                  onChange={(e) => updateProfile({ firstName: e.target.value })}
-                  onBlur={() => scheduleSave("profile")}
+                  onChange={(e) => {
+                    updateProfile({ firstName: e.target.value });
+                    scheduleSave("profile", "debounce");
+                  }}
+                  onBlur={() => scheduleSave("profile", "immediate")}
                 />
               )}
             </div>
@@ -470,7 +587,7 @@ export default function DynamicQuestionnaireForm(props: Props) {
                     value={profile.birthMonth?.toString() ?? ""}
                     onValueChange={(v) => {
                       updateProfile({ birthMonth: v ? Number(v) : null });
-                      scheduleSave("profile");
+                      scheduleSave("profile", "immediate");
                     }}
                   >
                     <SelectTrigger>
@@ -494,10 +611,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   <Input
                     type="number"
                     value={profile.birthYear ?? ""}
-                    onChange={(e) =>
-                      updateProfile({ birthYear: e.target.value ? Number(e.target.value) : null })
-                    }
-                    onBlur={() => scheduleSave("profile")}
+                    onChange={(e) => {
+                      updateProfile({ birthYear: e.target.value ? Number(e.target.value) : null });
+                      scheduleSave("profile", "debounce");
+                    }}
+                    onBlur={() => scheduleSave("profile", "immediate")}
                   />
                 )}
               </div>
@@ -510,8 +628,8 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 <Select
                   value={profile.gender ?? ""}
                   onValueChange={(v) => {
-                    updateProfile({ gender: v || null });
-                    scheduleSave("profile");
+                      updateProfile({ gender: v || null });
+                      scheduleSave("profile", "immediate");
                   }}
                 >
                   <SelectTrigger>
@@ -533,10 +651,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   <Input
                     type="number"
                     value={profile.height ?? ""}
-                    onChange={(e) =>
-                      updateProfile({ height: e.target.value ? Number(e.target.value) : null })
-                    }
-                    onBlur={() => scheduleSave("profile")}
+                    onChange={(e) => {
+                      updateProfile({ height: e.target.value ? Number(e.target.value) : null });
+                      scheduleSave("profile", "debounce");
+                    }}
+                    onBlur={() => scheduleSave("profile", "immediate")}
                   />
                 )}
               </div>
@@ -548,10 +667,11 @@ export default function DynamicQuestionnaireForm(props: Props) {
                   <Input
                     type="number"
                     value={profile.weight ?? ""}
-                    onChange={(e) =>
-                      updateProfile({ weight: e.target.value ? Number(e.target.value) : null })
-                    }
-                    onBlur={() => scheduleSave("profile")}
+                    onChange={(e) => {
+                      updateProfile({ weight: e.target.value ? Number(e.target.value) : null });
+                      scheduleSave("profile", "debounce");
+                    }}
+                    onBlur={() => scheduleSave("profile", "immediate")}
                   />
                 )}
               </div>
@@ -573,8 +693,9 @@ export default function DynamicQuestionnaireForm(props: Props) {
                 formDataRef.current = next;
                 return next;
               });
+              scheduleSave("notes", "debounce");
             }}
-            onBlur={() => scheduleSave("notes")}
+            onBlur={() => scheduleSave("notes", "immediate")}
             className="min-h-[100px]"
           />
         </div>
