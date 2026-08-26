@@ -114,7 +114,7 @@ import {
   setChatComposerDraft,
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
-import { saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile } from "@/lib/saveOrShareChatFile";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
@@ -2244,7 +2244,7 @@ export default function ConversationChat({
         return (
           <a
             href={msg.imageUrl}
-            download={name}
+            target="_blank"
             rel="noopener noreferrer"
             className={cn(
               "mb-0.5 flex max-w-full items-center gap-2.5 rounded-xl px-2.5 py-2 no-underline transition-colors",
@@ -2254,28 +2254,15 @@ export default function ConversationChat({
             )}
             data-testid={`file-${msg.id}`}
             onClick={(e) => {
-              e.preventDefault();
               e.stopPropagation();
-              let dismissLoading: (() => void) | undefined;
-              void saveOrShareChatFile(msg.imageUrl!, name, {
-                knownSize: meta?.size,
-                onStatus: (status) => {
-                  if (status === "loading" && !dismissLoading) {
-                    const result = toast({ title: t.messageFileDownloading });
-                    dismissLoading = result.dismiss;
-                  }
-                },
-              })
-                .catch(() => {
-                  toast({
-                    title: t.error,
-                    description: t.messageFileOpenError,
-                    variant: "destructive",
-                  });
-                })
-                .finally(() => {
-                  dismissLoading?.();
-                });
+              // Keep user-gesture navigation reliable in PWA if the browser blocks window.open.
+              if (!msg.imageUrl) {
+                e.preventDefault();
+                return;
+              }
+              // Prefer explicit open so chat bubble handlers never steal the gesture.
+              e.preventDefault();
+              openChatFile(msg.imageUrl);
             }}
           >
             <span

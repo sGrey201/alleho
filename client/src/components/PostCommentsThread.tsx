@@ -26,7 +26,7 @@ import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { t } from "@/lib/i18n";
-import { saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile } from "@/lib/saveOrShareChatFile";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
@@ -640,41 +640,13 @@ export default function PostCommentsThread({
                   return (
                     <a
                       href={anchorPost.imageUrl}
-                      download={name}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted"
                       onClick={(e) => {
-                        e.preventDefault();
                         e.stopPropagation();
-                        let dismissLoading: (() => void) | undefined;
-                        let knownSize: number | undefined;
-                        try {
-                          const parsed = anchorPost.content ? JSON.parse(anchorPost.content) : null;
-                          if (typeof parsed?.size === "number" && Number.isFinite(parsed.size)) {
-                            knownSize = parsed.size;
-                          }
-                        } catch {
-                          // ignore
-                        }
-                        void saveOrShareChatFile(anchorPost.imageUrl!, name, {
-                          knownSize,
-                          onStatus: (status) => {
-                            if (status === "loading" && !dismissLoading) {
-                              const result = toast({ title: t.messageFileDownloading });
-                              dismissLoading = result.dismiss;
-                            }
-                          },
-                        })
-                          .catch(() => {
-                            toast({
-                              title: t.error,
-                              description: t.messageFileOpenError,
-                              variant: "destructive",
-                            });
-                          })
-                          .finally(() => {
-                            dismissLoading?.();
-                          });
+                        e.preventDefault();
+                        if (anchorPost.imageUrl) openChatFile(anchorPost.imageUrl);
                       }}
                     >
                       <FileIcon className="h-5 w-5 shrink-0" />
