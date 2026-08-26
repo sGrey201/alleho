@@ -71,27 +71,50 @@ export function openChatFile(url: string): void {
   a.remove();
 }
 
-function openBlobPreview(blob: Blob, filename: string): void {
+/** Must run inside the click gesture — later window.open(blob) is blocked. */
+function openPreviewPlaceholder(): Window | null {
+  const w = window.open("about:blank", "_blank");
+  if (!w) return null;
+  try {
+    w.document.title = "…";
+    w.document.body.replaceChildren();
+    const p = w.document.createElement("p");
+    p.textContent = "Загрузка…";
+    p.style.cssText =
+      "font-family:system-ui,sans-serif;padding:24px;color:#666;margin:0;";
+    w.document.body.appendChild(p);
+  } catch {
+    /* cross-opaque about:blank on some engines — location.replace still works */
+  }
+  return w;
+}
+
+function blobObjectUrl(blob: Blob, filename: string): string {
   const headerType = (blob.type || "").split(";")[0]!.trim();
   const type =
     headerType && headerType !== "application/octet-stream"
       ? headerType
       : mimeFromFilename(filename);
-  const previewBlob =
-    blob.type === type ? blob : new Blob([blob], { type });
-  const objectUrl = URL.createObjectURL(previewBlob);
-  const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  const previewBlob = blob.type === type ? blob : new Blob([blob], { type });
+  return URL.createObjectURL(previewBlob);
+}
+
+function navigatePreviewToBlob(previewWindow: Window | null, objectUrl: string): void {
+  if (previewWindow && !previewWindow.closed) {
+    try {
+      previewWindow.location.replace(objectUrl);
+      return;
+    } catch {
+      /* fall through */
+    }
   }
-  // Keep the blob URL alive while the preview tab loads.
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function fetchBlobWithProgress(
@@ -175,9 +198,22 @@ export async function saveOrShareChatFile(
     return;
   }
 
-  // Ensure the progress ring paints before network work.
+  // Open the tab while we still have the user gesture (required on iOS/PWA).
+  const previewWindow = openPreviewPlaceholder();
+
   await waitForNextPaint();
 
-  const blob = await fetchBlobWithProgress(url, options.onProgress);
-  openBlobPreview(blob, filename);
+  try {
+    const blob = await fetchBlobWithProgress(url, options.onProgress);
+    const objectUrl = blobObjectUrl(blob, filename);
+    navigatePreviewToBlob(previewWindow, objectUrl);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+  } catch (error) {
+    try {
+      previewWindow?.close();
+    } catch {
+      /* ignore */
+    }
+    throw error;
+  }
 }
