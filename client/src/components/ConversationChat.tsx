@@ -2241,6 +2241,7 @@ export default function ConversationChat({
       {msg.imageUrl && msg.messageType === "file" && (() => {
         const meta = parseFilePayload(msg.content);
         const name = meta?.name ?? t.messageFileLabel;
+        const shareName = meta?.name ?? "";
         const sizeLabel = meta?.size ? formatFileSize(meta.size) : "";
         return (
           <a
@@ -2265,7 +2266,7 @@ export default function ConversationChat({
               }
 
               fileOpenInFlightRef.current = true;
-              void saveOrShareChatFile(msg.imageUrl, name)
+              void saveOrShareChatFile(msg.imageUrl, shareName)
                 .catch((error) => {
                   if ((error as Error)?.name === "AbortError") return;
                   toast({

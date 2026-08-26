@@ -632,9 +632,13 @@ export default function PostCommentsThread({
                 )}
                 {anchorPost.imageUrl && anchorPost.messageType === "file" && (() => {
                   let name = "Файл";
+                  let shareName = "";
                   try {
                     const parsed = anchorPost.content ? JSON.parse(anchorPost.content) : null;
-                    if (typeof parsed?.name === "string" && parsed.name.trim()) name = parsed.name.trim();
+                    if (typeof parsed?.name === "string" && parsed.name.trim()) {
+                      name = parsed.name.trim();
+                      shareName = name;
+                    }
                   } catch {
                     // ignore
                   }
@@ -655,7 +659,7 @@ export default function PostCommentsThread({
                         }
 
                         fileOpenInFlightRef.current = true;
-                        void saveOrShareChatFile(anchorPost.imageUrl, name)
+                        void saveOrShareChatFile(anchorPost.imageUrl, shareName)
                           .catch((error) => {
                             if ((error as Error)?.name === "AbortError") return;
                             toast({

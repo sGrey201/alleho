@@ -41,6 +41,55 @@ function mimeFromFilename(name: string): string {
   return types[ext] || "application/octet-stream";
 }
 
+function extensionForMime(mime: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/zip": "zip",
+    "text/plain": "txt",
+    "application/rtf": "rtf",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+  };
+  return map[mime.toLowerCase()] || "bin";
+}
+
+/** Strip path junk and ensure a usable basename for Share / download. */
+export function normalizeShareFilename(
+  raw: string | null | undefined,
+  mime?: string
+): string {
+  let name = (raw ?? "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    ?.replace(/[\r\n\0]/g, "_")
+    .trim() ?? "";
+
+  const generic =
+    !name ||
+    name === "Файл" ||
+    name.toLowerCase() === "file" ||
+    name === "download" ||
+    name === "untitled";
+
+  if (generic) {
+    name = `file.${extensionForMime(mime || "application/octet-stream")}`;
+  } else if (!/\.[a-z0-9]{1,8}$/i.test(name) && mime) {
+    name = `${name}.${extensionForMime(mime)}`;
+  }
+
+  return name.slice(0, 180) || "file.bin";
+}
+
 /**
  * Open a chat attachment the way a normal browser link works (desktop).
  */
@@ -71,12 +120,13 @@ const LOADER_HTML = `<!DOCTYPE html>
   #label{margin:0;font-size:15px}
   .track{width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
   #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .15s linear}
-  #bar.pulse{width:35% !important;animation:pulse 1s ease-in-out infinite}
-  @keyframes pulse{0%,100%{transform:translateX(0);opacity:.7}50%{transform:translateX(180%);opacity:1}}
+  #bar.pulse{width:40% !important;animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%{transform:translateX(-100%);opacity:.85}100%{transform:translateX(250%);opacity:.85}}
   #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
   #frame{position:fixed;inset:0;border:0;width:100%;height:100%;display:none;background:#fff}
-  #save{display:none;position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:2;
-    padding:10px 14px;border-radius:10px;background:#6B7042;color:#fff;text-decoration:none;font-size:14px}
+  #share{display:none;position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:2;
+    padding:10px 14px;border-radius:10px;border:0;background:#6B7042;color:#fff;font-size:14px;font-family:inherit;cursor:pointer}
+  #share:disabled{opacity:.6}
 </style>
 </head>
 <body>
@@ -86,14 +136,62 @@ const LOADER_HTML = `<!DOCTYPE html>
     <p id="pct"></p>
   </div>
   <iframe id="frame" title="preview"></iframe>
-  <a id="save" download>Сохранить</a>
+  <button type="button" id="share">Поделиться</button>
   <script>
-    const bar = document.getElementById('bar');
-    const pct = document.getElementById('pct');
-    const label = document.getElementById('label');
-    const ui = document.getElementById('ui');
-    const frame = document.getElementById('frame');
-    const save = document.getElementById('save');
+    function formatBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' КБ';
+      return (n / (1024 * 1024)).toFixed(1) + ' МБ';
+    }
+    var state = { url: '', filename: 'file', mime: 'application/octet-stream' };
+    var bar = document.getElementById('bar');
+    var pct = document.getElementById('pct');
+    var label = document.getElementById('label');
+    var ui = document.getElementById('ui');
+    var frame = document.getElementById('frame');
+    var shareBtn = document.getElementById('share');
+
+    function downloadFallback(blob) {
+      var objectUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = state.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
+    }
+
+    shareBtn.addEventListener('click', async function () {
+      shareBtn.disabled = true;
+      try {
+        var res = await fetch(state.url);
+        var blob = await res.blob();
+        var file = new File([blob], state.filename, {
+          type: state.mime || blob.type || 'application/octet-stream',
+        });
+        if (navigator.share) {
+          try {
+            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+              await navigator.share({ files: [file], title: state.filename });
+              return;
+            }
+          } catch (err) {
+            if (err && err.name === 'AbortError') return;
+          }
+        }
+        downloadFallback(blob);
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        try {
+          var res2 = await fetch(state.url);
+          downloadFallback(await res2.blob());
+        } catch (e2) {}
+      } finally {
+        shareBtn.disabled = false;
+      }
+    });
+
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
     }
@@ -108,25 +206,19 @@ const LOADER_HTML = `<!DOCTYPE html>
           pct.textContent = Math.round(r * 100) + '%';
         } else {
           bar.classList.add('pulse');
-          pct.textContent = '';
+          pct.textContent = typeof d.loaded === 'number' && d.loaded > 0
+            ? formatBytes(d.loaded)
+            : '';
         }
       } else if (d.type === 'hovial-done') {
-        document.title = d.filename || 'Файл';
+        state.url = d.url || '';
+        state.filename = d.filename || 'file';
+        state.mime = d.mime || 'application/octet-stream';
+        document.title = state.filename;
         ui.style.display = 'none';
-        save.href = d.url;
-        save.download = d.filename || 'file';
-        save.style.display = 'inline-block';
+        shareBtn.style.display = 'inline-block';
         frame.style.display = 'block';
-        frame.src = d.url;
-        // Also try top-level navigation for engines that render PDF better that way.
-        try {
-          var mime = (d.mime || '').toLowerCase();
-          if (mime.indexOf('pdf') !== -1 || mime.indexOf('image/') === 0 || mime.indexOf('text/') === 0) {
-            setTimeout(function () {
-              try { location.replace(d.url); } catch (err) {}
-            }, 50);
-          }
-        } catch (err2) {}
+        frame.src = state.url;
       } else if (d.type === 'hovial-error') {
         bar.classList.remove('pulse');
         bar.style.width = '0%';
@@ -140,19 +232,26 @@ const LOADER_HTML = `<!DOCTYPE html>
 
 type LoaderSession = {
   win: Window;
-  loaderUrl: string;
 };
 
 function openProgressLoader(): LoaderSession | null {
-  const loaderUrl = URL.createObjectURL(
-    new Blob([LOADER_HTML], { type: "text/html;charset=utf-8" })
-  );
-  const win = window.open(loaderUrl, "_blank");
-  if (!win) {
-    URL.revokeObjectURL(loaderUrl);
+  // about:blank inherits this origin, so Web Share keeps the real File.name.
+  // (A blob: HTML tab often shares as empty / UUID.)
+  const win = window.open("about:blank", "_blank");
+  if (!win) return null;
+  try {
+    win.document.open();
+    win.document.write(LOADER_HTML);
+    win.document.close();
+  } catch {
+    try {
+      win.close();
+    } catch {
+      /* ignore */
+    }
     return null;
   }
-  return { win, loaderUrl };
+  return { win };
 }
 
 function waitForLoaderReady(win: Window, timeoutMs = 2000): Promise<void> {
@@ -194,64 +293,49 @@ async function fetchBlobWithProgress(
   url: string,
   onProgress?: (progress: FileTransferProgress) => void
 ): Promise<Blob> {
-  const res = await fetch(url, { credentials: "include", cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch file (${res.status})`);
-  }
+  // XHR reports download progress while bytes arrive. fetch()+stream often
+  // buffers the whole body first on mobile, so the bar stays at 0 until done.
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.withCredentials = true;
+    xhr.responseType = "blob";
+    xhr.setRequestHeader("Cache-Control", "no-cache");
 
-  const contentLengthHeader = res.headers.get("content-length");
-  const totalFromHeader = contentLengthHeader ? Number(contentLengthHeader) : NaN;
-  const total = Number.isFinite(totalFromHeader) && totalFromHeader > 0 ? totalFromHeader : null;
+    let lastSent = 0;
+    const emit = (loaded: number, total: number | null) => {
+      const now = performance.now();
+      // Throttle UI posts a bit, but always allow first and last updates.
+      if (loaded > 0 && loaded !== total && now - lastSent < 50) return;
+      lastSent = now;
+      onProgress?.({ loaded, total });
+    };
 
-  if (!res.body) {
-    const blob = await res.blob();
-    onProgress?.({ loaded: blob.size, total: total ?? blob.size });
-    return blob;
-  }
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        emit(event.loaded, event.total);
+      } else {
+        emit(event.loaded, null);
+      }
+    };
 
-  const reader = res.body.getReader();
-  const chunks: BlobPart[] = [];
-  let loaded = 0;
-  let pending: FileTransferProgress | null = null;
-  let raf = 0;
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Failed to fetch file (${xhr.status})`));
+        return;
+      }
+      const blob = xhr.response as Blob;
+      const size = blob?.size ?? 0;
+      onProgress?.({ loaded: size, total: size });
+      resolve(blob);
+    };
 
-  const flushProgress = () => {
-    raf = 0;
-    if (pending) {
-      onProgress?.(pending);
-      pending = null;
-    }
-  };
+    xhr.onerror = () => reject(new Error("Failed to fetch file"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
-  const report = (next: FileTransferProgress) => {
-    pending = next;
-    if (!raf) raf = requestAnimationFrame(flushProgress);
-  };
-
-  report({ loaded: 0, total });
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value.slice());
-      loaded += value.byteLength;
-      report({ loaded, total });
-    }
-  }
-
-  if (raf) {
-    cancelAnimationFrame(raf);
-    flushProgress();
-  }
-  onProgress?.({ loaded, total: total ?? loaded });
-
-  const headerType = (res.headers.get("content-type") ?? "").split(";")[0]!.trim();
-  const type =
-    headerType && headerType !== "application/octet-stream"
-      ? headerType
-      : "application/octet-stream";
-  return new Blob(chunks, { type });
+    emit(0, null);
+    xhr.send();
+  });
 }
 
 /**
@@ -272,7 +356,7 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
     return;
   }
 
-  const { win, loaderUrl } = session;
+  const { win } = session;
   await waitForLoaderReady(win);
 
   try {
@@ -284,23 +368,20 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
       });
     });
     const typed = typedBlob(blob, filename);
+    const safeName = normalizeShareFilename(filename, typed.mime);
     const objectUrl = URL.createObjectURL(typed.blob);
     postToLoader(win, {
       type: "hovial-done",
       url: objectUrl,
-      filename,
+      filename: safeName,
       mime: typed.mime,
     });
-    window.setTimeout(() => {
-      URL.revokeObjectURL(objectUrl);
-      URL.revokeObjectURL(loaderUrl);
-    }, 180_000);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 180_000);
   } catch (error) {
     postToLoader(win, {
       type: "hovial-error",
       message: "Не удалось загрузить файл",
     });
-    window.setTimeout(() => URL.revokeObjectURL(loaderUrl), 30_000);
     throw error;
   }
 }
