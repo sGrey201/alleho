@@ -26,9 +26,8 @@ import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { t } from "@/lib/i18n";
-import { openChatFile, saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile, saveOrShareChatFile, shouldUseInAppFileTransfer } from "@/lib/saveOrShareChatFile";
 import { FileDownloadProgress } from "@/components/FileDownloadProgress";
-import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
@@ -654,17 +653,17 @@ export default function PostCommentsThread({
                         e.preventDefault();
                         if (!anchorPost.imageUrl || fileDownloadId) return;
 
-                        if (!isInstalledPwaSession()) {
+                        if (!shouldUseInAppFileTransfer()) {
                           openChatFile(anchorPost.imageUrl);
                           return;
                         }
 
                         setFileDownloadId(anchorPost.id);
-                        setFileDownloadProgress(null);
+                        setFileDownloadProgress(0);
                         void saveOrShareChatFile(anchorPost.imageUrl, name, {
                           onProgress: ({ loaded, total }) => {
                             if (total != null && total > 0) {
-                              setFileDownloadProgress(loaded / total);
+                              setFileDownloadProgress(Math.min(1, loaded / total));
                             } else {
                               setFileDownloadProgress(null);
                             }

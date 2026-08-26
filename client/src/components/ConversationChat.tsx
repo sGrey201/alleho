@@ -114,9 +114,8 @@ import {
   setChatComposerDraft,
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
-import { openChatFile, saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile, saveOrShareChatFile, shouldUseInAppFileTransfer } from "@/lib/saveOrShareChatFile";
 import { FileDownloadProgress } from "@/components/FileDownloadProgress";
-import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
@@ -2263,17 +2262,17 @@ export default function ConversationChat({
               e.preventDefault();
               if (!msg.imageUrl || fileDownloadId) return;
 
-              if (!isInstalledPwaSession()) {
+              if (!shouldUseInAppFileTransfer()) {
                 openChatFile(msg.imageUrl);
                 return;
               }
 
               setFileDownloadId(msg.id);
-              setFileDownloadProgress(null);
+              setFileDownloadProgress(0);
               void saveOrShareChatFile(msg.imageUrl, name, {
                 onProgress: ({ loaded, total }) => {
                   if (total != null && total > 0) {
-                    setFileDownloadProgress(loaded / total);
+                    setFileDownloadProgress(Math.min(1, loaded / total));
                   } else {
                     setFileDownloadProgress(null);
                   }

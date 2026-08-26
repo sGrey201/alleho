@@ -1,5 +1,8 @@
 import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 
+/** iOS Web Share with File often fails above ~10MB; stay under that. */
+const SHARE_FILE_MAX_BYTES = 9 * 1024 * 1024;
+
 export type FileTransferProgress = {
   loaded: number;
   /** Null when Content-Length is missing. */
@@ -9,6 +12,19 @@ export type FileTransferProgress = {
 export type SaveOrShareChatFileOptions = {
   onProgress?: (progress: FileTransferProgress) => void;
 };
+
+function isMobileShareDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod|Android/i.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+/** Installed PWA, or mobile browser where in-tab open has no save UI. */
+export function shouldUseInAppFileTransfer(): boolean {
+  if (isInstalledPwaSession()) return true;
+  return isMobileShareDevice() && typeof navigator.share === "function";
+}
 
 function mimeFromFilename(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -39,6 +55,17 @@ function canShareData(
   }
 }
 
+function withDownloadQuery(url: string, filename: string): string {
+  try {
+    const absolute = new URL(url, window.location.origin);
+    absolute.searchParams.set("download", filename);
+    return absolute.pathname + absolute.search;
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}download=${encodeURIComponent(filename)}`;
+  }
+}
+
 /**
  * Open a chat attachment the way a normal browser link works:
  * navigate to the file URL in a new browsing context (preview/download
@@ -56,6 +83,33 @@ export function openChatFile(url: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/** Force attachment download via server Content-Disposition (no in-memory buffer). */
+function openAttachmentDownload(url: string, filename: string): void {
+  const href = withDownloadQuery(url, filename);
+  const a = document.createElement("a");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }
 }
 
 async function fetchBlobWithProgress(
@@ -78,7 +132,7 @@ async function fetchBlobWithProgress(
   }
 
   const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const chunks: BlobPart[] = [];
   let loaded = 0;
   onProgress?.({ loaded: 0, total });
 
@@ -86,62 +140,67 @@ async function fetchBlobWithProgress(
     const { done, value } = await reader.read();
     if (done) break;
     if (value) {
-      chunks.push(value);
+      // Copy chunk — the underlying buffer may be reused by the stream.
+      chunks.push(value.slice());
       loaded += value.byteLength;
       onProgress?.({ loaded, total });
     }
   }
 
-  const bytes = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
   const headerType = (res.headers.get("content-type") ?? "").split(";")[0]!.trim();
-  return new Blob([bytes], {
-    type:
-      headerType && headerType !== "application/octet-stream"
-        ? headerType
-        : "application/octet-stream",
-  });
+  const type =
+    headerType && headerType !== "application/octet-stream"
+      ? headerType
+      : "application/octet-stream";
+  // Avoid allocating a second full-size Uint8Array (OOM on large mobile downloads).
+  return new Blob(chunks, { type });
 }
 
-async function shareFileInPwa(
+async function shareOrSaveBlob(
+  blob: Blob,
   url: string,
-  filename: string,
-  options: SaveOrShareChatFileOptions = {}
+  filename: string
 ): Promise<void> {
-  const blob = await fetchBlobWithProgress(url, options.onProgress);
   const type =
     blob.type && blob.type !== "application/octet-stream"
       ? blob.type
       : mimeFromFilename(filename);
-  const file = new File([blob], filename, { type });
 
+  const tooLargeForShare = blob.size > SHARE_FILE_MAX_BYTES;
   const nav = navigator as Navigator & {
     canShare?: (data: ShareData) => boolean;
     share?: (data: ShareData) => Promise<void>;
   };
-  if (!nav.share) {
-    throw new Error("Web Share API unavailable");
+
+  if (!tooLargeForShare && nav.share) {
+    const file = new File([blob], filename, { type });
+    const shareData: ShareData = { files: [file], title: filename };
+    try {
+      if (canShareData(nav, shareData)) {
+        await nav.share(shareData);
+        return;
+      }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      // Fall through to download fallbacks.
+    }
   }
 
-  const shareData: ShareData = { files: [file], title: filename };
-  if (canShareData(nav, shareData)) {
-    await nav.share(shareData);
+  // Large files / share unavailable: try blob download (works on many Android PWAs).
+  try {
+    triggerBlobDownload(blob, filename);
     return;
+  } catch {
+    /* continue */
   }
 
-  await nav.share({
-    title: filename,
-    url: new URL(url, window.location.origin).href,
-  });
+  // Last resort: server attachment URL (streams, no second full buffer).
+  openAttachmentDownload(url, filename);
 }
 
 /**
- * Installed PWA: download then system share sheet (with progress).
- * Browser / desktop: open the file URL like a normal link.
+ * Mobile / installed PWA: download with progress, then system share (or save fallback).
+ * Desktop browser: open the file URL like a normal link.
  * AbortError from the share sheet is not treated as failure by callers.
  */
 export async function saveOrShareChatFile(
@@ -150,9 +209,17 @@ export async function saveOrShareChatFile(
   options: SaveOrShareChatFileOptions = {}
 ): Promise<void> {
   if (!url) return;
-  if (!isInstalledPwaSession()) {
+  if (!shouldUseInAppFileTransfer()) {
     openChatFile(url);
     return;
   }
-  await shareFileInPwa(url, filename, options);
+
+  // Let React paint the progress ring before the network work starts.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+
+  const blob = await fetchBlobWithProgress(url, options.onProgress);
+  options.onProgress?.({ loaded: blob.size, total: blob.size });
+  await shareOrSaveBlob(blob, url, filename);
 }

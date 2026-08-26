@@ -1,9 +1,9 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { CacheFirst, StaleWhileRevalidate } from "workbox-strategies";
+import { CacheFirst, NetworkOnly } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
-import { MEDIA_FILES_CACHE, MEDIA_THUMB_CACHE } from "./lib/offlineCacheConfig";
+import { MEDIA_THUMB_CACHE } from "./lib/offlineCacheConfig";
 import { APP_HOME_PATH } from "@shared/brand";
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -41,30 +41,11 @@ registerRoute(
   ({ url, request }) => {
     if (request.method !== "GET" || !url.pathname.startsWith("/objects/")) return false;
     if (url.searchParams.get("size") === "thumb") return false;
-    // Range / media-element requests must hit the network: caching 206 slices
-    // makes large audio/video fail to play (especially on desktop Chrome).
-    if (request.headers.has("Range") || request.headers.has("range")) return false;
-    if (request.destination === "audio" || request.destination === "video") return false;
+    // Full attachments stream from the network only — SW caching of multi‑MB
+    // bodies breaks progress UI and OOMs mobile downloads.
     return true;
   },
-  new StaleWhileRevalidate({
-    cacheName: MEDIA_FILES_CACHE,
-    plugins: [
-      {
-        cacheWillUpdate: async ({ response }) => {
-          if (response.status !== 200) return null;
-          // Do not cache multi‑MB chat attachments — fills Cache quota and slows mobile downloads.
-          const len = Number(response.headers.get("content-length") ?? "");
-          if (Number.isFinite(len) && len > 2 * 1024 * 1024) return null;
-          return response;
-        },
-      },
-      new ExpirationPlugin({
-        maxEntries: 300,
-        maxAgeSeconds: 60 * 60 * 24 * 14,
-      }),
-    ],
-  })
+  new NetworkOnly()
 );
 
 self.addEventListener("message", (event) => {
@@ -78,6 +59,7 @@ self.addEventListener("activate", (event) => {
     (async () => {
       await self.clients.claim();
       await caches.delete("media-files-v1");
+      await caches.delete("media-files-v2");
     })()
   );
 });
