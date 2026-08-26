@@ -163,9 +163,11 @@ const LOADER_HTML = `<!DOCTYPE html>
   #pages{display:none;position:absolute;inset:0;z-index:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;overscroll-behavior:contain}
   #pages canvas{display:block;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
   #ready{display:none;position:absolute;inset:0;z-index:1;padding:72px 24px 88px;
-    color:#fff;text-align:center;overflow:auto;-webkit-overflow-scrolling:touch}
-  #readyName{margin:0;font-size:16px;word-break:break-word}
-  #readyHint{margin:10px 0 0;font-size:13px;color:rgba(255,255,255,.72)}
+    background:#fff;color:#222;text-align:center;overflow:auto;-webkit-overflow-scrolling:touch;
+    flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  #readyName{margin:0;font-size:17px;font-weight:600;word-break:break-word;max-width:20rem}
+  #readyHint{margin:0;font-size:15px;line-height:1.45;color:#444;max-width:20rem}
+  #readyHint .share-icon{display:inline-block;width:1.1em;height:1.1em;vertical-align:-0.2em;margin:0 2px}
   .fab{
     position:fixed;z-index:4;width:44px;height:44px;border-radius:999px;border:0;
     background:rgba(43,45,48,.78);color:#fff;display:flex;align-items:center;justify-content:center;
@@ -190,7 +192,13 @@ const LOADER_HTML = `<!DOCTYPE html>
     <div id="pages"></div>
     <div id="ready">
       <p id="readyName"></p>
-      <p id="readyHint"></p>
+      <p id="readyHint">Превью этого формата недоступно, нажмите поделиться
+        <svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/>
+          <path d="M16 6l-4-4-4 4"/>
+          <path d="M12 2v14"/>
+        </svg>
+        чтобы сохранить или поделиться файлом.</p>
     </div>
     <button type="button" class="fab" id="closeBtn" aria-label="Закрыть">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -222,7 +230,6 @@ const LOADER_HTML = `<!DOCTYPE html>
     var pages = document.getElementById('pages');
     var ready = document.getElementById('ready');
     var readyName = document.getElementById('readyName');
-    var readyHint = document.getElementById('readyHint');
     var closeBtn = document.getElementById('closeBtn');
     var shareBtn = document.getElementById('shareBtn');
     var maxRatio = 0;
@@ -300,6 +307,7 @@ const LOADER_HTML = `<!DOCTYPE html>
       pages.innerHTML = '';
       pages.style.display = 'block';
       ready.style.display = 'none';
+      preview.style.background = '#525659';
       lastScrollTop = 0;
       var cssWidth = Math.max(280, pages.clientWidth || window.innerWidth) - 16;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -323,12 +331,12 @@ const LOADER_HTML = `<!DOCTYPE html>
       }
     }
 
-    function showReadyScreen(hint) {
+    function showReadyScreen() {
       pages.style.display = 'none';
       pages.innerHTML = '';
-      ready.style.display = 'block';
+      preview.style.background = '#fff';
+      ready.style.display = 'flex';
       readyName.textContent = state.filename || 'Файл';
-      readyHint.textContent = hint || 'Нажмите кнопку, чтобы поделиться файлом.';
     }
 
     async function showPreview() {
@@ -343,7 +351,7 @@ const LOADER_HTML = `<!DOCTYPE html>
           await renderPdfPreview(state.url);
           return;
         } catch (err) {
-          showReadyScreen('Не удалось показать превью. Можно поделиться файлом.');
+          showReadyScreen();
           return;
         }
       }
