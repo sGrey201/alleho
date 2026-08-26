@@ -130,7 +130,8 @@ const LOADER_HTML = `<!DOCTYPE html>
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#f7f7f8;color:#222}
   #ui{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:24px;gap:12px}
-  #label{margin:0;font-size:15px}
+  #label{margin:0;font-size:15px;text-align:center;max-width:20rem}
+  #name{margin:0;font-size:13px;color:#666;text-align:center;max-width:20rem;word-break:break-word;display:none}
   .track{position:relative;width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
   #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .12s linear}
   .track.indeterminate #bar{width:0 !important;transition:none}
@@ -139,17 +140,29 @@ const LOADER_HTML = `<!DOCTYPE html>
     animation:indeterminate 1.1s ease-in-out infinite}
   @keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
   #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
-  #cancel{margin-top:8px;padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
+  .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
+  .actions button{
+    padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
     color:#222;font-size:14px;font-family:inherit;cursor:pointer}
-  #cancel:disabled{opacity:.5}
+  .actions button.primary{background:#6B7042;border-color:#6B7042;color:#fff}
+  .actions button:disabled{opacity:.5}
+  #actionsReady{display:none}
 </style>
 </head>
 <body>
   <div id="ui">
     <p id="label">Загрузка файла…</p>
+    <p id="name"></p>
     <div class="track" id="track"><div id="bar"></div></div>
     <p id="pct"></p>
-    <button type="button" id="cancel">Отмена</button>
+    <div class="actions" id="actionsLoading">
+      <button type="button" id="cancel">Отмена</button>
+    </div>
+    <div class="actions" id="actionsReady">
+      <button type="button" class="primary" id="view">Смотреть</button>
+      <button type="button" id="share">Поделиться</button>
+      <button type="button" id="closeReady">Закрыть</button>
+    </div>
   </div>
   <script>
     function formatBytes(n) {
@@ -157,11 +170,18 @@ const LOADER_HTML = `<!DOCTYPE html>
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' КБ';
       return (n / (1024 * 1024)).toFixed(1) + ' МБ';
     }
+    var state = { url: '', filename: 'file', mime: 'application/octet-stream' };
     var bar = document.getElementById('bar');
     var track = document.getElementById('track');
     var pct = document.getElementById('pct');
     var label = document.getElementById('label');
+    var nameEl = document.getElementById('name');
     var cancelBtn = document.getElementById('cancel');
+    var viewBtn = document.getElementById('view');
+    var shareBtn = document.getElementById('share');
+    var closeReadyBtn = document.getElementById('closeReady');
+    var actionsLoading = document.getElementById('actionsLoading');
+    var actionsReady = document.getElementById('actionsReady');
     var maxRatio = 0;
     var finished = false;
 
@@ -176,6 +196,53 @@ const LOADER_HTML = `<!DOCTYPE html>
       try { window.close(); } catch (e2) {}
     }
     cancelBtn.addEventListener('click', requestCancel);
+    closeReadyBtn.addEventListener('click', function () {
+      try { window.close(); } catch (e) {}
+    });
+
+    viewBtn.addEventListener('click', function () {
+      if (!state.url) return;
+      var opened = window.open(state.url, '_blank');
+      if (!opened) {
+        try { location.assign(state.url); } catch (e) {}
+      }
+    });
+
+    shareBtn.addEventListener('click', async function () {
+      if (!state.url) return;
+      shareBtn.disabled = true;
+      try {
+        var res = await fetch(state.url, { credentials: 'include', cache: 'force-cache' });
+        if (!res.ok) throw new Error('fetch failed');
+        var blob = await res.blob();
+        var file = new File([blob], state.filename, {
+          type: state.mime || blob.type || 'application/octet-stream',
+        });
+        if (navigator.share) {
+          try {
+            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+              await navigator.share({ files: [file], title: state.filename });
+              return;
+            }
+          } catch (err) {
+            if (err && err.name === 'AbortError') return;
+          }
+        }
+        var objectUrl = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = state.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        label.textContent = 'Не удалось поделиться файлом';
+      } finally {
+        shareBtn.disabled = false;
+      }
+    });
 
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
@@ -199,18 +266,19 @@ const LOADER_HTML = `<!DOCTYPE html>
         }
       } else if (d.type === 'hovial-done') {
         finished = true;
-        cancelBtn.style.display = 'none';
+        state.url = d.url || '';
+        state.filename = d.filename || 'file';
+        state.mime = d.mime || 'application/octet-stream';
         track.classList.remove('indeterminate');
         maxRatio = 1;
         bar.style.width = '100%';
         pct.textContent = '100%';
-        label.textContent = 'Открытие…';
-        document.title = d.filename || 'Файл';
-        try {
-          location.replace(d.url);
-        } catch (err) {
-          label.textContent = 'Не удалось открыть файл';
-        }
+        label.textContent = 'Файл готов';
+        nameEl.style.display = 'block';
+        nameEl.textContent = state.filename;
+        document.title = state.filename;
+        actionsLoading.style.display = 'none';
+        actionsReady.style.display = 'flex';
       } else if (d.type === 'hovial-error') {
         finished = true;
         cancelBtn.textContent = 'Закрыть';
@@ -221,6 +289,7 @@ const LOADER_HTML = `<!DOCTYPE html>
         maxRatio = 0;
         label.textContent = d.message || 'Не удалось загрузить файл';
         pct.textContent = '';
+        actionsReady.style.display = 'none';
       } else if (d.type === 'hovial-cancelled') {
         finished = true;
         try { window.close(); } catch (e) {}
@@ -284,8 +353,8 @@ type PrefetchHandle = {
 };
 
 /**
- * Prefetch with XHR so the progress UI can update, then open the same URL
- * for native preview (browser HTTP cache often serves the second request).
+ * Prefetch with XHR so the progress UI can update. Opening/sharing happens
+ * later via user taps (needed for popup + Web Share activation).
  */
 function prefetchWithProgress(
   url: string,
@@ -355,9 +424,8 @@ function prefetchWithProgress(
 }
 
 /**
- * Mobile / installed PWA: open a progress tab immediately, prefetch the file,
- * then navigate that tab to a native inline preview with the original filename.
- * Desktop: open the URL like a normal link.
+ * Mobile / installed PWA: open a progress tab, prefetch the file, then offer
+ * View (new tab) and Share. Desktop: open the URL like a normal link.
  */
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
@@ -376,7 +444,9 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
   await waitForLoaderReady(win);
 
   const safeName = normalizeShareFilename(filename, mimeFromFilename(filename));
-  const inlineUrl = withInlineFilename(url, safeName);
+  const inlinePath = withInlineFilename(url, safeName);
+  const inlineUrl = new URL(inlinePath, window.location.origin).href;
+  const mime = mimeFromFilename(safeName);
 
   let prefetch: PrefetchHandle | null = null;
   let cancelled = false;
@@ -414,6 +484,7 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
       type: "hovial-done",
       url: inlineUrl,
       filename: safeName,
+      mime,
     });
   } catch (error) {
     if ((error as Error)?.name === "AbortError" || cancelled) {
