@@ -654,7 +654,7 @@ export default function PostCommentsThread({
                         if (!anchorPost.imageUrl || fileOpenInFlightRef.current) return;
 
                         if (!shouldUseInAppFileTransfer()) {
-                          openChatFile(anchorPost.imageUrl);
+                          openChatFile(anchorPost.imageUrl, shareName);
                           return;
                         }
 

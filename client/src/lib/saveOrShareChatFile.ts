@@ -52,6 +52,12 @@ function extensionForMime(mime: string): string {
   return map[mime.toLowerCase()] || "bin";
 }
 
+function isPdfFile(filename: string, mime?: string): boolean {
+  const name = (filename || "").toLowerCase();
+  const type = (mime || mimeFromFilename(filename)).toLowerCase();
+  return type.includes("pdf") || /\.pdf($|\?)/.test(name);
+}
+
 /** Strip path junk and ensure a usable basename for Share / download. */
 export function normalizeShareFilename(
   raw: string | null | undefined,
@@ -81,34 +87,54 @@ export function normalizeShareFilename(
   return name.slice(0, 180) || "file.bin";
 }
 
-/** Same-origin object URL with inline Content-Disposition filename. */
-export function withInlineFilename(url: string, filename: string): string {
+function withQueryParam(url: string, key: string, value: string): string {
   try {
     const parsed = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
     parsed.searchParams.delete("download");
-    parsed.searchParams.set("name", filename);
+    parsed.searchParams.delete("name");
+    parsed.searchParams.set(key, value);
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     const join = url.includes("?") ? "&" : "?";
-    return `${url}${join}name=${encodeURIComponent(filename)}`;
+    return `${url}${join}${key}=${encodeURIComponent(value)}`;
   }
 }
 
-/**
- * Open a chat attachment the way a normal browser link works (desktop).
- */
-export function openChatFile(url: string): void {
-  if (!url) return;
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (opened) return;
+/** Same-origin object URL with inline Content-Disposition filename. */
+export function withInlineFilename(url: string, filename: string): string {
+  return withQueryParam(url, "name", filename);
+}
 
+function withDownloadFilename(url: string, filename: string): string {
+  return withQueryParam(url, "download", filename);
+}
+
+function clickAnchor(href: string, options: { download?: string; newTab?: boolean }): void {
   const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
+  a.href = href;
+  if (options.download) a.download = options.download;
+  if (options.newTab) {
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+  }
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/**
+ * Browser (not installed PWA): PDF opens in a new tab; other files download.
+ */
+export function openChatFile(url: string, filename?: string): void {
+  if (!url) return;
+  const safeName = normalizeShareFilename(filename, mimeFromFilename(filename || ""));
+  if (isPdfFile(safeName)) {
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) return;
+    clickAnchor(url, { newTab: true });
+    return;
+  }
+  clickAnchor(withDownloadFilename(url, safeName), { download: safeName });
 }
 
 const LOADER_HTML = `<!DOCTYPE html>
@@ -136,7 +162,10 @@ const LOADER_HTML = `<!DOCTYPE html>
   #preview{display:none;position:fixed;inset:0;background:#525659}
   #pages{display:none;position:absolute;inset:0;z-index:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;overscroll-behavior:contain}
   #pages canvas{display:block;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
-  #frame{display:none;border:0;width:100%;height:100%;background:#fff;position:absolute;inset:0;z-index:1}
+  #ready{display:none;position:absolute;inset:0;z-index:1;padding:72px 24px 88px;
+    color:#fff;text-align:center;overflow:auto;-webkit-overflow-scrolling:touch}
+  #readyName{margin:0;font-size:16px;word-break:break-word}
+  #readyHint{margin:10px 0 0;font-size:13px;color:rgba(255,255,255,.72)}
   .fab{
     position:fixed;z-index:4;width:44px;height:44px;border-radius:999px;border:0;
     background:rgba(43,45,48,.78);color:#fff;display:flex;align-items:center;justify-content:center;
@@ -159,7 +188,10 @@ const LOADER_HTML = `<!DOCTYPE html>
   </div>
   <div id="preview">
     <div id="pages"></div>
-    <iframe id="frame" title="preview"></iframe>
+    <div id="ready">
+      <p id="readyName"></p>
+      <p id="readyHint"></p>
+    </div>
     <button type="button" class="fab" id="closeBtn" aria-label="Закрыть">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 6L6 18M6 6l12 12"/>
@@ -188,16 +220,17 @@ const LOADER_HTML = `<!DOCTYPE html>
     var loading = document.getElementById('loading');
     var preview = document.getElementById('preview');
     var pages = document.getElementById('pages');
-    var frame = document.getElementById('frame');
+    var ready = document.getElementById('ready');
+    var readyName = document.getElementById('readyName');
+    var readyHint = document.getElementById('readyHint');
     var closeBtn = document.getElementById('closeBtn');
     var shareBtn = document.getElementById('shareBtn');
     var maxRatio = 0;
     var finished = false;
     var chromeVisible = true;
-    var hideTimer = 0;
     var pdfJsLoading = null;
-    var tapStart = null;
-    var tapBound = false;
+    var pointerStart = null;
+    var lastScrollTop = 0;
 
     function isPdf() {
       var mime = (state.mime || '').toLowerCase();
@@ -209,52 +242,26 @@ const LOADER_HTML = `<!DOCTYPE html>
       chromeVisible = visible;
       closeBtn.classList.toggle('hidden', !visible);
       shareBtn.classList.toggle('hidden', !visible);
-      if (hideTimer) {
-        clearTimeout(hideTimer);
-        hideTimer = 0;
-      }
-      if (visible) {
-        hideTimer = setTimeout(function () { setChromeVisible(false); }, 2500);
-      }
     }
 
-    function hideChromeFromScroll() {
-      if (!finished || !chromeVisible) return;
-      setChromeVisible(false);
-    }
-
-    function bindScrollTarget(el) {
+    function bindChromeGestures(el) {
       if (!el) return;
-      var opts = { passive: true };
-      el.addEventListener('scroll', hideChromeFromScroll, opts);
-      el.addEventListener('wheel', hideChromeFromScroll, opts);
-      el.addEventListener('touchmove', hideChromeFromScroll, opts);
-    }
-
-    function bindTapToShowChrome(el) {
-      if (!el || tapBound) return;
-      tapBound = true;
-      el.addEventListener('touchstart', function (e) {
-        if (e.touches.length !== 1) {
-          tapStart = null;
-          return;
-        }
-        tapStart = {
-          x: e.touches[0].clientX,
-          y: e.touches[0].clientY,
-          t: Date.now(),
-        };
+      el.addEventListener('scroll', function () {
+        if (!finished || !chromeVisible) return;
+        if (Math.abs(el.scrollTop - lastScrollTop) < 8) return;
+        lastScrollTop = el.scrollTop;
+        setChromeVisible(false);
       }, { passive: true });
-      el.addEventListener('touchend', function (e) {
-        if (!tapStart || !finished) return;
-        var touch = e.changedTouches[0];
-        var dx = Math.abs(touch.clientX - tapStart.x);
-        var dy = Math.abs(touch.clientY - tapStart.y);
-        var dt = Date.now() - tapStart.t;
-        tapStart = null;
-        if (dx < 12 && dy < 12 && dt < 450 && !chromeVisible) {
-          setChromeVisible(true);
-        }
+      el.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        pointerStart = { x: e.clientX, y: e.clientY };
+      }, { passive: true });
+      el.addEventListener('pointerup', function (e) {
+        if (!finished || !pointerStart) return;
+        var dx = Math.abs(e.clientX - pointerStart.x);
+        var dy = Math.abs(e.clientY - pointerStart.y);
+        pointerStart = null;
+        if (dx < 24 && dy < 24 && !chromeVisible) setChromeVisible(true);
       }, { passive: true });
       el.addEventListener('click', function () {
         if (!finished || chromeVisible) return;
@@ -292,7 +299,8 @@ const LOADER_HTML = `<!DOCTYPE html>
       var pdf = await pdfjsLib.getDocument({ data: data }).promise;
       pages.innerHTML = '';
       pages.style.display = 'block';
-      frame.style.display = 'none';
+      ready.style.display = 'none';
+      lastScrollTop = 0;
       var cssWidth = Math.max(280, pages.clientWidth || window.innerWidth) - 16;
       var dpr = Math.min(window.devicePixelRatio || 1, 3);
       for (var i = 1; i <= pdf.numPages; i++) {
@@ -313,42 +321,33 @@ const LOADER_HTML = `<!DOCTYPE html>
         pages.appendChild(canvas);
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
       }
-      bindScrollTarget(pages);
-      bindTapToShowChrome(pages);
     }
 
-    function showIframePreview(url) {
+    function showReadyScreen(hint) {
       pages.style.display = 'none';
       pages.innerHTML = '';
-      frame.style.display = 'block';
-      frame.src = url;
-      bindTapToShowChrome(preview);
-      frame.addEventListener('load', function onLoad() {
-        frame.removeEventListener('load', onLoad);
-        try {
-          var win = frame.contentWindow;
-          var doc = frame.contentDocument;
-          if (win) bindScrollTarget(win);
-          if (doc) bindScrollTarget(doc);
-          if (doc && doc.documentElement) bindScrollTarget(doc.documentElement);
-          if (doc && doc.body) bindScrollTarget(doc.body);
-        } catch (e) {}
-      });
+      ready.style.display = 'block';
+      readyName.textContent = state.filename || 'Файл';
+      readyHint.textContent = hint || 'Нажмите кнопку, чтобы поделиться файлом.';
     }
 
     async function showPreview() {
       loading.style.display = 'none';
       preview.style.display = 'block';
       setChromeVisible(true);
+      bindChromeGestures(pages);
+      bindChromeGestures(ready);
+      bindChromeGestures(preview);
       if (isPdf()) {
         try {
           await renderPdfPreview(state.url);
           return;
         } catch (err) {
-          /* fall through to iframe */
+          showReadyScreen('Не удалось показать превью. Можно поделиться файлом.');
+          return;
         }
       }
-      showIframePreview(state.url);
+      showReadyScreen();
     }
 
     function requestCancel() {
@@ -372,7 +371,6 @@ const LOADER_HTML = `<!DOCTYPE html>
       e.stopPropagation();
       if (!state.url) return;
       shareBtn.disabled = true;
-      if (hideTimer) clearTimeout(hideTimer);
       try {
         var res = await fetch(state.url, { credentials: 'include', cache: 'force-cache' });
         if (!res.ok) throw new Error('fetch failed');
@@ -402,7 +400,7 @@ const LOADER_HTML = `<!DOCTYPE html>
         if (err && err.name === 'AbortError') return;
       } finally {
         shareBtn.disabled = false;
-        if (chromeVisible) setChromeVisible(true);
+        setChromeVisible(true);
       }
     });
 
@@ -578,18 +576,18 @@ function prefetchWithProgress(
 
 /**
  * Installed PWA: progress tab, then in-page preview with Share/Close.
- * Browser (desktop/mobile): open the URL like a normal link.
+ * Browser: PDF opens in a tab; other files download.
  */
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
   if (!shouldUseInAppFileTransfer()) {
-    openChatFile(url);
+    openChatFile(url, filename);
     return;
   }
 
   const session = openProgressLoader();
   if (!session) {
-    openChatFile(url);
+    openChatFile(url, filename);
     return;
   }
 

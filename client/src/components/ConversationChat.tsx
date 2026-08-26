@@ -2261,7 +2261,7 @@ export default function ConversationChat({
               if (!msg.imageUrl || fileOpenInFlightRef.current) return;
 
               if (!shouldUseInAppFileTransfer()) {
-                openChatFile(msg.imageUrl);
+                openChatFile(msg.imageUrl, shareName);
                 return;
               }
 
