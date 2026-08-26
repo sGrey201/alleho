@@ -114,7 +114,9 @@ import {
   setChatComposerDraft,
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
-import { openChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile, saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { FileDownloadProgress } from "@/components/FileDownloadProgress";
+import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
@@ -544,6 +546,8 @@ export default function ConversationChat({
   const [pollQuizMode, setPollQuizMode] = useState(false);
   const [pollCorrectOptionIndex, setPollCorrectOptionIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [fileDownloadId, setFileDownloadId] = useState<string | null>(null);
+  const [fileDownloadProgress, setFileDownloadProgress] = useState<number | null>(null);
   const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
   const [openQuestionnaireTemplateName, setOpenQuestionnaireTemplateName] = useState<string | null>(null);
@@ -2250,19 +2254,43 @@ export default function ConversationChat({
               "mb-0.5 flex max-w-full items-center gap-2.5 rounded-xl px-2.5 py-2 no-underline transition-colors",
               isOwn
                 ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
-                : "bg-muted/80 hover:bg-muted"
+                : "bg-muted/80 hover:bg-muted",
+              fileDownloadId === msg.id && "pointer-events-none opacity-90"
             )}
             data-testid={`file-${msg.id}`}
             onClick={(e) => {
               e.stopPropagation();
-              // Keep user-gesture navigation reliable in PWA if the browser blocks window.open.
-              if (!msg.imageUrl) {
-                e.preventDefault();
+              e.preventDefault();
+              if (!msg.imageUrl || fileDownloadId) return;
+
+              if (!isInstalledPwaSession()) {
+                openChatFile(msg.imageUrl);
                 return;
               }
-              // Prefer explicit open so chat bubble handlers never steal the gesture.
-              e.preventDefault();
-              openChatFile(msg.imageUrl);
+
+              setFileDownloadId(msg.id);
+              setFileDownloadProgress(null);
+              void saveOrShareChatFile(msg.imageUrl, name, {
+                onProgress: ({ loaded, total }) => {
+                  if (total != null && total > 0) {
+                    setFileDownloadProgress(loaded / total);
+                  } else {
+                    setFileDownloadProgress(null);
+                  }
+                },
+              })
+                .catch((error) => {
+                  if ((error as Error)?.name === "AbortError") return;
+                  toast({
+                    title: t.error,
+                    description: t.messageFileOpenError,
+                    variant: "destructive",
+                  });
+                })
+                .finally(() => {
+                  setFileDownloadId(null);
+                  setFileDownloadProgress(null);
+                });
             }}
           >
             <span
@@ -2279,7 +2307,11 @@ export default function ConversationChat({
                 <span className="block text-[11px] text-muted-foreground">{sizeLabel}</span>
               ) : null}
             </span>
-            <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {fileDownloadId === msg.id ? (
+              <FileDownloadProgress value={fileDownloadProgress} />
+            ) : (
+              <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
           </a>
         );
       })()}

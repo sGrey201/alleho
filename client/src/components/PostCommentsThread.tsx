@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { useLocation } from "wouter";
-import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2, File as FileIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Reply, Pencil, Trash2, X, Forward as ForwardIcon, Copy, Link2, File as FileIcon, Download } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,9 @@ import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { t } from "@/lib/i18n";
-import { openChatFile } from "@/lib/saveOrShareChatFile";
+import { openChatFile, saveOrShareChatFile } from "@/lib/saveOrShareChatFile";
+import { FileDownloadProgress } from "@/components/FileDownloadProgress";
+import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
 import {
@@ -87,6 +89,8 @@ export default function PostCommentsThread({
   } | null>(null);
   const [inlineContentPaymentSegment, setInlineContentPaymentSegment] = useState<number | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [fileDownloadId, setFileDownloadId] = useState<string | null>(null);
+  const [fileDownloadProgress, setFileDownloadProgress] = useState<number | null>(null);
   const paymentSegmentRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -642,15 +646,51 @@ export default function PostCommentsThread({
                       href={anchorPost.imageUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted"
+                      className={`mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted${
+                        fileDownloadId === anchorPost.id ? " pointer-events-none opacity-90" : ""
+                      }`}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        if (anchorPost.imageUrl) openChatFile(anchorPost.imageUrl);
+                        if (!anchorPost.imageUrl || fileDownloadId) return;
+
+                        if (!isInstalledPwaSession()) {
+                          openChatFile(anchorPost.imageUrl);
+                          return;
+                        }
+
+                        setFileDownloadId(anchorPost.id);
+                        setFileDownloadProgress(null);
+                        void saveOrShareChatFile(anchorPost.imageUrl, name, {
+                          onProgress: ({ loaded, total }) => {
+                            if (total != null && total > 0) {
+                              setFileDownloadProgress(loaded / total);
+                            } else {
+                              setFileDownloadProgress(null);
+                            }
+                          },
+                        })
+                          .catch((error) => {
+                            if ((error as Error)?.name === "AbortError") return;
+                            toast({
+                              title: t.error,
+                              description: t.messageFileOpenError,
+                              variant: "destructive",
+                            });
+                          })
+                          .finally(() => {
+                            setFileDownloadId(null);
+                            setFileDownloadProgress(null);
+                          });
                       }}
                     >
                       <FileIcon className="h-5 w-5 shrink-0" />
-                      <span className="truncate font-medium">{name}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                      {fileDownloadId === anchorPost.id ? (
+                        <FileDownloadProgress value={fileDownloadProgress} />
+                      ) : (
+                        <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
                     </a>
                   );
                 })()}
