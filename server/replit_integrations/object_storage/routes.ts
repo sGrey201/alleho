@@ -82,16 +82,25 @@ export function registerObjectStorageRoutes(app: Express): void {
       } else {
         const rangeHeader = req.headers.range;
         const downloadRaw = req.query.download;
-        const downloadFilename =
+        const inlineRaw = req.query.name;
+        const attachmentName =
           typeof downloadRaw === "string" && downloadRaw.trim()
             ? downloadRaw.trim().slice(0, 180)
             : undefined;
+        const inlineName =
+          typeof inlineRaw === "string" && inlineRaw.trim()
+            ? inlineRaw.trim().slice(0, 180)
+            : undefined;
+        // ?download= → force save; ?name= → inline preview with filename for Share/Save As
+        const filename = attachmentName || inlineName;
+        const disposition = attachmentName ? "attachment" : "inline";
         await objectStorageService.downloadObject(
           objectFile,
           res,
           3600,
           typeof rangeHeader === "string" ? rangeHeader : undefined,
-          downloadFilename
+          filename,
+          filename ? disposition : "attachment"
         );
       }
     } catch (error) {

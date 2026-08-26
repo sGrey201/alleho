@@ -146,7 +146,8 @@ export class ObjectStorageService {
     res: Response,
     cacheTtlSec: number = 3600,
     rangeHeader?: string,
-    downloadFilename?: string
+    downloadFilename?: string,
+    disposition: "inline" | "attachment" = "attachment"
   ): Promise<void> {
     try {
       const rangeValue =
@@ -164,15 +165,16 @@ export class ObjectStorageService {
       const contentType =
         response.ContentType || "application/octet-stream";
 
-      const attachmentHeader = (() => {
+      const contentDisposition = (() => {
         if (!downloadFilename) return undefined;
         const safe = downloadFilename.replace(/[\r\n"]/g, "_").slice(0, 180);
         if (!safe) return undefined;
         const encoded = encodeURIComponent(safe);
-        return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+        const kind = disposition === "inline" ? "inline" : "attachment";
+        return `${kind}; filename="${safe}"; filename*=UTF-8''${encoded}`;
       })();
 
-      if (contentType.startsWith("image/") && response.Body && !attachmentHeader) {
+      if (contentType.startsWith("image/") && response.Body && !contentDisposition) {
         const { default: sharp } = await import("sharp");
         res.set({
           "Content-Type": contentType,
@@ -195,8 +197,8 @@ export class ObjectStorageService {
         "Accept-Ranges": "bytes",
         "Cache-Control": `private, max-age=${cacheTtlSec}`,
       };
-      if (attachmentHeader) {
-        headers["Content-Disposition"] = attachmentHeader;
+      if (contentDisposition) {
+        headers["Content-Disposition"] = contentDisposition;
       }
       if (contentLength != null) {
         headers["Content-Length"] = String(contentLength);

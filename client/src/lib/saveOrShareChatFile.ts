@@ -90,6 +90,19 @@ export function normalizeShareFilename(
   return name.slice(0, 180) || "file.bin";
 }
 
+/** Same-origin object URL with inline Content-Disposition filename. */
+export function withInlineFilename(url: string, filename: string): string {
+  try {
+    const parsed = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    parsed.searchParams.delete("download");
+    parsed.searchParams.set("name", filename);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    const join = url.includes("?") ? "&" : "?";
+    return `${url}${join}name=${encodeURIComponent(filename)}`;
+  }
+}
+
 /**
  * Open a chat attachment the way a normal browser link works (desktop).
  */
@@ -118,79 +131,33 @@ const LOADER_HTML = `<!DOCTYPE html>
   html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#f7f7f8;color:#222}
   #ui{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:24px;gap:12px}
   #label{margin:0;font-size:15px}
-  .track{width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
-  #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .15s linear}
-  #bar.pulse{width:40% !important;animation:pulse 1.1s ease-in-out infinite}
-  @keyframes pulse{0%{transform:translateX(-100%);opacity:.85}100%{transform:translateX(250%);opacity:.85}}
+  .track{position:relative;width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
+  #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .12s linear}
+  .track.indeterminate #bar{width:0 !important;transition:none}
+  .track.indeterminate::after{
+    content:'';position:absolute;top:0;left:0;height:100%;width:40%;border-radius:999px;background:#6B7042;
+    animation:indeterminate 1.1s ease-in-out infinite}
+  @keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
   #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
-  #frame{position:fixed;inset:0;border:0;width:100%;height:100%;display:none;background:#fff}
-  #share{display:none;position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:2;
-    padding:10px 14px;border-radius:10px;border:0;background:#6B7042;color:#fff;font-size:14px;font-family:inherit;cursor:pointer}
-  #share:disabled{opacity:.6}
 </style>
 </head>
 <body>
   <div id="ui">
     <p id="label">Загрузка файла…</p>
-    <div class="track"><div id="bar"></div></div>
+    <div class="track" id="track"><div id="bar"></div></div>
     <p id="pct"></p>
   </div>
-  <iframe id="frame" title="preview"></iframe>
-  <button type="button" id="share">Поделиться</button>
   <script>
     function formatBytes(n) {
       if (n < 1024) return n + ' B';
       if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' КБ';
       return (n / (1024 * 1024)).toFixed(1) + ' МБ';
     }
-    var state = { url: '', filename: 'file', mime: 'application/octet-stream' };
     var bar = document.getElementById('bar');
+    var track = document.getElementById('track');
     var pct = document.getElementById('pct');
     var label = document.getElementById('label');
-    var ui = document.getElementById('ui');
-    var frame = document.getElementById('frame');
-    var shareBtn = document.getElementById('share');
-
-    function downloadFallback(blob) {
-      var objectUrl = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = state.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
-    }
-
-    shareBtn.addEventListener('click', async function () {
-      shareBtn.disabled = true;
-      try {
-        var res = await fetch(state.url);
-        var blob = await res.blob();
-        var file = new File([blob], state.filename, {
-          type: state.mime || blob.type || 'application/octet-stream',
-        });
-        if (navigator.share) {
-          try {
-            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-              await navigator.share({ files: [file], title: state.filename });
-              return;
-            }
-          } catch (err) {
-            if (err && err.name === 'AbortError') return;
-          }
-        }
-        downloadFallback(blob);
-      } catch (err) {
-        if (err && err.name === 'AbortError') return;
-        try {
-          var res2 = await fetch(state.url);
-          downloadFallback(await res2.blob());
-        } catch (e2) {}
-      } finally {
-        shareBtn.disabled = false;
-      }
-    });
+    var maxRatio = 0;
 
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
@@ -200,28 +167,34 @@ const LOADER_HTML = `<!DOCTYPE html>
       if (!d || typeof d !== 'object') return;
       if (d.type === 'hovial-progress') {
         if (typeof d.total === 'number' && d.total > 0) {
-          bar.classList.remove('pulse');
+          track.classList.remove('indeterminate');
           var r = Math.max(0, Math.min(1, d.loaded / d.total));
+          if (r < maxRatio) r = maxRatio;
+          maxRatio = r;
           bar.style.width = (r * 100) + '%';
           pct.textContent = Math.round(r * 100) + '%';
-        } else {
-          bar.classList.add('pulse');
-          pct.textContent = typeof d.loaded === 'number' && d.loaded > 0
-            ? formatBytes(d.loaded)
-            : '';
+        } else if (typeof d.loaded === 'number' && d.loaded > 0) {
+          // Unknown total: shimmer on the track, never fake a high % fill.
+          track.classList.add('indeterminate');
+          bar.style.width = '0%';
+          pct.textContent = formatBytes(d.loaded);
         }
       } else if (d.type === 'hovial-done') {
-        state.url = d.url || '';
-        state.filename = d.filename || 'file';
-        state.mime = d.mime || 'application/octet-stream';
-        document.title = state.filename;
-        ui.style.display = 'none';
-        shareBtn.style.display = 'inline-block';
-        frame.style.display = 'block';
-        frame.src = state.url;
+        track.classList.remove('indeterminate');
+        maxRatio = 1;
+        bar.style.width = '100%';
+        pct.textContent = '100%';
+        label.textContent = 'Открытие…';
+        document.title = d.filename || 'Файл';
+        try {
+          location.replace(d.url);
+        } catch (err) {
+          label.textContent = 'Не удалось открыть файл';
+        }
       } else if (d.type === 'hovial-error') {
-        bar.classList.remove('pulse');
+        track.classList.remove('indeterminate');
         bar.style.width = '0%';
+        maxRatio = 0;
         label.textContent = d.message || 'Не удалось загрузить файл';
         pct.textContent = '';
       }
@@ -235,8 +208,7 @@ type LoaderSession = {
 };
 
 function openProgressLoader(): LoaderSession | null {
-  // about:blank inherits this origin, so Web Share keeps the real File.name.
-  // (A blob: HTML tab often shares as empty / UUID.)
+  // about:blank inherits this origin so postMessage stays same-site.
   const win = window.open("about:blank", "_blank");
   if (!win) return null;
   try {
@@ -279,42 +251,41 @@ function postToLoader(win: Window, payload: Record<string, unknown>): void {
   }
 }
 
-function typedBlob(blob: Blob, filename: string): { blob: Blob; mime: string } {
-  const headerType = (blob.type || "").split(";")[0]!.trim();
-  const mime =
-    headerType && headerType !== "application/octet-stream"
-      ? headerType
-      : mimeFromFilename(filename);
-  if (blob.type === mime) return { blob, mime };
-  return { blob: new Blob([blob], { type: mime }), mime };
-}
-
-async function fetchBlobWithProgress(
+/**
+ * Prefetch with XHR so the progress UI can update, then open the same URL
+ * for native preview (browser HTTP cache often serves the second request).
+ */
+async function prefetchWithProgress(
   url: string,
   onProgress?: (progress: FileTransferProgress) => void
-): Promise<Blob> {
-  // XHR reports download progress while bytes arrive. fetch()+stream often
-  // buffers the whole body first on mobile, so the bar stays at 0 until done.
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", url, true);
     xhr.withCredentials = true;
     xhr.responseType = "blob";
-    xhr.setRequestHeader("Cache-Control", "no-cache");
 
     let lastSent = 0;
+    let maxLoaded = 0;
+    let knownTotal: number | null = null;
+
     const emit = (loaded: number, total: number | null) => {
+      if (loaded < maxLoaded) return;
+      maxLoaded = loaded;
+      if (total != null && total > 0) knownTotal = total;
       const now = performance.now();
-      // Throttle UI posts a bit, but always allow first and last updates.
-      if (loaded > 0 && loaded !== total && now - lastSent < 50) return;
+      if (loaded > 0 && knownTotal != null && loaded < knownTotal && now - lastSent < 50) {
+        return;
+      }
       lastSent = now;
-      onProgress?.({ loaded, total });
+      onProgress?.({ loaded, total: knownTotal });
     };
 
     xhr.onprogress = (event) => {
+      // Prefer lengthComputable totals; ignore indeterminate flicker before headers settle.
       if (event.lengthComputable && event.total > 0) {
         emit(event.loaded, event.total);
-      } else {
+      } else if (event.loaded > 0 && knownTotal == null) {
         emit(event.loaded, null);
       }
     };
@@ -324,23 +295,26 @@ async function fetchBlobWithProgress(
         reject(new Error(`Failed to fetch file (${xhr.status})`));
         return;
       }
-      const blob = xhr.response as Blob;
-      const size = blob?.size ?? 0;
+      const size =
+        (xhr.response as Blob)?.size ??
+        knownTotal ??
+        maxLoaded;
       onProgress?.({ loaded: size, total: size });
-      resolve(blob);
+      // Drop the in-memory copy; native preview navigates to the HTTP URL.
+      resolve();
     };
 
     xhr.onerror = () => reject(new Error("Failed to fetch file"));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
-    emit(0, null);
     xhr.send();
   });
 }
 
 /**
- * Mobile / installed PWA: open a progress tab immediately, fetch the file, then
- * show it in that same tab. Desktop: open the URL like a normal link.
+ * Mobile / installed PWA: open a progress tab immediately, prefetch the file,
+ * then navigate that tab to a native inline preview with the original filename.
+ * Desktop: open the URL like a normal link.
  */
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
@@ -351,7 +325,6 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
 
   const session = openProgressLoader();
   if (!session) {
-    // Popup blocked — last resort: navigate current context.
     openChatFile(url);
     return;
   }
@@ -359,24 +332,22 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
   const { win } = session;
   await waitForLoaderReady(win);
 
+  const safeName = normalizeShareFilename(filename, mimeFromFilename(filename));
+  const inlineUrl = withInlineFilename(url, safeName);
+
   try {
-    const blob = await fetchBlobWithProgress(url, (progress) => {
+    await prefetchWithProgress(inlineUrl, (progress) => {
       postToLoader(win, {
         type: "hovial-progress",
         loaded: progress.loaded,
         total: progress.total,
       });
     });
-    const typed = typedBlob(blob, filename);
-    const safeName = normalizeShareFilename(filename, typed.mime);
-    const objectUrl = URL.createObjectURL(typed.blob);
     postToLoader(win, {
       type: "hovial-done",
-      url: objectUrl,
+      url: inlineUrl,
       filename: safeName,
-      mime: typed.mime,
     });
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 180_000);
   } catch (error) {
     postToLoader(win, {
       type: "hovial-error",
