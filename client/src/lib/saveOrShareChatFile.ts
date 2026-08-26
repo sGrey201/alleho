@@ -124,14 +124,13 @@ const LOADER_HTML = `<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Загрузка…</title>
 <style>
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#f7f7f8;color:#222}
-  #ui{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:24px;gap:12px}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#f7f7f8;color:#222;overflow:hidden}
+  #loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:24px;gap:12px}
   #label{margin:0;font-size:15px;text-align:center;max-width:20rem}
-  #name{margin:0;font-size:13px;color:#666;text-align:center;max-width:20rem;word-break:break-word;display:none}
   .track{position:relative;width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
   #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .12s linear}
   .track.indeterminate #bar{width:0 !important;transition:none}
@@ -140,29 +139,47 @@ const LOADER_HTML = `<!DOCTYPE html>
     animation:indeterminate 1.1s ease-in-out infinite}
   @keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
   #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
-  .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}
-  .actions button{
-    padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
+  #cancel{margin-top:8px;padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
     color:#222;font-size:14px;font-family:inherit;cursor:pointer}
-  .actions button.primary{background:#6B7042;border-color:#6B7042;color:#fff}
-  .actions button:disabled{opacity:.5}
-  #actionsReady{display:none}
+  #cancel:disabled{opacity:.5}
+  #preview{display:none;position:fixed;inset:0;background:#111}
+  #frame{border:0;width:100%;height:100%;background:#fff}
+  #tapCatcher{display:none;position:fixed;inset:0;z-index:3;background:transparent}
+  .fab{
+    position:fixed;z-index:4;width:44px;height:44px;border-radius:999px;border:0;
+    background:rgba(43,45,48,.78);color:#fff;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    box-shadow:0 2px 10px rgba(0,0,0,.25);transition:opacity .2s ease,transform .2s ease;
+    padding:0;opacity:1;pointer-events:auto}
+  .fab svg{width:22px;height:22px;display:block}
+  .fab:disabled{opacity:.45}
+  .fab.hidden{opacity:0;pointer-events:none;transform:scale(.92)}
+  #closeBtn{top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}
+  #shareBtn{bottom:max(16px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right))}
 </style>
 </head>
 <body>
-  <div id="ui">
+  <div id="loading">
     <p id="label">Загрузка файла…</p>
-    <p id="name"></p>
     <div class="track" id="track"><div id="bar"></div></div>
     <p id="pct"></p>
-    <div class="actions" id="actionsLoading">
-      <button type="button" id="cancel">Отмена</button>
-    </div>
-    <div class="actions" id="actionsReady">
-      <button type="button" class="primary" id="view">Смотреть</button>
-      <button type="button" id="share">Поделиться</button>
-      <button type="button" id="closeReady">Закрыть</button>
-    </div>
+    <button type="button" id="cancel">Отмена</button>
+  </div>
+  <div id="preview">
+    <iframe id="frame" title="preview"></iframe>
+    <div id="tapCatcher" aria-hidden="true"></div>
+    <button type="button" class="fab" id="closeBtn" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+    <button type="button" class="fab" id="shareBtn" aria-label="Поделиться">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/>
+        <path d="M16 6l-4-4-4 4"/>
+        <path d="M12 2v14"/>
+      </svg>
+    </button>
   </div>
   <script>
     function formatBytes(n) {
@@ -175,15 +192,55 @@ const LOADER_HTML = `<!DOCTYPE html>
     var track = document.getElementById('track');
     var pct = document.getElementById('pct');
     var label = document.getElementById('label');
-    var nameEl = document.getElementById('name');
     var cancelBtn = document.getElementById('cancel');
-    var viewBtn = document.getElementById('view');
-    var shareBtn = document.getElementById('share');
-    var closeReadyBtn = document.getElementById('closeReady');
-    var actionsLoading = document.getElementById('actionsLoading');
-    var actionsReady = document.getElementById('actionsReady');
+    var loading = document.getElementById('loading');
+    var preview = document.getElementById('preview');
+    var frame = document.getElementById('frame');
+    var tapCatcher = document.getElementById('tapCatcher');
+    var closeBtn = document.getElementById('closeBtn');
+    var shareBtn = document.getElementById('shareBtn');
     var maxRatio = 0;
     var finished = false;
+    var chromeVisible = true;
+    var hideTimer = 0;
+
+    function setChromeVisible(visible) {
+      chromeVisible = visible;
+      closeBtn.classList.toggle('hidden', !visible);
+      shareBtn.classList.toggle('hidden', !visible);
+      tapCatcher.style.display = visible ? 'none' : 'block';
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = 0;
+      }
+      if (visible) {
+        hideTimer = setTimeout(function () { setChromeVisible(false); }, 2500);
+      }
+    }
+
+    function hideChromeFromScroll() {
+      if (!finished || !chromeVisible) return;
+      setChromeVisible(false);
+    }
+
+    function bindFrameScrollListeners() {
+      try {
+        var win = frame.contentWindow;
+        var doc = frame.contentDocument;
+        if (!win) return;
+        var opts = { passive: true, capture: true };
+        win.addEventListener('scroll', hideChromeFromScroll, opts);
+        win.addEventListener('wheel', hideChromeFromScroll, opts);
+        win.addEventListener('touchmove', hideChromeFromScroll, opts);
+        if (doc) {
+          doc.addEventListener('scroll', hideChromeFromScroll, opts);
+          doc.addEventListener('wheel', hideChromeFromScroll, opts);
+          doc.addEventListener('touchmove', hideChromeFromScroll, opts);
+        }
+      } catch (e) {
+        /* PDF viewers are often opaque — tap catcher still works. */
+      }
+    }
 
     function requestCancel() {
       if (finished) return;
@@ -196,21 +253,21 @@ const LOADER_HTML = `<!DOCTYPE html>
       try { window.close(); } catch (e2) {}
     }
     cancelBtn.addEventListener('click', requestCancel);
-    closeReadyBtn.addEventListener('click', function () {
-      try { window.close(); } catch (e) {}
+
+    closeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      try { window.close(); } catch (err) {}
     });
 
-    viewBtn.addEventListener('click', function () {
-      if (!state.url) return;
-      var opened = window.open(state.url, '_blank');
-      if (!opened) {
-        try { location.assign(state.url); } catch (e) {}
-      }
+    tapCatcher.addEventListener('click', function () {
+      setChromeVisible(true);
     });
 
-    shareBtn.addEventListener('click', async function () {
+    shareBtn.addEventListener('click', async function (e) {
+      e.stopPropagation();
       if (!state.url) return;
       shareBtn.disabled = true;
+      if (hideTimer) clearTimeout(hideTimer);
       try {
         var res = await fetch(state.url, { credentials: 'include', cache: 'force-cache' });
         if (!res.ok) throw new Error('fetch failed');
@@ -238,11 +295,13 @@ const LOADER_HTML = `<!DOCTYPE html>
         setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
       } catch (err) {
         if (err && err.name === 'AbortError') return;
-        label.textContent = 'Не удалось поделиться файлом';
       } finally {
         shareBtn.disabled = false;
+        if (chromeVisible) setChromeVisible(true);
       }
     });
+
+    frame.addEventListener('load', bindFrameScrollListeners);
 
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
@@ -269,30 +328,24 @@ const LOADER_HTML = `<!DOCTYPE html>
         state.url = d.url || '';
         state.filename = d.filename || 'file';
         state.mime = d.mime || 'application/octet-stream';
-        track.classList.remove('indeterminate');
-        maxRatio = 1;
-        bar.style.width = '100%';
-        pct.textContent = '100%';
-        label.textContent = 'Файл готов';
-        nameEl.style.display = 'block';
-        nameEl.textContent = state.filename;
         document.title = state.filename;
-        actionsLoading.style.display = 'none';
-        actionsReady.style.display = 'flex';
+        loading.style.display = 'none';
+        preview.style.display = 'block';
+        frame.src = state.url;
+        setChromeVisible(true);
       } else if (d.type === 'hovial-error') {
         finished = true;
         cancelBtn.textContent = 'Закрыть';
         cancelBtn.disabled = false;
-        cancelBtn.onclick = function () { try { window.close(); } catch (e) {} };
+        cancelBtn.onclick = function () { try { window.close(); } catch (err) {} };
         track.classList.remove('indeterminate');
         bar.style.width = '0%';
         maxRatio = 0;
         label.textContent = d.message || 'Не удалось загрузить файл';
         pct.textContent = '';
-        actionsReady.style.display = 'none';
       } else if (d.type === 'hovial-cancelled') {
         finished = true;
-        try { window.close(); } catch (e) {}
+        try { window.close(); } catch (err) {}
       }
     });
   </script>
@@ -424,8 +477,8 @@ function prefetchWithProgress(
 }
 
 /**
- * Mobile / installed PWA: open a progress tab, prefetch the file, then offer
- * View (new tab) and Share. Desktop: open the URL like a normal link.
+ * Mobile / installed PWA: progress tab, then in-page preview with Share/Close.
+ * Desktop: open the URL like a normal link.
  */
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
