@@ -139,6 +139,9 @@ const LOADER_HTML = `<!DOCTYPE html>
     animation:indeterminate 1.1s ease-in-out infinite}
   @keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
   #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
+  #cancel{margin-top:8px;padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
+    color:#222;font-size:14px;font-family:inherit;cursor:pointer}
+  #cancel:disabled{opacity:.5}
 </style>
 </head>
 <body>
@@ -146,6 +149,7 @@ const LOADER_HTML = `<!DOCTYPE html>
     <p id="label">Загрузка файла…</p>
     <div class="track" id="track"><div id="bar"></div></div>
     <p id="pct"></p>
+    <button type="button" id="cancel">Отмена</button>
   </div>
   <script>
     function formatBytes(n) {
@@ -157,7 +161,21 @@ const LOADER_HTML = `<!DOCTYPE html>
     var track = document.getElementById('track');
     var pct = document.getElementById('pct');
     var label = document.getElementById('label');
+    var cancelBtn = document.getElementById('cancel');
     var maxRatio = 0;
+    var finished = false;
+
+    function requestCancel() {
+      if (finished) return;
+      finished = true;
+      cancelBtn.disabled = true;
+      label.textContent = 'Отмена…';
+      if (window.opener) {
+        try { window.opener.postMessage({ type: 'hovial-cancel' }, '*'); } catch (e) {}
+      }
+      try { window.close(); } catch (e2) {}
+    }
+    cancelBtn.addEventListener('click', requestCancel);
 
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
@@ -166,6 +184,7 @@ const LOADER_HTML = `<!DOCTYPE html>
       var d = e.data;
       if (!d || typeof d !== 'object') return;
       if (d.type === 'hovial-progress') {
+        if (finished) return;
         if (typeof d.total === 'number' && d.total > 0) {
           track.classList.remove('indeterminate');
           var r = Math.max(0, Math.min(1, d.loaded / d.total));
@@ -174,12 +193,13 @@ const LOADER_HTML = `<!DOCTYPE html>
           bar.style.width = (r * 100) + '%';
           pct.textContent = Math.round(r * 100) + '%';
         } else if (typeof d.loaded === 'number' && d.loaded > 0) {
-          // Unknown total: shimmer on the track, never fake a high % fill.
           track.classList.add('indeterminate');
           bar.style.width = '0%';
           pct.textContent = formatBytes(d.loaded);
         }
       } else if (d.type === 'hovial-done') {
+        finished = true;
+        cancelBtn.style.display = 'none';
         track.classList.remove('indeterminate');
         maxRatio = 1;
         bar.style.width = '100%';
@@ -192,11 +212,18 @@ const LOADER_HTML = `<!DOCTYPE html>
           label.textContent = 'Не удалось открыть файл';
         }
       } else if (d.type === 'hovial-error') {
+        finished = true;
+        cancelBtn.textContent = 'Закрыть';
+        cancelBtn.disabled = false;
+        cancelBtn.onclick = function () { try { window.close(); } catch (e) {} };
         track.classList.remove('indeterminate');
         bar.style.width = '0%';
         maxRatio = 0;
         label.textContent = d.message || 'Не удалось загрузить файл';
         pct.textContent = '';
+      } else if (d.type === 'hovial-cancelled') {
+        finished = true;
+        try { window.close(); } catch (e) {}
       }
     });
   </script>
@@ -251,16 +278,23 @@ function postToLoader(win: Window, payload: Record<string, unknown>): void {
   }
 }
 
+type PrefetchHandle = {
+  promise: Promise<void>;
+  abort: () => void;
+};
+
 /**
  * Prefetch with XHR so the progress UI can update, then open the same URL
  * for native preview (browser HTTP cache often serves the second request).
  */
-async function prefetchWithProgress(
+function prefetchWithProgress(
   url: string,
   onProgress?: (progress: FileTransferProgress) => void
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
+): PrefetchHandle {
+  const xhr = new XMLHttpRequest();
+  let settled = false;
+
+  const promise = new Promise<void>((resolve, reject) => {
     xhr.open("GET", url, true);
     xhr.withCredentials = true;
     xhr.responseType = "blob";
@@ -282,7 +316,6 @@ async function prefetchWithProgress(
     };
 
     xhr.onprogress = (event) => {
-      // Prefer lengthComputable totals; ignore indeterminate flicker before headers settle.
       if (event.lengthComputable && event.total > 0) {
         emit(event.loaded, event.total);
       } else if (event.loaded > 0 && knownTotal == null) {
@@ -291,24 +324,34 @@ async function prefetchWithProgress(
     };
 
     xhr.onload = () => {
+      settled = true;
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error(`Failed to fetch file (${xhr.status})`));
         return;
       }
-      const size =
-        (xhr.response as Blob)?.size ??
-        knownTotal ??
-        maxLoaded;
+      const size = (xhr.response as Blob)?.size ?? knownTotal ?? maxLoaded;
       onProgress?.({ loaded: size, total: size });
-      // Drop the in-memory copy; native preview navigates to the HTTP URL.
       resolve();
     };
 
-    xhr.onerror = () => reject(new Error("Failed to fetch file"));
-    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    xhr.onerror = () => {
+      settled = true;
+      reject(new Error("Failed to fetch file"));
+    };
+    xhr.onabort = () => {
+      settled = true;
+      reject(new DOMException("Aborted", "AbortError"));
+    };
 
     xhr.send();
   });
+
+  return {
+    promise,
+    abort: () => {
+      if (!settled) xhr.abort();
+    },
+  };
 }
 
 /**
@@ -335,24 +378,55 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
   const safeName = normalizeShareFilename(filename, mimeFromFilename(filename));
   const inlineUrl = withInlineFilename(url, safeName);
 
+  let prefetch: PrefetchHandle | null = null;
+  let cancelled = false;
+
+  const onCancelMessage = (event: MessageEvent) => {
+    if (event.source !== win) return;
+    if (!event.data || event.data.type !== "hovial-cancel") return;
+    cancelled = true;
+    prefetch?.abort();
+  };
+  window.addEventListener("message", onCancelMessage);
+
+  const closedPoll = window.setInterval(() => {
+    if (win.closed) {
+      cancelled = true;
+      prefetch?.abort();
+      window.clearInterval(closedPoll);
+    }
+  }, 400);
+
   try {
-    await prefetchWithProgress(inlineUrl, (progress) => {
+    prefetch = prefetchWithProgress(inlineUrl, (progress) => {
+      if (cancelled) return;
       postToLoader(win, {
         type: "hovial-progress",
         loaded: progress.loaded,
         total: progress.total,
       });
     });
+    await prefetch.promise;
+    if (cancelled || win.closed) {
+      throw new DOMException("Aborted", "AbortError");
+    }
     postToLoader(win, {
       type: "hovial-done",
       url: inlineUrl,
       filename: safeName,
     });
   } catch (error) {
+    if ((error as Error)?.name === "AbortError" || cancelled) {
+      postToLoader(win, { type: "hovial-cancelled" });
+      throw new DOMException("Aborted", "AbortError");
+    }
     postToLoader(win, {
       type: "hovial-error",
       message: "Не удалось загрузить файл",
     });
     throw error;
+  } finally {
+    window.removeEventListener("message", onCancelMessage);
+    window.clearInterval(closedPoll);
   }
 }

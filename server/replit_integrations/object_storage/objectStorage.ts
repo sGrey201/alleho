@@ -167,11 +167,23 @@ export class ObjectStorageService {
 
       const contentDisposition = (() => {
         if (!downloadFilename) return undefined;
-        const safe = downloadFilename.replace(/[\r\n"]/g, "_").slice(0, 180);
-        if (!safe) return undefined;
-        const encoded = encodeURIComponent(safe);
+        const raw = downloadFilename.replace(/[\r\n"]/g, "_").trim().slice(0, 180);
+        if (!raw) return undefined;
+        // Node rejects non-ASCII in header values. Keep Unicode only in filename*.
+        const asciiish = raw
+          .replace(/[^\x20-\x7E]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^[\s._]+|[\s._]+$/g, "");
+        const extMatch = raw.match(/\.([A-Za-z0-9]{1,8})$/);
+        const asciiFallback =
+          asciiish && /[A-Za-z0-9]/.test(asciiish)
+            ? asciiish
+            : extMatch
+              ? `file.${extMatch[1]}`
+              : "file";
+        const encoded = encodeURIComponent(raw);
         const kind = disposition === "inline" ? "inline" : "attachment";
-        return `${kind}; filename="${safe}"; filename*=UTF-8''${encoded}`;
+        return `${kind}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
       })();
 
       if (contentType.startsWith("image/") && response.Body && !contentDisposition) {
