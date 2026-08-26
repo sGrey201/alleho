@@ -114,6 +114,7 @@ import {
   setChatComposerDraft,
 } from "@/lib/chatComposerDrafts";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
+import { flushSync } from "react-dom";
 import { openChatFile, saveOrShareChatFile, shouldUseInAppFileTransfer } from "@/lib/saveOrShareChatFile";
 import { FileDownloadProgress } from "@/components/FileDownloadProgress";
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
@@ -2254,7 +2255,7 @@ export default function ConversationChat({
               isOwn
                 ? "bg-primary-foreground/15 hover:bg-primary-foreground/25"
                 : "bg-muted/80 hover:bg-muted",
-              fileDownloadId === msg.id && "pointer-events-none opacity-90"
+              fileDownloadId === msg.id && "pointer-events-none"
             )}
             data-testid={`file-${msg.id}`}
             onClick={(e) => {
@@ -2267,8 +2268,10 @@ export default function ConversationChat({
                 return;
               }
 
-              setFileDownloadId(msg.id);
-              setFileDownloadProgress(0);
+              flushSync(() => {
+                setFileDownloadId(msg.id);
+                setFileDownloadProgress(null);
+              });
               void saveOrShareChatFile(msg.imageUrl, name, {
                 onProgress: ({ loaded, total }) => {
                   if (total != null && total > 0) {

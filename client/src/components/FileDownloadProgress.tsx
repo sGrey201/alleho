@@ -9,7 +9,7 @@ type Props = {
 /** Compact circular progress for the chat file download icon slot (~16px). */
 export function FileDownloadProgress({ value, className }: Props) {
   const size = 16;
-  const stroke = 2;
+  const stroke = 2.5;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const known = typeof value === "number" && Number.isFinite(value);
@@ -21,11 +21,7 @@ export function FileDownloadProgress({ value, className }: Props) {
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className={cn(
-        "shrink-0 text-muted-foreground",
-        !known && "animate-spin",
-        className
-      )}
+      className={cn("shrink-0 text-foreground", !known && "animate-spin", className)}
       aria-hidden
     >
       <circle
@@ -35,7 +31,7 @@ export function FileDownloadProgress({ value, className }: Props) {
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="opacity-25"
+        className="opacity-20"
       />
       <circle
         cx={size / 2}
@@ -46,7 +42,7 @@ export function FileDownloadProgress({ value, className }: Props) {
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={circumference}
-        strokeDashoffset={known ? dashoffset : circumference * 0.25}
+        strokeDashoffset={known ? dashoffset : circumference * 0.28}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </svg>

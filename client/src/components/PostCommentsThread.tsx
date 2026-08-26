@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useConversationMessages } from "@/hooks/useConversationMessages";
 import { useLocation } from "wouter";
@@ -646,7 +647,7 @@ export default function PostCommentsThread({
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`mb-0.5 flex max-w-full items-center gap-2 rounded-xl bg-muted/80 px-2.5 py-2 text-sm no-underline hover:bg-muted${
-                        fileDownloadId === anchorPost.id ? " pointer-events-none opacity-90" : ""
+                        fileDownloadId === anchorPost.id ? " pointer-events-none" : ""
                       }`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -658,8 +659,10 @@ export default function PostCommentsThread({
                           return;
                         }
 
-                        setFileDownloadId(anchorPost.id);
-                        setFileDownloadProgress(0);
+                        flushSync(() => {
+                          setFileDownloadId(anchorPost.id);
+                          setFileDownloadProgress(null);
+                        });
                         void saveOrShareChatFile(anchorPost.imageUrl, name, {
                           onProgress: ({ loaded, total }) => {
                             if (total != null && total > 0) {
