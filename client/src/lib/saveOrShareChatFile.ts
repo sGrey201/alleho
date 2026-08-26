@@ -1,3 +1,6 @@
+/** Above this size, mobile Web Share + in-memory File often fails (iOS PWA especially). */
+const SHARE_VIA_BLOB_MAX_BYTES = 4 * 1024 * 1024;
+
 function isIosDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   return (
@@ -55,18 +58,79 @@ function canShareData(
   }
 }
 
-export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
+function withDownloadQuery(url: string, filename: string): string {
+  try {
+    const absolute = new URL(url, window.location.origin);
+    absolute.searchParams.set("download", filename);
+    return absolute.pathname + absolute.search;
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}download=${encodeURIComponent(filename)}`;
+  }
+}
+
+/** Open same-origin file URL without buffering (works in standalone PWA). */
+function openFileInBrowser(url: string, filename: string): void {
+  const href = withDownloadQuery(url, filename);
+  const opened = window.open(href, "_blank", "noopener,noreferrer");
+  if (opened) return;
+  const a = document.createElement("a");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+export type SaveOrShareChatFileOptions = {
+  /** Declared size from message metadata when known. */
+  knownSize?: number;
+  onStatus?: (status: "loading" | "sharing") => void;
+};
+
+export async function saveOrShareChatFile(
+  url: string,
+  filename: string,
+  options: SaveOrShareChatFileOptions = {}
+): Promise<void> {
   if (!shouldUseShareSheet()) {
     triggerDownload(url, filename, true);
     return;
   }
 
-  const res = await fetch(url, { credentials: "include" });
+  const known = options.knownSize;
+  if (typeof known === "number" && Number.isFinite(known) && known > SHARE_VIA_BLOB_MAX_BYTES) {
+    openFileInBrowser(url, filename);
+    return;
+  }
+
+  options.onStatus?.("loading");
+
+  const res = await fetch(url, { credentials: "include", cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Failed to fetch file (${res.status})`);
   }
 
+  const contentLengthHeader = res.headers.get("content-length");
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : NaN;
+  if (Number.isFinite(contentLength) && contentLength > SHARE_VIA_BLOB_MAX_BYTES) {
+    // Avoid buffering multi‑MB bodies into JS heap for Web Share.
+    try {
+      await res.body?.cancel();
+    } catch {
+      /* ignore */
+    }
+    openFileInBrowser(url, filename);
+    return;
+  }
+
   const blob = await res.blob();
+  if (blob.size > SHARE_VIA_BLOB_MAX_BYTES) {
+    openFileInBrowser(url, filename);
+    return;
+  }
+
   const type =
     blob.type && blob.type !== "application/octet-stream"
       ? blob.type
@@ -80,6 +144,8 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
   const shareData: ShareData = { files: [file], title: filename };
   const canShareFiles = canShareData(nav, shareData);
 
+  options.onStatus?.("sharing");
+
   if (nav.share) {
     try {
       if (canShareFiles) {
@@ -87,19 +153,17 @@ export async function saveOrShareChatFile(url: string, filename: string): Promis
       } else {
         await nav.share({
           title: filename,
-          url: new URL(url, window.location.origin).href,
+          url: new URL(withDownloadQuery(url, filename), window.location.origin).href,
         });
       }
       return;
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
+      // Share failed (common for larger files / standalone PWA) — open instead of silent <a download>.
+      openFileInBrowser(url, filename);
+      return;
     }
   }
 
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    triggerDownload(objectUrl, filename, false);
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2_000);
-  }
+  openFileInBrowser(url, filename);
 }

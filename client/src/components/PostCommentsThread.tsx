@@ -646,13 +646,35 @@ export default function PostCommentsThread({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        void saveOrShareChatFile(anchorPost.imageUrl!, name).catch(() => {
-                          toast({
-                            title: t.error,
-                            description: t.messageFileOpenError,
-                            variant: "destructive",
+                        let dismissLoading: (() => void) | undefined;
+                        let knownSize: number | undefined;
+                        try {
+                          const parsed = anchorPost.content ? JSON.parse(anchorPost.content) : null;
+                          if (typeof parsed?.size === "number" && Number.isFinite(parsed.size)) {
+                            knownSize = parsed.size;
+                          }
+                        } catch {
+                          // ignore
+                        }
+                        void saveOrShareChatFile(anchorPost.imageUrl!, name, {
+                          knownSize,
+                          onStatus: (status) => {
+                            if (status === "loading" && !dismissLoading) {
+                              const result = toast({ title: t.messageFileDownloading });
+                              dismissLoading = result.dismiss;
+                            }
+                          },
+                        })
+                          .catch(() => {
+                            toast({
+                              title: t.error,
+                              description: t.messageFileOpenError,
+                              variant: "destructive",
+                            });
+                          })
+                          .finally(() => {
+                            dismissLoading?.();
                           });
-                        });
                       }}
                     >
                       <FileIcon className="h-5 w-5 shrink-0" />

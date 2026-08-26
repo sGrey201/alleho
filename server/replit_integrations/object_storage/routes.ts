@@ -81,11 +81,17 @@ export function registerObjectStorageRoutes(app: Express): void {
         await objectStorageService.downloadObjectAsThumb(objectFile, res);
       } else {
         const rangeHeader = req.headers.range;
+        const downloadRaw = req.query.download;
+        const downloadFilename =
+          typeof downloadRaw === "string" && downloadRaw.trim()
+            ? downloadRaw.trim().slice(0, 180)
+            : undefined;
         await objectStorageService.downloadObject(
           objectFile,
           res,
           3600,
-          typeof rangeHeader === "string" ? rangeHeader : undefined
+          typeof rangeHeader === "string" ? rangeHeader : undefined,
+          downloadFilename
         );
       }
     } catch (error) {

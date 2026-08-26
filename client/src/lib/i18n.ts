@@ -2221,6 +2221,7 @@ export const t = {
   messageVideoReplaced: 'Видео обновлено',
   messageFileLabel: 'Файл',
   messageFileOpenError: 'Не удалось открыть файл',
+  messageFileDownloading: 'Загрузка файла…',
   messageFileTooLarge: 'Файл слишком большой (макс. 100 МБ)',
   messageFileUnsupported: 'Этот тип файла не поддерживается',
   messageMediaUnsupported: 'Можно прикрепить только фото или видео',

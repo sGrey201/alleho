@@ -2256,13 +2256,26 @@ export default function ConversationChat({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void saveOrShareChatFile(msg.imageUrl!, name).catch(() => {
-                toast({
-                  title: t.error,
-                  description: t.messageFileOpenError,
-                  variant: "destructive",
+              let dismissLoading: (() => void) | undefined;
+              void saveOrShareChatFile(msg.imageUrl!, name, {
+                knownSize: meta?.size,
+                onStatus: (status) => {
+                  if (status === "loading" && !dismissLoading) {
+                    const result = toast({ title: t.messageFileDownloading });
+                    dismissLoading = result.dismiss;
+                  }
+                },
+              })
+                .catch(() => {
+                  toast({
+                    title: t.error,
+                    description: t.messageFileOpenError,
+                    variant: "destructive",
+                  });
+                })
+                .finally(() => {
+                  dismissLoading?.();
                 });
-              });
             }}
           >
             <span

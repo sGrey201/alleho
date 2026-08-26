@@ -51,8 +51,13 @@ registerRoute(
     cacheName: MEDIA_FILES_CACHE,
     plugins: [
       {
-        cacheWillUpdate: async ({ response }) =>
-          response.status === 200 ? response : null,
+        cacheWillUpdate: async ({ response }) => {
+          if (response.status !== 200) return null;
+          // Do not cache multi‑MB chat attachments — fills Cache quota and slows mobile downloads.
+          const len = Number(response.headers.get("content-length") ?? "");
+          if (Number.isFinite(len) && len > 2 * 1024 * 1024) return null;
+          return response;
+        },
       },
       new ExpirationPlugin({
         maxEntries: 300,

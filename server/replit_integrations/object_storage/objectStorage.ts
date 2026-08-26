@@ -145,7 +145,8 @@ export class ObjectStorageService {
     ref: S3ObjectRef,
     res: Response,
     cacheTtlSec: number = 3600,
-    rangeHeader?: string
+    rangeHeader?: string,
+    downloadFilename?: string
   ): Promise<void> {
     try {
       const rangeValue =
@@ -163,7 +164,15 @@ export class ObjectStorageService {
       const contentType =
         response.ContentType || "application/octet-stream";
 
-      if (contentType.startsWith("image/") && response.Body) {
+      const attachmentHeader = (() => {
+        if (!downloadFilename) return undefined;
+        const safe = downloadFilename.replace(/[\r\n"]/g, "_").slice(0, 180);
+        if (!safe) return undefined;
+        const encoded = encodeURIComponent(safe);
+        return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+      })();
+
+      if (contentType.startsWith("image/") && response.Body && !attachmentHeader) {
         const { default: sharp } = await import("sharp");
         res.set({
           "Content-Type": contentType,
@@ -186,6 +195,9 @@ export class ObjectStorageService {
         "Accept-Ranges": "bytes",
         "Cache-Control": `private, max-age=${cacheTtlSec}`,
       };
+      if (attachmentHeader) {
+        headers["Content-Disposition"] = attachmentHeader;
+      }
       if (contentLength != null) {
         headers["Content-Length"] = String(contentLength);
       }
