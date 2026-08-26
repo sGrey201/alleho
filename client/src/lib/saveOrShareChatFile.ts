@@ -5,18 +5,9 @@ export type FileTransferProgress = {
   total: number | null;
 };
 
-function isMobileDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  return (
-    /iPad|iPhone|iPod|Android/i.test(ua) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
-}
-
-/** Installed PWA or mobile: download with progress in a preview tab. */
+/** Installed PWA only: progress + in-app preview. Browser tabs use a normal open. */
 export function shouldUseInAppFileTransfer(): boolean {
-  return isInstalledPwaSession() || isMobileDevice();
+  return isInstalledPwaSession();
 }
 
 function mimeFromFilename(name: string): string {
@@ -144,9 +135,8 @@ const LOADER_HTML = `<!DOCTYPE html>
   #cancel:disabled{opacity:.5}
   #preview{display:none;position:fixed;inset:0;background:#525659}
   #pages{display:none;position:absolute;inset:0;z-index:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;overscroll-behavior:contain}
-  #pages canvas{display:block;width:100%;height:auto;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+  #pages canvas{display:block;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
   #frame{display:none;border:0;width:100%;height:100%;background:#fff;position:absolute;inset:0;z-index:1}
-  #tapCatcher{display:none;position:fixed;inset:0;z-index:3;background:transparent}
   .fab{
     position:fixed;z-index:4;width:44px;height:44px;border-radius:999px;border:0;
     background:rgba(43,45,48,.78);color:#fff;display:flex;align-items:center;justify-content:center;
@@ -170,7 +160,6 @@ const LOADER_HTML = `<!DOCTYPE html>
   <div id="preview">
     <div id="pages"></div>
     <iframe id="frame" title="preview"></iframe>
-    <div id="tapCatcher" aria-hidden="true"></div>
     <button type="button" class="fab" id="closeBtn" aria-label="Закрыть">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 6L6 18M6 6l12 12"/>
@@ -200,7 +189,6 @@ const LOADER_HTML = `<!DOCTYPE html>
     var preview = document.getElementById('preview');
     var pages = document.getElementById('pages');
     var frame = document.getElementById('frame');
-    var tapCatcher = document.getElementById('tapCatcher');
     var closeBtn = document.getElementById('closeBtn');
     var shareBtn = document.getElementById('shareBtn');
     var maxRatio = 0;
@@ -208,6 +196,8 @@ const LOADER_HTML = `<!DOCTYPE html>
     var chromeVisible = true;
     var hideTimer = 0;
     var pdfJsLoading = null;
+    var tapStart = null;
+    var tapBound = false;
 
     function isPdf() {
       var mime = (state.mime || '').toLowerCase();
@@ -219,7 +209,6 @@ const LOADER_HTML = `<!DOCTYPE html>
       chromeVisible = visible;
       closeBtn.classList.toggle('hidden', !visible);
       shareBtn.classList.toggle('hidden', !visible);
-      tapCatcher.style.display = visible ? 'none' : 'block';
       if (hideTimer) {
         clearTimeout(hideTimer);
         hideTimer = 0;
@@ -240,6 +229,37 @@ const LOADER_HTML = `<!DOCTYPE html>
       el.addEventListener('scroll', hideChromeFromScroll, opts);
       el.addEventListener('wheel', hideChromeFromScroll, opts);
       el.addEventListener('touchmove', hideChromeFromScroll, opts);
+    }
+
+    function bindTapToShowChrome(el) {
+      if (!el || tapBound) return;
+      tapBound = true;
+      el.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) {
+          tapStart = null;
+          return;
+        }
+        tapStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+          t: Date.now(),
+        };
+      }, { passive: true });
+      el.addEventListener('touchend', function (e) {
+        if (!tapStart || !finished) return;
+        var touch = e.changedTouches[0];
+        var dx = Math.abs(touch.clientX - tapStart.x);
+        var dy = Math.abs(touch.clientY - tapStart.y);
+        var dt = Date.now() - tapStart.t;
+        tapStart = null;
+        if (dx < 12 && dy < 12 && dt < 450 && !chromeVisible) {
+          setChromeVisible(true);
+        }
+      }, { passive: true });
+      el.addEventListener('click', function () {
+        if (!finished || chromeVisible) return;
+        setChromeVisible(true);
+      });
     }
 
     function loadScript(src) {
@@ -273,20 +293,28 @@ const LOADER_HTML = `<!DOCTYPE html>
       pages.innerHTML = '';
       pages.style.display = 'block';
       frame.style.display = 'none';
-      var maxWidth = Math.max(280, pages.clientWidth || window.innerWidth) - 16;
+      var cssWidth = Math.max(280, pages.clientWidth || window.innerWidth) - 16;
+      var dpr = Math.min(window.devicePixelRatio || 1, 3);
       for (var i = 1; i <= pdf.numPages; i++) {
         var page = await pdf.getPage(i);
         var base = page.getViewport({ scale: 1 });
-        var scale = Math.min(2.25, maxWidth / base.width);
+        var scale = (cssWidth / base.width) * dpr;
         var viewport = page.getViewport({ scale: scale });
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d', { alpha: false });
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
+        canvas.style.width = cssWidth + 'px';
+        canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+        }
         pages.appendChild(canvas);
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
       }
       bindScrollTarget(pages);
+      bindTapToShowChrome(pages);
     }
 
     function showIframePreview(url) {
@@ -294,6 +322,7 @@ const LOADER_HTML = `<!DOCTYPE html>
       pages.innerHTML = '';
       frame.style.display = 'block';
       frame.src = url;
+      bindTapToShowChrome(preview);
       frame.addEventListener('load', function onLoad() {
         frame.removeEventListener('load', onLoad);
         try {
@@ -337,10 +366,6 @@ const LOADER_HTML = `<!DOCTYPE html>
     closeBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       try { window.close(); } catch (err) {}
-    });
-
-    tapCatcher.addEventListener('click', function () {
-      setChromeVisible(true);
     });
 
     shareBtn.addEventListener('click', async function (e) {
@@ -552,8 +577,8 @@ function prefetchWithProgress(
 }
 
 /**
- * Mobile / installed PWA: progress tab, then in-page preview with Share/Close.
- * Desktop: open the URL like a normal link.
+ * Installed PWA: progress tab, then in-page preview with Share/Close.
+ * Browser (desktop/mobile): open the URL like a normal link.
  */
 export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
