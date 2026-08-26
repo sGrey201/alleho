@@ -142,8 +142,10 @@ const LOADER_HTML = `<!DOCTYPE html>
   #cancel{margin-top:8px;padding:10px 18px;border-radius:10px;border:1px solid #c7c7cc;background:#fff;
     color:#222;font-size:14px;font-family:inherit;cursor:pointer}
   #cancel:disabled{opacity:.5}
-  #preview{display:none;position:fixed;inset:0;background:#111}
-  #frame{border:0;width:100%;height:100%;background:#fff}
+  #preview{display:none;position:fixed;inset:0;background:#525659}
+  #pages{display:none;position:absolute;inset:0;z-index:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px;overscroll-behavior:contain}
+  #pages canvas{display:block;width:100%;height:auto;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+  #frame{display:none;border:0;width:100%;height:100%;background:#fff;position:absolute;inset:0;z-index:1}
   #tapCatcher{display:none;position:fixed;inset:0;z-index:3;background:transparent}
   .fab{
     position:fixed;z-index:4;width:44px;height:44px;border-radius:999px;border:0;
@@ -166,6 +168,7 @@ const LOADER_HTML = `<!DOCTYPE html>
     <button type="button" id="cancel">Отмена</button>
   </div>
   <div id="preview">
+    <div id="pages"></div>
     <iframe id="frame" title="preview"></iframe>
     <div id="tapCatcher" aria-hidden="true"></div>
     <button type="button" class="fab" id="closeBtn" aria-label="Закрыть">
@@ -195,6 +198,7 @@ const LOADER_HTML = `<!DOCTYPE html>
     var cancelBtn = document.getElementById('cancel');
     var loading = document.getElementById('loading');
     var preview = document.getElementById('preview');
+    var pages = document.getElementById('pages');
     var frame = document.getElementById('frame');
     var tapCatcher = document.getElementById('tapCatcher');
     var closeBtn = document.getElementById('closeBtn');
@@ -203,6 +207,13 @@ const LOADER_HTML = `<!DOCTYPE html>
     var finished = false;
     var chromeVisible = true;
     var hideTimer = 0;
+    var pdfJsLoading = null;
+
+    function isPdf() {
+      var mime = (state.mime || '').toLowerCase();
+      var name = (state.filename || '').toLowerCase();
+      return mime.indexOf('pdf') !== -1 || /\\.pdf($|\\?)/.test(name);
+    }
 
     function setChromeVisible(visible) {
       chromeVisible = visible;
@@ -223,23 +234,92 @@ const LOADER_HTML = `<!DOCTYPE html>
       setChromeVisible(false);
     }
 
-    function bindFrameScrollListeners() {
-      try {
-        var win = frame.contentWindow;
-        var doc = frame.contentDocument;
-        if (!win) return;
-        var opts = { passive: true, capture: true };
-        win.addEventListener('scroll', hideChromeFromScroll, opts);
-        win.addEventListener('wheel', hideChromeFromScroll, opts);
-        win.addEventListener('touchmove', hideChromeFromScroll, opts);
-        if (doc) {
-          doc.addEventListener('scroll', hideChromeFromScroll, opts);
-          doc.addEventListener('wheel', hideChromeFromScroll, opts);
-          doc.addEventListener('touchmove', hideChromeFromScroll, opts);
-        }
-      } catch (e) {
-        /* PDF viewers are often opaque — tap catcher still works. */
+    function bindScrollTarget(el) {
+      if (!el) return;
+      var opts = { passive: true };
+      el.addEventListener('scroll', hideChromeFromScroll, opts);
+      el.addEventListener('wheel', hideChromeFromScroll, opts);
+      el.addEventListener('touchmove', hideChromeFromScroll, opts);
+    }
+
+    function loadScript(src) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error('script load failed')); };
+        document.head.appendChild(s);
+      });
+    }
+
+    function ensurePdfJs() {
+      if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+      if (pdfJsLoading) return pdfJsLoading;
+      pdfJsLoading = loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js').then(function () {
+        if (!window.pdfjsLib) throw new Error('pdfjs missing');
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        return window.pdfjsLib;
+      });
+      return pdfJsLoading;
+    }
+
+    async function renderPdfPreview(url) {
+      var pdfjsLib = await ensurePdfJs();
+      var res = await fetch(url, { credentials: 'include', cache: 'force-cache' });
+      if (!res.ok) throw new Error('pdf fetch failed');
+      var data = await res.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: data }).promise;
+      pages.innerHTML = '';
+      pages.style.display = 'block';
+      frame.style.display = 'none';
+      var maxWidth = Math.max(280, pages.clientWidth || window.innerWidth) - 16;
+      for (var i = 1; i <= pdf.numPages; i++) {
+        var page = await pdf.getPage(i);
+        var base = page.getViewport({ scale: 1 });
+        var scale = Math.min(2.25, maxWidth / base.width);
+        var viewport = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d', { alpha: false });
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        pages.appendChild(canvas);
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
       }
+      bindScrollTarget(pages);
+    }
+
+    function showIframePreview(url) {
+      pages.style.display = 'none';
+      pages.innerHTML = '';
+      frame.style.display = 'block';
+      frame.src = url;
+      frame.addEventListener('load', function onLoad() {
+        frame.removeEventListener('load', onLoad);
+        try {
+          var win = frame.contentWindow;
+          var doc = frame.contentDocument;
+          if (win) bindScrollTarget(win);
+          if (doc) bindScrollTarget(doc);
+          if (doc && doc.documentElement) bindScrollTarget(doc.documentElement);
+          if (doc && doc.body) bindScrollTarget(doc.body);
+        } catch (e) {}
+      });
+    }
+
+    async function showPreview() {
+      loading.style.display = 'none';
+      preview.style.display = 'block';
+      setChromeVisible(true);
+      if (isPdf()) {
+        try {
+          await renderPdfPreview(state.url);
+          return;
+        } catch (err) {
+          /* fall through to iframe */
+        }
+      }
+      showIframePreview(state.url);
     }
 
     function requestCancel() {
@@ -301,8 +381,6 @@ const LOADER_HTML = `<!DOCTYPE html>
       }
     });
 
-    frame.addEventListener('load', bindFrameScrollListeners);
-
     if (window.opener) {
       try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
     }
@@ -329,10 +407,7 @@ const LOADER_HTML = `<!DOCTYPE html>
         state.filename = d.filename || 'file';
         state.mime = d.mime || 'application/octet-stream';
         document.title = state.filename;
-        loading.style.display = 'none';
-        preview.style.display = 'block';
-        frame.src = state.url;
-        setChromeVisible(true);
+        void showPreview();
       } else if (d.type === 'hovial-error') {
         finished = true;
         cancelBtn.textContent = 'Закрыть';
