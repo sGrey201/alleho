@@ -2,12 +2,7 @@ import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 
 export type FileTransferProgress = {
   loaded: number;
-  /** Null when Content-Length is missing. */
   total: number | null;
-};
-
-export type SaveOrShareChatFileOptions = {
-  onProgress?: (progress: FileTransferProgress) => void;
 };
 
 function isMobileDevice(): boolean {
@@ -19,7 +14,7 @@ function isMobileDevice(): boolean {
   );
 }
 
-/** Installed PWA or mobile: download with progress, then open preview. */
+/** Installed PWA or mobile: download with progress in a preview tab. */
 export function shouldUseInAppFileTransfer(): boolean {
   return isInstalledPwaSession() || isMobileDevice();
 }
@@ -46,14 +41,6 @@ function mimeFromFilename(name: string): string {
   return types[ext] || "application/octet-stream";
 }
 
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => resolve());
-    });
-  });
-}
-
 /**
  * Open a chat attachment the way a normal browser link works (desktop).
  */
@@ -71,50 +58,136 @@ export function openChatFile(url: string): void {
   a.remove();
 }
 
-/** Must run inside the click gesture — later window.open(blob) is blocked. */
-function openPreviewPlaceholder(): Window | null {
-  const w = window.open("about:blank", "_blank");
-  if (!w) return null;
-  try {
-    w.document.title = "…";
-    w.document.body.replaceChildren();
-    const p = w.document.createElement("p");
-    p.textContent = "Загрузка…";
-    p.style.cssText =
-      "font-family:system-ui,sans-serif;padding:24px;color:#666;margin:0;";
-    w.document.body.appendChild(p);
-  } catch {
-    /* cross-opaque about:blank on some engines — location.replace still works */
+const LOADER_HTML = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Загрузка…</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#f7f7f8;color:#222}
+  #ui{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:24px;gap:12px}
+  #label{margin:0;font-size:15px}
+  .track{width:min(280px,80vw);height:8px;border-radius:999px;background:#e5e5ea;overflow:hidden}
+  #bar{height:100%;width:0%;border-radius:999px;background:#6B7042;transition:width .15s linear}
+  #bar.pulse{width:35% !important;animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:translateX(0);opacity:.7}50%{transform:translateX(180%);opacity:1}}
+  #pct{margin:0;font-size:13px;color:#666;min-height:1.2em}
+  #frame{position:fixed;inset:0;border:0;width:100%;height:100%;display:none;background:#fff}
+  #save{display:none;position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:2;
+    padding:10px 14px;border-radius:10px;background:#6B7042;color:#fff;text-decoration:none;font-size:14px}
+</style>
+</head>
+<body>
+  <div id="ui">
+    <p id="label">Загрузка файла…</p>
+    <div class="track"><div id="bar"></div></div>
+    <p id="pct"></p>
+  </div>
+  <iframe id="frame" title="preview"></iframe>
+  <a id="save" download>Сохранить</a>
+  <script>
+    const bar = document.getElementById('bar');
+    const pct = document.getElementById('pct');
+    const label = document.getElementById('label');
+    const ui = document.getElementById('ui');
+    const frame = document.getElementById('frame');
+    const save = document.getElementById('save');
+    if (window.opener) {
+      try { window.opener.postMessage({ type: 'hovial-loader-ready' }, '*'); } catch (e) {}
+    }
+    window.addEventListener('message', function (e) {
+      var d = e.data;
+      if (!d || typeof d !== 'object') return;
+      if (d.type === 'hovial-progress') {
+        if (typeof d.total === 'number' && d.total > 0) {
+          bar.classList.remove('pulse');
+          var r = Math.max(0, Math.min(1, d.loaded / d.total));
+          bar.style.width = (r * 100) + '%';
+          pct.textContent = Math.round(r * 100) + '%';
+        } else {
+          bar.classList.add('pulse');
+          pct.textContent = '';
+        }
+      } else if (d.type === 'hovial-done') {
+        document.title = d.filename || 'Файл';
+        ui.style.display = 'none';
+        save.href = d.url;
+        save.download = d.filename || 'file';
+        save.style.display = 'inline-block';
+        frame.style.display = 'block';
+        frame.src = d.url;
+        // Also try top-level navigation for engines that render PDF better that way.
+        try {
+          var mime = (d.mime || '').toLowerCase();
+          if (mime.indexOf('pdf') !== -1 || mime.indexOf('image/') === 0 || mime.indexOf('text/') === 0) {
+            setTimeout(function () {
+              try { location.replace(d.url); } catch (err) {}
+            }, 50);
+          }
+        } catch (err2) {}
+      } else if (d.type === 'hovial-error') {
+        bar.classList.remove('pulse');
+        bar.style.width = '0%';
+        label.textContent = d.message || 'Не удалось загрузить файл';
+        pct.textContent = '';
+      }
+    });
+  </script>
+</body>
+</html>`;
+
+type LoaderSession = {
+  win: Window;
+  loaderUrl: string;
+};
+
+function openProgressLoader(): LoaderSession | null {
+  const loaderUrl = URL.createObjectURL(
+    new Blob([LOADER_HTML], { type: "text/html;charset=utf-8" })
+  );
+  const win = window.open(loaderUrl, "_blank");
+  if (!win) {
+    URL.revokeObjectURL(loaderUrl);
+    return null;
   }
-  return w;
+  return { win, loaderUrl };
 }
 
-function blobObjectUrl(blob: Blob, filename: string): string {
+function waitForLoaderReady(win: Window, timeoutMs = 2000): Promise<void> {
+  return new Promise((resolve) => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== win) return;
+      if (!event.data || event.data.type !== "hovial-loader-ready") return;
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const timer = window.setTimeout(() => {
+      window.removeEventListener("message", onMessage);
+      resolve();
+    }, timeoutMs);
+    window.addEventListener("message", onMessage);
+  });
+}
+
+function postToLoader(win: Window, payload: Record<string, unknown>): void {
+  try {
+    if (!win.closed) win.postMessage(payload, "*");
+  } catch {
+    /* ignore */
+  }
+}
+
+function typedBlob(blob: Blob, filename: string): { blob: Blob; mime: string } {
   const headerType = (blob.type || "").split(";")[0]!.trim();
-  const type =
+  const mime =
     headerType && headerType !== "application/octet-stream"
       ? headerType
       : mimeFromFilename(filename);
-  const previewBlob = blob.type === type ? blob : new Blob([blob], { type });
-  return URL.createObjectURL(previewBlob);
-}
-
-function navigatePreviewToBlob(previewWindow: Window | null, objectUrl: string): void {
-  if (previewWindow && !previewWindow.closed) {
-    try {
-      previewWindow.location.replace(objectUrl);
-      return;
-    } catch {
-      /* fall through */
-    }
-  }
-  const a = document.createElement("a");
-  a.href = objectUrl;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  if (blob.type === mime) return { blob, mime };
+  return { blob: new Blob([blob], { type: mime }), mime };
 }
 
 async function fetchBlobWithProgress(
@@ -152,9 +225,7 @@ async function fetchBlobWithProgress(
 
   const report = (next: FileTransferProgress) => {
     pending = next;
-    if (!raf) {
-      raf = requestAnimationFrame(flushProgress);
-    }
+    if (!raf) raf = requestAnimationFrame(flushProgress);
   };
 
   report({ loaded: 0, total });
@@ -184,36 +255,52 @@ async function fetchBlobWithProgress(
 }
 
 /**
- * Mobile / installed PWA: download with progress, then open an in-app preview tab.
- * Desktop browser: open the file URL like a normal link.
+ * Mobile / installed PWA: open a progress tab immediately, fetch the file, then
+ * show it in that same tab. Desktop: open the URL like a normal link.
  */
-export async function saveOrShareChatFile(
-  url: string,
-  filename: string,
-  options: SaveOrShareChatFileOptions = {}
-): Promise<void> {
+export async function saveOrShareChatFile(url: string, filename: string): Promise<void> {
   if (!url) return;
   if (!shouldUseInAppFileTransfer()) {
     openChatFile(url);
     return;
   }
 
-  // Open the tab while we still have the user gesture (required on iOS/PWA).
-  const previewWindow = openPreviewPlaceholder();
+  const session = openProgressLoader();
+  if (!session) {
+    // Popup blocked — last resort: navigate current context.
+    openChatFile(url);
+    return;
+  }
 
-  await waitForNextPaint();
+  const { win, loaderUrl } = session;
+  await waitForLoaderReady(win);
 
   try {
-    const blob = await fetchBlobWithProgress(url, options.onProgress);
-    const objectUrl = blobObjectUrl(blob, filename);
-    navigatePreviewToBlob(previewWindow, objectUrl);
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+    const blob = await fetchBlobWithProgress(url, (progress) => {
+      postToLoader(win, {
+        type: "hovial-progress",
+        loaded: progress.loaded,
+        total: progress.total,
+      });
+    });
+    const typed = typedBlob(blob, filename);
+    const objectUrl = URL.createObjectURL(typed.blob);
+    postToLoader(win, {
+      type: "hovial-done",
+      url: objectUrl,
+      filename,
+      mime: typed.mime,
+    });
+    window.setTimeout(() => {
+      URL.revokeObjectURL(objectUrl);
+      URL.revokeObjectURL(loaderUrl);
+    }, 180_000);
   } catch (error) {
-    try {
-      previewWindow?.close();
-    } catch {
-      /* ignore */
-    }
+    postToLoader(win, {
+      type: "hovial-error",
+      message: "Не удалось загрузить файл",
+    });
+    window.setTimeout(() => URL.revokeObjectURL(loaderUrl), 30_000);
     throw error;
   }
 }
