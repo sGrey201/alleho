@@ -17,6 +17,39 @@ function sniffAudioMime(bytes: ArrayBuffer): string {
   return "audio/mp4";
 }
 
+function resolveAudioHref(url: string): string {
+  try {
+    return new URL(url, window.location.origin).href;
+  } catch {
+    return url;
+  }
+}
+
+function errorName(error: unknown): string | undefined {
+  return error && typeof error === "object" && "name" in error
+    ? String((error as { name?: unknown }).name)
+    : undefined;
+}
+
+/** Only one voice message plays in the chat at a time. */
+let activeVoice: HTMLAudioElement | null = null;
+
+function claimVoicePlayback(audio: HTMLAudioElement): void {
+  if (activeVoice && activeVoice !== audio) {
+    activeVoice.pause();
+    try {
+      activeVoice.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+  }
+  activeVoice = audio;
+}
+
+function releaseVoicePlayback(audio: HTMLAudioElement): void {
+  if (activeVoice === audio) activeVoice = null;
+}
+
 /** Static pseudo-waveform bars (decorative, deterministic per message). */
 const WAVE_BARS = [
   0.35, 0.6, 0.45, 0.8, 1, 0.7, 0.5, 0.9, 0.65, 0.4, 0.75, 0.55, 0.85, 0.5, 0.7, 0.45,
@@ -48,13 +81,18 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
       }
     };
     const onEnded = () => {
+      releaseVoicePlayback(audio);
       setIsPlaying(false);
       setIsLoading(false);
       setCurrentTime(0);
       audio.currentTime = 0;
     };
-    const onPause = () => setIsPlaying(false);
+    const onPause = () => {
+      setIsPlaying(false);
+      if (audio.paused) releaseVoicePlayback(audio);
+    };
     const onPlay = () => {
+      claimVoicePlayback(audio);
       setIsPlaying(true);
       setIsLoading(false);
     };
@@ -77,6 +115,8 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("waiting", onWaiting);
       audio.removeEventListener("playing", onPlaying);
+      audio.pause();
+      releaseVoicePlayback(audio);
     };
   }, []);
 
@@ -89,6 +129,7 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
+      releaseVoicePlayback(audio);
       audio.removeAttribute("src");
       audio.load();
     }
@@ -131,9 +172,11 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
   const playFromUrl = async (url: string) => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.src !== url) {
+    const href = resolveAudioHref(url);
+    if (audio.src !== href) {
       audio.src = url;
     }
+    claimVoicePlayback(audio);
     await audio.play();
   };
 
@@ -146,19 +189,29 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
     }
 
     // Play in the click turn first (iOS user-gesture). Network URL streams;
-    // blob fallback is for poisoned caches / missing audio Content-Type.
+    // blob fallback is for octet-stream / missing audio Content-Type.
     setIsLoading(true);
     try {
       await playFromUrl(objectUrlRef.current ?? src);
-    } catch {
+    } catch (error) {
+      const name = errorName(error);
+      if (name === "AbortError" || name === "NotAllowedError") {
+        setIsLoading(false);
+        return;
+      }
       const blobUrl = await ensureObjectUrl();
       if (!blobUrl) {
+        setIsPlaying(false);
         setIsLoading(false);
         return;
       }
       try {
         await playFromUrl(blobUrl);
-      } catch {
+      } catch (blobError) {
+        if (errorName(blobError) === "AbortError") {
+          setIsLoading(false);
+          return;
+        }
         setIsPlaying(false);
         setIsLoading(false);
       }
@@ -229,7 +282,7 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
           {formatTime(remaining)}
         </span>
       </div>
-      <audio ref={audioRef} preload="none" className="hidden" />
+      <audio ref={audioRef} preload="none" playsInline className="hidden" />
     </div>
   );
 }
