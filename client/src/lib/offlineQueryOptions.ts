@@ -1,4 +1,5 @@
 import { OFFLINE_CACHE_GC_TIME_MS } from "@/lib/offlineCacheConfig";
+import { retryTransientQuery, transientQueryRetryDelay } from "@/lib/queryClient";
 
 /** Offline-first queries: show cached data immediately, refresh when online. */
 export const offlineMessengerQueryOptions = {
@@ -8,4 +9,6 @@ export const offlineMessengerQueryOptions = {
   refetchOnWindowFocus: true,
   refetchOnReconnect: true,
   networkMode: "offlineFirst" as const,
+  retry: retryTransientQuery,
+  retryDelay: transientQueryRetryDelay,
 };

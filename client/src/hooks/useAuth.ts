@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { User } from "@shared/schema";
-import { getQueryFn, queryClient } from "@/lib/queryClient";
+import { getQueryFn, isTransientQueryError, queryClient, transientQueryRetryDelay } from "@/lib/queryClient";
 
 export function useAuth() {
   const { data: user, isPending } = useQuery<User | null>({
@@ -13,7 +13,8 @@ export function useAuth() {
       }
       return getQueryFn<User | null>({ on401: "returnNull" })(context);
     },
-    retry: false,
+    retry: (failureCount, error) => failureCount < 2 && isTransientQueryError(error),
+    retryDelay: transientQueryRetryDelay,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     staleTime: Infinity,

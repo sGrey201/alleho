@@ -2240,6 +2240,7 @@ export const t = {
   pollVotes: 'голосов',
   searchEmptyHint: 'Введите запрос для поиска',
   searchError: 'Не удалось загрузить результаты поиска',
+  chatsLoadError: 'Не удалось загрузить список чатов',
   retry: 'Повторить',
   doctorEmail: 'Email врача',
   noDoctorsConnected: 'Врачи не подключены',

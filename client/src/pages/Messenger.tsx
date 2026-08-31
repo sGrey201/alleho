@@ -26,7 +26,7 @@ import {
 } from "@/components/PwaInstallInstructionsSheet";
 import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { pageMeta } from "@/lib/pageMeta";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, fetchJson } from "@/lib/queryClient";
 import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
@@ -464,14 +464,22 @@ export default function Messenger() {
         ? "channels"
         : activeFolder;
 
-  const { data: chatsPages, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery<PaginatedChatsResponse>({
+  const {
+    data: chatsPages,
+    isPending: chatsPending,
+    isFetching: chatsFetching,
+    isError: chatsError,
+    refetch: refetchChats,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<PaginatedChatsResponse>({
     queryKey: ["/api/me/chats", apiFolder, activeFolder],
-    queryFn: async ({ pageParam = 0 }) => {
-      const url = `/api/me/chats?folder=${apiFolder}&limit=${PAGE_SIZE}&offset=${pageParam}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    queryFn: ({ pageParam = 0, signal }) =>
+      fetchJson<PaginatedChatsResponse>(
+        `/api/me/chats?folder=${apiFolder}&limit=${PAGE_SIZE}&offset=${pageParam}`,
+        { signal },
+      ),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextOffset : undefined),
     enabled: isAuthenticated,
@@ -481,11 +489,7 @@ export default function Messenger() {
 
   const { data: unreadSummary } = useQuery<MessengerUnreadSummary>({
     queryKey: ["/api/me/chats/unread-summary"],
-    queryFn: async () => {
-      const res = await fetch("/api/me/chats/unread-summary", { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    queryFn: ({ signal }) => fetchJson<MessengerUnreadSummary>("/api/me/chats/unread-summary", { signal }),
     enabled: isAuthenticated,
     ...offlineMessengerQueryOptions,
   });
@@ -1196,9 +1200,16 @@ export default function Messenger() {
                   {t.retry}
                 </Button>
               </div>
-            ) : isLoading && listChats.length === 0 ? (
+            ) : listChats.length === 0 && (chatsError ? chatsFetching : chatsPending) ? (
               <div className="flex flex-1 items-center justify-center p-4 min-h-0">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : chatsError && listChats.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-4 min-h-0 text-center">
+                <p className="text-sm text-muted-foreground mb-2">{t.chatsLoadError}</p>
+                <Button variant="outline" size="sm" onClick={() => void refetchChats()}>
+                  {t.retry}
+                </Button>
               </div>
             ) : (
               <ScrollArea ref={listScrollRef} className="messenger-sidebar-scroll">
