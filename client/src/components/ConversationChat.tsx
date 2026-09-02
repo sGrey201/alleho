@@ -2305,6 +2305,12 @@ export default function ConversationChat({
           loading="lazy"
           className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
           data-testid={`image-${msg.id}`}
+          onError={(e) => {
+            const el = e.currentTarget;
+            if (el.dataset.fallback === "1") return;
+            el.dataset.fallback = "1";
+            el.src = msg.imageUrl!;
+          }}
           onClick={() => {
             setMessageLayer(null);
             setSelectedImage(msg.imageUrl!);

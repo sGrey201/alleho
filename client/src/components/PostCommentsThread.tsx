@@ -688,6 +688,12 @@ export default function PostCommentsThread({
                     alt=""
                     loading="lazy"
                     className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      if (el.dataset.fallback === "1") return;
+                      el.dataset.fallback = "1";
+                      el.src = anchorPost.imageUrl!;
+                    }}
                     onClick={() => setSelectedImage(anchorPost.imageUrl!)}
                   />
                 )}
@@ -767,6 +773,12 @@ export default function PostCommentsThread({
                             alt=""
                             loading="lazy"
                             className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                            onError={(e) => {
+                              const el = e.currentTarget;
+                              if (el.dataset.fallback === "1") return;
+                              el.dataset.fallback = "1";
+                              el.src = comment.imageUrl!;
+                            }}
                             onClick={() => {
                               setMessageLayer(null);
                               setSelectedImage(comment.imageUrl!);

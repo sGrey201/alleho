@@ -51,6 +51,43 @@ export interface S3ObjectRef {
 
 const UPLOADS_PREFIX = "uploads";
 
+/** Best-effort image MIME from magic bytes (for objects stored as octet-stream). */
+function sniffImageMime(buf: Buffer): string | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  ) {
+    return "image/png";
+  }
+  if (buf.length >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+    return "image/gif";
+  }
+  if (
+    buf.length >= 12 &&
+    buf.toString("ascii", 0, 4) === "RIFF" &&
+    buf.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+async function bodyToBuffer(body: unknown): Promise<Buffer> {
+  if (body && typeof body === "object" && "transformToByteArray" in body) {
+    const bytes = await (
+      body as { transformToByteArray: () => Promise<Uint8Array> }
+    ).transformToByteArray();
+    return Buffer.from(bytes);
+  }
+  throw new Error("Object body is not readable");
+}
+
 export class ObjectStorageService {
   private bucket: string;
   private client: S3Client;
@@ -186,24 +223,76 @@ export class ObjectStorageService {
         return `${kind}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
       })();
 
-      if (contentType.startsWith("image/") && response.Body && !contentDisposition) {
-        const { default: sharp } = await import("sharp");
-        res.set({
-          "Content-Type": contentType,
-          "Cache-Control": `private, max-age=${cacheTtlSec}`,
-        });
-        const pipeline = sharp()
-          .rotate()
-          .on("error", (err: Error) => {
-            console.error("Sharp orient error:", err);
-            if (!res.headersSent) res.status(500).json({ error: "Error processing image" });
+      const contentLength = response.ContentLength;
+      // Bake EXIF orientation for images. Also try small octet-stream objects —
+      // older chat uploads were stored without an image/* Content-Type.
+      const tryOrient =
+        !!response.Body &&
+        !contentDisposition &&
+        !rangeValue &&
+        (contentType.startsWith("image/") ||
+          ((contentType === "application/octet-stream" || !response.ContentType) &&
+            contentLength != null &&
+            contentLength > 0 &&
+            contentLength <= 12 * 1024 * 1024));
+
+      if (tryOrient) {
+        try {
+          const bytes = await bodyToBuffer(response.Body);
+          const sniffed = sniffImageMime(bytes);
+          if (contentType.startsWith("image/") || sniffed) {
+            try {
+              const { default: sharp } = await import("sharp");
+              const out = await sharp(bytes).rotate().toBuffer();
+              const outType =
+                (contentType.startsWith("image/") ? contentType : null) ||
+                sniffed ||
+                "image/jpeg";
+              res.set({
+                "Content-Type": outType,
+                "Cache-Control": `private, max-age=${cacheTtlSec}`,
+                "Content-Length": String(out.length),
+              });
+              res.send(out);
+              return;
+            } catch (sharpErr) {
+              console.error("Sharp orient error:", sharpErr);
+              if (sniffed) {
+                res.set({
+                  "Content-Type": sniffed,
+                  "Cache-Control": `private, max-age=${cacheTtlSec}`,
+                  "Content-Length": String(bytes.length),
+                });
+                res.send(bytes);
+                return;
+              }
+              if (contentType.startsWith("image/")) {
+                if (!res.headersSent) {
+                  res.status(500).json({ error: "Error processing image" });
+                }
+                return;
+              }
+            }
+          }
+          // Not an image (e.g. voice/pdf stored as octet-stream) — send raw.
+          res.set({
+            "Content-Type": contentType,
+            "Accept-Ranges": "bytes",
+            "Cache-Control": `private, max-age=${cacheTtlSec}`,
+            "Content-Length": String(bytes.length),
           });
-        const bodyStream = response.Body as NodeJS.ReadableStream;
-        bodyStream.pipe(pipeline).pipe(res);
-        return;
+          res.send(bytes);
+          return;
+        } catch (bufErr) {
+          console.error("Error buffering object for image pipeline:", bufErr);
+          // Fall through to stream path below (re-fetch not available; 500).
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Error downloading file" });
+          }
+          return;
+        }
       }
 
-      const contentLength = response.ContentLength;
       const headers: Record<string, string> = {
         "Content-Type": contentType,
         "Accept-Ranges": "bytes",
@@ -244,7 +333,7 @@ export class ObjectStorageService {
 
   /**
    * Stream S3 object as small square avatar (128×128) for chat list / header circles.
-   * Non-image content-types are streamed as-is (no resize).
+   * Decodes by magic bytes when Content-Type is missing/wrong (older uploads).
    */
   async downloadObjectAsAvatar(
     ref: S3ObjectRef,
@@ -255,28 +344,49 @@ export class ObjectStorageService {
       const response = await this.client.send(
         new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
       );
-      const contentType = response.ContentType || "application/octet-stream";
-      if (!contentType.startsWith("image/")) {
-        return this.downloadObject(ref, res, cacheTtlSec);
-      }
       if (!response.Body) {
         res.status(404).end();
         return;
       }
-      const { default: sharp } = await import("sharp");
-      res.set({
-        "Content-Type": contentType,
-        "Cache-Control": `private, max-age=${cacheTtlSec}`,
-      });
-      const pipeline = sharp()
-        .rotate()
-        .resize(128, 128, { fit: "cover", withoutEnlargement: true })
-        .on("error", (err: Error) => {
-          console.error("Sharp avatar resize error:", err);
-          if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });
+      const bytes = await bodyToBuffer(response.Body);
+      const contentType = response.ContentType || "application/octet-stream";
+      const sniffed = sniffImageMime(bytes);
+      if (!contentType.startsWith("image/") && !sniffed) {
+        res.set({
+          "Content-Type": contentType,
+          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+          "Content-Length": String(bytes.length),
         });
-      const bodyStream = response.Body as NodeJS.ReadableStream;
-      bodyStream.pipe(pipeline).pipe(res);
+        res.send(bytes);
+        return;
+      }
+      try {
+        const { default: sharp } = await import("sharp");
+        const out = await sharp(bytes)
+          .rotate()
+          .resize(128, 128, { fit: "cover", withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toBuffer();
+        res.set({
+          "Content-Type": "image/jpeg",
+          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+          "Content-Length": String(out.length),
+        });
+        res.send(out);
+      } catch (sharpErr) {
+        console.error("Sharp avatar resize error:", sharpErr);
+        const fallbackType = sniffed || (contentType.startsWith("image/") ? contentType : null);
+        if (fallbackType) {
+          res.set({
+            "Content-Type": fallbackType,
+            "Cache-Control": `private, max-age=${cacheTtlSec}`,
+            "Content-Length": String(bytes.length),
+          });
+          res.send(bytes);
+          return;
+        }
+        if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });
+      }
     } catch (error) {
       console.error("Error downloading avatar thumbnail:", error);
       if (!res.headersSent) {
@@ -304,7 +414,8 @@ export class ObjectStorageService {
 
   /**
    * Stream S3 object as thumbnail (max width 400px) for chat preview.
-   * Non-image content-types are streamed as-is (no resize).
+   * Always emits image/jpeg when decodable — ignores wrong/missing Content-Type
+   * so photo bubbles work for older octet-stream uploads.
    */
   async downloadObjectAsThumb(
     ref: S3ObjectRef,
@@ -315,27 +426,44 @@ export class ObjectStorageService {
       const response = await this.client.send(
         new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key })
       );
-      const contentType = response.ContentType || "application/octet-stream";
-      if (!contentType.startsWith("image/")) {
-        return this.downloadObject(ref, res, cacheTtlSec);
-      }
       if (!response.Body) {
         res.status(404).end();
         return;
       }
-      const { default: sharp } = await import("sharp");
-      res.set({
-        "Content-Type": contentType,
-        "Cache-Control": `private, max-age=${cacheTtlSec}`,
-      });
-      const pipeline = sharp()
-        .resize(400, undefined, { withoutEnlargement: true })
-        .on("error", (err: Error) => {
-          console.error("Sharp resize error:", err);
-          if (!res.headersSent) res.status(500).json({ error: "Error resizing image" });
+      const bytes = await bodyToBuffer(response.Body);
+      const contentType = response.ContentType || "application/octet-stream";
+      const sniffed = sniffImageMime(bytes);
+
+      try {
+        const { default: sharp } = await import("sharp");
+        const out = await sharp(bytes)
+          .rotate()
+          .resize(400, undefined, { withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        res.set({
+          "Content-Type": "image/jpeg",
+          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+          "Content-Length": String(out.length),
         });
-      const bodyStream = response.Body as NodeJS.ReadableStream;
-      bodyStream.pipe(pipeline).pipe(res);
+        res.send(out);
+        return;
+      } catch (sharpErr) {
+        console.error("Sharp resize error:", sharpErr);
+        const fallbackType = sniffed || (contentType.startsWith("image/") ? contentType : null);
+        if (fallbackType) {
+          res.set({
+            "Content-Type": fallbackType,
+            "Cache-Control": `private, max-age=${cacheTtlSec}`,
+            "Content-Length": String(bytes.length),
+          });
+          res.send(bytes);
+          return;
+        }
+        if (!res.headersSent) {
+          res.status(415).json({ error: "Not an image" });
+        }
+      }
     } catch (error) {
       console.error("Error downloading thumbnail:", error);
       if (!res.headersSent) {

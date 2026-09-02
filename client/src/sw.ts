@@ -29,6 +29,14 @@ registerRoute(
   new CacheFirst({
     cacheName: MEDIA_THUMB_CACHE,
     plugins: [
+      {
+        cacheWillUpdate: async ({ response }) => {
+          if (!response || !response.ok) return null;
+          const type = response.headers.get("Content-Type") || "";
+          if (!type.startsWith("image/")) return null;
+          return response;
+        },
+      },
       new ExpirationPlugin({
         maxEntries: 500,
         maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -60,6 +68,7 @@ self.addEventListener("activate", (event) => {
       await self.clients.claim();
       await caches.delete("media-files-v1");
       await caches.delete("media-files-v2");
+      await caches.delete("media-thumbs-v1");
     })()
   );
 });

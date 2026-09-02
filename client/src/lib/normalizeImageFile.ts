@@ -44,11 +44,18 @@ export async function normalizeImageFile(file: File): Promise<File> {
   }
 }
 
+const CHAT_IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
+
 /**
  * Bakes EXIF orientation into pixels and resizes chat photos (aspect ratio preserved).
+ * Also attempts decode when the picker left MIME empty but the extension looks like an image.
  */
 export async function normalizeChatImageFile(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
+  const looksLikeImage =
+    file.type.startsWith("image/") ||
+    ((!file.type || file.type === "application/octet-stream") &&
+      CHAT_IMAGE_EXT_RE.test(file.name));
+  if (!looksLikeImage) return file;
 
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
