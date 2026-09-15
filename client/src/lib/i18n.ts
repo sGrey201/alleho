@@ -2086,7 +2086,7 @@ export const t = {
   deleteChannelConfirmDescription: (name: string) =>
     `Это действие нельзя отменить. Канал «${name}» будет удалён безвозвратно.`,
   deletePatientChatConfirmDescription: (name: string) =>
-    `Чат «${name}» исчезнет из вашего списка. Данные сохранятся в системе.`,
+    `Чат «${name}» исчезнет из вашего списка.`,
   deleteGroupOrChannelConfirmDescription: 'Вы уверены, что хотите это сделать?',
   conversationDeleted: 'Удалено',
   channelOwnerLabel: 'Владелец',
