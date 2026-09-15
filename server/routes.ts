@@ -2167,7 +2167,7 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  // Soft-delete group or channel (owner only)
+  // Soft-delete group, channel, or patient chat (owner only; marks deletedAt, keeps data)
   app.delete("/api/conversations/:id", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -2175,8 +2175,12 @@ ${allUrls.map(url => `  <url>
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const role = await storage.getParticipantRole(id, currentUserId);
       if (role !== "owner") return res.status(403).json({ message: "only_owner_can_delete_conversation" });
+      const participants = await storage.getConversationParticipants(id);
       const deleted = await storage.markConversationDeleted(id);
       if (!deleted) return res.status(404).json({ message: "Conversation not found" });
+      await Promise.all(
+        participants.map((participant) => publishDoctorChatsUpdated(participant.userId))
+      );
       res.json({ ok: true });
     } catch (error) {
       console.error("Error deleting conversation:", error);

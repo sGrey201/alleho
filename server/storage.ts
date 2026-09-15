@@ -2329,7 +2329,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(conversations.id, id),
-          inArray(conversations.type, ["group", "channel"]),
+          inArray(conversations.type, ["group", "channel", "patient"]),
           isNull(conversations.deletedAt)
         )
       )
@@ -2846,7 +2846,13 @@ export class DatabaseStorage implements IStorage {
     const convRows = await db
       .select()
       .from(conversations)
-      .where(and(inArray(conversations.id, convIds), eq(conversations.type, "patient")));
+      .where(
+        and(
+          inArray(conversations.id, convIds),
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt)
+        )
+      );
 
     const currentUser = await this.getUser(userId);
     const isDoctor = !!currentUser?.isAdmin;

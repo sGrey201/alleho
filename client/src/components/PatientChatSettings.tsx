@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { ArrowLeft, Camera, Copy, Loader2, Share2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, Camera, Copy, Loader2, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUpload } from "@/hooks/use-upload";
@@ -60,12 +70,14 @@ type Props = {
 
 export default function PatientChatSettings({ conversationId, onBack, onOpenSearch }: Props) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { user, hasActiveSubscription, isAdmin } = useAuth();
   const voiceCall = useVoiceCallContext();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [inviteLinkDialog, setInviteLinkDialog] = useState<{
     open: boolean;
     inviteUrl: string;
@@ -114,6 +126,23 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
       setInviteLinkDialog({ open: true, inviteUrl: data.inviteUrl });
     },
     onError: () => toast({ title: t.inviteError, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/conversations/${conversationId}`, {});
+    },
+    onSuccess: async () => {
+      setDeleteDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/my-patients"] });
+      await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
+      toast({ title: t.conversationDeleted });
+      setLocation("/messenger");
+    },
+    onError: (err: Error) => {
+      toast({ title: t.error, description: err.message, variant: "destructive" });
+    },
   });
 
   const handleAvatarChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -286,6 +315,24 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
             </Link>
           </div>
         )}
+
+        {!!user?.isAdmin && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            disabled={deleteMutation.isPending}
+            onClick={() => setDeleteDialogOpen(true)}
+            data-testid="button-delete-patient-chat"
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            {t.deletePatientChat}
+          </Button>
+        )}
       </div>
 
       <Dialog
@@ -341,6 +388,31 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.deletePatientChatConfirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.deletePatientChatConfirmDescription(displayName)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteMutation.mutate();
+              }}
+            >
+              {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t.deletePatientChat}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
