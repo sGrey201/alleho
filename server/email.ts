@@ -149,7 +149,12 @@ export async function sendInviteEmail(
           ${inviterLine}
         </p>
         <p style="font-size: 16px; color: #333; line-height: 1.6;">
-          ${inviteBody} Ссылка действует 24 часа и может быть использована только один раз:
+          ${inviteBody}
+          ${
+            inviteType === "patient"
+              ? " Ссылка не имеет срока действия и может быть использована только один раз:"
+              : " Ссылка действует 24 часа и может быть использована только один раз:"
+          }
         </p>
         <a href="${inviteUrl}" style="display: inline-block; background-color: ${THEME_COLOR}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px; margin: 20px 0;">
           Перейти к регистрации

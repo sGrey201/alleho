@@ -443,9 +443,9 @@ export default function Messenger() {
   const [inviteLinkData, setInviteLinkData] = useState<{
     open: boolean;
     inviteUrl: string;
-    expiresAt: string;
+    expiresAt: string | null;
     inviteType: "patient" | "homeopath" | null;
-  }>({ open: false, inviteUrl: "", expiresAt: "", inviteType: null });
+  }>({ open: false, inviteUrl: "", expiresAt: null, inviteType: null });
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -813,7 +813,7 @@ export default function Messenger() {
       const res = await apiRequest("POST", "/api/invites", { inviteType });
       return res.json() as Promise<{
         inviteUrl: string;
-        expiresAt: string;
+        expiresAt: string | null;
         inviteType: "patient" | "homeopath";
       }>;
     },
@@ -847,7 +847,7 @@ export default function Messenger() {
       const res = await apiRequest("POST", "/api/patient-invites", { patientName: patientName.trim() });
       return res.json() as Promise<{
         inviteUrl: string;
-        expiresAt: string;
+        expiresAt: string | null;
         conversationId: string;
         inviteType: "patient";
       }>;
@@ -1512,7 +1512,11 @@ export default function Messenger() {
               <p className="text-xs text-muted-foreground mb-1">Ссылка-приглашение</p>
               <p className="break-all text-sm">{inviteLinkData.inviteUrl}</p>
             </div>
-            <p className="text-sm text-muted-foreground">Ссылка действительна 24 часа.</p>
+            <p className="text-sm text-muted-foreground">
+              {inviteLinkData.inviteType === "patient"
+                ? t.inviteLinkNoExpiry
+                : t.inviteLinkValid24h}
+            </p>
             <DialogFooter className="flex flex-row justify-end gap-2">
               <Button
                 type="button"

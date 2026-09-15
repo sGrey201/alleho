@@ -301,7 +301,7 @@ export interface IStorage {
     templateId: string;
     conversationId: string;
     messageId: string;
-    patientUserId: string;
+    patientUserId: string | null;
     doctorUserId: string;
     structureSnapshot: QuestionnaireTemplateStructure;
     hintsModeSnapshot: QuestionnaireHintsMode;
@@ -314,6 +314,14 @@ export interface IStorage {
     instance: QuestionnaireInstance,
     userId: string
   ): Promise<boolean>;
+  bindQuestionnaireInstancePatientIfUnbound(
+    id: string,
+    patientUserId: string
+  ): Promise<QuestionnaireInstance | undefined>;
+  bindUnboundQuestionnaireInstancesForConversation(
+    conversationId: string,
+    patientUserId: string
+  ): Promise<number>;
 
   // Invite operations
   createInvite(invite: InsertInvite): Promise<Invite>;
@@ -1158,7 +1166,7 @@ export class DatabaseStorage implements IStorage {
     templateId: string;
     conversationId: string;
     messageId: string;
-    patientUserId: string;
+    patientUserId: string | null;
     doctorUserId: string;
     structureSnapshot: QuestionnaireTemplateStructure;
     hintsModeSnapshot: QuestionnaireHintsMode;
@@ -1191,6 +1199,43 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  /**
+   * Atomically bind patient only if still unbound.
+   * Always pass conversations.patientUserId — never the writer user id.
+   */
+  async bindQuestionnaireInstancePatientIfUnbound(
+    id: string,
+    patientUserId: string
+  ): Promise<QuestionnaireInstance | undefined> {
+    const [updated] = await db
+      .update(questionnaireInstances)
+      .set({ patientUserId, updatedAt: new Date() })
+      .where(
+        and(eq(questionnaireInstances.id, id), isNull(questionnaireInstances.patientUserId))
+      )
+      .returning();
+    if (updated) return updated;
+    return this.getQuestionnaireInstance(id);
+  }
+
+  /** Backfill unbound instances when a patient joins the chat (invite accept). */
+  async bindUnboundQuestionnaireInstancesForConversation(
+    conversationId: string,
+    patientUserId: string
+  ): Promise<number> {
+    const rows = await db
+      .update(questionnaireInstances)
+      .set({ patientUserId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(questionnaireInstances.conversationId, conversationId),
+          isNull(questionnaireInstances.patientUserId)
+        )
+      )
+      .returning({ id: questionnaireInstances.id });
+    return rows.length;
+  }
+
   async canAccessQuestionnaireInstance(
     instance: QuestionnaireInstance,
     userId: string
@@ -1198,6 +1243,13 @@ export class DatabaseStorage implements IStorage {
     if (instance.doctorUserId === userId) return true;
     if (instance.patientUserId === userId) {
       return this.isUserInConversation(userId, instance.conversationId);
+    }
+    // Unbound: allow the conversation patient once they have joined (after invite accept).
+    if (!instance.patientUserId) {
+      const conv = await this.getConversation(instance.conversationId);
+      if (conv?.patientUserId === userId) {
+        return this.isUserInConversation(userId, instance.conversationId);
+      }
     }
     return false;
   }
@@ -1228,7 +1280,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(invites.conversationId, conversationId),
           eq(invites.inviteType, "patient"),
-          eq(invites.status, "pending")
+          or(eq(invites.status, "pending"), eq(invites.status, "expired"))
         )
       )
       .orderBy(desc(invites.createdAt));

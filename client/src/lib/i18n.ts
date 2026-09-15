@@ -168,6 +168,7 @@ export const t = {
   questionnaires: 'Опросники',
   questionnaireTitle: 'Опросник',
   sendQuestionnaire: 'Отправить опросник',
+  sendQuestionnaireError: 'Не удалось отправить опросник',
   copyQuestionnaireTemplate: 'Скопировать себе',
   questionnaireTemplateCopied:
     'Шаблон скопирован. Теперь вы можете редактировать его и отправлять своим пациентам.',
@@ -2064,6 +2065,7 @@ export const t = {
   patientInviteShareLink: 'Поделиться',
   patientInviteLinkCopied: 'Ссылка скопирована',
   inviteLinkValid24h: 'Ссылка действительна 24 часа.',
+  inviteLinkNoExpiry: 'Ссылка действует без ограничения по сроку.',
   chatNameLabel: 'Название чата',
   changeChatPhoto: 'Изменить фото',
   contactPersonLabel: 'контактное лицо',

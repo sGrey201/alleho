@@ -840,6 +840,9 @@ export default function ConversationChat({
       );
       setQuestionnairePickerOpen(false);
     },
+    onError: () => {
+      toast({ title: t.sendQuestionnaireError, variant: "destructive" });
+    },
   });
 
   const sendMutation = useMutation({
@@ -2190,9 +2193,8 @@ export default function ConversationChat({
     if (msg.messageType === "questionnaire") {
       const payload = parseQuestionnaireMessageContent(msg.content);
       if (payload) {
-        // Edit only in the original patient chat; forwarded copies and other chats are view-only.
-        const viewOnly =
-          filledOnly || conv?.type !== "patient" || !!msg.forwardedFromMessageId;
+        // Edit only in patient chats; ACL on the instance still blocks edits outside its home chat.
+        const viewOnly = filledOnly || conv?.type !== "patient";
         setOpenQuestionnaireInstanceId(payload.instanceId);
         setOpenQuestionnaireTemplateName(payload.templateName);
         setQuestionnaireFilledOnly(viewOnly);

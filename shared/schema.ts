@@ -461,9 +461,10 @@ export const questionnaireInstances = pgTable(
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
     messageId: varchar("message_id").references(() => conversationMessages.id, { onDelete: "set null" }),
-    patientUserId: varchar("patient_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Null until invite accept / first bind from conversations.patient_user_id
+    patientUserId: varchar("patient_user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     doctorUserId: varchar("doctor_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

@@ -28,6 +28,7 @@ import {
   type QuestionnaireTemplateStructure,
 } from "@shared/questionnaireTypes";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
+import { inviteExpiresAtForType, isInviteExpired, isInviteInactive } from "./inviteExpiry";
 import {
   insertConversationSchema,
   insertConversationMessageSchema,
@@ -362,7 +363,7 @@ ${allUrls.map(url => `  <url>
 
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAt = inviteExpiresAtForType(inviteType);
 
       await storage.createInvite({
         email,
@@ -385,7 +386,13 @@ ${allUrls.map(url => `  <url>
         await sendInviteEmail(email, inviteUrlWithEmail, inviteType, doctorName, inviter?.email);
       }
 
-      res.json({ success: true, email, inviteType, expiresAt, inviteUrl });
+      res.json({
+        success: true,
+        email,
+        inviteType,
+        expiresAt: inviteType === "patient" ? null : expiresAt,
+        inviteUrl,
+      });
     } catch (error) {
       console.error("Error creating invite:", error);
       res.status(500).json({ message: "Failed to create invite" });
@@ -411,7 +418,7 @@ ${allUrls.map(url => `  <url>
 
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAt = inviteExpiresAtForType("patient");
       await storage.createInvite({
         email: null,
         inviteType: "patient",
@@ -433,7 +440,7 @@ ${allUrls.map(url => `  <url>
         success: true,
         inviteType: "patient" as const,
         conversationId: conv.id,
-        expiresAt: expiresAt.toISOString(),
+        expiresAt: null,
         inviteUrl,
       });
     } catch (error) {
@@ -456,10 +463,10 @@ ${allUrls.map(url => `  <url>
       if (invite.email && invite.email !== email) {
         return res.status(400).json({ message: "invalid_invite_email" });
       }
-      if (invite.status !== "pending") {
+      if (isInviteInactive(invite)) {
         return res.status(400).json({ message: "invite_inactive" });
       }
-      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+      if (isInviteExpired(invite)) {
         return res.status(400).json({ message: "invite_expired" });
       }
 
@@ -479,10 +486,10 @@ ${allUrls.map(url => `  <url>
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
       const invite = await storage.getInviteByTokenHash(tokenHash);
       if (!invite) return res.status(404).json({ message: "invalid_invite" });
-      if (invite.status !== "pending") {
+      if (isInviteInactive(invite)) {
         return res.status(400).json({ message: "invite_inactive" });
       }
-      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+      if (isInviteExpired(invite)) {
         await storage.markInviteExpired(invite.id);
         return res.status(400).json({ message: "invite_expired" });
       }
@@ -528,10 +535,10 @@ ${allUrls.map(url => `  <url>
       if (invite.email && invite.email !== email) {
         return res.status(400).json({ message: "invalid_invite_email" });
       }
-      if (invite.status !== "pending") {
+      if (isInviteInactive(invite)) {
         return res.status(400).json({ message: "invite_inactive" });
       }
-      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+      if (isInviteExpired(invite)) {
         await storage.markInviteExpired(invite.id);
         return res.status(400).json({ message: "invite_expired" });
       }
@@ -579,10 +586,10 @@ ${allUrls.map(url => `  <url>
       if (invite.email && invite.email !== email) {
         return res.status(400).json({ message: "invalid_invite_email" });
       }
-      if (invite.status !== "pending") {
+      if (isInviteInactive(invite)) {
         return res.status(400).json({ message: "invite_inactive" });
       }
-      if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+      if (isInviteExpired(invite)) {
         await storage.markInviteExpired(invite.id);
         return res.status(400).json({ message: "invite_expired" });
       }
@@ -676,6 +683,7 @@ ${allUrls.map(url => `  <url>
           await storage.updateConversation(conv.id, { patientUserId: targetUser.id });
           await storage.addConversationParticipant(conv.id, targetUser.id, "member", patientChatTitle);
           conversationId = conv.id;
+          await storage.bindUnboundQuestionnaireInstancesForConversation(conv.id, targetUser.id);
           await postPatientChatStatusMessage(conv.id, targetUser.id, PATIENT_INVITE_ACCEPTED_MESSAGE);
           await publishDoctorChatsUpdated(invite.invitedByUserId);
           await publishDoctorChatsUpdated(targetUser.id);
@@ -1190,7 +1198,7 @@ ${allUrls.map(url => `  <url>
       const userId = await getCurrentUserId(req);
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const currentUser = await storage.getUser(userId);
-      const instance = await storage.getQuestionnaireInstance(req.params.id);
+      let instance = await storage.getQuestionnaireInstance(req.params.id);
       if (!instance) return res.status(404).json({ message: "Instance not found" });
       if (!(await storage.canAccessQuestionnaireInstance(instance, userId))) {
         return res.status(403).json({ message: "Access denied" });
@@ -1199,6 +1207,19 @@ ${allUrls.map(url => `  <url>
       if (!(await storage.isUserInConversation(userId, instance.conversationId))) {
         return res.status(403).json({ message: "Questionnaire is read-only outside the patient chat" });
       }
+
+      // Bind unbound instance to conversation patient (never to the writer blindly).
+      if (!instance.patientUserId) {
+        const conv = await storage.getConversation(instance.conversationId);
+        if (conv?.patientUserId) {
+          instance =
+            (await storage.bindQuestionnaireInstancePatientIfUnbound(
+              instance.id,
+              conv.patientUserId
+            )) ?? instance;
+        }
+      }
+
       const parsed = questionnaireInstanceDataSchema.parse(req.body?.data ?? req.body);
       const toSave = currentUser?.isAdmin
         ? parsed
@@ -1934,22 +1955,27 @@ ${allUrls.map(url => `  <url>
 
       const baseUrl = process.env.APP_URL || BASE_URL;
       const existingInvite = await storage.getPendingPatientInviteByConversationId(id);
-      const now = new Date();
-      if (
-        existingInvite &&
-        existingInvite.expiresAt > now &&
-        existingInvite.token
-      ) {
+      if (existingInvite?.token) {
+        const expiresAt = inviteExpiresAtForType("patient");
+        // Keep the same token forever; refresh sentinel expiry for legacy 24h rows.
+        if (new Date(existingInvite.expiresAt).getTime() < expiresAt.getTime()) {
+          await storage.renewInviteToken(
+            existingInvite.id,
+            existingInvite.tokenHash,
+            expiresAt,
+            existingInvite.token
+          );
+        }
         const inviteUrl = `${baseUrl}/invite/accept?token=${existingInvite.token}`;
         return res.json({
           inviteUrl,
-          expiresAt: existingInvite.expiresAt.toISOString(),
+          expiresAt: null,
         });
       }
 
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAt = inviteExpiresAtForType("patient");
 
       if (existingInvite) {
         await storage.renewInviteToken(existingInvite.id, tokenHash, expiresAt, token);
@@ -1968,7 +1994,7 @@ ${allUrls.map(url => `  <url>
 
       const inviteUrl = `${baseUrl}/invite/accept?token=${token}`;
 
-      res.json({ inviteUrl, expiresAt: expiresAt.toISOString() });
+      res.json({ inviteUrl, expiresAt: null });
     } catch (error) {
       console.error("Error issuing patient invite link:", error);
       res.status(500).json({ message: "Failed to issue patient invite link" });
@@ -2966,6 +2992,13 @@ ${allUrls.map(url => `  <url>
       let messageType: string = body.messageType ?? "message";
       let forwardedFromMessageId: string | null = null;
       let forwardedFromUserId: string | null = null;
+      /** When forwarding a template/instance card into a patient chat, create a fresh fillable instance. */
+      let materializeQuestionnaireInstance: {
+        templateId: string;
+        templateName: string;
+        structureSnapshot: QuestionnaireTemplateStructure;
+        hintsModeSnapshot: QuestionnaireHintsMode;
+      } | null = null;
       const resolveForwardedAuthorId = async (params: {
         directForwardedFromUserId?: string | null;
         directForwardedFromMessageId?: string | null;
@@ -3002,6 +3035,87 @@ ${allUrls.map(url => `  <url>
           } catch {
             return res.status(400).json({ message: "Invalid poll data" });
           }
+        }
+
+        // Forwarding a questionnaire card into a patient chat → new fillable instance.
+        if (
+          conv.type === "patient" &&
+          (messageType === "questionnaire" || messageType === "questionnaire_template")
+        ) {
+          if (!currentUser?.isAdmin) {
+            return res.status(403).json({ message: "Only doctors can send questionnaires" });
+          }
+          let templateId = "";
+          let templateName = "";
+          let structureSnapshot: QuestionnaireTemplateStructure | null = null;
+          let hintsModeSnapshot: QuestionnaireHintsMode = "icon";
+
+          if (messageType === "questionnaire_template" && content) {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(content);
+            } catch {
+              return res.status(400).json({ message: "Invalid questionnaire template message" });
+            }
+            const payload = questionnaireTemplateMessageContentSchema.safeParse(parsed);
+            if (!payload.success) {
+              return res.status(400).json({ message: "Invalid questionnaire template message" });
+            }
+            templateId = payload.data.templateId;
+            templateName = payload.data.templateName;
+            if (payload.data.snapshot) {
+              structureSnapshot = deepCloneQuestionnaireStructure(payload.data.snapshot);
+            }
+            if (payload.data.hintsMode) {
+              hintsModeSnapshot = parseQuestionnaireHintsMode(payload.data.hintsMode);
+            }
+          } else if (messageType === "questionnaire" && content) {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(content);
+            } catch {
+              return res.status(400).json({ message: "Invalid questionnaire message" });
+            }
+            const payload = questionnaireMessageContentSchema.safeParse(parsed);
+            if (!payload.success) {
+              return res.status(400).json({ message: "Invalid questionnaire message" });
+            }
+            const sourceInstance = await storage.getQuestionnaireInstance(payload.data.instanceId);
+            if (!sourceInstance) {
+              return res.status(404).json({ message: "Source questionnaire instance not found" });
+            }
+            if (!(await storage.canAccessQuestionnaireInstance(sourceInstance, currentUserId))) {
+              return res.status(403).json({ message: "Access denied" });
+            }
+            templateId = sourceInstance.templateId;
+            templateName = payload.data.templateName;
+            structureSnapshot = deepCloneQuestionnaireStructure(
+              sourceInstance.structureSnapshot as QuestionnaireTemplateStructure
+            );
+            hintsModeSnapshot = parseQuestionnaireHintsMode(sourceInstance.hintsModeSnapshot);
+          }
+
+          const template = await storage.getQuestionnaireTemplate(templateId);
+          if (!template) {
+            return res.status(404).json({ message: "Template not found" });
+          }
+          if (!structureSnapshot) {
+            structureSnapshot = deepCloneQuestionnaireStructure(
+              template.structure as QuestionnaireTemplateStructure
+            );
+            hintsModeSnapshot = parseQuestionnaireHintsMode(template.hintsMode);
+          }
+          if (!templateName) templateName = template.name;
+
+          materializeQuestionnaireInstance = {
+            templateId: template.id,
+            templateName,
+            structureSnapshot,
+            hintsModeSnapshot,
+          };
+          messageType = "questionnaire";
+          content = null;
+          imageUrl = null;
         }
       } else if (body.forwardSource) {
         return res.status(400).json({ message: "Invalid forward source" });
@@ -3060,9 +3174,7 @@ ${allUrls.map(url => `  <url>
             if (conv.type !== "patient") {
               return res.status(400).json({ message: "Questionnaire instances only in patient chats" });
             }
-            if (!conv.patientUserId) {
-              return res.status(400).json({ message: "Patient not found in conversation" });
-            }
+            // patientUserId may be null until invite accept — instance is created unbound.
           } else if (conv.type === "patient") {
             return res.status(400).json({ message: "Template preview not allowed in patient chats" });
           }
@@ -3096,7 +3208,7 @@ ${allUrls.map(url => `  <url>
         return res.status(400).json({ message: "Questionnaire cannot have image" });
       }
 
-      if (messageType === "questionnaire_template") {
+      if (messageType === "questionnaire_template" && !forwardedFromMessageId) {
         const template = await storage.getQuestionnaireTemplate(String(body.templateId));
         if (!template || template.ownerUserId !== currentUserId) {
           return res.status(404).json({ message: "Template not found" });
@@ -3126,23 +3238,34 @@ ${allUrls.map(url => `  <url>
       const message = await storage.createConversationMessage(validated);
 
       let finalMessage = message;
-      if (messageType === "questionnaire" && conv.patientUserId) {
-        const template = await storage.getQuestionnaireTemplate(String(body.templateId));
+      const shouldCreateQuestionnaireInstance =
+        messageType === "questionnaire" &&
+        (!!materializeQuestionnaireInstance || !forwardedFromMessageId);
+      if (shouldCreateQuestionnaireInstance) {
+        const fromForward = materializeQuestionnaireInstance;
+        const template = await storage.getQuestionnaireTemplate(
+          fromForward?.templateId ?? String(body.templateId || "")
+        );
         if (template) {
+          const structureSnapshot =
+            fromForward?.structureSnapshot ??
+            deepCloneQuestionnaireStructure(template.structure as QuestionnaireTemplateStructure);
+          const hintsModeSnapshot =
+            fromForward?.hintsModeSnapshot ?? parseQuestionnaireHintsMode(template.hintsMode);
+          const templateName = fromForward?.templateName ?? template.name;
+
           const instance = await storage.createQuestionnaireInstance({
             templateId: template.id,
             conversationId: id,
             messageId: message.id,
-            patientUserId: conv.patientUserId,
+            patientUserId: conv.patientUserId ?? null,
             doctorUserId: currentUserId,
-            structureSnapshot: deepCloneQuestionnaireStructure(
-              template.structure as QuestionnaireTemplateStructure
-            ),
-            hintsModeSnapshot: parseQuestionnaireHintsMode(template.hintsMode),
+            structureSnapshot,
+            hintsModeSnapshot,
           });
           const payload = questionnaireMessageContentSchema.parse({
             instanceId: instance.id,
-            templateName: template.name,
+            templateName,
           });
           const updatedContent = JSON.stringify(payload);
           await storage.editConversationMessage(message.id, { content: updatedContent });
@@ -3831,7 +3954,7 @@ ${allUrls.map(url => `  <url>
 
       const token = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAt = inviteExpiresAtForType("patient");
       await storage.createInvite({
         email: normalizedEmail,
         inviteType: "patient",

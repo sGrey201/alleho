@@ -108,7 +108,7 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
   const issueInviteLinkMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/patient-invite-link`);
-      return res.json() as Promise<{ inviteUrl: string; expiresAt: string }>;
+      return res.json() as Promise<{ inviteUrl: string; expiresAt: string | null }>;
     },
     onSuccess: (data) => {
       setInviteLinkDialog({ open: true, inviteUrl: data.inviteUrl });
@@ -300,7 +300,7 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
             <div className="rounded-md border bg-muted/40 p-3">
               <p className="break-all text-sm">{inviteLinkDialog.inviteUrl}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{t.inviteLinkValid24h}</p>
+            <p className="text-sm text-muted-foreground">{t.inviteLinkNoExpiry}</p>
             <DialogFooter className="flex flex-row justify-end gap-2">
               <Button
                 type="button"
