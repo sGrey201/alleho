@@ -6,6 +6,7 @@ import {
   UserPlus,
   Users,
   Radio,
+  ChartColumn,
 } from "lucide-react";
 import { Link } from "wouter";
 import { PwaInstallMenuFooter } from "@/components/PwaInstallMenuFooter";
@@ -60,6 +61,7 @@ type MenuItem = {
 
 type MessengerMenuProps = {
   isAdmin: boolean;
+  isPlatformAdmin?: boolean;
   showInstallButtons: boolean;
   onInstallSafari: () => void;
   onInstallChrome: () => void;
@@ -73,6 +75,7 @@ type MessengerMenuProps = {
 
 export function MessengerMenu({
   isAdmin,
+  isPlatformAdmin = false,
   showInstallButtons,
   onInstallSafari,
   onInstallChrome,
@@ -103,6 +106,16 @@ export function MessengerMenu({
       { id: "createGroup", icon: Users, label: t.createGroup, onClick: () => { onClose(); onCreateGroup(); } },
       { id: "createChannel", icon: Radio, label: t.createChannel, onClick: () => { onClose(); onCreateChannel(); } },
     );
+  }
+
+  if (isPlatformAdmin) {
+    items.push({
+      id: "metrics",
+      icon: ChartColumn,
+      label: t.adminMetricsMenu,
+      href: "/admin/metrics",
+      onClick: onClose,
+    });
   }
 
   items.push({

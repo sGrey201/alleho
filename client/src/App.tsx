@@ -25,6 +25,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import About from "@/pages/About";
 import Messenger from "@/pages/Messenger";
 import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
+import AdminMetrics from "@/pages/AdminMetrics";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
@@ -36,7 +37,7 @@ import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo, buildAuthR
 import { APP_HOME_PATH } from "@shared/brand";
 
 function Router() {
-  const { isLoading, isAdmin } = useAuth();
+  const { isLoading, isAdmin, isPlatformAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -85,6 +86,7 @@ function Router() {
           <Route path="/questionnaires" component={QuestionnaireTemplates} />
         </>
       )}
+      {isPlatformAdmin && <Route path="/admin/metrics" component={AdminMetrics} />}
       <Route component={NotFound} />
     </Switch>
   );
@@ -114,9 +116,11 @@ function AppContent() {
   const [location] = useLocation();
 
   const isQuestionnairesPage = location.startsWith("/questionnaires");
+  const isAdminMetricsPage = location.startsWith("/admin/metrics");
   const isFullscreenPage =
     location.startsWith("/messenger") ||
-    isQuestionnairesPage;
+    isQuestionnairesPage ||
+    isAdminMetricsPage;
 
   useImmersiveViewport(isFullscreenPage);
   useVisualViewportSize(isFullscreenPage);

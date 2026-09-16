@@ -101,6 +101,16 @@ export const t = {
   
   // Admin
   adminPanel: 'Панель администратора',
+  adminMetricsTitle: 'Метрики',
+  adminMetricsMenu: 'Метрики',
+  adminMetricsWindow: (days: number) => `За последние ${days} дней`,
+  adminMetricsNorthStarLabel: 'North Star',
+  adminMetricsNorthStarHint: 'Активные пары доктор–пациент',
+  adminMetricsDoctorWau: 'WAU докторов',
+  adminMetricsPatientWau: 'WAU пациентов',
+  adminMetricsInviteAcceptRate: 'Accept rate инвайтов',
+  adminMetricsInviteAcceptDetail: (accepted: number, created: number) =>
+    `${accepted} принято / ${created} создано`,
   manageArticles: 'Управление статьями',
   manageSubscriptions: 'Управление подписками',
   selectTags: 'Выбрать теги',

@@ -275,3 +275,39 @@ export const isAdmin: RequestHandler = async (req, res, next) => {
   (req as any).dbUser = user;
   next();
 };
+
+/** Comma-separated emails in PLATFORM_ADMIN_EMAILS — product owners only, not all homeopaths. */
+export function getPlatformAdminEmails(): Set<string> {
+  const raw = process.env.PLATFORM_ADMIN_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+export function isPlatformAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return getPlatformAdminEmails().has(email.trim().toLowerCase());
+}
+
+export const isPlatformAdmin: RequestHandler = async (req, res, next) => {
+  const session = req.session as any;
+
+  if (!session?.userId || session?.authType !== "email") {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const user = await storage.getUser(session.userId);
+  if (!user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (!isPlatformAdminEmail(user.email)) {
+    return res.status(403).json({ message: "Forbidden - Platform admin access required" });
+  }
+
+  (req as any).dbUser = user;
+  next();
+};

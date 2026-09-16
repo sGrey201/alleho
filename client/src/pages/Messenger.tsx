@@ -348,7 +348,7 @@ function FolderTabLabel({ label, unread }: { label: string; unread: number }) {
 }
 
 export default function Messenger() {
-  const { isAuthenticated, isLoading: authLoading, isAdmin, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, isPlatformAdmin, user } = useAuth();
   const [location, setLocation] = useLocation();
   const profileSearch = useSearch();
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
@@ -971,6 +971,7 @@ export default function Messenger() {
             <div className="messenger-menu-layer">
               <MessengerMenu
                 isAdmin={!!isAdmin}
+                isPlatformAdmin={!!isPlatformAdmin}
                 showInstallButtons={showInstallButtons}
                 onInstallSafari={() => setPwaInstallBrowser("safari")}
                 onInstallChrome={() => setPwaInstallBrowser("chrome")}

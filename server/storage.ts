@@ -169,6 +169,16 @@ export type PatientConversationListItem = {
   otherParticipantName?: string;
 };
 
+export type PlatformMetrics = {
+  windowDays: number;
+  activeDoctorPatientPairs: number;
+  doctorWau: number;
+  patientWau: number;
+  patientInvitesCreated: number;
+  patientInvitesAccepted: number;
+  inviteAcceptRate: number | null;
+};
+
 export type MessageReactionSummary = {
   emoji: string;
   count: number;
@@ -460,6 +470,7 @@ export interface IStorage {
   searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
+  getPlatformMetrics(windowDays?: number): Promise<PlatformMetrics>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
   getUserChannelSubscriptions(userId: string): Promise<UserChannelSubscriptionItem[]>;
   getMessengerChannelBrowseList(userId: string, isAdmin: boolean): Promise<MessengerChannelBrowseList>;
@@ -2917,6 +2928,84 @@ export class DatabaseStorage implements IStorage {
     });
 
     return items;
+  }
+
+  async getPlatformMetrics(windowDays = 7): Promise<PlatformMetrics> {
+    const days = Math.max(1, Math.min(90, Math.floor(windowDays)));
+    const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const [pairsRow] = await db
+      .select({
+        c: sql<number>`count(distinct ${conversations.id})::int`,
+      })
+      .from(conversations)
+      .innerJoin(
+        conversationMessages,
+        and(
+          eq(conversationMessages.conversationId, conversations.id),
+          isNull(conversationMessages.deletedAt),
+          gt(conversationMessages.createdAt, windowStart)
+        )
+      )
+      .where(and(eq(conversations.type, "patient"), isNull(conversations.deletedAt)));
+
+    const [doctorWauRow] = await db
+      .select({
+        c: sql<number>`count(distinct ${conversationMessages.authorUserId})::int`,
+      })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+      .innerJoin(users, eq(users.id, conversationMessages.authorUserId))
+      .where(
+        and(
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt),
+          isNull(conversationMessages.deletedAt),
+          gt(conversationMessages.createdAt, windowStart),
+          eq(users.isAdmin, true)
+        )
+      );
+
+    const [patientWauRow] = await db
+      .select({
+        c: sql<number>`count(distinct ${conversationMessages.authorUserId})::int`,
+      })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+      .innerJoin(users, eq(users.id, conversationMessages.authorUserId))
+      .where(
+        and(
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt),
+          isNull(conversationMessages.deletedAt),
+          gt(conversationMessages.createdAt, windowStart),
+          eq(users.isAdmin, false)
+        )
+      );
+
+    const [createdRow] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(invites)
+      .where(and(eq(invites.inviteType, "patient"), gt(invites.createdAt, windowStart)));
+
+    const [acceptedRow] = await db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(invites)
+      .where(and(eq(invites.inviteType, "patient"), gt(invites.acceptedAt, windowStart)));
+
+    const patientInvitesCreated = Number(createdRow?.c ?? 0);
+    const patientInvitesAccepted = Number(acceptedRow?.c ?? 0);
+
+    return {
+      windowDays: days,
+      activeDoctorPatientPairs: Number(pairsRow?.c ?? 0),
+      doctorWau: Number(doctorWauRow?.c ?? 0),
+      patientWau: Number(patientWauRow?.c ?? 0),
+      patientInvitesCreated,
+      patientInvitesAccepted,
+      inviteAcceptRate:
+        patientInvitesCreated > 0 ? patientInvitesAccepted / patientInvitesCreated : null,
+    };
   }
 
   async getChannelSponsorSettings(conversationId: string): Promise<ChannelSponsorSettings | undefined> {

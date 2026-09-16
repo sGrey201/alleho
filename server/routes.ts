@@ -9,7 +9,7 @@ import { canUserJoinGroup, canUserReadGroup } from "./groupAccess";
 import { db } from "./db";
 import { users, payments } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
-import { isAuthenticated, isAdmin } from "./emailAuth";
+import { isAuthenticated, isAdmin, isPlatformAdmin, isPlatformAdminEmail } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { generateAuthPassword } from "./authPassword";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
@@ -135,6 +135,7 @@ function toAuthUserResponse(user: any) {
     city: user.city,
     subscriptionExpiresAt: user.subscriptionExpiresAt,
     isAdmin: user.isAdmin,
+    isPlatformAdmin: isPlatformAdminEmail(user.email),
     requiresRoleSelection: user.requiresRoleSelection,
     authType: "email",
     hasPassword: !!user.passwordHash,
@@ -262,6 +263,16 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get("/api/admin/metrics", isAuthenticated, isPlatformAdmin, async (_req, res) => {
+    try {
+      const metrics = await storage.getPlatformMetrics(7);
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching platform metrics:", error);
+      res.status(500).json({ message: "Failed to fetch metrics" });
     }
   });
 
