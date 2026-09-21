@@ -21,9 +21,11 @@ export function useAuth() {
     },
     retry: (failureCount, error) => failureCount < 2 && isTransientQueryError(error),
     retryDelay: transientQueryRetryDelay,
-    refetchOnWindowFocus: false,
+    // Auth response can gain fields (e.g. isPlatformAdmin); do not keep a forever-fresh cache.
+    staleTime: 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    staleTime: Infinity,
     networkMode: "offlineFirst",
   });
 

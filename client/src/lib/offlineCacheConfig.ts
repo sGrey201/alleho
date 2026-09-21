@@ -1,5 +1,5 @@
 /** Bump when persisted query shape or policy changes. */
-export const OFFLINE_CACHE_BUSTER = "v1";
+export const OFFLINE_CACHE_BUSTER = "v2-platform-admin";
 
 /** How long dehydrated query data stays valid in IndexedDB. */
 export const OFFLINE_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
