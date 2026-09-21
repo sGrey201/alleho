@@ -169,6 +169,11 @@ export type PatientConversationListItem = {
   otherParticipantName?: string;
 };
 
+export type PlatformMetricsWeeklyPoint = {
+  weekStart: string;
+  activeDoctorPatientPairs: number;
+};
+
 export type PlatformMetrics = {
   windowDays: number;
   activeDoctorPatientPairs: number;
@@ -177,6 +182,7 @@ export type PlatformMetrics = {
   patientInvitesCreated: number;
   patientInvitesAccepted: number;
   inviteAcceptRate: number | null;
+  weeklyActivePairs: PlatformMetricsWeeklyPoint[];
 };
 
 export type MessageReactionSummary = {
@@ -470,7 +476,10 @@ export interface IStorage {
   searchUsersForInvite(excludeUserId: string, nameFilter?: string): Promise<User[]>;
   getMessengerPersonalContacts(currentUserId: string): Promise<MessengerPersonalContact[]>;
   getPatientConversationsForUser(userId: string): Promise<PatientConversationListItem[]>;
-  getPlatformMetrics(windowDays?: number): Promise<PlatformMetrics>;
+  getPlatformMetrics(
+    windowDays?: number,
+    options?: { excludeEmails?: string[]; weeklyWeeks?: number }
+  ): Promise<PlatformMetrics>;
   getMessengerChannels(currentUserId: string): Promise<MessengerChannelListItem[]>;
   getUserChannelSubscriptions(userId: string): Promise<UserChannelSubscriptionItem[]>;
   getMessengerChannelBrowseList(userId: string, isAdmin: boolean): Promise<MessengerChannelBrowseList>;
@@ -2930,9 +2939,30 @@ export class DatabaseStorage implements IStorage {
     return items;
   }
 
-  async getPlatformMetrics(windowDays = 7): Promise<PlatformMetrics> {
+  async getPlatformMetrics(
+    windowDays = 7,
+    options?: { excludeEmails?: string[]; weeklyWeeks?: number }
+  ): Promise<PlatformMetrics> {
     const days = Math.max(1, Math.min(90, Math.floor(windowDays)));
+    const weeklyWeeks = Math.max(1, Math.min(26, Math.floor(options?.weeklyWeeks ?? 13)));
+    const excludeEmails = (options?.excludeEmails ?? [])
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
     const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const notPlatformAdminChat =
+      excludeEmails.length === 0
+        ? sql`true`
+        : sql`NOT EXISTS (
+            SELECT 1
+            FROM ${conversationParticipants} cp
+            INNER JOIN ${users} u ON u.id = cp.user_id
+            WHERE cp.conversation_id = ${conversations.id}
+              AND lower(u.email) IN (${sql.join(
+                excludeEmails.map((email) => sql`${email}`),
+                sql`, `
+              )})
+          )`;
 
     const [pairsRow] = await db
       .select({
@@ -2947,7 +2977,13 @@ export class DatabaseStorage implements IStorage {
           gt(conversationMessages.createdAt, windowStart)
         )
       )
-      .where(and(eq(conversations.type, "patient"), isNull(conversations.deletedAt)));
+      .where(
+        and(
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt),
+          notPlatformAdminChat
+        )
+      );
 
     const [doctorWauRow] = await db
       .select({
@@ -2962,7 +2998,14 @@ export class DatabaseStorage implements IStorage {
           isNull(conversations.deletedAt),
           isNull(conversationMessages.deletedAt),
           gt(conversationMessages.createdAt, windowStart),
-          eq(users.isAdmin, true)
+          eq(users.isAdmin, true),
+          notPlatformAdminChat,
+          excludeEmails.length === 0
+            ? sql`true`
+            : sql`lower(${users.email}) NOT IN (${sql.join(
+                excludeEmails.map((email) => sql`${email}`),
+                sql`, `
+              )})`
         )
       );
 
@@ -2979,7 +3022,8 @@ export class DatabaseStorage implements IStorage {
           isNull(conversations.deletedAt),
           isNull(conversationMessages.deletedAt),
           gt(conversationMessages.createdAt, windowStart),
-          eq(users.isAdmin, false)
+          eq(users.isAdmin, false),
+          notPlatformAdminChat
         )
       );
 
@@ -2996,6 +3040,55 @@ export class DatabaseStorage implements IStorage {
     const patientInvitesCreated = Number(createdRow?.c ?? 0);
     const patientInvitesAccepted = Number(acceptedRow?.c ?? 0);
 
+    const weeklySeriesStart = new Date(Date.now() - weeklyWeeks * 7 * 24 * 60 * 60 * 1000);
+    const weeklyRows = await db
+      .select({
+        weekStart: sql<string>`to_char(date_trunc('week', ${conversationMessages.createdAt}), 'YYYY-MM-DD')`,
+        activePairs: sql<number>`count(distinct ${conversations.id})::int`,
+      })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+      .where(
+        and(
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt),
+          isNull(conversationMessages.deletedAt),
+          gt(conversationMessages.createdAt, weeklySeriesStart),
+          notPlatformAdminChat
+        )
+      )
+      .groupBy(sql`date_trunc('week', ${conversationMessages.createdAt})`)
+      .orderBy(sql`date_trunc('week', ${conversationMessages.createdAt})`);
+
+    const weeklyByStart = new Map(
+      weeklyRows.map((row) => [row.weekStart, Number(row.activePairs ?? 0)])
+    );
+
+    const [currentWeekRow] = await db
+      .select({
+        weekStart: sql<string>`to_char(date_trunc('week', now()), 'YYYY-MM-DD')`,
+      })
+      .from(users)
+      .limit(1);
+
+    const currentWeekKey =
+      currentWeekRow?.weekStart ?? new Date().toISOString().slice(0, 10);
+
+    const shiftIsoDate = (isoDate: string, days: number): string => {
+      const [y, m, d] = isoDate.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d + days));
+      return dt.toISOString().slice(0, 10);
+    };
+
+    const weeklyActivePairs: PlatformMetricsWeeklyPoint[] = [];
+    for (let i = weeklyWeeks - 1; i >= 0; i--) {
+      const key = shiftIsoDate(currentWeekKey, -i * 7);
+      weeklyActivePairs.push({
+        weekStart: key,
+        activeDoctorPatientPairs: weeklyByStart.get(key) ?? 0,
+      });
+    }
+
     return {
       windowDays: days,
       activeDoctorPatientPairs: Number(pairsRow?.c ?? 0),
@@ -3005,6 +3098,7 @@ export class DatabaseStorage implements IStorage {
       patientInvitesAccepted,
       inviteAcceptRate:
         patientInvitesCreated > 0 ? patientInvitesAccepted / patientInvitesCreated : null,
+      weeklyActivePairs,
     };
   }
 

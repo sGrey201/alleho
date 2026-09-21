@@ -9,7 +9,7 @@ import { canUserJoinGroup, canUserReadGroup } from "./groupAccess";
 import { db } from "./db";
 import { users, payments } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
-import { isAuthenticated, isAdmin, isPlatformAdmin, isPlatformAdminEmail } from "./emailAuth";
+import { isAuthenticated, isAdmin, isPlatformAdmin, isPlatformAdminEmail, getPlatformAdminEmails } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { generateAuthPassword } from "./authPassword";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
@@ -268,7 +268,10 @@ ${allUrls.map(url => `  <url>
 
   app.get("/api/admin/metrics", isAuthenticated, isPlatformAdmin, async (_req, res) => {
     try {
-      const metrics = await storage.getPlatformMetrics(7);
+      const metrics = await storage.getPlatformMetrics(7, {
+        excludeEmails: [...getPlatformAdminEmails()],
+        weeklyWeeks: 13,
+      });
       res.json(metrics);
     } catch (error) {
       console.error("Error fetching platform metrics:", error);

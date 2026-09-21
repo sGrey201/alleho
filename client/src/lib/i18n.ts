@@ -106,6 +106,8 @@ export const t = {
   adminMetricsWindow: (days: number) => `За последние ${days} дней`,
   adminMetricsNorthStarLabel: 'North Star',
   adminMetricsNorthStarHint: 'Активные пары доктор–пациент',
+  adminMetricsWeeklyChartTitle: 'Активные пары по неделям',
+  adminMetricsWeeklyChartHint: 'Последние 3 месяца',
   adminMetricsDoctorWau: 'WAU докторов',
   adminMetricsPatientWau: 'WAU пациентов',
   adminMetricsInviteAcceptRate: 'Accept rate инвайтов',
