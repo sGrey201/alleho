@@ -4,6 +4,7 @@ import { getQueryFn, isTransientQueryError, queryClient, transientQueryRetryDela
 
 export type AuthUser = User & {
   isPlatformAdmin?: boolean;
+  helpAvailable?: boolean;
   authType?: string;
   hasPassword?: boolean;
 };
@@ -35,6 +36,7 @@ export function useAuth() {
     isAuthenticated: !!user,
     isAdmin: user?.isAdmin || false,
     isPlatformAdmin: user?.isPlatformAdmin || false,
+    helpAvailable: user?.helpAvailable || false,
     requiresRoleSelection: user?.requiresRoleSelection ?? false,
     hasActiveSubscription: user ? (user.subscriptionExpiresAt ? new Date(user.subscriptionExpiresAt) > new Date() : false) : false,
   };

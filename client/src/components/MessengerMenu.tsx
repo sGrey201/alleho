@@ -7,6 +7,7 @@ import {
   Users,
   Radio,
   ChartColumn,
+  LifeBuoy,
 } from "lucide-react";
 import { Link } from "wouter";
 import { PwaInstallMenuFooter } from "@/components/PwaInstallMenuFooter";
@@ -19,9 +20,17 @@ type MessengerMenuTileProps = {
   onClick?: () => void;
   href?: string;
   className?: string;
+  disabled?: boolean;
 };
 
-function MessengerMenuTile({ icon: Icon, label, onClick, href, className }: MessengerMenuTileProps) {
+function MessengerMenuTile({
+  icon: Icon,
+  label,
+  onClick,
+  href,
+  className,
+  disabled,
+}: MessengerMenuTileProps) {
   const content = (
     <>
       <Icon className="h-8 w-8 shrink-0 text-primary" aria-hidden />
@@ -33,6 +42,7 @@ function MessengerMenuTile({ icon: Icon, label, onClick, href, className }: Mess
     "aspect-square w-full rounded-2xl border border-border/60 bg-muted/30 p-3",
     "flex flex-col items-center justify-center gap-2",
     "hover:bg-muted/50 active:bg-muted/60 transition-colors",
+    disabled && "pointer-events-none opacity-50",
     className
   );
 
@@ -45,7 +55,7 @@ function MessengerMenuTile({ icon: Icon, label, onClick, href, className }: Mess
   }
 
   return (
-    <button type="button" className={tileClass} onClick={onClick}>
+    <button type="button" className={tileClass} onClick={onClick} disabled={disabled}>
       {content}
     </button>
   );
@@ -57,11 +67,14 @@ type MenuItem = {
   label: string;
   href?: string;
   onClick?: () => void;
+  disabled?: boolean;
 };
 
 type MessengerMenuProps = {
   isAdmin: boolean;
   isPlatformAdmin?: boolean;
+  helpAvailable?: boolean;
+  helpPending?: boolean;
   showInstallButtons: boolean;
   onInstallSafari: () => void;
   onInstallChrome: () => void;
@@ -70,12 +83,15 @@ type MessengerMenuProps = {
   onInvite: () => void;
   onCreateGroup: () => void;
   onCreateChannel: () => void;
+  onHelp?: () => void;
   onClose: () => void;
 };
 
 export function MessengerMenu({
   isAdmin,
   isPlatformAdmin = false,
+  helpAvailable = false,
+  helpPending = false,
   showInstallButtons,
   onInstallSafari,
   onInstallChrome,
@@ -84,6 +100,7 @@ export function MessengerMenu({
   onInvite,
   onCreateGroup,
   onCreateChannel,
+  onHelp,
   onClose,
 }: MessengerMenuProps) {
   const installFooter = (
@@ -106,6 +123,19 @@ export function MessengerMenu({
       { id: "createGroup", icon: Users, label: t.createGroup, onClick: () => { onClose(); onCreateGroup(); } },
       { id: "createChannel", icon: Radio, label: t.createChannel, onClick: () => { onClose(); onCreateChannel(); } },
     );
+  }
+
+  if (isAdmin && helpAvailable && onHelp) {
+    items.push({
+      id: "help",
+      icon: LifeBuoy,
+      label: t.messengerHelp,
+      disabled: helpPending,
+      onClick: () => {
+        onClose();
+        onHelp();
+      },
+    });
   }
 
   if (isPlatformAdmin) {
@@ -146,6 +176,7 @@ export function MessengerMenu({
                 label={item.label}
                 href={item.href}
                 onClick={item.onClick}
+                disabled={item.disabled}
               />
             ))}
           </div>
@@ -159,6 +190,7 @@ export function MessengerMenu({
                   label={item.label}
                   href={item.href}
                   onClick={item.onClick}
+                  disabled={item.disabled}
                   className="w-full"
                 />
               </div>

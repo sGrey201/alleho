@@ -348,7 +348,7 @@ function FolderTabLabel({ label, unread }: { label: string; unread: number }) {
 }
 
 export default function Messenger() {
-  const { isAuthenticated, isLoading: authLoading, isAdmin, isPlatformAdmin, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, isAdmin, isPlatformAdmin, helpAvailable, user } = useAuth();
   const [location, setLocation] = useLocation();
   const profileSearch = useSearch();
   const [, groupParams] = useRoute("/messenger/group/:conversationId");
@@ -893,6 +893,21 @@ export default function Messenger() {
     },
   });
 
+  const openHelpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/messenger/help", {});
+      return (await res.json()) as { conversationId: string; created: boolean };
+    },
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      setFolder("doctors");
+      setLocation(`/messenger/direct/${data.conversationId}`);
+    },
+    onError: () => {
+      toast({ title: t.messengerHelpError, variant: "destructive" });
+    },
+  });
+
   const handleSelectChannel = (channel: MessengerSearchChannel) => {
     setFolder("channels");
     setLocation(`/messenger/channel/${channel.id}`);
@@ -972,6 +987,8 @@ export default function Messenger() {
               <MessengerMenu
                 isAdmin={!!isAdmin}
                 isPlatformAdmin={!!isPlatformAdmin}
+                helpAvailable={!!helpAvailable}
+                helpPending={openHelpMutation.isPending}
                 showInstallButtons={showInstallButtons}
                 onInstallSafari={() => setPwaInstallBrowser("safari")}
                 onInstallChrome={() => setPwaInstallBrowser("chrome")}
@@ -986,6 +1003,7 @@ export default function Messenger() {
                   setCreateConversationName("");
                   setCreateConversationType("channel");
                 }}
+                onHelp={() => openHelpMutation.mutate()}
                 onClose={() => setMenuOpen(false)}
               />
             </div>

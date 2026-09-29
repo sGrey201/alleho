@@ -17,6 +17,14 @@ type PlatformMetricsWeeklyPoint = {
   activeDoctorPatientPairs: number;
 };
 
+type PlatformMetricsDoctorRow = {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  activeSessions7d: number;
+  activeSessions28d: number;
+};
+
 type PlatformMetrics = {
   windowDays: number;
   activeDoctorPatientPairs: number;
@@ -26,6 +34,7 @@ type PlatformMetrics = {
   patientInvitesAccepted: number;
   inviteAcceptRate: number | null;
   weeklyActivePairs: PlatformMetricsWeeklyPoint[];
+  topDoctors: PlatformMetricsDoctorRow[];
 };
 
 const chartConfig = {
@@ -61,6 +70,8 @@ export default function AdminMetrics() {
       })),
     [data?.weeklyActivePairs]
   );
+
+  const topDoctors = data?.topDoctors ?? [];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -158,6 +169,63 @@ export default function AdminMetrics() {
                   )}
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-card px-4 py-4">
+              <div className="mb-3">
+                <p className="text-sm font-medium">{t.adminMetricsTopDoctorsTitle}</p>
+                <p className="text-xs text-muted-foreground">{t.adminMetricsTopDoctorsHint}</p>
+              </div>
+              {topDoctors.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {t.adminMetricsTopDoctorsEmpty}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[20rem] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 text-xs text-muted-foreground">
+                        <th className="pb-2 pr-3 font-medium">{t.adminMetricsDoctorCol}</th>
+                        <th className="pb-2 pl-2 text-right font-medium tabular-nums">
+                          {t.adminMetricsSessions7dCol}
+                        </th>
+                        <th className="pb-2 pl-2 text-right font-medium tabular-nums">
+                          {t.adminMetricsSessions28dCol}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topDoctors.map((doctor) => {
+                        const showEmail =
+                          !!doctor.email &&
+                          doctor.displayName !== doctor.email &&
+                          !doctor.displayName.includes(doctor.email);
+                        return (
+                          <tr
+                            key={doctor.userId}
+                            className="border-b border-border/40 last:border-0"
+                          >
+                            <td className="py-2.5 pr-3 align-top">
+                              <p className="font-medium leading-snug">{doctor.displayName}</p>
+                              {showEmail ? (
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {doctor.email}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="py-2.5 pl-2 text-right align-top tabular-nums font-medium">
+                              {doctor.activeSessions7d}
+                            </td>
+                            <td className="py-2.5 pl-2 text-right align-top tabular-nums text-muted-foreground">
+                              {doctor.activeSessions28d}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

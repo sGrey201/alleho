@@ -174,6 +174,14 @@ export type PlatformMetricsWeeklyPoint = {
   activeDoctorPatientPairs: number;
 };
 
+export type PlatformMetricsDoctorRow = {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  activeSessions7d: number;
+  activeSessions28d: number;
+};
+
 export type PlatformMetrics = {
   windowDays: number;
   activeDoctorPatientPairs: number;
@@ -183,6 +191,7 @@ export type PlatformMetrics = {
   patientInvitesAccepted: number;
   inviteAcceptRate: number | null;
   weeklyActivePairs: PlatformMetricsWeeklyPoint[];
+  topDoctors: PlatformMetricsDoctorRow[];
 };
 
 export type MessageReactionSummary = {
@@ -3089,6 +3098,66 @@ export class DatabaseStorage implements IStorage {
       });
     }
 
+    const windowStart7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const windowStart28d = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+    const notExcludedDoctorEmail =
+      excludeEmails.length === 0
+        ? sql`true`
+        : sql`lower(${users.email}) NOT IN (${sql.join(
+            excludeEmails.map((email) => sql`${email}`),
+            sql`, `
+          )})`;
+
+    const doctorMetricRows = await db
+      .select({
+        userId: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        activeSessions7d: sql<number>`count(distinct case when ${conversationMessages.createdAt} > ${windowStart7d} then ${conversations.id} end)::int`,
+        activeSessions28d: sql<number>`count(distinct ${conversations.id})::int`,
+      })
+      .from(users)
+      .innerJoin(conversationParticipants, eq(conversationParticipants.userId, users.id))
+      .innerJoin(conversations, eq(conversations.id, conversationParticipants.conversationId))
+      .innerJoin(
+        conversationMessages,
+        and(
+          eq(conversationMessages.conversationId, conversations.id),
+          isNull(conversationMessages.deletedAt),
+          gt(conversationMessages.createdAt, windowStart28d)
+        )
+      )
+      .where(
+        and(
+          eq(users.isAdmin, true),
+          eq(conversations.type, "patient"),
+          isNull(conversations.deletedAt),
+          notPlatformAdminChat,
+          notExcludedDoctorEmail
+        )
+      )
+      .groupBy(users.id, users.firstName, users.lastName, users.email)
+      .orderBy(
+        sql`count(distinct case when ${conversationMessages.createdAt} > ${windowStart7d} then ${conversations.id} end) desc`,
+        sql`count(distinct ${conversations.id}) desc`
+      )
+      .limit(25);
+
+    const topDoctors: PlatformMetricsDoctorRow[] = doctorMetricRows.map((row) => {
+      const displayName =
+        [row.firstName, row.lastName].filter(Boolean).join(" ").trim() ||
+        row.email?.trim() ||
+        "—";
+      return {
+        userId: row.userId,
+        displayName,
+        email: row.email ?? null,
+        activeSessions7d: Number(row.activeSessions7d ?? 0),
+        activeSessions28d: Number(row.activeSessions28d ?? 0),
+      };
+    });
+
     return {
       windowDays: days,
       activeDoctorPatientPairs: Number(pairsRow?.c ?? 0),
@@ -3099,6 +3168,7 @@ export class DatabaseStorage implements IStorage {
       inviteAcceptRate:
         patientInvitesCreated > 0 ? patientInvitesAccepted / patientInvitesCreated : null,
       weeklyActivePairs,
+      topDoctors,
     };
   }
 

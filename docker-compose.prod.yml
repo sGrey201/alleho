@@ -27,6 +27,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS}
+      HELP_SUPPORT_USER_ID: ${HELP_SUPPORT_USER_ID}
     depends_on:
       - db
       - redis

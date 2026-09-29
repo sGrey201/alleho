@@ -119,7 +119,13 @@ async function getCurrentUserId(req: any): Promise<string | null> {
   return null;
 }
 
+function getHelpSupportUserId(): string | null {
+  const id = process.env.HELP_SUPPORT_USER_ID?.trim();
+  return id || null;
+}
+
 function toAuthUserResponse(user: any) {
+  const helpSupportUserId = getHelpSupportUserId();
   return {
     id: user.id,
     email: user.email,
@@ -136,6 +142,7 @@ function toAuthUserResponse(user: any) {
     subscriptionExpiresAt: user.subscriptionExpiresAt,
     isAdmin: user.isAdmin,
     isPlatformAdmin: isPlatformAdminEmail(user.email),
+    helpAvailable: !!(user.isAdmin && helpSupportUserId && helpSupportUserId !== user.id),
     requiresRoleSelection: user.requiresRoleSelection,
     authType: "email",
     hasPassword: !!user.passwordHash,
@@ -1598,6 +1605,61 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error get-or-create direct conversation:", error);
       res.status(500).json({ message: "Failed to get conversation" });
+    }
+  });
+
+  // Open help direct chat with support contact; send welcome only when the chat is newly created.
+  app.post("/api/messenger/help", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const supportUserId = getHelpSupportUserId();
+      if (!supportUserId) {
+        return res.status(503).json({ message: "Help support is not configured" });
+      }
+      if (supportUserId === currentUserId) {
+        return res.status(400).json({ message: "Cannot open help chat with yourself" });
+      }
+      const supportUser = await storage.getUser(supportUserId);
+      if (!supportUser?.isAdmin) {
+        return res.status(503).json({ message: "Help support is not available" });
+      }
+
+      let created = false;
+      let conversationId = await storage.getDirectConversationBetween(currentUserId, supportUserId);
+      if (!conversationId) {
+        const conv = await storage.createConversation({ type: "direct", name: null, patientUserId: null });
+        await storage.addConversationParticipant(conv.id, currentUserId, "owner");
+        await storage.addConversationParticipant(conv.id, supportUserId, "member");
+        conversationId = conv.id;
+        created = true;
+      }
+
+      if (created) {
+        const welcomeText = "👋 Добрый день";
+        const message = await storage.createConversationMessage({
+          conversationId,
+          authorUserId: currentUserId,
+          content: welcomeText,
+          messageType: "message",
+        });
+        const [wsPayload] = await enrichConversationMessages([message], currentUserId);
+        await pushConversationRecentMessage(conversationId, wsPayload);
+        await publishConversationMessage(conversationId, wsPayload);
+        void notifyConversationNewMessage(conversationId, currentUserId, wsPayload).catch((err) =>
+          console.error("[Push] help welcome notify error:", err)
+        );
+        void notifyMessengerConversationActivity(conversationId, currentUserId).catch((err) =>
+          console.error("[DoctorChats] help welcome notify error:", err)
+        );
+        await publishDoctorChatsUpdated(currentUserId);
+        await publishDoctorChatsUpdated(supportUserId);
+      }
+
+      res.json({ conversationId, created });
+    } catch (error) {
+      console.error("Error opening help conversation:", error);
+      res.status(500).json({ message: "Failed to open help chat" });
     }
   });
 

@@ -75,6 +75,8 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webmanifest}"],
+        // Main bundle can exceed Workbox default 2 MiB; raise so PWA build does not fail.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
     ...(process.env.NODE_ENV !== "production" &&
