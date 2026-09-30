@@ -1,12 +1,16 @@
 export function messengerProfilePath(userId: string, returnTo?: string): string {
   const base = `/messenger/profile/${userId}`;
-  if (!returnTo || !returnTo.startsWith("/messenger")) return base;
+  if (!returnTo || !(returnTo.startsWith("/messenger") || returnTo.startsWith("/admin"))) {
+    return base;
+  }
   return `${base}?from=${encodeURIComponent(returnTo)}`;
 }
 
 export function messengerOwnProfilePath(returnTo?: string): string {
   const base = "/messenger/profile";
-  if (!returnTo || !returnTo.startsWith("/messenger")) return base;
+  if (!returnTo || !(returnTo.startsWith("/messenger") || returnTo.startsWith("/admin"))) {
+    return base;
+  }
   return `${base}?from=${encodeURIComponent(returnTo)}`;
 }
 
@@ -19,7 +23,7 @@ export function messengerProfileReturnPath(search: string): string {
 export function getMessengerProfileFromSearch(search: string): string | undefined {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const from = params.get("from");
-  if (from && from.startsWith("/messenger")) return from;
+  if (from && (from.startsWith("/messenger") || from.startsWith("/admin"))) return from;
   return undefined;
 }
 

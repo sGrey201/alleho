@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { t } from "@/lib/i18n";
 
 type PlatformMetricsWeeklyPoint = {
@@ -206,7 +207,12 @@ export default function AdminMetrics() {
                             className="border-b border-border/40 last:border-0"
                           >
                             <td className="py-2.5 pr-3 align-top">
-                              <p className="font-medium leading-snug">{doctor.displayName}</p>
+                              <Link
+                                href={messengerProfilePath(doctor.userId, "/admin/metrics")}
+                                className="font-medium leading-snug text-primary hover:underline"
+                              >
+                                {doctor.displayName}
+                              </Link>
                               {showEmail ? (
                                 <p className="mt-0.5 text-xs text-muted-foreground">
                                   {doctor.email}
