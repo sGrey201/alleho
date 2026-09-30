@@ -154,6 +154,26 @@ function renderDiscoverSearchSubtitle(
   );
 }
 
+const PENDING_PATIENT_INVITE_KEY = "hovial-pending-patient-invite";
+
+type PendingPatientInvite = {
+  inviteUrl: string;
+  expiresAt: string | null;
+  conversationId: string;
+};
+
+function readPendingPatientInvite(): PendingPatientInvite | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_PATIENT_INVITE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingPatientInvite;
+    if (!parsed.inviteUrl || !parsed.conversationId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function getChatListLabel(chat: ChatItem, isAdminUser: boolean): string {
   if (chat.type === "patient") {
     if (!isAdminUser) {
@@ -445,12 +465,26 @@ export default function Messenger() {
     inviteUrl: string;
     expiresAt: string | null;
     inviteType: "patient" | "homeopath" | null;
+    conversationId?: string;
   }>({ open: false, inviteUrl: "", expiresAt: null, inviteType: null });
 
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const prevLocationRef = useRef(location);
+
+  useEffect(() => {
+    const pending = readPendingPatientInvite();
+    if (!pending) return;
+    if (!location.includes(pending.conversationId)) return;
+    setInviteLinkData({
+      open: true,
+      inviteUrl: pending.inviteUrl,
+      expiresAt: pending.expiresAt,
+      inviteType: "patient",
+      conversationId: pending.conversationId,
+    });
+  }, [location]);
 
   const activeFolder = isAdmin
     ? folder
@@ -853,6 +887,14 @@ export default function Messenger() {
       }>;
     },
     onSuccess: (data) => {
+      sessionStorage.setItem(
+        PENDING_PATIENT_INVITE_KEY,
+        JSON.stringify({
+          inviteUrl: data.inviteUrl,
+          expiresAt: data.expiresAt,
+          conversationId: data.conversationId,
+        } satisfies PendingPatientInvite)
+      );
       setPatientInviteOpen(false);
       setPatientInviteName("");
       setFolder("patients");
@@ -862,6 +904,7 @@ export default function Messenger() {
         inviteUrl: data.inviteUrl,
         expiresAt: data.expiresAt,
         inviteType: "patient",
+        conversationId: data.conversationId,
       });
       setLocation(`/messenger/chat/${data.conversationId}`);
     },
@@ -1517,7 +1560,13 @@ export default function Messenger() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={inviteLinkData.open} onOpenChange={(open) => setInviteLinkData((prev) => ({ ...prev, open }))}>
+      <Dialog
+        open={inviteLinkData.open}
+        onOpenChange={(open) => {
+          setInviteLinkData((prev) => ({ ...prev, open }));
+          if (!open) sessionStorage.removeItem(PENDING_PATIENT_INVITE_KEY);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>

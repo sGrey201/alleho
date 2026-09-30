@@ -297,6 +297,9 @@ export interface IStorage {
 
   // Questionnaire template & instance operations
   listQuestionnaireTemplates(ownerUserId: string): Promise<QuestionnaireTemplate[]>;
+  listQuestionnaireTemplateSummaries(
+    ownerUserId: string
+  ): Promise<Array<{ id: string; name: string }>>;
   getQuestionnaireTemplate(id: string): Promise<QuestionnaireTemplate | undefined>;
   createQuestionnaireTemplate(data: {
     ownerUserId: string;
@@ -404,6 +407,11 @@ export interface IStorage {
     userId: string,
     displayName: string
   ): Promise<void>;
+  setConversationParticipantRole(
+    conversationId: string,
+    userId: string,
+    role: "member" | "admin"
+  ): Promise<boolean>;
   removeConversationParticipant(conversationId: string, userId: string): Promise<boolean>;
   isUserInConversation(userId: string, conversationId: string): Promise<boolean>;
   getParticipantRole(conversationId: string, userId: string): Promise<string | undefined>;
@@ -1054,6 +1062,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(questionnaireTemplates.updatedAt));
   }
 
+  async listQuestionnaireTemplateSummaries(
+    ownerUserId: string
+  ): Promise<Array<{ id: string; name: string }>> {
+    return db
+      .select({
+        id: questionnaireTemplates.id,
+        name: questionnaireTemplates.name,
+      })
+      .from(questionnaireTemplates)
+      .where(eq(questionnaireTemplates.ownerUserId, ownerUserId))
+      .orderBy(desc(questionnaireTemplates.updatedAt));
+  }
+
   async getQuestionnaireTemplate(id: string): Promise<QuestionnaireTemplate | undefined> {
     const [row] = await db.select().from(questionnaireTemplates).where(eq(questionnaireTemplates.id, id));
     return row;
@@ -1577,6 +1598,25 @@ export class DatabaseStorage implements IStorage {
           eq(conversationParticipants.userId, userId)
         )
       );
+  }
+
+  async setConversationParticipantRole(
+    conversationId: string,
+    userId: string,
+    role: "member" | "admin"
+  ): Promise<boolean> {
+    const result = await db
+      .update(conversationParticipants)
+      .set({ role })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId),
+          ne(conversationParticipants.role, "owner")
+        )
+      )
+      .returning();
+    return result.length > 0;
   }
 
   async removeConversationParticipant(conversationId: string, userId: string): Promise<boolean> {

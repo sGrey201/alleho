@@ -31,6 +31,8 @@ type Props = {
   isHiddenChannel?: boolean;
   onApproveSubscription?: (userId: string) => void;
   isApproving?: boolean;
+  onSetAdmin?: (userId: string, makeAdmin: boolean) => void;
+  isUpdatingRole?: boolean;
 };
 
 type SubscriptionInfo = {
@@ -92,6 +94,8 @@ export default function ChannelSubscribersList({
   isHiddenChannel = false,
   onApproveSubscription,
   isApproving = false,
+  onSetAdmin,
+  isUpdatingRole = false,
 }: Props) {
   const [, setLocation] = useLocation();
 
@@ -119,6 +123,9 @@ export default function ChannelSubscribersList({
               isHiddenChannel &&
               subscriber.role === "member" &&
               subscriber.membershipStatus === "pending";
+            const isChannelAdmin = subscriber.role === "admin";
+            const isChannelOwner = subscriber.role === "owner";
+            const canChangeAdminRole = isOwner && !isChannelOwner && !isPending && !!onSetAdmin;
 
             return (
               <li key={subscriber.userId} className="flex items-start gap-2 py-2.5 first:pt-0 last:pb-0">
@@ -144,6 +151,11 @@ export default function ChannelSubscribersList({
                   >
                     {displayName(subscriber)}
                   </button>
+                  {isChannelOwner ? (
+                    <p className="text-xs text-muted-foreground">{t.channelOwnerLabel}</p>
+                  ) : isChannelAdmin ? (
+                    <p className="text-xs text-muted-foreground">{t.channelSubscriberAdmin}</p>
+                  ) : null}
                   {(contentDays !== null || sponsorDays !== null) && (
                     <div className="space-y-0.5 text-xs text-muted-foreground">
                       {contentDays !== null && (
@@ -160,6 +172,18 @@ export default function ChannelSubscribersList({
                     </p>
                   )}
                 </div>
+                {canChangeAdminRole && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={isUpdatingRole}
+                    onClick={() => onSetAdmin?.(subscriber.userId, !isChannelAdmin)}
+                  >
+                    {isChannelAdmin ? t.channelRemoveAdmin : t.channelMakeAdmin}
+                  </Button>
+                )}
                 {isOwner && isPending && onApproveSubscription && (
                   <Button
                     type="button"

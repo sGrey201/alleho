@@ -798,11 +798,11 @@ export default function ConversationChat({
     },
   });
 
-  const { data: myQuestionnaireTemplates = [] } = useQuery<
+  const { data: myQuestionnaireTemplates = [], isSuccess: questionnaireTemplatesLoaded } = useQuery<
     Array<{ id: string; name: string }>
   >({
-    queryKey: ["/api/questionnaire-templates"],
-    enabled: questionnairePickerOpen && !!user?.isAdmin,
+    queryKey: ["/api/questionnaire-templates", "summary"],
+    enabled: !!user?.isAdmin,
   });
 
   const copyTemplateMutation = useMutation({
@@ -3468,7 +3468,7 @@ export default function ConversationChat({
             <DialogTitle>{t.selectQuestionnaireToSend}</DialogTitle>
           </DialogHeader>
           <div className="max-h-72 space-y-2 overflow-y-auto">
-            {myQuestionnaireTemplates.length === 0 ? (
+            {questionnaireTemplatesLoaded && myQuestionnaireTemplates.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t.noDataAvailable}</p>
             ) : (
               myQuestionnaireTemplates.map((tpl) => (

@@ -452,6 +452,7 @@ ${allUrls.map(url => `  <url>
       });
 
       await postPatientChatStatusMessage(conv.id, userId, PATIENT_INVITE_SENT_MESSAGE);
+      await postPatientChatStatusMessage(conv.id, userId, PATIENT_INVITE_WELCOME_MESSAGE);
       await publishDoctorChatsUpdated(userId);
 
       const baseUrl = process.env.APP_URL || BASE_URL;
@@ -1015,6 +1016,18 @@ ${allUrls.map(url => `  <url>
   });
 
   // Questionnaire templates (doctors only)
+  app.get("/api/questionnaire-templates/summary", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      const templates = await storage.listQuestionnaireTemplateSummaries(userId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error listing questionnaire template summaries:", error);
+      res.status(500).json({ message: "Failed to list templates" });
+    }
+  });
+
   app.get("/api/questionnaire-templates", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const userId = await getCurrentUserId(req);
@@ -2286,6 +2299,47 @@ ${allUrls.map(url => `  <url>
     }
   });
 
+  // Channel owner can grant or revoke the admin role (admins can post).
+  app.patch("/api/conversations/:id/participants/:userId/role", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { id, userId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const nextRole = req.body?.role === "admin" ? "admin" : req.body?.role === "member" ? "member" : null;
+      if (!nextRole) return res.status(400).json({ message: "invalid_role" });
+
+      const conv = await storage.getConversation(id);
+      if (!conv || conv.deletedAt) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "channel") return res.status(400).json({ message: "roles_can_be_changed_only_in_channels" });
+
+      const actorRole = await storage.getParticipantRole(id, currentUserId);
+      if (actorRole !== "owner") return res.status(403).json({ message: "only_owner_can_change_roles" });
+      if (userId === currentUserId) return res.status(400).json({ message: "owner_role_cannot_be_changed" });
+
+      const targetRole = await storage.getParticipantRole(id, userId);
+      if (!targetRole) return res.status(404).json({ message: "Participant not found" });
+      if (targetRole === "owner") return res.status(400).json({ message: "owner_role_cannot_be_changed" });
+
+      if (nextRole === "admin") {
+        const membership = await storage.getParticipantMembershipStatus(id, userId);
+        if (membership === "pending") {
+          return res.status(400).json({ message: "pending_subscriber_cannot_be_admin" });
+        }
+      }
+
+      const updated = await storage.setConversationParticipantRole(id, userId, nextRole);
+      if (!updated) return res.status(404).json({ message: "Participant not found" });
+
+      await publishDoctorChatsUpdated(userId);
+      const updatedConv = await storage.getConversation(id);
+      const participants = await storage.getConversationParticipants(id);
+      res.json({ ...updatedConv, participants });
+    } catch (error) {
+      console.error("Error updating participant role:", error);
+      res.status(500).json({ message: "Failed to update participant role" });
+    }
+  });
+
   // Leave conversation
   app.post("/api/conversations/:id/leave", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
@@ -2905,6 +2959,18 @@ ${allUrls.map(url => `  <url>
 
   const PATIENT_INVITE_SENT_MESSAGE = "Приглашение отправлено";
   const PATIENT_INVITE_ACCEPTED_MESSAGE = "Приглашение принято";
+  const PATIENT_INVITE_WELCOME_MESSAGE = [
+    "Здравствуйте! Спасибо, что обратились.",
+    "",
+    "**Как проходит консультация:**",
+    "1. Вы заполняете анкету, которую я пришлю следующим сообщением. Отвечайте своими словами, как вам удобно. Любые мелочи могут оказаться важными.",
+    "2. Я изучаю ваши ответы и, если нужно, задаю уточняющие вопросы здесь, в чате или мы договоримся о времени созвона.",
+    "",
+    "**Важно:**",
+    "• Всё, что вы расскажете, остаётся конфиденциальным. Заполняя анкету, вы соглашаетесь на обработку ваших персональных данных для проведения консультации.",
+    "",
+    "Если что-то в анкете непонятно, пропустите вопрос или напишите мне. Буду ждать ваших ответов!",
+  ].join("\n");
 
   async function postPatientChatStatusMessage(
     conversationId: string,

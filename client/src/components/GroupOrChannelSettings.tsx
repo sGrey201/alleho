@@ -230,6 +230,25 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
     },
   });
 
+  const setChannelAdminMutation = useMutation({
+    mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/conversations/${conversationId}/participants/${userId}/role`,
+        { role: makeAdmin ? "admin" : "member" }
+      );
+      return res.json();
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/conversations", conversationId] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
+      toast({
+        title: variables.makeAdmin ? t.channelAdminGranted : t.channelAdminRevoked,
+      });
+    },
+    onError: () => toast({ title: t.error, variant: "destructive" }),
+  });
+
   const unsubscribeMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("DELETE", `/api/conversations/${conversationId}/subscribe`, {});
@@ -840,6 +859,10 @@ export default function GroupOrChannelSettings({ conversationId, mode, currentUs
                 isHiddenChannel={isHidden}
                 onApproveSubscription={(userId) => approveSubscriptionMutation.mutate(userId)}
                 isApproving={approveSubscriptionMutation.isPending}
+                onSetAdmin={(userId, makeAdmin) =>
+                  setChannelAdminMutation.mutate({ userId, makeAdmin })
+                }
+                isUpdatingRole={setChannelAdminMutation.isPending}
               />
             )}
           </>
