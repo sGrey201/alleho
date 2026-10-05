@@ -2227,9 +2227,19 @@ export default function ConversationChat({
     return (
     <>
       {!isOwn && showMessageAuthorName && (
-        <p className="mb-0.5 pr-8 text-[10px] leading-tight text-muted-foreground">
+        <button
+          type="button"
+          className="mb-0.5 block max-w-full truncate pr-8 text-left text-[10px] leading-tight text-muted-foreground hover:underline"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const authorId = msg.author?.id || msg.authorUserId;
+            if (!authorId) return;
+            setLocation(messengerProfilePath(authorId, location));
+          }}
+        >
           {getMessageDisplayName(msg.author)}
-        </p>
+        </button>
       )}
       {msg.replyTo && renderReplyPreviewInsideBubble(msg.replyTo, isOwn)}
       {renderForwardedHeader(msg)}

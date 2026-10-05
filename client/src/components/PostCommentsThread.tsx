@@ -24,6 +24,7 @@ import { liveConversationQueryOptions } from "@/lib/conversationQueryOptions";
 import { useInboxUnreadMessages } from "@/hooks/useInboxUnreadMessages";
 import { ChatBackUnreadBadge } from "@/components/ChatBackUnreadBadge";
 import { postConversationSeen } from "@/lib/markConversationSeen";
+import { messengerProfilePath } from "@/lib/messengerPaths";
 import { ImageViewerDialog } from "@/components/ImageViewerDialog";
 import { t } from "@/lib/i18n";
 import { openChatFile, saveOrShareChatFile, shouldUseInAppFileTransfer } from "@/lib/saveOrShareChatFile";
@@ -73,7 +74,7 @@ export default function PostCommentsThread({
   currentUserId,
   onBack,
 }: PostCommentsThreadProps) {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const inboxUnreadMessages = useInboxUnreadMessages();
   const [message, setMessage] = useState("");
@@ -751,9 +752,19 @@ export default function PostCommentsThread({
                     style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                   >
                     {!isOwn && (
-                      <p className="mb-0.5 pr-8 text-[10px] leading-tight text-muted-foreground">
+                      <button
+                        type="button"
+                        className="mb-0.5 block max-w-full truncate pr-8 text-left text-[10px] leading-tight text-muted-foreground hover:underline"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const authorId = comment.author?.id || comment.authorUserId;
+                          if (!authorId) return;
+                          setLocation(messengerProfilePath(authorId, location));
+                        }}
+                      >
                         {getAuthorName(comment.author)}
-                      </p>
+                      </button>
                     )}
                     {comment.replyTo && (
                       <div className="mb-1 rounded-lg border-l-2 border-primary/70 bg-stone-50 px-2 py-1 text-[11px] text-muted-foreground dark:bg-stone-900/80">
