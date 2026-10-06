@@ -659,6 +659,18 @@ html.app-immersive.app-shell-chat .chat-header-panel {
   padding-top: calc(7.75rem + env(safe-area-inset-top, 0px));
 }
 
+/* Windows draws up/down scrollbar buttons on a textarea; Mac overlays them. */
+.chat-composer-input {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chat-composer-input::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Composer hugs the bottom edge; keep the input above the iOS home indicator. */
 .chat-composer-panel {
   padding-bottom: max(1.5rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));

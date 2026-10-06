@@ -521,7 +521,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
             onPaste={handlePaste}
             rows={1}
             className={cn(
-              "min-h-[36px] resize-none overflow-y-auto rounded-[22px] text-sm leading-snug md:text-sm",
+              "chat-composer-input min-h-[36px] resize-none overflow-y-hidden rounded-[22px] text-sm leading-snug md:text-sm",
               showMessageModeSelector && onMessageModeChange && "pr-10",
             )}
             style={{ maxHeight: "144px" }}
