@@ -99,6 +99,7 @@ import { profileAvatarSrc } from "@/lib/utils";
 import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
 import { captureVideoPosterFromFile } from "@/lib/captureVideoPoster";
 import { parseVideoMessagePayload } from "@shared/videoMessagePayload";
+import { formatCallDuration, parseCallMessagePayload } from "@shared/callMessage";
 import {
   clearMessageLongPress,
   handleMessagePointerDown,
@@ -364,6 +365,12 @@ function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["reply
     return shouldShowDeletedMessagePlaque(reply.deletedAt) ? t.messageDeleted : "";
   }
   if (reply.messageType === "voice") return t.voiceMessageLabel;
+  if (reply.messageType === "call") {
+    const duration = parseCallMessagePayload(reply.content)?.durationSec;
+    return duration === undefined
+      ? t.callMessageLabel
+      : `${t.callMessageLabel} · ${formatCallDuration(duration)}`;
+  }
   if (reply.messageType === "video") return t.messageVideoLabel;
   if (reply.messageType === "file") {
     return parseFilePayload(reply.content)?.name ?? t.messageFileLabel;
@@ -2092,6 +2099,7 @@ export default function ConversationChat({
       msg.messageType !== "voice" &&
       msg.messageType !== "video" &&
       msg.messageType !== "file" &&
+      msg.messageType !== "call" &&
       (conv.type === "channel" || withinEditWindow);
     const canEditVideo =
       isOwn &&
@@ -2800,6 +2808,8 @@ export default function ConversationChat({
               preview={
                 activePinnedMessage.messageType === "voice"
                   ? t.voiceMessageLabel
+                  : activePinnedMessage.messageType === "call"
+                  ? `${t.callMessageLabel} · ${formatCallDuration(parseCallMessagePayload(activePinnedMessage.content)?.durationSec ?? 0)}`
                   : activePinnedMessage.messageType === "video"
                   ? t.messageVideoLabel
                   : activePinnedMessage.messageType === "file"
@@ -2893,6 +2903,51 @@ export default function ConversationChat({
           ) : displayMessages.length > 0 ? (
             displayMessages.map((msg) => {
               const isOwn = msg.authorUserId === user?.id;
+              if (msg.messageType === "call" && !msg.deletedAt) {
+                const durationSec = parseCallMessagePayload(msg.content)?.durationSec ?? 0;
+                const filename = "zapis-zvonka.ogg";
+                return (
+                  <div
+                    key={msg.id}
+                    ref={setMessageRef(msg.id)}
+                    className="flex justify-center px-6 py-1"
+                    data-testid={`call-log-${msg.id}`}
+                  >
+                    <p className="text-center text-xs text-muted-foreground">
+                      {t.callMessageLabel} · {formatCallDuration(durationSec)}
+                      {msg.imageUrl ? (
+                        <>
+                          {" · "}
+                          <button
+                            type="button"
+                            className="underline"
+                            data-testid={`call-recording-${msg.id}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!msg.imageUrl) return;
+                              if (!shouldUseInAppFileTransfer()) {
+                                openChatFile(msg.imageUrl, filename);
+                                return;
+                              }
+                              void saveOrShareChatFile(msg.imageUrl, filename).catch((error) => {
+                                if ((error as Error)?.name === "AbortError") return;
+                                toast({
+                                  title: t.error,
+                                  description: t.messageFileOpenError,
+                                  variant: "destructive",
+                                });
+                              });
+                            }}
+                          >
+                            {t.callRecordingDownload}
+                          </button>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                );
+              }
               return (
                 <ChatMessageBubble
                   key={msg.id}
@@ -3039,6 +3094,8 @@ export default function ConversationChat({
                     : replyTo
                       ? replyTo.messageType === "voice"
                         ? t.voiceMessageLabel
+                        : replyTo.messageType === "call"
+                        ? `${t.callMessageLabel} · ${formatCallDuration(parseCallMessagePayload(replyTo.content)?.durationSec ?? 0)}`
                         : replyTo.messageType === "video"
                         ? t.messageVideoLabel
                         : replyTo.messageType === "file"

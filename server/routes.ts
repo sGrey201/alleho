@@ -3371,6 +3371,10 @@ ${allUrls.map(url => `  <url>
         content = JSON.stringify(payload);
       }
 
+      if (messageType === "call") {
+        return res.status(400).json({ message: "Cannot post this message type" });
+      }
+
       const validated = insertConversationMessageSchema.parse({
         conversationId: id,
         authorUserId: currentUserId,
@@ -3497,7 +3501,7 @@ ${allUrls.map(url => `  <url>
         }
         throw err;
       }
-      const token = await createCallAccessToken(state.id, currentUser);
+      const token = await createCallAccessToken(state.id, currentUser, conv.type);
       res.status(201).json({ call: state, token, livekitUrl: getLiveKitUrl() });
     } catch (error) {
       console.error("Error starting call:", error);
@@ -3544,8 +3548,10 @@ ${allUrls.map(url => `  <url>
       }
       const currentUser = await storage.getUser(currentUserId);
       if (!currentUser) return res.status(401).json({ message: "Unauthorized" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
       await acceptCall(call, currentUserId);
-      const token = await createCallAccessToken(call.id, currentUser);
+      const token = await createCallAccessToken(call.id, currentUser, conv.type);
       const state = await getCallStateDto(call.id);
       res.json({ call: state, token, livekitUrl: getLiveKitUrl() });
     } catch (error) {
@@ -3633,7 +3639,7 @@ ${allUrls.map(url => `  <url>
       if (existing.messageType === "poll") {
         return res.status(400).json({ message: "Cannot edit poll" });
       }
-      if (existing.messageType === "voice" || existing.messageType === "file") {
+      if (existing.messageType === "voice" || existing.messageType === "file" || existing.messageType === "call") {
         return res.status(400).json({ message: "Cannot edit this message type" });
       }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });

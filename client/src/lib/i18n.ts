@@ -2311,4 +2311,10 @@ export const t = {
   voiceCallRinging: 'Звонок…',
   voiceCallMinimize: 'Свернуть',
   voiceCallOpenChat: 'Открыть чат',
+  voiceCallCameraOn: 'Включить камеру',
+  voiceCallCameraOff: 'Выключить камеру',
+  voiceCallCameraError: 'Не удалось включить камеру',
+  voiceCallRecording: 'Идёт запись',
+  callMessageLabel: 'Звонок',
+  callRecordingDownload: 'Скачать запись',
 };

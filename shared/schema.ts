@@ -267,6 +267,7 @@ export const conversationMessageTypeEnum = z.enum([
   'voice',
   'video',
   'file',
+  'call',
 ]);
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 
@@ -314,6 +315,15 @@ export const voicePayloadSchema = z.object({
   durationSec: z.number().int().min(0).max(36000),
 });
 export type VoicePayload = z.infer<typeof voicePayloadSchema>;
+
+/**
+ * JSON stored in conversation_messages.content when message_type is `call`.
+ * The recording object path, once ready, is stored in `image_url`.
+ */
+export const callPayloadSchema = z.object({
+  durationSec: z.number().int().min(0).max(86400),
+});
+export type CallPayload = z.infer<typeof callPayloadSchema>;
 
 /**
  * JSON stored in conversation_messages.content when message_type is `video`.
@@ -673,6 +683,11 @@ export const conversationCalls = pgTable(
     endedAt: timestamp("ended_at"),
     ringExpiresAt: timestamp("ring_expires_at"),
     createdAt: timestamp("created_at").defaultNow(),
+    /** skipped | recording | ready | failed. Null until the call is classified. */
+    recordingStatus: varchar("recording_status", { length: 20 }),
+    recordingEgressId: varchar("recording_egress_id"),
+    recordingObjectPath: text("recording_object_path"),
+    recordingMessageId: varchar("recording_message_id"),
   },
   (table) => [
     index("conversation_calls_conversation_idx").on(table.conversationId),

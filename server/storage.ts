@@ -580,6 +580,13 @@ export interface IStorage {
     conversationIds: string[],
     forUserId: string
   ): Promise<string[]>;
+  /** Sets recording_status to `recording` when it is still null. Returns false if already claimed. */
+  claimCallRecording(callId: string): Promise<boolean>;
+  skipCallRecording(callId: string): Promise<void>;
+  setCallRecordingEgressId(callId: string, egressId: string): Promise<void>;
+  setCallRecordingFailed(callId: string): Promise<void>;
+  markCallRecordingReady(callId: string, objectPath: string): Promise<ConversationCall | undefined>;
+  setCallRecordingMessageId(callId: string, messageId: string): Promise<ConversationCall | undefined>;
 
   upsertPushSubscription(
     userId: string,
@@ -2867,6 +2874,63 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(conversationCalls)
       .where(inArray(conversationCalls.status, ["ringing", "active"]));
+  }
+
+  async claimCallRecording(callId: string): Promise<boolean> {
+    const rows = await db
+      .update(conversationCalls)
+      .set({ recordingStatus: "recording" })
+      .where(and(eq(conversationCalls.id, callId), isNull(conversationCalls.recordingStatus)))
+      .returning({ id: conversationCalls.id });
+    return rows.length > 0;
+  }
+
+  async skipCallRecording(callId: string): Promise<void> {
+    await db
+      .update(conversationCalls)
+      .set({ recordingStatus: "skipped" })
+      .where(and(eq(conversationCalls.id, callId), isNull(conversationCalls.recordingStatus)));
+  }
+
+  async setCallRecordingEgressId(callId: string, egressId: string): Promise<void> {
+    await db
+      .update(conversationCalls)
+      .set({ recordingEgressId: egressId, recordingStatus: "recording" })
+      .where(eq(conversationCalls.id, callId));
+  }
+
+  async setCallRecordingFailed(callId: string): Promise<void> {
+    await db
+      .update(conversationCalls)
+      .set({ recordingStatus: "failed" })
+      .where(
+        and(eq(conversationCalls.id, callId), eq(conversationCalls.recordingStatus, "recording"))
+      );
+  }
+
+  async markCallRecordingReady(
+    callId: string,
+    objectPath: string
+  ): Promise<ConversationCall | undefined> {
+    const [row] = await db
+      .update(conversationCalls)
+      .set({ recordingStatus: "ready", recordingObjectPath: objectPath })
+      .where(eq(conversationCalls.id, callId))
+      .returning();
+    return row;
+  }
+
+  async setCallRecordingMessageId(
+    callId: string,
+    messageId: string
+  ): Promise<ConversationCall | undefined> {
+    const [row] = await db
+      .update(conversationCalls)
+      .set({ recordingMessageId: messageId })
+      .where(and(eq(conversationCalls.id, callId), isNull(conversationCalls.recordingMessageId)))
+      .returning();
+    if (row) return row;
+    return this.getCallById(callId);
   }
 
   async getConversationIdsWithActiveCalls(

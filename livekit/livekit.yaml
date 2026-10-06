@@ -1,4 +1,5 @@
-# LiveKit server config (self-hosted, audio conferences).
+# LiveKit server config (self-hosted). Signaling is proxied by nginx;
+# media uses the RTC ports below. Redis is required for Egress.
 # API key/secret are injected via the LIVEKIT_KEYS env var on the container
 # (format: "<key>: <secret>"), so no secrets live in this file.
 port: 7880
@@ -26,6 +27,9 @@ turn:
 logging:
   level: info
   json: false
+
+redis:
+  address: redis:6379
 
 # Webhooks keep call state in sync with real LiveKit room occupancy.
 # api_key must match the key name in LIVEKIT_KEYS (the LIVEKIT_API_KEY env var on app).

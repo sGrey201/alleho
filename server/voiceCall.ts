@@ -1,8 +1,21 @@
 import type { Request, Response } from "express";
-import { AccessToken, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
+import { AccessToken, EgressStatus, TrackSource, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
 import { storage } from "./storage";
-import { publishConversationCallEvent } from "./redis";
+import {
+  invalidateConversationRecent,
+  publishConversationCallEvent,
+  publishConversationMessage,
+  publishConversationMessageEdited,
+  pushConversationRecentMessage,
+  type ConversationMessageWithAuthor,
+} from "./redis";
 import { sendPushToUsers, formatSenderName, conversationPath } from "./push";
+import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
+import {
+  callRecordingObjectPath,
+  startCallAudioEgress,
+  stopCallAudioEgress,
+} from "./callRecording";
 import {
   deleteLiveKitRoom,
   fetchLiveKitRoomSnapshot,
@@ -27,10 +40,19 @@ const ROOM_EMPTY_DEBOUNCE_MS = 2_000;
 /** Conversation types that support voice conferences (channels are excluded). */
 const CALLABLE_TYPES = new Set(["direct", "patient", "group", "consilium"]);
 
+/** One-to-one chats where camera and call recording are allowed. */
+const PRIVATE_CALL_TYPES = new Set(["direct", "patient"]);
+
+const recordingStartTasks = new Map<string, Promise<void>>();
+
 const roomEmptyTimers = new Map<string, NodeJS.Timeout>();
 
 export function isCallableConversationType(type: string): boolean {
   return CALLABLE_TYPES.has(type);
+}
+
+export function isPrivateCallConversationType(type: string): boolean {
+  return PRIVATE_CALL_TYPES.has(type);
 }
 
 export function isLiveKitConfigured(): boolean {
@@ -107,8 +129,15 @@ async function buildCallStateDto(call: ConversationCall): Promise<CallStateDto> 
   };
 }
 
-/** Issues a LiveKit access token scoped to a single call room (audio only). */
-export async function createCallAccessToken(callId: string, user: User): Promise<string> {
+/**
+ * Issues a LiveKit access token scoped to a single call room.
+ * Private chats may publish microphone and camera. Groups stay audio-only.
+ */
+export async function createCallAccessToken(
+  callId: string,
+  user: User,
+  conversationType: string
+): Promise<string> {
   const apiKey = process.env.LIVEKIT_API_KEY;
   const apiSecret = process.env.LIVEKIT_API_SECRET;
   if (!apiKey || !apiSecret) {
@@ -124,8 +153,52 @@ export async function createCallAccessToken(callId: string, user: User): Promise
     room: callId,
     canPublish: true,
     canSubscribe: true,
+    canPublishSources: isPrivateCallConversationType(conversationType)
+      ? [TrackSource.MICROPHONE, TrackSource.CAMERA]
+      : [TrackSource.MICROPHONE],
   });
   return at.toJwt();
+}
+
+function trackRecordingStart(callId: string): void {
+  if (recordingStartTasks.has(callId)) return;
+  const task = ensurePrivateCallRecording(callId).finally(() => {
+    if (recordingStartTasks.get(callId) === task) {
+      recordingStartTasks.delete(callId);
+    }
+  });
+  recordingStartTasks.set(callId, task);
+}
+
+async function markCallActiveAndMaybeRecord(call: ConversationCall): Promise<void> {
+  if (call.status === "ringing") {
+    await storage.markCallActive(call.id);
+  }
+  trackRecordingStart(call.id);
+}
+
+/** Starts audio egress once for a private call. Failures do not end the call. */
+async function ensurePrivateCallRecording(callId: string): Promise<void> {
+  const call = await storage.getCallById(callId);
+  if (!call || call.status === "ended" || call.status === "cancelled") return;
+  if (call.recordingStatus) return;
+
+  const conv = await storage.getConversation(call.conversationId);
+  if (!conv || !isPrivateCallConversationType(conv.type)) {
+    await storage.skipCallRecording(callId);
+    return;
+  }
+
+  const claimed = await storage.claimCallRecording(callId);
+  if (!claimed) return;
+
+  try {
+    const egressId = await startCallAudioEgress(callId);
+    await storage.setCallRecordingEgressId(callId, egressId);
+  } catch (err) {
+    console.error("[VoiceCall] start recording error:", err);
+    await storage.setCallRecordingFailed(callId);
+  }
 }
 
 function participantCountFromSnapshot(
@@ -173,7 +246,7 @@ export async function reconcileStaleCall(
 
   if (participantCount > 0) {
     if (call.status === "ringing") {
-      await storage.markCallActive(call.id);
+      await markCallActiveAndMaybeRecord(call);
     }
     return false;
   }
@@ -226,6 +299,11 @@ export async function startCall(
   });
 
   const state = await buildCallStateDto(call);
+  if (!isPrivateCallConversationType(
+    (await storage.getConversation(conversationId))?.type ?? ""
+  )) {
+    await storage.skipCallRecording(call.id);
+  }
   await publishConversationCallEvent(conversationId, "conversation_call_started", state);
 
   void notifyIncomingCall(conversationId, initiator, participantUserIds).catch((err) =>
@@ -255,7 +333,7 @@ async function notifyIncomingCall(
 /** Marks a participant joined, flips the call to active, and broadcasts. */
 export async function acceptCall(call: ConversationCall, userId: string): Promise<void> {
   await storage.setCallParticipantStatus(call.id, userId, "joined");
-  await storage.markCallActive(call.id);
+  await markCallActiveAndMaybeRecord(call);
   await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
     callId: call.id,
     conversationId: call.conversationId,
@@ -297,8 +375,30 @@ export async function endCall(
     roomEmptyTimers.delete(call.id);
   }
 
+  const pendingRecording = recordingStartTasks.get(call.id);
+  if (pendingRecording) {
+    await pendingRecording.catch((err) =>
+      console.error("[VoiceCall] recording start before end error:", err)
+    );
+  }
+
   const ended = await storage.endCall(call.id, reason);
   if (!ended) return;
+
+  if (ended.recordingEgressId && ended.recordingStatus === "recording") {
+    try {
+      await stopCallAudioEgress(ended.recordingEgressId);
+    } catch (err) {
+      console.error("[VoiceCall] stop recording error:", err);
+    }
+  }
+
+  try {
+    await postPrivateCallChatMessage(ended);
+  } catch (err) {
+    console.error("[VoiceCall] call chat message error:", err);
+  }
+
   await publishConversationCallEvent(call.conversationId, "conversation_call_ended", {
     callId: call.id,
     conversationId: call.conversationId,
@@ -392,7 +492,7 @@ export async function sweepExpiredCalls(): Promise<void> {
     if (snapshot) {
       const participantCount = participantCountFromSnapshot(call.id, snapshot);
       if (participantCount > 0) {
-        await storage.markCallActive(call.id);
+        await markCallActiveAndMaybeRecord(call);
         continue;
       }
       await cancelUnansweredCall(call);
@@ -404,7 +504,7 @@ export async function sweepExpiredCalls(): Promise<void> {
       (r) => r.status === "joined" && r.userId !== call.initiatedByUserId
     );
     if (someoneJoinedAfterInitiator) {
-      await storage.markCallActive(call.id);
+      await markCallActiveAndMaybeRecord(call);
       continue;
     }
     await cancelUnansweredCall(call);
@@ -437,7 +537,130 @@ async function reconcileEmptyRoom(callId: string): Promise<void> {
   void deleteLiveKitRoom(callId);
 }
 
+async function publishCallChatMessage(
+  message: {
+    id: string;
+    conversationId: string;
+    authorUserId: string;
+    messageType: string;
+    content: string | null;
+    imageUrl: string | null;
+    createdAt: Date | null;
+  },
+  author: User
+): Promise<void> {
+  const payload: ConversationMessageWithAuthor = {
+    id: message.id,
+    conversationId: message.conversationId,
+    authorUserId: message.authorUserId,
+    messageType: message.messageType,
+    content: message.content,
+    imageUrl: message.imageUrl,
+    createdAt: (message.createdAt ?? new Date()).toISOString(),
+    editedAt: null,
+    deletedAt: null,
+    reactions: [],
+    commentsCount: 0,
+    author: {
+      id: author.id,
+      email: author.email ?? null,
+      firstName: author.firstName ?? null,
+      lastName: author.lastName ?? null,
+      isAdmin: author.isAdmin ?? null,
+    },
+  };
+  await pushConversationRecentMessage(message.conversationId, payload);
+  await publishConversationMessage(message.conversationId, payload);
+  void notifyMessengerConversationActivity(message.conversationId, author.id).catch((err) =>
+    console.error("[VoiceCall] chat list refresh error:", err)
+  );
+}
+
+async function attachCallRecordingLink(
+  messageId: string,
+  conversationId: string,
+  objectPath: string
+): Promise<void> {
+  const updated = await storage.editConversationMessage(messageId, { imageUrl: objectPath });
+  if (!updated) return;
+  await invalidateConversationRecent(conversationId);
+  await publishConversationMessageEdited(conversationId, {
+    conversationId,
+    messageId,
+    content: updated.content ?? null,
+    imageUrl: updated.imageUrl ?? null,
+    editedAt: (updated.editedAt ?? new Date()).toISOString(),
+  });
+}
+
+/** Writes a chat line for a private call that actually connected. */
+async function postPrivateCallChatMessage(ended: ConversationCall): Promise<void> {
+  if (!ended.startedAt) return;
+  const conv = await storage.getConversation(ended.conversationId);
+  if (!conv || !isPrivateCallConversationType(conv.type)) return;
+
+  const latest = (await storage.getCallById(ended.id)) ?? ended;
+  if (latest.recordingMessageId) return;
+
+  const author = await storage.getUser(ended.initiatedByUserId);
+  if (!author) return;
+
+  const endedAt = latest.endedAt?.getTime() ?? ended.endedAt?.getTime() ?? Date.now();
+  const durationSec = Math.max(0, Math.round((endedAt - ended.startedAt.getTime()) / 1000));
+  const imageUrl =
+    latest.recordingStatus === "ready" && latest.recordingObjectPath
+      ? latest.recordingObjectPath
+      : null;
+  const message = await storage.createConversationMessage({
+    conversationId: ended.conversationId,
+    authorUserId: author.id,
+    messageType: "call",
+    content: JSON.stringify({ durationSec }),
+    imageUrl,
+  });
+  const linked = await storage.setCallRecordingMessageId(ended.id, message.id);
+  await publishCallChatMessage(message, author);
+
+  const recordingPath = linked?.recordingObjectPath;
+  if (recordingPath && recordingPath !== imageUrl) {
+    await attachCallRecordingLink(message.id, ended.conversationId, recordingPath);
+  }
+}
+
+function egressEndedFailed(status: EgressStatus | undefined): boolean {
+  return (
+    status === EgressStatus.EGRESS_FAILED ||
+    status === EgressStatus.EGRESS_ABORTED ||
+    status === EgressStatus.EGRESS_LIMIT_REACHED
+  );
+}
+
+async function handleCallEgressEnded(event: WebhookEvent): Promise<void> {
+  const info = event.egressInfo;
+  const callId = info?.roomName || event.room?.name;
+  if (!info || !callId) return;
+
+  const call = await storage.getCallById(callId);
+  if (!call || call.recordingStatus === "skipped" || call.recordingStatus === "ready") return;
+
+  if (egressEndedFailed(info.status)) {
+    await storage.setCallRecordingFailed(callId);
+    return;
+  }
+  if (info.status !== EgressStatus.EGRESS_COMPLETE) return;
+
+  const objectPath = callRecordingObjectPath(callId);
+  const updated = await storage.markCallRecordingReady(callId, objectPath);
+  if (!updated?.recordingMessageId) return;
+  await attachCallRecordingLink(updated.recordingMessageId, updated.conversationId, objectPath);
+}
+
 async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
+  if (event.event === "egress_ended") {
+    await handleCallEgressEnded(event);
+    return;
+  }
+
   const roomName = event.room?.name;
   if (!roomName) return;
 
@@ -451,7 +674,9 @@ async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
       if (!userId) return;
       await storage.setCallParticipantStatus(call.id, userId, "joined");
       if (call.status === "ringing") {
-        await storage.markCallActive(call.id);
+        await markCallActiveAndMaybeRecord(call);
+      } else {
+        trackRecordingStart(call.id);
       }
       await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
         callId: call.id,

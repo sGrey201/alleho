@@ -12,6 +12,8 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
+  type LocalTrack,
   type RemoteTrack,
   type RemoteTrackPublication,
   type RemoteParticipant,
@@ -33,6 +35,44 @@ type ConversationMeta = {
   path: string;
 };
 
+export type CallVideoTile = {
+  userId: string;
+  trackSid: string;
+  track: LocalTrack | RemoteTrack;
+};
+
+const CAMERA_CAPTURE = {
+  resolution: VideoPresets.h720.resolution,
+  facingMode: "user" as const,
+};
+
+function isPrivateCallType(type: string | undefined): boolean {
+  return type === "direct" || type === "patient";
+}
+
+function collectVideoTiles(room: Room): CallVideoTile[] {
+  const tiles: CallVideoTile[] = [];
+  const localPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+  if (localPub?.track && !localPub.isMuted) {
+    tiles.push({
+      userId: room.localParticipant.identity,
+      trackSid: localPub.trackSid,
+      track: localPub.track,
+    });
+  }
+  room.remoteParticipants.forEach((participant) => {
+    const pub = participant.getTrackPublication(Track.Source.Camera);
+    if (pub?.track && pub.isSubscribed && !pub.isMuted) {
+      tiles.push({
+        userId: participant.identity,
+        trackSid: pub.trackSid,
+        track: pub.track,
+      });
+    }
+  });
+  return tiles;
+}
+
 export type VoiceCallContextValue = VoiceCallApi & {
   /** Call for the conversation currently open in chat UI (banner). */
   viewingCall: CallStateDto | null;
@@ -46,6 +86,10 @@ export type VoiceCallContextValue = VoiceCallApi & {
   startCallFor: (conversationId: string, meta?: Partial<ConversationMeta>) => Promise<void>;
   acceptCallFor: (conversationId: string, meta?: Partial<ConversationMeta>) => Promise<void>;
   declineCallFor: (conversationId: string) => Promise<void>;
+  cameraEnabled: boolean;
+  canUseCamera: boolean;
+  videoTiles: CallVideoTile[];
+  toggleCamera: () => Promise<void>;
 };
 
 const VoiceCallContext = createContext<VoiceCallContextValue | null>(null);
@@ -156,6 +200,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [isStarting, setIsStarting] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [videoTiles, setVideoTiles] = useState<CallVideoTile[]>([]);
   const [connectedUserIds, setConnectedUserIds] = useState<string[]>([]);
   const [speakingUserIds, setSpeakingUserIds] = useState<string[]>([]);
   const [callUiExpanded, setCallUiExpanded] = useState(false);
@@ -186,6 +232,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     detachAllAudio();
     setConnectedUserIds([]);
     setSpeakingUserIds([]);
+    setVideoTiles([]);
+    setCameraEnabled(false);
     setStatus("idle");
     if (room) {
       intentionalDisconnectRef.current = true;
@@ -236,17 +284,26 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       await disconnectRoomOnly();
       setStatus("connecting");
       const room = new Room({
-        adaptiveStream: false,
-        dynacast: false,
+        adaptiveStream: true,
+        dynacast: true,
         webAudioMix: false,
         disconnectOnPageLeave: false,
       });
       roomRef.current = room;
 
+      const refreshVideoTiles = () => {
+        if (roomRef.current !== room) return;
+        setVideoTiles(collectVideoTiles(room));
+        setCameraEnabled(room.localParticipant.isCameraEnabled);
+      };
+
       room.on(
         RoomEvent.TrackSubscribed,
         (track: RemoteTrack, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
-          if (track.kind !== Track.Kind.Audio) return;
+          if (track.kind !== Track.Kind.Audio) {
+            if (track.kind === Track.Kind.Video) refreshVideoTiles();
+            return;
+          }
           const el = track.attach() as HTMLAudioElement;
           configureRemoteAudioElement(el);
           document.body.appendChild(el);
@@ -264,7 +321,12 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           audioElsRef.current.delete(key);
         }
         track.detach();
+        refreshVideoTiles();
       });
+      room.on(RoomEvent.LocalTrackPublished, refreshVideoTiles);
+      room.on(RoomEvent.LocalTrackUnpublished, refreshVideoTiles);
+      room.on(RoomEvent.TrackMuted, refreshVideoTiles);
+      room.on(RoomEvent.TrackUnmuted, refreshVideoTiles);
       room.on(RoomEvent.ParticipantConnected, () => updateParticipants(room));
       room.on(RoomEvent.ParticipantDisconnected, () => updateParticipants(room));
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
@@ -523,6 +585,23 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     }
   }, [micEnabled]);
 
+  const toggleCamera = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    const next = !room.localParticipant.isCameraEnabled;
+    try {
+      await room.localParticipant.setCameraEnabled(next, next ? CAMERA_CAPTURE : undefined);
+      setCameraEnabled(room.localParticipant.isCameraEnabled);
+      setVideoTiles(collectVideoTiles(room));
+    } catch (err) {
+      console.error("[VoiceCall] toggle camera error:", err);
+      toast({
+        title: t.voiceCallCameraError ?? "Не удалось включить камеру",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
   const handleCallWsEvent = useCallback(
     (event: ConversationCallWsEvent) => {
       invalidateChatList();
@@ -737,6 +816,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       leaveCall,
       endCall,
       toggleMic,
+      toggleCamera,
       handleCallWsEvent,
       callUiExpanded,
       setCallUiExpanded,
@@ -746,11 +826,16 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       startCallFor,
       acceptCallFor,
       declineCallFor,
+      cameraEnabled,
+      canUseCamera: isPrivateCallType(conversationMeta?.type),
+      videoTiles,
     };
   }, [
     acceptCallFor,
     callUiExpanded,
+    cameraEnabled,
     connectedUserIds,
+    conversationMeta?.type,
     conversationPath,
     declineCallFor,
     displayTitle,
@@ -763,7 +848,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     speakingUserIds,
     startCallFor,
     status,
+    toggleCamera,
     toggleMic,
+    videoTiles,
     viewingCall,
   ]);
 

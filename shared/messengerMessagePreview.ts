@@ -1,3 +1,4 @@
+import { callMessagePreview } from "./callMessage";
 import { stripMessageFormatting, stripSponsorSections } from "./messageFormatting";
 
 const PREVIEW_MAX_LEN = 500;
@@ -67,6 +68,10 @@ export function formatConversationMessagePreview(
 
   if (messageType === "voice") {
     return "Голосовое сообщение";
+  }
+
+  if (messageType === "call") {
+    return callMessagePreview(text);
   }
 
   if (messageType === "video") {

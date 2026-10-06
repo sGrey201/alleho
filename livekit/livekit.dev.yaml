@@ -20,3 +20,6 @@ turn:
 
 logging:
   level: info
+
+redis:
+  address: redis:6379

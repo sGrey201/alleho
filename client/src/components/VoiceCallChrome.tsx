@@ -1,4 +1,5 @@
-import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Loader2 } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Loader2, Video, VideoOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { profileAvatarSrc } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
-import { useVoiceCallContext } from "@/components/VoiceCallProvider";
+import { useVoiceCallContext, type CallVideoTile } from "@/components/VoiceCallProvider";
 import type { CallStateDto } from "@/hooks/useVoiceCall";
 
 function displayName(user: CallStateDto["participants"][number]["user"]): string {
@@ -27,6 +28,28 @@ function initials(user: CallStateDto["participants"][number]["user"]): string {
   );
 }
 
+function CallVideoSurface({ tile, mirrored }: { tile: CallVideoTile; mirrored: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    tile.track.attach(el);
+    return () => {
+      tile.track.detach(el);
+    };
+  }, [tile.track]);
+
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted
+      className={cn("aspect-video w-full bg-black object-cover", mirrored && "-scale-x-100")}
+    />
+  );
+}
+
 export function VoiceCallChrome() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -42,8 +65,12 @@ export function VoiceCallChrome() {
     displayTitle,
     conversationPath,
     toggleMic,
+    toggleCamera,
     leaveCall,
     endCall,
+    cameraEnabled,
+    canUseCamera,
+    videoTiles,
   } = useVoiceCallContext();
 
   if (!roomCall || (!isInRoom && !isConnecting)) return null;
@@ -51,6 +78,7 @@ export function VoiceCallChrome() {
   const isInitiator = roomCall.initiatedByUserId === user?.id;
   const connected = new Set(connectedUserIds);
   const speaking = new Set(speakingUserIds);
+  const videoByUser = new Map(videoTiles.map((tile) => [tile.userId, tile]));
   const roster = roomCall.participants.filter(
     (p) => p.status === "invited" || p.status === "joined" || connected.has(p.userId)
   );
@@ -72,7 +100,10 @@ export function VoiceCallChrome() {
           data-testid="voice-call-strip"
           aria-label={displayTitle}
         >
-          <span className="voice-call-strip__label">{displayTitle}</span>
+          <span className="voice-call-strip__label">
+            {displayTitle}
+            {canUseCamera ? ` · ${t.voiceCallRecording}` : ""}
+          </span>
         </button>
       )}
 
@@ -105,13 +136,30 @@ export function VoiceCallChrome() {
                   ) : (
                     t.voiceCallInProgress
                   )}
+                  {canUseCamera ? ` · ${t.voiceCallRecording}` : ""}
                 </p>
               </div>
 
-              <div className="flex flex-wrap justify-center gap-4">
+              <div className="flex w-full max-w-3xl flex-wrap items-center justify-center gap-3">
                 {roster.map((p) => {
                   const isConnected = connected.has(p.userId);
                   const isSpeaking = speaking.has(p.userId);
+                  const tile = videoByUser.get(p.userId);
+                  const name = p.userId === user?.id ? "Вы" : displayName(p.user);
+                  if (tile) {
+                    return (
+                      <div
+                        key={p.userId}
+                        className="relative w-full max-w-md overflow-hidden rounded-2xl"
+                        data-testid={`video-call-tile-${p.userId}`}
+                      >
+                        <CallVideoSurface tile={tile} mirrored={p.userId === user?.id} />
+                        <span className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
+                          {name}
+                        </span>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={p.userId} className="flex w-20 flex-col items-center gap-1.5">
                       <div
@@ -132,9 +180,7 @@ export function VoiceCallChrome() {
                           </span>
                         )}
                       </div>
-                      <span className="w-full truncate text-center text-xs text-white/90">
-                        {p.userId === user?.id ? "Вы" : displayName(p.user)}
-                      </span>
+                      <span className="w-full truncate text-center text-xs text-white/90">{name}</span>
                     </div>
                   );
                 })}
@@ -156,6 +202,24 @@ export function VoiceCallChrome() {
                 >
                   {micEnabled ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
                 </Button>
+
+                {canUseCamera && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    className={cn(
+                      "h-14 w-14 rounded-full",
+                      cameraEnabled
+                        ? "bg-white text-green-700 hover:bg-white/90"
+                        : "bg-white/15 text-white hover:bg-white/25"
+                    )}
+                    onClick={() => void toggleCamera()}
+                    data-testid="button-toggle-camera"
+                    title={cameraEnabled ? t.voiceCallCameraOff : t.voiceCallCameraOn}
+                  >
+                    {cameraEnabled ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
+                  </Button>
+                )}
 
                 <Button
                   type="button"

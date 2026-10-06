@@ -253,6 +253,13 @@
       "when": 1774230000000,
       "tag": "0035_questionnaire_instance_patient_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1774240000000,
+      "tag": "0036_call_recordings",
+      "breakpoints": true
     }
   ]
 }

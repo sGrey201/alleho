@@ -2,6 +2,7 @@ import webpush from "web-push";
 import { storage } from "./storage";
 import { scheduleConversationMessagePush } from "./pushDefer";
 import { stripMessageFormatting } from "../shared/messageFormatting";
+import { callMessagePreview } from "../shared/callMessage";
 
 export type PushPayload = {
   title: string;
@@ -94,6 +95,9 @@ export function messagePreview(
   messageType?: string | null,
 ): string {
   if (messageType === "voice") return "Голосовое сообщение";
+  if (messageType === "call") {
+    return callMessagePreview(content);
+  }
   if (messageType === "video") return "Видео";
   if (messageType === "file") {
     try {
