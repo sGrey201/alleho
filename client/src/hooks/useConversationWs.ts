@@ -83,6 +83,7 @@ type ConversationMessageEditedPayload = {
   messageId: string;
   content: string | null;
   imageUrl?: string | null;
+  messageType?: string;
   editedAt: string;
 };
 
@@ -287,6 +288,7 @@ export function useConversationWs(
                       ...m,
                       content: payload.content,
                       ...(payload.imageUrl !== undefined ? { imageUrl: payload.imageUrl } : {}),
+                      ...(payload.messageType ? { messageType: payload.messageType } : {}),
                       editedAt: payload.editedAt,
                     }
                   : {

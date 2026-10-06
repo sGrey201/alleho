@@ -38,6 +38,7 @@ function bubblePropsEqual(prev: ChatMessageBubbleProps, next: ChatMessageBubbleP
     pm.editedAt === nm.editedAt &&
     pm.deletedAt === nm.deletedAt &&
     pm.content === nm.content &&
+    pm.messageType === nm.messageType &&
     pm.imageUrl === nm.imageUrl &&
     pm.pinnedAt === nm.pinnedAt &&
     pm.commentsCount === nm.commentsCount &&

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Bookmark } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,53 @@ import { QuestionnaireHintPopover, QuestionnaireHintText } from "@/components/Qu
 import { cn } from "@/lib/utils";
 
 type TagDef = { id: string; label: string; hint?: string };
+
+function fitTextarea(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+function AutoGrowTextarea({
+  value,
+  placeholder,
+  onChange,
+  onBlur,
+}: {
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    fitTextarea(el);
+
+    if (typeof ResizeObserver === "undefined") return;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? el.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      fitTextarea(el);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <Textarea
+      ref={ref}
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+      className="min-h-[60px] resize-none overflow-hidden text-sm"
+    />
+  );
+}
 
 type Props = {
   tags: TagDef[];
@@ -144,17 +191,11 @@ export function QuestionnaireTagSelector({
                 {readOnly ? (
                   <p className="whitespace-pre-wrap rounded-md bg-muted p-2 text-sm">{entry?.description || "—"}</p>
                 ) : (
-                  <Textarea
+                  <AutoGrowTextarea
                     placeholder={t.describeSelectedTraits}
                     value={entry?.description || ""}
-                    onChange={(e) => {
-                      onUpdateDescription(tag.id, e.target.value);
-                      const el = e.target;
-                      el.style.height = "auto";
-                      el.style.height = `${el.scrollHeight}px`;
-                    }}
+                    onChange={(next) => onUpdateDescription(tag.id, next)}
                     onBlur={onBlur}
-                    className="min-h-[60px] resize-none overflow-hidden text-sm"
                   />
                 )}
               </div>

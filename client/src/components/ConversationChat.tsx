@@ -76,7 +76,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import ChatInputBar, { type ChatInputBarHandle } from "@/components/ChatInputBar";
+import ChatInputBar, { type ChatInputBarHandle, type ChatMessageMode } from "@/components/ChatInputBar";
 import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { CollapsibleMessageText } from "@/components/CollapsibleMessageText";
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
@@ -218,6 +218,21 @@ function isSupportedChatDocumentFile(file: File): boolean {
 
 function isNonImageAttachment(messageType: string | null | undefined): boolean {
   return messageType === "voice" || messageType === "video" || messageType === "file";
+}
+
+const CLINICAL_MESSAGE_TYPES = new Set([
+  "questionnaire",
+  "questionnaire_template",
+  "followup",
+  "prescription",
+]);
+
+function isClinicalChatMessage(messageType: string | null | undefined): boolean {
+  return !!messageType && CLINICAL_MESSAGE_TYPES.has(messageType);
+}
+
+function isComposerMessageMode(messageType: string | null | undefined): messageType is ChatMessageMode {
+  return messageType === "message" || messageType === "prescription" || messageType === "followup";
 }
 
 function formatFileSize(bytes: number): string {
@@ -561,6 +576,12 @@ export default function ConversationChat({
   } | null>(null);
   const [questionnairePickerOpen, setQuestionnairePickerOpen] = useState(false);
   const [questionnairePanelVisible, setQuestionnairePanelVisible] = useState(false);
+  const [clinicalMessagesOnly, setClinicalMessagesOnly] = useState(false);
+  const clinicalFilterConversationRef = useRef(conversationId);
+  if (clinicalFilterConversationRef.current !== conversationId) {
+    clinicalFilterConversationRef.current = conversationId;
+    if (clinicalMessagesOnly) setClinicalMessagesOnly(false);
+  }
 
   useEffect(() => {
     setOpenQuestionnaireInstanceId(null);
@@ -569,6 +590,7 @@ export default function ConversationChat({
     setTemplatePreview(null);
     setQuestionnairePickerOpen(false);
     setQuestionnairePanelVisible(false);
+    setClinicalMessagesOnly(false);
     questionnaireScrollCacheRef.current.clear();
     const openSearchPending =
       !!conversationId &&
@@ -935,13 +957,25 @@ export default function ConversationChat({
   });
 
   const editMutation = useMutation({
-    mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
+    mutationFn: async ({
+      messageId,
+      content,
+      messageType,
+    }: {
+      messageId: string;
+      content: string;
+      messageType?: ChatMessageMode;
+    }) => {
       const res = await apiRequest(
         "PATCH",
         `/api/conversations/${conversationId}/messages/${messageId}`,
-        { content }
+        { content, messageType }
       );
-      return res.json() as Promise<{ content: string | null; editedAt: string }>;
+      return res.json() as Promise<{
+        content: string | null;
+        editedAt: string;
+        messageType?: string;
+      }>;
     },
     onSuccess: (resp, variables) => {
       queryClient.setQueryData<ConversationMessagesInfiniteData>(
@@ -950,13 +984,19 @@ export default function ConversationChat({
           updateConversationMessagesList(old, (list) =>
             list.map((m) =>
               m.id === variables.messageId
-                ? { ...m, content: resp.content, editedAt: resp.editedAt }
+                ? {
+                    ...m,
+                    content: resp.content,
+                    editedAt: resp.editedAt,
+                    messageType: resp.messageType ?? variables.messageType ?? m.messageType,
+                  }
                 : m
             )
           )
       );
       setEditing(null);
       setEditText("");
+      setMessageMode("message");
     },
     onError: (err: Error) => {
       toast({ title: t.error, description: err.message, variant: "destructive" });
@@ -1413,7 +1453,14 @@ export default function ConversationChat({
     if (editing) {
       const text = editText.trim();
       if (!text) return;
-      editMutation.mutate({ messageId: editing.id, content: text });
+      editMutation.mutate({
+        messageId: editing.id,
+        content: text,
+        messageType:
+          isPatientConv && user?.isAdmin && isComposerMessageMode(editing.messageType)
+            ? messageMode
+            : undefined,
+      });
       return;
     }
     if (!message.trim()) return;
@@ -1449,9 +1496,26 @@ export default function ConversationChat({
     const visible = sortedMessages.filter(
       (m) => !m.deletedAt || shouldShowDeletedMessagePlaque(m.deletedAt)
     );
-    if (!isPatientConv || user?.isAdmin) return visible;
-    return visible.filter((m) => m.messageType !== "followup");
-  }, [sortedMessages, isPatientConv, user?.isAdmin]);
+    const audienceVisible =
+      !isPatientConv || user?.isAdmin
+        ? visible
+        : visible.filter((m) => m.messageType !== "followup");
+    if (!clinicalMessagesOnly) return audienceVisible;
+    return audienceVisible.filter((m) => isClinicalChatMessage(m.messageType));
+  }, [sortedMessages, isPatientConv, user?.isAdmin, clinicalMessagesOnly]);
+
+  useEffect(() => {
+    if (!clinicalMessagesOnly || !hasNextPage || isFetchingNextPage) return;
+    const root = messagesScrollRef.current;
+    if (root) {
+      pendingScrollRestoreRef.current = {
+        height: root.scrollHeight,
+        top: root.scrollTop,
+      };
+      stickToBottomRef.current = false;
+    }
+    void fetchNextPage();
+  }, [clinicalMessagesOnly, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
 
   useEffect(() => {
     deepLinkFetchAttemptsRef.current = 0;
@@ -1889,6 +1953,8 @@ export default function ConversationChat({
     }
     setEditing(msg);
     setEditText(msg.content ?? "");
+    if (isComposerMessageMode(msg.messageType)) setMessageMode(msg.messageType);
+    onDone?.();
   };
 
   const handleReplaceVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1939,6 +2005,7 @@ export default function ConversationChat({
     setReplyTo(null);
     setEditing(null);
     setEditText("");
+    setMessageMode("message");
   };
 
   const copyMessageContent = async (msg: ConversationMessageWithAuthor) => {
@@ -2702,20 +2769,28 @@ export default function ConversationChat({
               <AvatarFallback className="text-sm font-semibold">{headerInitials}</AvatarFallback>
             </Avatar>
           </button>
-          {isMobile &&
-            hasQuestionnaireSelection &&
-            !questionnairePanelVisible && (
-              <button
-                type="button"
-                onClick={() => setQuestionnairePanelVisible(true)}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm animate-in fade-in zoom-in-75 duration-300"
-                aria-label={questionnairePanelTitle}
-                title={questionnairePanelTitle}
-                data-testid="button-questionnaire-minimized"
-              >
-                <ClipboardList className="h-5 w-5" />
-              </button>
-            )}
+          {isPatientConv && (
+            <button
+              type="button"
+              onClick={() => {
+                setClinicalMessagesOnly((on) => !on);
+                stickToBottomRef.current = true;
+                requestScrollToBottom();
+              }}
+              className={cn(
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border shadow-sm animate-in fade-in zoom-in-75 duration-300",
+                clinicalMessagesOnly
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-primary",
+              )}
+              aria-pressed={clinicalMessagesOnly}
+              aria-label={clinicalMessagesOnly ? t.showAllChatMessages : t.showClinicalMessagesOnly}
+              title={clinicalMessagesOnly ? t.showAllChatMessages : t.showClinicalMessagesOnly}
+              data-testid="button-questionnaire-minimized"
+            >
+              <ClipboardList className="h-5 w-5" />
+            </button>
+          )}
         </div>
         )}
         {activePinnedMessage && !isChatSearchOpen && (
@@ -2853,8 +2928,14 @@ export default function ConversationChat({
                 </ChatMessageBubble>
               );
             })
+          ) : clinicalMessagesOnly && (isFetchingNextPage || hasNextPage) ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">{t.noMessages}</p>
+            <p className="text-center text-muted-foreground py-8">
+              {clinicalMessagesOnly ? t.clinicalMessagesFilterEmpty : t.noMessages}
+            </p>
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -3092,7 +3173,11 @@ export default function ConversationChat({
                     : undefined
                 }
                 showSponsorFormat={conv.type === "channel" && channelMonetizationEnabled && canPostToChannel}
-                showMessageModeSelector={isPatientConv && !!user?.isAdmin && !editing}
+                showMessageModeSelector={
+                  isPatientConv &&
+                  !!user?.isAdmin &&
+                  (!editing || isComposerMessageMode(editing.messageType))
+                }
                 messageMode={messageMode}
                 onMessageModeChange={setMessageMode}
                 onInputFocus={scrollMessagesForKeyboard}

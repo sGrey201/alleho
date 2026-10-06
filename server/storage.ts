@@ -455,7 +455,7 @@ export interface IStorage {
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
   editConversationMessage(
     messageId: string,
-    updates: { content?: string | null; imageUrl?: string | null }
+    updates: { content?: string | null; imageUrl?: string | null; messageType?: string }
   ): Promise<ConversationMessage | undefined>;
   softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
   pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined>;
@@ -2129,13 +2129,19 @@ export class DatabaseStorage implements IStorage {
 
   async editConversationMessage(
     messageId: string,
-    updates: { content?: string | null; imageUrl?: string | null }
+    updates: { content?: string | null; imageUrl?: string | null; messageType?: string }
   ): Promise<ConversationMessage | undefined> {
-    const patch: { content?: string | null; imageUrl?: string | null; editedAt: Date } = {
+    const patch: {
+      content?: string | null;
+      imageUrl?: string | null;
+      messageType?: string;
+      editedAt: Date;
+    } = {
       editedAt: new Date(),
     };
     if (updates.content !== undefined) patch.content = updates.content;
     if (updates.imageUrl !== undefined) patch.imageUrl = updates.imageUrl;
+    if (updates.messageType !== undefined) patch.messageType = updates.messageType;
 
     const [m] = await db
       .update(conversationMessages)

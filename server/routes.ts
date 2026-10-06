@@ -3646,6 +3646,7 @@ ${allUrls.map(url => `  <url>
         content?: string;
         imageUrl?: string;
         videoPosterUrl?: string;
+        messageType?: string;
       };
 
       if (existing.messageType === "video" && body.imageUrl) {
@@ -3687,7 +3688,18 @@ ${allUrls.map(url => `  <url>
 
       const content = (body.content ?? "").toString().trim();
       if (!content) return res.status(400).json({ message: "Content required" });
-      const updated = await storage.editConversationMessage(messageId, { content });
+      const switchableTypes = new Set(["message", "prescription", "followup"]);
+      let messageType: string | undefined;
+      if (body.messageType && switchableTypes.has(existing.messageType) && switchableTypes.has(body.messageType)) {
+        if (
+          (body.messageType === "prescription" || body.messageType === "followup") &&
+          (conv?.type !== "patient" || !(await storage.getUser(currentUserId))?.isAdmin)
+        ) {
+          return res.status(403).json({ message: "Only doctors can set this message type in a patient chat" });
+        }
+        messageType = body.messageType;
+      }
+      const updated = await storage.editConversationMessage(messageId, { content, messageType });
       if (!updated) return res.status(404).json({ message: "Message not found" });
       const editedAt = (updated.editedAt instanceof Date ? updated.editedAt : new Date()).toISOString();
       await syncConversationRecentCache(id, currentUserId);
@@ -3695,9 +3707,15 @@ ${allUrls.map(url => `  <url>
         conversationId: id,
         messageId,
         content: updated.content ?? null,
+        messageType: updated.messageType,
         editedAt,
       });
-      res.json({ ok: true, content: updated.content ?? null, editedAt });
+      res.json({
+        ok: true,
+        content: updated.content ?? null,
+        messageType: updated.messageType,
+        editedAt,
+      });
     } catch (error) {
       console.error("Error editing conversation message:", error);
       res.status(500).json({ message: "Failed to edit message" });

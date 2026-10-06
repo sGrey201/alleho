@@ -161,6 +161,7 @@ export type ConversationMessageEditedPayload = {
   messageId: string;
   content: string | null;
   imageUrl?: string | null;
+  messageType?: string;
   editedAt: string;
 };
 
