@@ -683,8 +683,11 @@ export const conversationCalls = pgTable(
     endedAt: timestamp("ended_at"),
     ringExpiresAt: timestamp("ring_expires_at"),
     createdAt: timestamp("created_at").defaultNow(),
-    /** skipped | recording | ready | failed. Null until the call is classified. */
-    recordingStatus: varchar("recording_status", { length: 20 }),
+    /**
+     * skipped | recording | ready | ready_for_transcription | failed | package_failed.
+     * Null until the call is classified.
+     */
+    recordingStatus: varchar("recording_status", { length: 40 }),
     recordingEgressId: varchar("recording_egress_id"),
     recordingObjectPath: text("recording_object_path"),
     recordingMessageId: varchar("recording_message_id"),
@@ -723,6 +726,42 @@ export const conversationCallParticipants = pgTable(
 
 export type ConversationCallParticipant = typeof conversationCallParticipants.$inferSelect;
 export type InsertConversationCallParticipant = typeof conversationCallParticipants.$inferInsert;
+
+export const callRecordingRoleEnum = z.enum(["practitioner", "patient"]);
+export type CallRecordingRole = z.infer<typeof callRecordingRoleEnum>;
+
+export const callRecordingTrackStatusEnum = z.enum(["recording", "done", "failed"]);
+export type CallRecordingTrackStatus = z.infer<typeof callRecordingTrackStatusEnum>;
+
+/** One LiveKit Track Egress per published microphone track. */
+export const conversationCallRecordingTracks = pgTable(
+  "conversation_call_recording_tracks",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    callId: varchar("call_id")
+      .notNull()
+      .references(() => conversationCalls.id, { onDelete: "cascade" }),
+    roomName: text("room_name").notNull(),
+    participantIdentity: text("participant_identity").notNull(),
+    role: varchar("role", { length: 20 }).notNull(),
+    trackSid: text("track_sid").notNull(),
+    egressId: varchar("egress_id"),
+    startedAt: timestamp("started_at"),
+    endedAt: timestamp("ended_at"),
+    filePath: text("file_path"),
+    status: varchar("status", { length: 20 }).notNull().default("recording"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("call_recording_tracks_call_idx").on(table.callId),
+    index("call_recording_tracks_egress_idx").on(table.egressId),
+    sql`CONSTRAINT conversation_call_recording_tracks_unique UNIQUE (call_id, track_sid)`,
+  ]
+);
+
+export type ConversationCallRecordingTrack = typeof conversationCallRecordingTracks.$inferSelect;
+export type InsertConversationCallRecordingTrack =
+  typeof conversationCallRecordingTracks.$inferInsert;
 
 // Channel sponsor monetization
 export const channelSponsorPaymentStatusEnum = z.enum(["granted", "approved", "disputed"]);

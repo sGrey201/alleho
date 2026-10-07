@@ -1,5 +1,11 @@
 import type { Request, Response } from "express";
-import { AccessToken, EgressStatus, TrackSource, WebhookReceiver, type WebhookEvent } from "livekit-server-sdk";
+import {
+  AccessToken,
+  TrackSource,
+  TrackType,
+  WebhookReceiver,
+  type WebhookEvent,
+} from "livekit-server-sdk";
 import { storage } from "./storage";
 import {
   invalidateConversationRecent,
@@ -12,9 +18,11 @@ import {
 import { sendPushToUsers, formatSenderName, conversationPath } from "./push";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
-  callRecordingObjectPath,
-  startCallAudioEgress,
-  stopCallAudioEgress,
+  markTrackEgressEnded,
+  markTrackEgressStarted,
+  resolveCallRecordingRole,
+  startMicrophoneTrackRecording,
+  tryBuildCallRecordingPackage,
 } from "./callRecording";
 import {
   deleteLiveKitRoom,
@@ -42,8 +50,6 @@ const CALLABLE_TYPES = new Set(["direct", "patient", "group", "consilium"]);
 
 /** One-to-one chats where camera and call recording are allowed. */
 const PRIVATE_CALL_TYPES = new Set(["direct", "patient"]);
-
-const recordingStartTasks = new Map<string, Promise<void>>();
 
 const roomEmptyTimers = new Map<string, NodeJS.Timeout>();
 
@@ -143,10 +149,14 @@ export async function createCallAccessToken(
   if (!apiKey || !apiSecret) {
     throw new Error("LiveKit is not configured");
   }
+  const call = await storage.getCallById(callId);
+  const conv = call ? await storage.getConversation(call.conversationId) : null;
+  const role = resolveCallRecordingRole(user, conv);
   const at = new AccessToken(apiKey, apiSecret, {
     identity: user.id,
     name: formatSenderName(user),
     ttl: "2h",
+    metadata: JSON.stringify({ role }),
   });
   at.addGrant({
     roomJoin: true,
@@ -160,44 +170,9 @@ export async function createCallAccessToken(
   return at.toJwt();
 }
 
-function trackRecordingStart(callId: string): void {
-  if (recordingStartTasks.has(callId)) return;
-  const task = ensurePrivateCallRecording(callId).finally(() => {
-    if (recordingStartTasks.get(callId) === task) {
-      recordingStartTasks.delete(callId);
-    }
-  });
-  recordingStartTasks.set(callId, task);
-}
-
-async function markCallActiveAndMaybeRecord(call: ConversationCall): Promise<void> {
+async function markCallActive(call: ConversationCall): Promise<void> {
   if (call.status === "ringing") {
     await storage.markCallActive(call.id);
-  }
-  trackRecordingStart(call.id);
-}
-
-/** Starts audio egress once for a private call. Failures do not end the call. */
-async function ensurePrivateCallRecording(callId: string): Promise<void> {
-  const call = await storage.getCallById(callId);
-  if (!call || call.status === "ended" || call.status === "cancelled") return;
-  if (call.recordingStatus) return;
-
-  const conv = await storage.getConversation(call.conversationId);
-  if (!conv || !isPrivateCallConversationType(conv.type)) {
-    await storage.skipCallRecording(callId);
-    return;
-  }
-
-  const claimed = await storage.claimCallRecording(callId);
-  if (!claimed) return;
-
-  try {
-    const egressId = await startCallAudioEgress(callId);
-    await storage.setCallRecordingEgressId(callId, egressId);
-  } catch (err) {
-    console.error("[VoiceCall] start recording error:", err);
-    await storage.setCallRecordingFailed(callId);
   }
 }
 
@@ -246,7 +221,7 @@ export async function reconcileStaleCall(
 
   if (participantCount > 0) {
     if (call.status === "ringing") {
-      await markCallActiveAndMaybeRecord(call);
+      await markCallActive(call);
     }
     return false;
   }
@@ -333,7 +308,7 @@ async function notifyIncomingCall(
 /** Marks a participant joined, flips the call to active, and broadcasts. */
 export async function acceptCall(call: ConversationCall, userId: string): Promise<void> {
   await storage.setCallParticipantStatus(call.id, userId, "joined");
-  await markCallActiveAndMaybeRecord(call);
+  await markCallActive(call);
   await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
     callId: call.id,
     conversationId: call.conversationId,
@@ -375,29 +350,17 @@ export async function endCall(
     roomEmptyTimers.delete(call.id);
   }
 
-  const pendingRecording = recordingStartTasks.get(call.id);
-  if (pendingRecording) {
-    await pendingRecording.catch((err) =>
-      console.error("[VoiceCall] recording start before end error:", err)
-    );
-  }
-
   const ended = await storage.endCall(call.id, reason);
   if (!ended) return;
-
-  if (ended.recordingEgressId && ended.recordingStatus === "recording") {
-    try {
-      await stopCallAudioEgress(ended.recordingEgressId);
-    } catch (err) {
-      console.error("[VoiceCall] stop recording error:", err);
-    }
-  }
 
   try {
     await postPrivateCallChatMessage(ended);
   } catch (err) {
     console.error("[VoiceCall] call chat message error:", err);
   }
+  void tryBuildCallRecordingPackage(ended.id).catch((err) =>
+    console.error("[VoiceCall] recording package error:", err)
+  );
 
   await publishConversationCallEvent(call.conversationId, "conversation_call_ended", {
     callId: call.id,
@@ -492,7 +455,7 @@ export async function sweepExpiredCalls(): Promise<void> {
     if (snapshot) {
       const participantCount = participantCountFromSnapshot(call.id, snapshot);
       if (participantCount > 0) {
-        await markCallActiveAndMaybeRecord(call);
+        await markCallActive(call);
         continue;
       }
       await cancelUnansweredCall(call);
@@ -504,7 +467,7 @@ export async function sweepExpiredCalls(): Promise<void> {
       (r) => r.status === "joined" && r.userId !== call.initiatedByUserId
     );
     if (someoneJoinedAfterInitiator) {
-      await markCallActiveAndMaybeRecord(call);
+      await markCallActive(call);
       continue;
     }
     await cancelUnansweredCall(call);
@@ -608,7 +571,8 @@ async function postPrivateCallChatMessage(ended: ConversationCall): Promise<void
   const endedAt = latest.endedAt?.getTime() ?? ended.endedAt?.getTime() ?? Date.now();
   const durationSec = Math.max(0, Math.round((endedAt - ended.startedAt.getTime()) / 1000));
   const imageUrl =
-    latest.recordingStatus === "ready" && latest.recordingObjectPath
+    (latest.recordingStatus === "ready" || latest.recordingStatus === "ready_for_transcription") &&
+    latest.recordingObjectPath?.endsWith(".ogg")
       ? latest.recordingObjectPath
       : null;
   const message = await storage.createConversationMessage({
@@ -622,42 +586,35 @@ async function postPrivateCallChatMessage(ended: ConversationCall): Promise<void
   await publishCallChatMessage(message, author);
 
   const recordingPath = linked?.recordingObjectPath;
-  if (recordingPath && recordingPath !== imageUrl) {
+  if (recordingPath && recordingPath !== imageUrl && recordingPath.endsWith(".ogg")) {
     await attachCallRecordingLink(message.id, ended.conversationId, recordingPath);
   }
 }
 
-function egressEndedFailed(status: EgressStatus | undefined): boolean {
-  return (
-    status === EgressStatus.EGRESS_FAILED ||
-    status === EgressStatus.EGRESS_ABORTED ||
-    status === EgressStatus.EGRESS_LIMIT_REACHED
-  );
-}
-
-async function handleCallEgressEnded(event: WebhookEvent): Promise<void> {
-  const info = event.egressInfo;
-  const callId = info?.roomName || event.room?.name;
-  if (!info || !callId) return;
-
-  const call = await storage.getCallById(callId);
-  if (!call || call.recordingStatus === "skipped" || call.recordingStatus === "ready") return;
-
-  if (egressEndedFailed(info.status)) {
-    await storage.setCallRecordingFailed(callId);
-    return;
-  }
-  if (info.status !== EgressStatus.EGRESS_COMPLETE) return;
-
-  const objectPath = callRecordingObjectPath(callId);
-  const updated = await storage.markCallRecordingReady(callId, objectPath);
-  if (!updated?.recordingMessageId) return;
-  await attachCallRecordingLink(updated.recordingMessageId, updated.conversationId, objectPath);
+function isMicrophoneAudioTrack(event: WebhookEvent): boolean {
+  const track = event.track;
+  if (!track) return false;
+  const type = track.type as unknown;
+  const source = track.source as unknown;
+  const isAudio =
+    type === TrackType.AUDIO || type === "AUDIO" || Number(type) === TrackType.AUDIO;
+  const isMic =
+    source === TrackSource.MICROPHONE ||
+    source === "MICROPHONE" ||
+    Number(source) === TrackSource.MICROPHONE;
+  return isAudio && isMic;
 }
 
 async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
-  if (event.event === "egress_ended") {
-    await handleCallEgressEnded(event);
+  if (event.event === "egress_started" && event.egressInfo) {
+    await markTrackEgressStarted(event.egressInfo);
+    return;
+  }
+  if (event.event === "egress_ended" && event.egressInfo) {
+    const call = await markTrackEgressEnded(event.egressInfo);
+    if (call) {
+      await tryBuildCallRecordingPackage(call.id);
+    }
     return;
   }
 
@@ -665,7 +622,27 @@ async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
   if (!roomName) return;
 
   const call = await storage.getCallById(roomName);
-  if (!call || (call.status !== "ringing" && call.status !== "active")) return;
+  if (!call) return;
+
+  if (event.event === "track_published") {
+    if (call.status !== "ringing" && call.status !== "active") return;
+    const conv = await storage.getConversation(call.conversationId);
+    if (!conv || !isPrivateCallConversationType(conv.type)) return;
+    if (!isMicrophoneAudioTrack(event)) return;
+    const trackSid = event.track?.sid;
+    const identity = event.participant?.identity;
+    if (!trackSid || !identity) return;
+    await startMicrophoneTrackRecording({
+      call,
+      conv,
+      trackSid,
+      participantIdentity: identity,
+      participantMetadata: event.participant?.metadata,
+    });
+    return;
+  }
+
+  if (call.status !== "ringing" && call.status !== "active") return;
 
   const userId = event.participant?.identity;
 
@@ -673,11 +650,7 @@ async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
     case "participant_joined": {
       if (!userId) return;
       await storage.setCallParticipantStatus(call.id, userId, "joined");
-      if (call.status === "ringing") {
-        await markCallActiveAndMaybeRecord(call);
-      } else {
-        trackRecordingStart(call.id);
-      }
+      await markCallActive(call);
       await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
         callId: call.id,
         conversationId: call.conversationId,

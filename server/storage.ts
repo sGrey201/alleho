@@ -18,6 +18,7 @@ import {
   pushSubscriptions,
   conversationCalls,
   conversationCallParticipants,
+  conversationCallRecordingTracks,
   channelSponsorSettings,
   channelSponsorPayments,
   type User,
@@ -48,7 +49,10 @@ import {
   type PushSubscription,
   type ConversationCall,
   type ConversationCallParticipant,
+  type ConversationCallRecordingTrack,
   type CallParticipantStatus,
+  type CallRecordingRole,
+  type CallRecordingTrackStatus,
   type ChannelSponsorSettings,
   type ChannelSponsorPayment,
   type ChannelSponsorDonationType,
@@ -586,7 +590,39 @@ export interface IStorage {
   setCallRecordingEgressId(callId: string, egressId: string): Promise<void>;
   setCallRecordingFailed(callId: string): Promise<void>;
   markCallRecordingReady(callId: string, objectPath: string): Promise<ConversationCall | undefined>;
+  setCallRecordingStatus(
+    callId: string,
+    status: string,
+    objectPath?: string | null
+  ): Promise<ConversationCall | undefined>;
   setCallRecordingMessageId(callId: string, messageId: string): Promise<ConversationCall | undefined>;
+  insertCallRecordingTrack(data: {
+    callId: string;
+    roomName: string;
+    participantIdentity: string;
+    role: CallRecordingRole;
+    trackSid: string;
+    filePath: string;
+  }): Promise<ConversationCallRecordingTrack | undefined>;
+  getCallRecordingTracks(callId: string): Promise<ConversationCallRecordingTrack[]>;
+  getCallRecordingTrackBySid(
+    callId: string,
+    trackSid: string
+  ): Promise<ConversationCallRecordingTrack | undefined>;
+  getCallRecordingTrackByEgressId(
+    egressId: string
+  ): Promise<ConversationCallRecordingTrack | undefined>;
+  updateCallRecordingTrack(
+    id: string,
+    updates: {
+      egressId?: string | null;
+      startedAt?: Date | null;
+      endedAt?: Date | null;
+      filePath?: string | null;
+      status?: CallRecordingTrackStatus;
+    }
+  ): Promise<ConversationCallRecordingTrack | undefined>;
+  hasOpenCallRecordingTracks(callId: string): Promise<boolean>;
 
   upsertPushSubscription(
     userId: string,
@@ -2920,6 +2956,24 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async setCallRecordingStatus(
+    callId: string,
+    status: string,
+    objectPath?: string | null
+  ): Promise<ConversationCall | undefined> {
+    const patch: {
+      recordingStatus: string;
+      recordingObjectPath?: string | null;
+    } = { recordingStatus: status };
+    if (objectPath !== undefined) patch.recordingObjectPath = objectPath;
+    const [row] = await db
+      .update(conversationCalls)
+      .set(patch)
+      .where(eq(conversationCalls.id, callId))
+      .returning();
+    return row;
+  }
+
   async setCallRecordingMessageId(
     callId: string,
     messageId: string
@@ -2931,6 +2985,95 @@ export class DatabaseStorage implements IStorage {
       .returning();
     if (row) return row;
     return this.getCallById(callId);
+  }
+
+  async insertCallRecordingTrack(data: {
+    callId: string;
+    roomName: string;
+    participantIdentity: string;
+    role: CallRecordingRole;
+    trackSid: string;
+    filePath: string;
+  }): Promise<ConversationCallRecordingTrack | undefined> {
+    const [row] = await db
+      .insert(conversationCallRecordingTracks)
+      .values({
+        callId: data.callId,
+        roomName: data.roomName,
+        participantIdentity: data.participantIdentity,
+        role: data.role,
+        trackSid: data.trackSid,
+        filePath: data.filePath,
+        status: "recording",
+      })
+      .onConflictDoNothing()
+      .returning();
+    return row;
+  }
+
+  async getCallRecordingTracks(callId: string): Promise<ConversationCallRecordingTrack[]> {
+    return db
+      .select()
+      .from(conversationCallRecordingTracks)
+      .where(eq(conversationCallRecordingTracks.callId, callId));
+  }
+
+  async getCallRecordingTrackBySid(
+    callId: string,
+    trackSid: string
+  ): Promise<ConversationCallRecordingTrack | undefined> {
+    const [row] = await db
+      .select()
+      .from(conversationCallRecordingTracks)
+      .where(
+        and(
+          eq(conversationCallRecordingTracks.callId, callId),
+          eq(conversationCallRecordingTracks.trackSid, trackSid)
+        )
+      );
+    return row;
+  }
+
+  async getCallRecordingTrackByEgressId(
+    egressId: string
+  ): Promise<ConversationCallRecordingTrack | undefined> {
+    const [row] = await db
+      .select()
+      .from(conversationCallRecordingTracks)
+      .where(eq(conversationCallRecordingTracks.egressId, egressId));
+    return row;
+  }
+
+  async updateCallRecordingTrack(
+    id: string,
+    updates: {
+      egressId?: string | null;
+      startedAt?: Date | null;
+      endedAt?: Date | null;
+      filePath?: string | null;
+      status?: CallRecordingTrackStatus;
+    }
+  ): Promise<ConversationCallRecordingTrack | undefined> {
+    const [row] = await db
+      .update(conversationCallRecordingTracks)
+      .set(updates)
+      .where(eq(conversationCallRecordingTracks.id, id))
+      .returning();
+    return row;
+  }
+
+  async hasOpenCallRecordingTracks(callId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: conversationCallRecordingTracks.id })
+      .from(conversationCallRecordingTracks)
+      .where(
+        and(
+          eq(conversationCallRecordingTracks.callId, callId),
+          eq(conversationCallRecordingTracks.status, "recording")
+        )
+      )
+      .limit(1);
+    return !!row;
   }
 
   async getConversationIdsWithActiveCalls(
