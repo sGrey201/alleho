@@ -76,6 +76,29 @@ services:
       redis:
         condition: service_healthy
 
+  # Audio recording for private calls. Config is built from LiveKit keys so
+  # secrets stay in the environment. Media still flows through LiveKit, not here.
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+    shm_size: "1gb"
+    environment:
+      EGRESS_CONFIG_BODY: |
+        log_level: info
+        api_key: "${LIVEKIT_API_KEY:-devkey}"
+        api_secret: "${LIVEKIT_API_SECRET:-secret}"
+        ws_url: ws://livekit:7880
+        insecure: true
+        redis:
+          address: redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
   pgadmin:
     image: dpage/pgadmin4:latest
     ports:
