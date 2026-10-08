@@ -2905,46 +2905,60 @@ export default function ConversationChat({
               const isOwn = msg.authorUserId === user?.id;
               if (msg.messageType === "call" && !msg.deletedAt) {
                 const durationSec = parseCallMessagePayload(msg.content)?.durationSec ?? 0;
-                const filename = "zapis-zvonka.ogg";
+                const filename = t.callRecordingFileName;
                 return (
                   <div
                     key={msg.id}
                     ref={setMessageRef(msg.id)}
-                    className="flex justify-center px-6 py-1"
+                    className="flex justify-center px-6 py-2"
                     data-testid={`call-log-${msg.id}`}
                   >
-                    <p className="text-center text-xs text-muted-foreground">
-                      {t.callMessageLabel} · {formatCallDuration(durationSec)}
+                    <div className="w-full max-w-sm rounded-2xl border border-border/60 bg-muted/40 px-3 py-2.5">
+                      <p className="text-center text-xs text-muted-foreground">
+                        {t.callMessageLabel} · {formatCallDuration(durationSec)}
+                      </p>
                       {msg.imageUrl ? (
-                        <>
-                          {" · "}
-                          <button
-                            type="button"
-                            className="underline"
-                            data-testid={`call-recording-${msg.id}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (!msg.imageUrl) return;
-                              if (!shouldUseInAppFileTransfer()) {
-                                openChatFile(msg.imageUrl, filename);
-                                return;
-                              }
-                              void saveOrShareChatFile(msg.imageUrl, filename).catch((error) => {
-                                if ((error as Error)?.name === "AbortError") return;
-                                toast({
-                                  title: t.error,
-                                  description: t.messageFileOpenError,
-                                  variant: "destructive",
-                                });
+                        <button
+                          type="button"
+                          className="mt-2 flex w-full items-center gap-2.5 rounded-xl bg-background/80 px-2.5 py-2 text-left transition-colors hover:bg-background"
+                          data-testid={`call-recording-${msg.id}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!msg.imageUrl) return;
+                            if (!shouldUseInAppFileTransfer()) {
+                              openChatFile(msg.imageUrl, filename);
+                              return;
+                            }
+                            void saveOrShareChatFile(msg.imageUrl, filename).catch((error) => {
+                              if ((error as Error)?.name === "AbortError") return;
+                              toast({
+                                title: t.error,
+                                description: t.messageFileOpenError,
+                                variant: "destructive",
                               });
-                            }}
-                          >
-                            {t.callRecordingDownload}
-                          </button>
-                        </>
-                      ) : null}
-                    </p>
+                            });
+                          }}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <FileIcon className="h-5 w-5" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-foreground">
+                              {filename}
+                            </span>
+                            <span className="block text-[11px] text-muted-foreground">
+                              {t.callRecordingDownload}
+                            </span>
+                          </span>
+                          <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </button>
+                      ) : (
+                        <p className="mt-1.5 text-center text-[11px] text-muted-foreground/80">
+                          {t.callRecordingPreparing}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 );
               }

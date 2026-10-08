@@ -22,6 +22,7 @@ import {
   markTrackEgressStarted,
   resolveCallRecordingRole,
   startMicrophoneTrackRecording,
+  isCallRecordingDownloadPath,
   tryBuildCallRecordingPackage,
 } from "./callRecording";
 import {
@@ -539,7 +540,8 @@ async function publishCallChatMessage(
   );
 }
 
-async function attachCallRecordingLink(
+/** Attach (or update) the recording download path on an existing call chat message. */
+export async function attachCallRecordingToChatMessage(
   messageId: string,
   conversationId: string,
   objectPath: string
@@ -572,7 +574,7 @@ async function postPrivateCallChatMessage(ended: ConversationCall): Promise<void
   const durationSec = Math.max(0, Math.round((endedAt - ended.startedAt.getTime()) / 1000));
   const imageUrl =
     (latest.recordingStatus === "ready" || latest.recordingStatus === "ready_for_transcription") &&
-    latest.recordingObjectPath?.endsWith(".ogg")
+    isCallRecordingDownloadPath(latest.recordingObjectPath)
       ? latest.recordingObjectPath
       : null;
   const message = await storage.createConversationMessage({
@@ -586,8 +588,12 @@ async function postPrivateCallChatMessage(ended: ConversationCall): Promise<void
   await publishCallChatMessage(message, author);
 
   const recordingPath = linked?.recordingObjectPath;
-  if (recordingPath && recordingPath !== imageUrl && recordingPath.endsWith(".ogg")) {
-    await attachCallRecordingLink(message.id, ended.conversationId, recordingPath);
+  if (
+    recordingPath &&
+    recordingPath !== imageUrl &&
+    isCallRecordingDownloadPath(recordingPath)
+  ) {
+    await attachCallRecordingToChatMessage(message.id, ended.conversationId, recordingPath);
   }
 }
 

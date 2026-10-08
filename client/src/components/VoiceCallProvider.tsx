@@ -39,6 +39,8 @@ export type CallVideoTile = {
   userId: string;
   trackSid: string;
   track: LocalTrack | RemoteTrack;
+  /** Present for remote camera tiles — live quality / subscription state. */
+  remotePublication?: RemoteTrackPublication;
 };
 
 const CAMERA_CAPTURE = {
@@ -67,6 +69,7 @@ function collectVideoTiles(room: Room): CallVideoTile[] {
         userId: participant.identity,
         trackSid: pub.trackSid,
         track: pub.track,
+        remotePublication: pub,
       });
     }
   });

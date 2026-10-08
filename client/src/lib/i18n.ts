@@ -2317,4 +2317,6 @@ export const t = {
   voiceCallRecording: 'Идёт запись',
   callMessageLabel: 'Звонок',
   callRecordingDownload: 'Скачать запись',
+  callRecordingFileName: 'Запись звонка.zip',
+  callRecordingPreparing: 'Запись готовится…',
 };

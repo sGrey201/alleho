@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Loader2, Video, VideoOff } from "lucide-react";
 import { useLocation } from "wouter";
+import { RemoteVideoTrack, VideoQuality } from "livekit-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,129 @@ function CallVideoSurface({
       muted
       className={cn("bg-black object-cover", mirrored && "-scale-x-100", className)}
     />
+  );
+}
+
+function qualityLabel(q: VideoQuality | undefined): string {
+  if (q === VideoQuality.HIGH) return "HIGH";
+  if (q === VideoQuality.MEDIUM) return "MED";
+  if (q === VideoQuality.LOW) return "LOW";
+  return "?";
+}
+
+function formatBitrate(bps: number | undefined): string {
+  if (bps == null || !Number.isFinite(bps) || bps <= 0) return "—";
+  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mb/s`;
+  if (bps >= 1_000) return `${Math.round(bps / 1_000)} kb/s`;
+  return `${Math.round(bps)} b/s`;
+}
+
+type RemoteVideoDebugStats = {
+  display: string;
+  recv: string;
+  quality: string;
+  bitrate: string;
+  fps: string;
+  stream: string;
+};
+
+/** Debug HUD for the remote fullscreen stage — resolution / layer / bitrate. */
+function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const prevBytesRef = useRef<{ bytes: number; frames: number; at: number } | null>(null);
+  const [stats, setStats] = useState<RemoteVideoDebugStats | null>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    tile.track.attach(el);
+    return () => {
+      tile.track.detach(el);
+    };
+  }, [tile.track]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tick = async () => {
+      const el = videoRef.current;
+      const displayW = el?.videoWidth || 0;
+      const displayH = el?.videoHeight || 0;
+      const display = displayW && displayH ? `${displayW}×${displayH}` : "—";
+
+      const quality = qualityLabel(tile.remotePublication?.videoQuality);
+      const stream = tile.track.streamState ?? "—";
+
+      let recv = "—";
+      let bitrate = "—";
+      let fps = "—";
+
+      if (tile.track instanceof RemoteVideoTrack) {
+        try {
+          const rs = await tile.track.getReceiverStats();
+          if (rs) {
+            if (rs.frameWidth && rs.frameHeight) {
+              recv = `${rs.frameWidth}×${rs.frameHeight}`;
+            }
+            const now = rs.timestamp || performance.now();
+            const bytes = rs.bytesReceived ?? 0;
+            const frames = rs.framesDecoded ?? 0;
+            const prev = prevBytesRef.current;
+            if (prev && now > prev.at) {
+              const dt = (now - prev.at) / 1000;
+              if (dt > 0) {
+                bitrate = formatBitrate(((bytes - prev.bytes) * 8) / dt);
+                const fpsVal = (frames - prev.frames) / dt;
+                if (fpsVal >= 0 && fpsVal < 120) fps = `${fpsVal.toFixed(0)} fps`;
+              }
+            }
+            prevBytesRef.current = { bytes, frames, at: now };
+          }
+        } catch {
+          // stats unavailable — keep placeholders
+        }
+      }
+
+      if (!cancelled) {
+        setStats({ display, recv, quality, bitrate, fps, stream: String(stream) });
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => void tick(), 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      prevBytesRef.current = null;
+    };
+  }, [tile.track, tile.remotePublication]);
+
+  return (
+    <div className="relative h-full w-full">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="h-full w-full bg-black object-cover"
+      />
+      {stats && (
+        <div
+          className="pointer-events-none absolute bottom-24 left-3 z-10 rounded bg-black/55 px-1.5 py-1 font-mono text-[10px] leading-tight text-white/90 tabular-nums sm:bottom-28"
+          data-testid="video-call-remote-stats"
+        >
+          <div>
+            in {stats.display}
+            {stats.recv !== "—" && stats.recv !== stats.display ? ` · rtc ${stats.recv}` : ""}
+          </div>
+          <div>
+            {stats.quality} · {stats.bitrate}
+            {stats.fps !== "—" ? ` · ${stats.fps}` : ""}
+            {stats.stream !== "active" ? ` · ${stats.stream}` : ""}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -230,11 +354,7 @@ export function VoiceCallChrome() {
               <>
                 <div className="absolute inset-0 overflow-hidden bg-black">
                   {primaryRemote ? (
-                    <CallVideoSurface
-                      tile={primaryRemote}
-                      mirrored={false}
-                      className="h-full w-full"
-                    />
+                    <RemoteVideoStage tile={primaryRemote} />
                   ) : localTile ? (
                     <CallVideoSurface tile={localTile} mirrored className="h-full w-full" />
                   ) : null}

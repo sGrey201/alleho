@@ -6,9 +6,11 @@ import {
   type EgressInfo,
 } from "livekit-server-sdk";
 import {
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
+import JSZip from "jszip";
 import { getLiveKitApiHost } from "./livekitRoom";
 import { objectStorageClient } from "./replit_integrations/object_storage/objectStorage";
 import { storage } from "./storage";
@@ -47,6 +49,20 @@ export function callRecordingManifestObjectKey(roomName: string): string {
 
 export function callRecordingManifestObjectPath(roomName: string): string {
   return `/objects/${callRecordingManifestObjectKey(roomName)}`;
+}
+
+export function callRecordingZipObjectKey(roomName: string): string {
+  return `call-recordings/${roomName}/recording.zip`;
+}
+
+export function callRecordingZipObjectPath(roomName: string): string {
+  return `/objects/${callRecordingZipObjectKey(roomName)}`;
+}
+
+/** Chat attachment path for a finished call package (zip preferred). */
+export function isCallRecordingDownloadPath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  return path.endsWith(".zip") || path.endsWith(".ogg");
 }
 
 export function resolveCallRecordingRole(
@@ -184,6 +200,79 @@ async function putManifestJson(roomName: string, body: unknown): Promise<void> {
       ContentType: "application/json",
     })
   );
+}
+
+async function getObjectBytes(key: string): Promise<Uint8Array | null> {
+  const bucket = process.env.YC_BUCKET?.trim();
+  if (!bucket) return null;
+  try {
+    const res = await objectStorageClient.send(
+      new GetObjectCommand({ Bucket: bucket, Key: key })
+    );
+    if (!res.Body) return null;
+    return await res.Body.transformToByteArray();
+  } catch {
+    return null;
+  }
+}
+
+async function putRecordingZip(roomName: string, body: Buffer): Promise<void> {
+  const bucket = process.env.YC_BUCKET?.trim();
+  if (!bucket) throw new Error("Object storage is not configured");
+  await objectStorageClient.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: callRecordingZipObjectKey(roomName),
+      Body: body,
+      ContentType: "application/zip",
+    })
+  );
+}
+
+function zipEntryNameForTrack(track: {
+  role: string;
+  participantIdentity: string;
+  trackSid: string;
+}): string {
+  const identity = track.participantIdentity.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40);
+  const sid = track.trackSid.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(-12);
+  return `tracks/${track.role}_${identity}_${sid}.ogg`;
+}
+
+async function buildAndUploadRecordingZip(
+  roomName: string,
+  manifest: unknown,
+  tracks: ConversationCallRecordingTrack[]
+): Promise<string> {
+  const zip = new JSZip();
+  zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+
+  for (const track of tracks) {
+    if (track.status !== "done") continue;
+    const key = callRecordingTrackObjectKey(
+      track.roomName,
+      track.participantIdentity,
+      track.trackSid
+    );
+    const bytes = await getObjectBytes(key);
+    if (!bytes || bytes.byteLength === 0) continue;
+    zip.file(
+      zipEntryNameForTrack({
+        role: track.role,
+        participantIdentity: track.participantIdentity,
+        trackSid: track.trackSid,
+      }),
+      bytes
+    );
+  }
+
+  const buffer = await zip.generateAsync({
+    type: "nodebuffer",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+  await putRecordingZip(roomName, buffer);
+  return callRecordingZipObjectPath(roomName);
 }
 
 export async function startMicrophoneTrackRecording(params: {
@@ -364,8 +453,17 @@ export async function tryBuildCallRecordingPackage(callId: string): Promise<void
       mute_events: [],
     };
     await putManifestJson(call.id, manifest);
-    const objectPath = callRecordingManifestObjectPath(call.id);
-    await storage.setCallRecordingStatus(call.id, "ready_for_transcription", objectPath);
+    const zipPath = await buildAndUploadRecordingZip(call.id, manifest, tracks);
+    const updated = await storage.setCallRecordingStatus(
+      call.id,
+      "ready_for_transcription",
+      zipPath
+    );
+    const messageId = updated?.recordingMessageId ?? call.recordingMessageId;
+    if (messageId) {
+      const { attachCallRecordingToChatMessage } = await import("./voiceCall");
+      await attachCallRecordingToChatMessage(messageId, call.conversationId, zipPath);
+    }
   } catch (err) {
     console.error("[VoiceCall] recording alert: package_failed", { callId, err });
     await storage.setCallRecordingStatus(call.id, "package_failed");
