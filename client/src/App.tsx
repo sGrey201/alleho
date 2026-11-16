@@ -11,6 +11,7 @@ import { VoiceCallProvider } from "@/components/VoiceCallProvider";
 import { VoiceCallChrome } from "@/components/VoiceCallChrome";
 import { useAuth } from "@/hooks/useAuth";
 import { Footer } from "@/components/Footer";
+import { YandexMetrika } from "@/components/YandexMetrika";
 import NotFound from "@/pages/not-found";
 import Terms from "@/pages/Terms";
 import Oferta from "@/pages/Oferta";
@@ -237,6 +238,7 @@ function App() {
         <TooltipProvider>
           <VoiceCallProvider>
             <div className="app-root-shell">
+              <YandexMetrika />
               <AppContent />
               <VoiceCallChrome />
               <Toaster />
