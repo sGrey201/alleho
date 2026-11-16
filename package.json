@@ -13,7 +13,8 @@
     "migrate": "drizzle-kit migrate",
     "migrate:bootstrap": "tsx scripts/bootstrap-migrations.ts",
     "import:users": "tsx scripts/import-users-from-json.ts",
-    "import:legacy": "tsx scripts/import-legacy-data.ts"
+    "import:legacy": "tsx scripts/import-legacy-data.ts",
+    "migrate:voice-messages": "tsx scripts/migrate-voice-messages.ts"
   },
   "unused_dependencies": {
     "@jridgewell/trace-mapping": "^0.3.25",

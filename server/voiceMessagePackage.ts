@@ -70,6 +70,8 @@ export async function packageVoiceMessage(params: {
   author: User | undefined;
   sourceObjectPath: string;
   durationSec: number;
+  /** Live sends remove the uploads/ object. The backfill script deletes it after repointing copies. */
+  deleteSource?: boolean;
 }): Promise<ConversationMessage | null> {
   const sourceKey = objectKeyFromAppPath(params.sourceObjectPath);
   if (!sourceKey || !sourceKey.startsWith("uploads/")) return null;
@@ -137,16 +139,18 @@ export async function packageVoiceMessage(params: {
   );
   if (!updated) return null;
 
-  try {
-    await objectStorageClient.send(
-      new DeleteObjectCommand({ Bucket: bucket, Key: sourceKey })
-    );
-  } catch (err) {
-    console.error("[VoiceMessage] failed to delete source upload", {
-      messageId: params.message.id,
-      sourceKey,
-      err,
-    });
+  if (params.deleteSource !== false) {
+    try {
+      await objectStorageClient.send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: sourceKey })
+      );
+    } catch (err) {
+      console.error("[VoiceMessage] failed to delete source upload", {
+        messageId: params.message.id,
+        sourceKey,
+        err,
+      });
+    }
   }
 
   return updated;
