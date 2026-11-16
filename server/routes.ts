@@ -75,6 +75,7 @@ import {
   reconcileStaleCall,
 } from "./voiceCall";
 import { packageVoiceMessage } from "./voiceMessagePackage";
+import { buildConversationExport } from "./chatExport";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
@@ -3098,6 +3099,34 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error fetching conversation messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  // Homeopath archive of a conversation: markdown timeline, photos, transcripts.
+  app.get("/api/conversations/:id/export", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "Export is only available for patient chats" });
+      }
+
+      const exported = await buildConversationExport(conv);
+      const encoded = encodeURIComponent(exported.filename);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="chat-export.zip"; filename*=UTF-8''${encoded}`);
+      res.setHeader("X-Missing-Transcripts", String(exported.missingTranscripts));
+      res.send(exported.zip);
+    } catch (error) {
+      console.error("Error exporting conversation:", error);
+      res.status(500).json({ message: "Failed to export conversation" });
     }
   });
 

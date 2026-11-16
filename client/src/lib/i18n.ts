@@ -2111,6 +2111,12 @@ export const t = {
   deletePatientChatConfirmDescription: (name: string) =>
     `Чат «${name}» будет перемещён в архив и исчезнет из списка.`,
   archivePatientChatDone: 'Чат перемещён в архив',
+  exportChat: 'Экспортировать чат',
+  exportChatError: 'Не удалось экспортировать чат',
+  exportChatMissingTranscripts: (count: number) =>
+    count === 1
+      ? '1 голосовое или созвон ещё без транскрипта. В файле на этом месте стоит пометка.'
+      : `${count} голосовых или созвонов ещё без транскрипта. В файле на этих местах стоит пометка.`,
   deleteGroupOrChannelConfirmDescription: 'Вы уверены, что хотите это сделать?',
   conversationDeleted: 'Удалено',
   channelOwnerLabel: 'Владелец',

@@ -329,6 +329,7 @@ export interface IStorage {
   incrementTemplatePatientSendCount(templateId: string): Promise<void>;
   listSharedQuestionnaireTemplatesByUser(userId: string): Promise<QuestionnaireTemplate[]>;
   getQuestionnaireInstance(id: string): Promise<QuestionnaireInstance | undefined>;
+  getQuestionnaireInstancesByConversation(conversationId: string): Promise<QuestionnaireInstance[]>;
   createQuestionnaireInstance(data: {
     templateId: string;
     conversationId: string;
@@ -434,6 +435,7 @@ export interface IStorage {
     messageCreatedAt: Date
   ): Promise<boolean>;
   getConversationMessages(conversationId: string, limit?: number): Promise<ConversationMessage[]>;
+  getAllConversationMessages(conversationId: string): Promise<ConversationMessage[]>;
   getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]>;
   getConversationMessagesBefore(
     conversationId: string,
@@ -571,6 +573,7 @@ export interface IStorage {
     ringExpiresAt: Date;
   }): Promise<ConversationCall>;
   getCallById(callId: string): Promise<ConversationCall | undefined>;
+  getCallsByRecordingMessageIds(messageIds: string[]): Promise<ConversationCall[]>;
   getActiveCallForConversation(
     conversationId: string,
     forUserId?: string
@@ -1260,6 +1263,15 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async getQuestionnaireInstancesByConversation(
+    conversationId: string
+  ): Promise<QuestionnaireInstance[]> {
+    return db
+      .select()
+      .from(questionnaireInstances)
+      .where(eq(questionnaireInstances.conversationId, conversationId));
+  }
+
   async createQuestionnaireInstance(data: {
     templateId: string;
     conversationId: string;
@@ -1880,6 +1892,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(conversationMessages.createdAt)
       .limit(limit);
     return rows;
+  }
+
+  async getAllConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
+    return db
+      .select()
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(conversationMessages.createdAt);
   }
 
   async getConversationMessagesRecent(conversationId: string, limit: number): Promise<ConversationMessage[]> {
@@ -2832,6 +2852,14 @@ export class DatabaseStorage implements IStorage {
   async getCallById(callId: string): Promise<ConversationCall | undefined> {
     const [c] = await db.select().from(conversationCalls).where(eq(conversationCalls.id, callId));
     return c;
+  }
+
+  async getCallsByRecordingMessageIds(messageIds: string[]): Promise<ConversationCall[]> {
+    if (messageIds.length === 0) return [];
+    return db
+      .select()
+      .from(conversationCalls)
+      .where(inArray(conversationCalls.recordingMessageId, messageIds));
   }
 
   async getActiveCallForConversation(
