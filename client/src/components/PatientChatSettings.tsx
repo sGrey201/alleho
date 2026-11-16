@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Camera, Copy, Loader2, Share2, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, Camera, Copy, Loader2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,10 @@ import { t } from "@/lib/i18n";
 import { useAuth } from "@/hooks/useAuth";
 import { ChatProfileActionRow } from "@/components/ChatProfileActionRow";
 import { useVoiceCallContext } from "@/components/VoiceCallProvider";
+
+function generateArchiveConfirmationCode(): number {
+  return Math.floor(100 + Math.random() * 900);
+}
 
 type ConversationInfo = {
   id: string;
@@ -78,6 +82,8 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
   const [avatarDraft, setAvatarDraft] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [archiveConfirmationCode, setArchiveConfirmationCode] = useState<number | null>(null);
+  const [archiveCodeInput, setArchiveCodeInput] = useState("");
   const [inviteLinkDialog, setInviteLinkDialog] = useState<{
     open: boolean;
     inviteUrl: string;
@@ -134,10 +140,12 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
     },
     onSuccess: async () => {
       setDeleteDialogOpen(false);
+      setArchiveConfirmationCode(null);
+      setArchiveCodeInput("");
       await queryClient.invalidateQueries({ queryKey: ["/api/me/chats"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/my-patients"] });
       await queryClient.removeQueries({ queryKey: ["/api/conversations", conversationId] });
-      toast({ title: t.conversationDeleted });
+      toast({ title: t.archivePatientChatDone });
       setLocation("/messenger");
     },
     onError: (err: Error) => {
@@ -178,6 +186,23 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
       </div>
     );
   }
+
+  const openArchiveDialog = () => {
+    setArchiveConfirmationCode(generateArchiveConfirmationCode());
+    setArchiveCodeInput("");
+    setDeleteDialogOpen(true);
+  };
+
+  const handleArchiveDialogOpenChange = (open: boolean) => {
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setArchiveConfirmationCode(null);
+      setArchiveCodeInput("");
+    }
+  };
+
+  const archiveCodeMatches =
+    archiveConfirmationCode !== null && archiveCodeInput.trim() === String(archiveConfirmationCode);
 
   const displayName = nameDraft || conv.myDisplayName || conv.name || "—";
   const patientProfileId = conv.patientUserId;
@@ -322,13 +347,13 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
             variant="outline"
             className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
             disabled={deleteMutation.isPending}
-            onClick={() => setDeleteDialogOpen(true)}
+            onClick={openArchiveDialog}
             data-testid="button-delete-patient-chat"
           >
             {deleteMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Archive className="mr-2 h-4 w-4" />
             )}
             {t.deletePatientChat}
           </Button>
@@ -389,7 +414,7 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleArchiveDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.deletePatientChatConfirmTitle}</AlertDialogTitle>
@@ -397,13 +422,29 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
               {t.deletePatientChatConfirmDescription(displayName)}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {archiveConfirmationCode !== null && (
+            <div className="space-y-2">
+              <Label htmlFor="archive-patient-chat-code">
+                {t.deleteConfirmationCodePrompt(archiveConfirmationCode)}
+              </Label>
+              <Input
+                id="archive-patient-chat-code"
+                inputMode="numeric"
+                autoComplete="off"
+                value={archiveCodeInput}
+                onChange={(e) => setArchiveCodeInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="000"
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteMutation.isPending}
+              disabled={!archiveCodeMatches || deleteMutation.isPending}
               onClick={(e) => {
                 e.preventDefault();
+                if (!archiveCodeMatches) return;
                 deleteMutation.mutate();
               }}
             >

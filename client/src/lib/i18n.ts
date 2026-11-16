@@ -2100,16 +2100,17 @@ export const t = {
   channelUnsubscribed: 'Вы отписались от канала',
   deleteGroup: 'Удалить группу',
   deleteChannel: 'Удалить канал',
-  deletePatientChat: 'Удалить',
+  deletePatientChat: 'В архив',
   deleteGroupConfirmTitle: 'Удалить группу?',
   deleteChannelConfirmTitle: 'Удалить канал?',
-  deletePatientChatConfirmTitle: 'Удалить пациента?',
+  deletePatientChatConfirmTitle: 'Переместить в архив?',
   deleteGroupConfirmDescription: (name: string) =>
     `Это действие нельзя отменить. Группа «${name}» будет удалена безвозвратно.`,
   deleteChannelConfirmDescription: (name: string) =>
     `Это действие нельзя отменить. Канал «${name}» будет удалён безвозвратно.`,
   deletePatientChatConfirmDescription: (name: string) =>
-    `Чат «${name}» исчезнет из вашего списка.`,
+    `Чат «${name}» будет перемещён в архив и исчезнет из списка.`,
+  archivePatientChatDone: 'Чат перемещён в архив',
   deleteGroupOrChannelConfirmDescription: 'Вы уверены, что хотите это сделать?',
   conversationDeleted: 'Удалено',
   channelOwnerLabel: 'Владелец',

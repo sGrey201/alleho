@@ -461,6 +461,11 @@ export interface IStorage {
     messageId: string,
     updates: { content?: string | null; imageUrl?: string | null; messageType?: string }
   ): Promise<ConversationMessage | undefined>;
+  /** Replace the attachment path without marking the message edited. */
+  setConversationMessageImageUrl(
+    messageId: string,
+    imageUrl: string
+  ): Promise<ConversationMessage | undefined>;
   softDeleteConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
   pinConversationMessage(messageId: string, userId: string): Promise<ConversationMessage | undefined>;
   unpinConversationMessage(messageId: string): Promise<ConversationMessage | undefined>;
@@ -2193,6 +2198,27 @@ export class DatabaseStorage implements IStorage {
       .returning();
     if (!m) return undefined;
     // Refresh conversation preview if this was the last message.
+    const last = await this.getLastConversationMessage(m.conversationId);
+    if (last && last.id === m.id) {
+      const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);
+      await db
+        .update(conversations)
+        .set({ lastMessagePreview: preview, updatedAt: new Date() })
+        .where(eq(conversations.id, m.conversationId));
+    }
+    return m;
+  }
+
+  async setConversationMessageImageUrl(
+    messageId: string,
+    imageUrl: string
+  ): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({ imageUrl })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
+    if (!m) return undefined;
     const last = await this.getLastConversationMessage(m.conversationId);
     if (last && last.id === m.id) {
       const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);

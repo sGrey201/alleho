@@ -74,6 +74,7 @@ import {
   reconcileConversationCallBeforeStart,
   reconcileStaleCall,
 } from "./voiceCall";
+import { packageVoiceMessage } from "./voiceMessagePackage";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
@@ -3136,6 +3137,7 @@ ${allUrls.map(url => `  <url>
       let content: string | null = body.content ?? null;
       let imageUrl: string | null = body.imageUrl ?? null;
       let messageType: string = body.messageType ?? "message";
+      let voiceDurationSec: number | null = null;
       let forwardedFromMessageId: string | null = null;
       let forwardedFromUserId: string | null = null;
       /** When forwarding a template/instance card into a patient chat, create a fresh fillable instance. */
@@ -3285,6 +3287,7 @@ ${allUrls.map(url => `  <url>
           const parsed = voicePayloadSchema.parse({
             durationSec: Math.round(Number(body.voiceDurationSec ?? 0)),
           });
+          voiceDurationSec = parsed.durationSec;
           content = JSON.stringify(parsed);
         } else if (messageType === "video") {
           if (!imageUrl) {
@@ -3388,6 +3391,25 @@ ${allUrls.map(url => `  <url>
       const message = await storage.createConversationMessage(validated);
 
       let finalMessage = message;
+      if (
+        messageType === "voice" &&
+        !forwardedFromMessageId &&
+        voiceDurationSec !== null &&
+        imageUrl
+      ) {
+        try {
+          const packaged = await packageVoiceMessage({
+            message,
+            conversation: conv,
+            author: currentUser,
+            sourceObjectPath: imageUrl,
+            durationSec: voiceDurationSec,
+          });
+          if (packaged) finalMessage = packaged;
+        } catch (err) {
+          console.error("[VoiceMessage] package failed", { messageId: message.id, err });
+        }
+      }
       const shouldCreateQuestionnaireInstance =
         messageType === "questionnaire" &&
         (!!materializeQuestionnaireInstance || !forwardedFromMessageId);
