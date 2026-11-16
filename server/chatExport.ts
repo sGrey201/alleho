@@ -72,24 +72,9 @@ function formatExportDate(date: Date): string {
   return `${get("day")} ${month} ${get("year")}, ${get("hour")}:${get("minute")}`;
 }
 
-function displayName(user: User | undefined): string {
-  if (!user) return "Участник";
-  const full = [user.lastName, user.firstName]
-    .map((part) => part?.trim())
-    .filter((part): part is string => !!part)
-    .join(" ");
-  return full || user.email || "Участник";
-}
-
-function roleSuffix(user: User | undefined, conversation: Conversation): string {
-  if (conversation.type !== "patient" || !user) return "";
-  if (conversation.patientUserId && user.id === conversation.patientUserId) return " (пациент)";
-  if (user.isAdmin) return " (гомеопат)";
-  return "";
-}
-
-function personLabel(user: User | undefined, conversation: Conversation): string {
-  return `${displayName(user)}${roleSuffix(user, conversation)}`;
+function roleLabel(user: User | undefined, conversation: Conversation): string {
+  if (conversation.patientUserId && user?.id === conversation.patientUserId) return "Пациент";
+  return "Гомеопат";
 }
 
 function messageHeader(
@@ -98,7 +83,7 @@ function messageHeader(
   conversation: Conversation
 ): string {
   const when = message.createdAt instanceof Date ? formatExportDate(message.createdAt) : "";
-  return `${when} — ${personLabel(user, conversation)}`;
+  return `${when} — ${roleLabel(user, conversation)}`;
 }
 
 function objectKeyFromAppPath(objectPath: string | null | undefined): string | null {
@@ -247,7 +232,7 @@ function questionnaireBody(
   data: QuestionnaireInstanceData | null
 ): string {
   if (!structure || !data) {
-    return `Анкета «${templateName}»\n\nНет заполненных полей`;
+    return `Анкета «${templateName}»\n\nНет заполненных полей\n\nКонец анкеты...`;
   }
   const parts: string[] = [`Анкета «${templateName}»`, ""];
   let filled = false;
@@ -267,7 +252,8 @@ function questionnaireBody(
     filled = true;
     parts.push("Заметки гомеопата", notes, "");
   }
-  if (!filled) parts.push("Нет заполненных полей");
+  if (!filled) parts.push("Нет заполненных полей", "");
+  parts.push("Конец анкеты...");
   return parts.join("\n").trimEnd();
 }
 
@@ -388,7 +374,7 @@ export async function buildConversationExport(
         const targetAuthor = users.get(target.authorUserId);
         const targetWhen = target.createdAt instanceof Date ? formatExportDate(target.createdAt) : "";
         lines.push(
-          `В ответ на ${personLabel(targetAuthor, conversation)}${targetWhen ? `, ${targetWhen}` : ""}:`,
+          `В ответ на ${roleLabel(targetAuthor, conversation)}${targetWhen ? `, ${targetWhen}` : ""}:`,
           `> ${quoteFor(target)}`,
           ""
         );
@@ -424,13 +410,15 @@ export async function buildConversationExport(
   async function messageBody(message: ConversationMessage): Promise<string> {
     if (message.messageType === "voice") {
       const transcript = transcripts.get(message.id);
-      return transcript ? `Голосовое сообщение\n\n${transcript}` : `Голосовое сообщение\n\n${TRANSCRIPT_PENDING}`;
+      const body = transcript ?? TRANSCRIPT_PENDING;
+      return `Голосовое сообщение\n\n${body}\n\nКонец голосового сообщения...`;
     }
     if (message.messageType === "call") {
       const duration = callPayloadSchema.safeParse(parseJson(message.content));
       const heading = duration.success ? `Созвон, ${formatDuration(duration.data.durationSec)}` : "Созвон";
       const transcript = transcripts.get(message.id);
-      return transcript ? `${heading}\n\n${transcript}` : `${heading}\n\n${TRANSCRIPT_PENDING}`;
+      const body = transcript ?? TRANSCRIPT_PENDING;
+      return `${heading}\n\n${body}\n\nКонец созвона...`;
     }
     if (message.messageType === "video") return "Видео";
     if (message.messageType === "file") {
@@ -459,11 +447,11 @@ export async function buildConversationExport(
     if (message.messageType === "questionnaire_template") {
       const parsed = questionnaireTemplateMessageContentSchema.safeParse(parseJson(message.content));
       const name = parsed.success ? parsed.data.templateName : "Анкета";
-      return `Шаблон анкеты «${name}»`;
+      return `Шаблон анкеты «${name}»\n\nКонец анкеты...`;
     }
     const text = message.content?.trim() ?? "";
     if (message.messageType === "prescription") return text ? `Назначение\n\n${text}` : "Назначение";
-    if (message.messageType === "followup") return text ? `Повторный приём\n\n${text}` : "Повторный приём";
+    if (message.messageType === "followup") return text ? `Follow Up\n\n${text}` : "Follow Up";
     return text;
   }
 }
