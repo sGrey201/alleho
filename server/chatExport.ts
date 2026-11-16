@@ -77,12 +77,23 @@ function roleLabel(user: User | undefined, conversation: Conversation): string {
   return "Гомеопат";
 }
 
+function callHeading(message: ConversationMessage): string {
+  const duration = callPayloadSchema.safeParse(parseJson(message.content));
+  return duration.success ? `Созвон, ${formatDuration(duration.data.durationSec)}` : "Созвон";
+}
+
 function messageHeader(
   message: ConversationMessage,
   user: User | undefined,
   conversation: Conversation
 ): string {
   const when = message.createdAt instanceof Date ? formatExportDate(message.createdAt) : "";
+  if (message.messageType === "call" && !message.deletedAt) {
+    return `${when} — ${callHeading(message)}`;
+  }
+  if (message.messageType === "voice" && !message.deletedAt) {
+    return `${when} — Голосовое сообщение`;
+  }
   return `${when} — ${roleLabel(user, conversation)}`;
 }
 
@@ -358,7 +369,17 @@ export async function buildConversationExport(
   let photoIndex = 0;
   for (const message of messages) {
     const author = users.get(message.authorUserId);
-    const lines: string[] = [messageHeader(message, author, conversation), ""];
+    const header = messageHeader(message, author, conversation);
+    const plainText =
+      message.messageType === "message" && !message.deletedAt && !message.replyToMessageId
+        ? message.content?.trim() ?? ""
+        : "";
+    if (plainText && !message.imageUrl) {
+      blocks.push(`${header}: ${plainText}`);
+      continue;
+    }
+
+    const lines: string[] = [plainText ? `${header}: ${plainText}` : header, ""];
 
     if (message.deletedAt) {
       lines.push("Сообщение удалено");
@@ -381,7 +402,7 @@ export async function buildConversationExport(
       }
     }
 
-    lines.push(await messageBody(message));
+    if (!plainText) lines.push(await messageBody(message));
     if (message.messageType === "message" && message.imageUrl && !message.deletedAt) {
       const key = objectKeyFromAppPath(message.imageUrl);
       const object = key ? await readObjectBytes(key) : null;
@@ -411,14 +432,12 @@ export async function buildConversationExport(
     if (message.messageType === "voice") {
       const transcript = transcripts.get(message.id);
       const body = transcript ?? TRANSCRIPT_PENDING;
-      return `Голосовое сообщение\n\n${body}\n\nКонец голосового сообщения...`;
+      return `${body}\n\nКонец голосового сообщения...`;
     }
     if (message.messageType === "call") {
-      const duration = callPayloadSchema.safeParse(parseJson(message.content));
-      const heading = duration.success ? `Созвон, ${formatDuration(duration.data.durationSec)}` : "Созвон";
       const transcript = transcripts.get(message.id);
       const body = transcript ?? TRANSCRIPT_PENDING;
-      return `${heading}\n\n${body}\n\nКонец созвона...`;
+      return `${body}\n\nКонец созвона...`;
     }
     if (message.messageType === "video") return "Видео";
     if (message.messageType === "file") {
