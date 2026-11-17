@@ -75,6 +75,9 @@ function formatBitrate(bps: number | undefined): string {
   return `${Math.round(bps)} b/s`;
 }
 
+/** Set true to show the remote video resolution and bitrate overlay. */
+const showRemoteVideoStats = false;
+
 type RemoteVideoDebugStats = {
   display: string;
   recv: string;
@@ -164,7 +167,8 @@ function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
         muted
         className="h-full w-full bg-black object-cover"
       />
-      {stats && (
+      {/* Quality HUD stays in the tree, hidden until we want it on screen again. */}
+      {showRemoteVideoStats && stats && (
         <div
           className="pointer-events-none absolute bottom-[17.5rem] left-3 z-10 rounded bg-black/55 px-1.5 py-1 font-mono text-[10px] leading-tight text-white/90 tabular-nums"
           data-testid="video-call-remote-stats"
@@ -552,13 +556,6 @@ export function VoiceCallChrome() {
               </div>
             )}
 
-            {hasVideoStage && (
-              <div className="pointer-events-none relative z-20 px-6 pb-2 text-center">
-                <div className="text-[22px] font-bold leading-tight">{heroName}</div>
-                <div className="text-[16px] tabular-nums text-[rgba(255,255,255,0.74)]">{subtitle}</div>
-              </div>
-            )}
-
             <div
               className={cn(
                 "relative z-20 transition-transform duration-300 ease-out",
@@ -566,6 +563,12 @@ export function VoiceCallChrome() {
                 hasVideoStage && !controlsRevealed && "pointer-events-none translate-y-full"
               )}
             >
+              {hasVideoStage && (
+                <div className="pointer-events-none px-6 pb-2 text-center">
+                  <div className="text-[22px] font-bold leading-tight">{heroName}</div>
+                  <div className="text-[16px] tabular-nums text-[rgba(255,255,255,0.74)]">{subtitle}</div>
+                </div>
+              )}
               {controls}
             </div>
           </div>
