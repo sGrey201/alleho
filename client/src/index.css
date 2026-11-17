@@ -960,7 +960,7 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: var(--voice-call-green);
+  background: #1e2118;
   color: #fff;
 }
 

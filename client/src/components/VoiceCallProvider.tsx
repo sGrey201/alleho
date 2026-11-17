@@ -90,9 +90,12 @@ export type VoiceCallContextValue = VoiceCallApi & {
   acceptCallFor: (conversationId: string, meta?: Partial<ConversationMeta>) => Promise<void>;
   declineCallFor: (conversationId: string) => Promise<void>;
   cameraEnabled: boolean;
+  /** Remote audio is playing. Off mutes the call locally. */
+  speakerEnabled: boolean;
   canUseCamera: boolean;
   videoTiles: CallVideoTile[];
   toggleCamera: () => Promise<void>;
+  toggleSpeaker: () => void;
 };
 
 const VoiceCallContext = createContext<VoiceCallContextValue | null>(null);
@@ -102,6 +105,11 @@ function configureRemoteAudioElement(el: HTMLAudioElement) {
   el.autoplay = true;
   el.setAttribute("playsinline", "true");
   el.setAttribute("webkit-playsinline", "true");
+}
+
+function applySpeakerToElement(el: HTMLAudioElement, on: boolean) {
+  el.muted = !on;
+  el.volume = on ? 1 : 0;
 }
 
 async function playRemoteAudioElement(el: HTMLAudioElement) {
@@ -203,6 +211,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [isStarting, setIsStarting] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
+  const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [videoTiles, setVideoTiles] = useState<CallVideoTile[]>([]);
   const [connectedUserIds, setConnectedUserIds] = useState<string[]>([]);
@@ -216,6 +225,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const roomCallRef = useRef<CallStateDto | null>(null);
   const viewingConversationIdRef = useRef(viewingConversationId);
   const intentionalDisconnectRef = useRef(false);
+  const speakerEnabledRef = useRef(true);
+  speakerEnabledRef.current = speakerEnabled;
   statusRef.current = status;
   roomCallRef.current = roomCall;
   viewingConversationIdRef.current = viewingConversationId;
@@ -268,6 +279,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   const resumeRemoteAudio = useCallback(() => {
     audioElsRef.current.forEach((el) => {
+      applySpeakerToElement(el, speakerEnabledRef.current);
       void playRemoteAudioElement(el);
     });
     const room = roomRef.current;
@@ -309,6 +321,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           }
           const el = track.attach() as HTMLAudioElement;
           configureRemoteAudioElement(el);
+          applySpeakerToElement(el, speakerEnabledRef.current);
           document.body.appendChild(el);
           audioElsRef.current.set(participant.identity + ":" + track.sid, el);
           void playRemoteAudioElement(el);
@@ -351,6 +364,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         await room.startAudio().catch(() => {});
         await room.localParticipant.setMicrophoneEnabled(true);
         setMicEnabled(true);
+        speakerEnabledRef.current = true;
+        setSpeakerEnabled(true);
         setStatus("in-room");
         updateParticipants(room);
       } catch (err) {
@@ -588,6 +603,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     }
   }, [micEnabled]);
 
+  const toggleSpeaker = useCallback(() => {
+    const next = !speakerEnabledRef.current;
+    speakerEnabledRef.current = next;
+    setSpeakerEnabled(next);
+    audioElsRef.current.forEach((el) => applySpeakerToElement(el, next));
+  }, []);
+
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current;
     if (!room) return;
@@ -820,6 +842,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       endCall,
       toggleMic,
       toggleCamera,
+      toggleSpeaker,
       handleCallWsEvent,
       callUiExpanded,
       setCallUiExpanded,
@@ -830,6 +853,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       acceptCallFor,
       declineCallFor,
       cameraEnabled,
+      speakerEnabled,
       canUseCamera: isPrivateCallType(conversationMeta?.type),
       videoTiles,
     };
@@ -837,6 +861,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     acceptCallFor,
     callUiExpanded,
     cameraEnabled,
+    speakerEnabled,
     connectedUserIds,
     conversationMeta?.type,
     conversationPath,
@@ -853,6 +878,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     status,
     toggleCamera,
     toggleMic,
+    toggleSpeaker,
     videoTiles,
     viewingCall,
   ]);

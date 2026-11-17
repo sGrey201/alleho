@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Loader2, Video, VideoOff } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Video, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useLocation } from "wouter";
 import { RemoteVideoTrack, VideoQuality } from "livekit-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { profileAvatarSrc } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -17,8 +16,7 @@ function displayName(user: CallStateDto["participants"][number]["user"]): string
   return user.email?.split("@")[0] ?? "—";
 }
 
-function initials(user: CallStateDto["participants"][number]["user"]): string {
-  const name = displayName(user);
+function initialsFromTitle(name: string): string {
   return (
     name
       .split(" ")
@@ -27,6 +25,10 @@ function initials(user: CallStateDto["participants"][number]["user"]): string {
       .map((p) => p[0]?.toUpperCase())
       .join("") || "?"
   );
+}
+
+function initials(user: CallStateDto["participants"][number]["user"]): string {
+  return initialsFromTitle(displayName(user));
 }
 
 function CallVideoSurface({
@@ -164,7 +166,7 @@ function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
       />
       {stats && (
         <div
-          className="pointer-events-none absolute bottom-24 left-3 z-10 rounded bg-black/55 px-1.5 py-1 font-mono text-[10px] leading-tight text-white/90 tabular-nums sm:bottom-28"
+          className="pointer-events-none absolute bottom-[17.5rem] left-3 z-10 rounded bg-black/55 px-1.5 py-1 font-mono text-[10px] leading-tight text-white/90 tabular-nums"
           data-testid="video-call-remote-stats"
         >
           <div>
@@ -182,85 +184,167 @@ function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
   );
 }
 
+function formatElapsed(totalSec: number): string {
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function useCallElapsed(startedAt: string | null, running: boolean): string | null {
+  const fallbackRef = useRef<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!running) {
+      fallbackRef.current = null;
+      return;
+    }
+    if (!startedAt && fallbackRef.current == null) fallbackRef.current = Date.now();
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [running, startedAt]);
+
+  if (!running) return null;
+  const start = startedAt ? Date.parse(startedAt) : fallbackRef.current;
+  if (start == null || Number.isNaN(start)) return null;
+  return formatElapsed(Math.max(0, Math.floor((now - start) / 1000)));
+}
+
+function CallAction({
+  label,
+  pressed,
+  disabled,
+  testId,
+  title,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  disabled?: boolean;
+  testId: string;
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={onClick}
+      data-testid={testId}
+      title={title}
+      className="flex flex-col items-center gap-2 bg-transparent p-0 text-white disabled:opacity-40"
+    >
+      <span
+        className={cn(
+          "flex h-16 w-16 items-center justify-center rounded-full",
+          pressed ? "bg-white text-[#1E2118]" : "bg-[rgba(255,255,255,0.14)] text-white"
+        )}
+      >
+        {children}
+      </span>
+      <span className="text-[13px] leading-none text-[rgba(255,255,255,0.82)]">{label}</span>
+    </button>
+  );
+}
+
 function CallControls({
   micEnabled,
   cameraEnabled,
+  speakerEnabled,
   canUseCamera,
   isInitiator,
   conversationPath,
   onToggleMic,
   onToggleCamera,
+  onToggleSpeaker,
   onHangUp,
   onOpenChat,
 }: {
   micEnabled: boolean;
   cameraEnabled: boolean;
+  speakerEnabled: boolean;
   canUseCamera: boolean;
   isInitiator: boolean;
   conversationPath: string | null;
   onToggleMic: () => void;
   onToggleCamera: () => void;
+  onToggleSpeaker: () => void;
   onHangUp: () => void;
   onOpenChat: () => void;
 }) {
   return (
-    <div className="flex items-center justify-center gap-4">
-      <Button
-        type="button"
-        size="icon"
+    <div className="flex w-full flex-col items-center gap-7 px-5 pb-12">
+      <div
         className={cn(
-          "h-14 w-14 rounded-full",
-          micEnabled
-            ? "bg-white/15 text-white hover:bg-white/25"
-            : "bg-white text-green-700 hover:bg-white/90"
+          "grid w-full gap-2",
+          canUseCamera ? "grid-cols-4" : "grid-cols-3"
         )}
-        onClick={onToggleMic}
-        data-testid="button-toggle-mic"
-        title={micEnabled ? t.voiceCallMute : t.voiceCallUnmute}
       >
-        {micEnabled ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
-      </Button>
-
-      {canUseCamera && (
-        <Button
-          type="button"
-          size="icon"
-          className={cn(
-            "h-14 w-14 rounded-full",
-            cameraEnabled
-              ? "bg-white text-green-700 hover:bg-white/90"
-              : "bg-white/15 text-white hover:bg-white/25"
-          )}
-          onClick={onToggleCamera}
-          data-testid="button-toggle-camera"
-          title={cameraEnabled ? t.voiceCallCameraOff : t.voiceCallCameraOn}
+        <CallAction
+          label={t.voiceCallMic}
+          pressed={!micEnabled}
+          testId="button-toggle-mic"
+          title={micEnabled ? t.voiceCallMute : t.voiceCallUnmute}
+          onClick={onToggleMic}
         >
-          {cameraEnabled ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
-        </Button>
-      )}
+          {micEnabled ? <Mic className="h-[26px] w-[26px]" /> : <MicOff className="h-[26px] w-[26px]" />}
+        </CallAction>
 
-      <Button
+        {canUseCamera && (
+          <CallAction
+            label={cameraEnabled ? t.voiceCallCameraShort : t.voiceCallCameraOffShort}
+            pressed={cameraEnabled}
+            testId="button-toggle-camera"
+            title={cameraEnabled ? t.voiceCallCameraOff : t.voiceCallCameraOn}
+            onClick={onToggleCamera}
+          >
+            {cameraEnabled ? (
+              <Video className="h-[26px] w-[26px]" />
+            ) : (
+              <VideoOff className="h-[26px] w-[26px]" />
+            )}
+          </CallAction>
+        )}
+
+        <CallAction
+          label={t.voiceCallSpeaker}
+          pressed={speakerEnabled}
+          testId="button-toggle-speaker"
+          title={t.voiceCallSpeaker}
+          onClick={onToggleSpeaker}
+        >
+          {speakerEnabled ? (
+            <Volume2 className="h-[26px] w-[26px]" />
+          ) : (
+            <VolumeX className="h-[26px] w-[26px]" />
+          )}
+        </CallAction>
+
+        <CallAction
+          label={t.voiceCallChat}
+          pressed={false}
+          disabled={!conversationPath}
+          testId="button-open-call-chat"
+          title={t.voiceCallOpenChat}
+          onClick={onOpenChat}
+        >
+          <MessageSquare className="h-[26px] w-[26px]" />
+        </CallAction>
+      </div>
+
+      <button
         type="button"
-        size="icon"
-        className="h-14 w-14 rounded-full bg-red-500 text-white hover:bg-red-600"
+        aria-label={t.voiceCallHangUp}
         onClick={onHangUp}
         data-testid={isInitiator ? "button-end-call" : "button-leave-call"}
         title={isInitiator ? t.voiceCallEnd : t.voiceCallLeave}
+        className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#DC2626] text-white"
       >
-        <PhoneOff className="h-6 w-6" />
-      </Button>
-
-      <Button
-        type="button"
-        size="icon"
-        className="h-14 w-14 rounded-full bg-white/15 text-white hover:bg-white/25"
-        onClick={onOpenChat}
-        data-testid="button-open-call-chat"
-        title={t.voiceCallOpenChat}
-        disabled={!conversationPath}
-      >
-        <MessageSquare className="h-6 w-6" />
-      </Button>
+        <PhoneOff className="h-[30px] w-[30px]" />
+      </button>
     </div>
   );
 }
@@ -281,12 +365,16 @@ export function VoiceCallChrome() {
     conversationPath,
     toggleMic,
     toggleCamera,
+    toggleSpeaker,
     leaveCall,
     endCall,
     cameraEnabled,
+    speakerEnabled,
     canUseCamera,
     videoTiles,
   } = useVoiceCallContext();
+
+  const elapsed = useCallElapsed(roomCall?.startedAt ?? null, Boolean(roomCall) && isInRoom && !isConnecting);
 
   if (!roomCall || (!isInRoom && !isConnecting)) return null;
 
@@ -313,15 +401,31 @@ export function VoiceCallChrome() {
 
   const hangUp = () => void (isInitiator ? endCall() : leaveCall());
 
+  const others = roster.filter((p) => p.userId !== user?.id);
+  const featured = others.length === 1 ? others[0] : null;
+  const heroName = featured ? displayName(featured.user) : displayTitle;
+  const heroInitials = featured ? initials(featured.user) : initialsFromTitle(displayTitle);
+  const heroImage = featured ? profileAvatarSrc(featured.user.profileImageUrl, "avatar") : undefined;
+  const heroSpeaking = featured ? speaking.has(featured.userId) : false;
+  const subtitle = isConnecting
+    ? t.voiceCallConnecting
+    : elapsed
+      ? `${hasVideoStage ? t.voiceCallVideo : t.voiceCallAudio} · ${elapsed}`
+      : hasVideoStage
+        ? t.voiceCallVideo
+        : t.voiceCallAudio;
+
   const controls = (
     <CallControls
       micEnabled={micEnabled}
       cameraEnabled={cameraEnabled}
+      speakerEnabled={speakerEnabled}
       canUseCamera={canUseCamera}
       isInitiator={isInitiator}
       conversationPath={conversationPath}
       onToggleMic={() => void toggleMic()}
       onToggleCamera={() => void toggleCamera()}
+      onToggleSpeaker={toggleSpeaker}
       onHangUp={hangUp}
       onOpenChat={openChat}
     />
@@ -350,122 +454,91 @@ export function VoiceCallChrome() {
           data-testid="voice-call-fullscreen"
         >
           <div className="voice-call-fullscreen__safe relative">
-            {hasVideoStage ? (
-              <>
-                <div className="absolute inset-0 overflow-hidden bg-black">
-                  {primaryRemote ? (
-                    <RemoteVideoStage tile={primaryRemote} />
-                  ) : localTile ? (
-                    <CallVideoSurface tile={localTile} mirrored className="h-full w-full" />
-                  ) : null}
-                </div>
-
-                {primaryRemote && localTile && (
-                  <div
-                    className="absolute right-3 top-14 z-10 w-28 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/20 sm:w-36"
-                    data-testid="video-call-pip-local"
-                  >
-                    <CallVideoSurface
-                      tile={localTile}
-                      mirrored
-                      className="aspect-[3/4] w-full"
-                    />
-                  </div>
-                )}
-
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between bg-gradient-to-b from-black/50 to-transparent px-3 pb-8 pt-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="pointer-events-auto text-white hover:bg-white/10 hover:text-white"
-                    onClick={() => setCallUiExpanded(false)}
-                    data-testid="button-minimize-call"
-                  >
-                    <ChevronDown className="mr-1 h-4 w-4" />
-                    {t.voiceCallMinimize}
-                  </Button>
-                  <div className="pointer-events-none max-w-[50%] truncate pt-1.5 text-right text-sm font-medium text-white/90">
-                    {displayTitle}
-                    {isConnecting ? (
-                      <span className="ml-1.5 inline-flex items-center gap-1 text-white/70">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/60 to-transparent px-4 pb-6 pt-10">
-                  <div className="pointer-events-auto">{controls}</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between px-3 pt-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-white hover:bg-white/10 hover:text-white"
-                    onClick={() => setCallUiExpanded(false)}
-                    data-testid="button-minimize-call"
-                  >
-                    <ChevronDown className="mr-1 h-4 w-4" />
-                    {t.voiceCallMinimize}
-                  </Button>
-                </div>
-
-                <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-10">
-                  <div className="text-center">
-                    <p className="text-xl font-semibold text-white">{displayTitle}</p>
-                    <p className="mt-1 text-sm text-white/80">
-                      {isConnecting ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          {t.voiceCallConnecting}
-                        </span>
-                      ) : (
-                        t.voiceCallInProgress
-                      )}
-                      {canUseCamera ? ` · ${t.voiceCallRecording}` : ""}
-                    </p>
-                  </div>
-
-                  <div className="flex w-full max-w-3xl flex-wrap items-center justify-center gap-3">
-                    {roster.map((p) => {
-                      const isConnected = connected.has(p.userId);
-                      const isSpeaking = speaking.has(p.userId);
-                      const name = p.userId === user?.id ? "Вы" : displayName(p.user);
-                      return (
-                        <div key={p.userId} className="flex w-20 flex-col items-center gap-1.5">
-                          <div
-                            className={cn(
-                              "relative rounded-full p-0.5",
-                              isSpeaking ? "ring-2 ring-white" : "ring-1 ring-white/40"
-                            )}
-                          >
-                            <Avatar className="h-16 w-16">
-                              <AvatarImage src={profileAvatarSrc(p.user.profileImageUrl, "avatar")} />
-                              <AvatarFallback className="bg-white/20 text-base font-semibold text-white">
-                                {initials(p.user)}
-                              </AvatarFallback>
-                            </Avatar>
-                            {!isConnected && (
-                              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-[10px] text-white">
-                                {t.voiceCallRinging}
-                              </span>
-                            )}
-                          </div>
-                          <span className="w-full truncate text-center text-xs text-white/90">{name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {controls}
-                </div>
-              </>
+            {hasVideoStage && (
+              <div className="absolute inset-0 overflow-hidden bg-black">
+                {primaryRemote ? (
+                  <RemoteVideoStage tile={primaryRemote} />
+                ) : localTile ? (
+                  <CallVideoSurface tile={localTile} mirrored className="h-full w-full" />
+                ) : null}
+              </div>
             )}
+
+            {primaryRemote && localTile && (
+              <div
+                className="absolute right-3 top-16 z-10 w-28 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/20 sm:w-36"
+                data-testid="video-call-pip-local"
+              >
+                <CallVideoSurface tile={localTile} mirrored className="aspect-[3/4] w-full" />
+              </div>
+            )}
+
+            <div
+              className={cn(
+                "relative z-20 flex items-center justify-between px-2 pt-1",
+                hasVideoStage && "bg-gradient-to-b from-black/55 to-transparent pb-8"
+              )}
+            >
+              <button
+                type="button"
+                className="flex h-11 items-center gap-1.5 bg-transparent px-2.5 text-base font-semibold text-[rgba(255,255,255,0.88)]"
+                onClick={() => setCallUiExpanded(false)}
+                data-testid="button-minimize-call"
+              >
+                <ChevronDown className="h-[22px] w-[22px]" strokeWidth={2} />
+                {t.voiceCallMinimize}
+              </button>
+              {canUseCamera ? (
+                <div className="mr-2 flex h-8 items-center gap-2 rounded-2xl bg-[rgba(239,68,68,0.2)] px-3 text-sm font-bold text-[#FECACA]">
+                  <span className="h-2 w-2 rounded-full bg-[#F87171]" />
+                  {t.voiceCallRecording}
+                </div>
+              ) : (
+                <span />
+              )}
+            </div>
+
+            {hasVideoStage ? (
+              <div className="relative z-10 flex-1" />
+            ) : (
+              <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-3.5 px-6">
+                <div
+                  className={cn(
+                    "flex h-[136px] w-[136px] items-center justify-center overflow-hidden rounded-full bg-[#6F7042] text-[46px] font-semibold text-white shadow-[0_0_0_12px_rgba(255,255,255,0.06),0_0_0_28px_rgba(255,255,255,0.03)]",
+                    heroSpeaking && "ring-2 ring-white"
+                  )}
+                >
+                  {heroImage ? (
+                    <Avatar className="h-full w-full">
+                      <AvatarImage src={heroImage} alt="" className="object-cover" />
+                      <AvatarFallback className="bg-[#6F7042] text-[46px] font-semibold text-white">
+                        {heroInitials}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    heroInitials
+                  )}
+                </div>
+                <div className="mt-[22px] text-center text-[30px] font-bold leading-tight">{heroName}</div>
+                <div className="text-[18px] tabular-nums text-[rgba(255,255,255,0.74)]">{subtitle}</div>
+              </div>
+            )}
+
+            {hasVideoStage && (
+              <div className="pointer-events-none relative z-20 px-6 pb-2 text-center">
+                <div className="text-[22px] font-bold leading-tight">{heroName}</div>
+                <div className="text-[16px] tabular-nums text-[rgba(255,255,255,0.74)]">{subtitle}</div>
+              </div>
+            )}
+
+            <div
+              className={cn(
+                "relative z-20",
+                hasVideoStage && "bg-gradient-to-t from-black/70 to-transparent"
+              )}
+            >
+              {controls}
+            </div>
           </div>
         </div>
       )}
