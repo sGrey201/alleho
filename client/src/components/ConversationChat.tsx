@@ -84,7 +84,7 @@ import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
 import { flattenSponsorMarkersForDisplay, hasSponsorSections, stripMessageFormatting } from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCallContext } from "@/components/VoiceCallProvider";
-import { VoiceCallBanner } from "@/components/VoiceCallBanner";
+import { IncomingCallNotice } from "@/components/VoiceCallBanner";
 import {
   CHAT_COMPOSER_INSET_EVENT,
   scrollChatPaneToBottom,
@@ -2852,20 +2852,32 @@ export default function ConversationChat({
               initiator.email?.split("@")[0] ||
               t.doctor
             : t.doctor;
+          const incoming =
+            vc.initiatedByUserId !== user?.id &&
+            myStatus !== "joined" &&
+            vc.status === "ringing";
+          const roleLabel =
+            conv?.type === "patient"
+              ? vc.initiatedByUserId === conv.patientUserId
+                ? t.patient
+                : t.chatWithHomeopath
+              : null;
           return (
-            <div className="pointer-events-auto w-full min-w-0 max-w-full overflow-hidden">
-              <VoiceCallBanner
-                initiatorName={initiatorName}
-                isActive={vc.status === "active"}
-                onAccept={() => {
-                  void voiceCall.acceptCallFor(conversationId!, {
-                    type: conv?.type,
-                    title: headerTitle,
-                  });
-                }}
-                onDecline={() => void voiceCall.declineCallFor(conversationId!)}
-              />
-            </div>
+            <IncomingCallNotice
+              callId={vc.id}
+              fullscreen={incoming}
+              roleLabel={roleLabel}
+              avatarUrl={profileAvatarSrc(initiator?.profileImageUrl, "avatar") ?? null}
+              initiatorName={initiatorName}
+              isActive={vc.status === "active"}
+              onAccept={() => {
+                void voiceCall.acceptCallFor(conversationId!, {
+                  type: conv?.type,
+                  title: headerTitle,
+                });
+              }}
+              onDecline={() => void voiceCall.declineCallFor(conversationId!)}
+            />
           );
         })()}
       </div>

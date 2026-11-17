@@ -29,13 +29,25 @@ import {
   deleteLiveKitRoom,
   fetchLiveKitRoomSnapshot,
   getLiveKitParticipantCount,
+  listPublishedMicrophones,
   type LiveKitRoomSnapshot,
+  type PublishedMicrophone,
 } from "./livekitRoom";
 import type {
   ConversationCall,
   CallParticipantStatus,
   User,
 } from "@shared/schema";
+
+/** Mics published while the call is still ringing, started once the other person joins. */
+const pendingMicrophones = new Map<string, PublishedMicrophone[]>();
+
+function rememberPendingMicrophone(callId: string, track: PublishedMicrophone): void {
+  const list = pendingMicrophones.get(callId) ?? [];
+  if (list.some((item) => item.trackSid === track.trackSid)) return;
+  list.push(track);
+  pendingMicrophones.set(callId, list);
+}
 
 /** How long an unanswered call keeps ringing before it is auto-cancelled. */
 export const RING_TTL_MS = 60_000;
@@ -177,6 +189,35 @@ async function markCallActive(call: ConversationCall): Promise<void> {
   }
 }
 
+/** The call is answered only after someone other than the caller is in the room. */
+async function markAnsweredAndRecord(call: ConversationCall): Promise<void> {
+  await markCallActive(call);
+  const latest = (await storage.getCallById(call.id)) ?? call;
+  if (!latest.startedAt) return;
+  await beginRecordingAnsweredCall(latest);
+}
+
+async function beginRecordingAnsweredCall(call: ConversationCall): Promise<void> {
+  const conv = await storage.getConversation(call.conversationId);
+  if (!conv || !isPrivateCallConversationType(conv.type)) return;
+  const queued = pendingMicrophones.get(call.id) ?? [];
+  pendingMicrophones.delete(call.id);
+  const listed = await listPublishedMicrophones(call.id);
+  const tracks = [...queued];
+  for (const track of listed) {
+    if (!tracks.some((item) => item.trackSid === track.trackSid)) tracks.push(track);
+  }
+  for (const track of tracks) {
+    await startMicrophoneTrackRecording({
+      call,
+      conv,
+      trackSid: track.trackSid,
+      participantIdentity: track.identity,
+      participantMetadata: track.metadata,
+    });
+  }
+}
+
 function participantCountFromSnapshot(
   callId: string,
   snapshot: LiveKitRoomSnapshot
@@ -220,10 +261,14 @@ export async function reconcileStaleCall(
   const participantCount = await resolveParticipantCount(call.id, snapshot);
   if (participantCount === null) return false;
 
-  if (participantCount > 0) {
+  if (participantCount >= 2) {
     if (call.status === "ringing") {
-      await markCallActive(call);
+      await markAnsweredAndRecord(call);
     }
+    return false;
+  }
+
+  if (participantCount > 0) {
     return false;
   }
 
@@ -306,10 +351,9 @@ async function notifyIncomingCall(
   });
 }
 
-/** Marks a participant joined, flips the call to active, and broadcasts. */
+/** Records that the callee accepted. The call becomes active when they join the room. */
 export async function acceptCall(call: ConversationCall, userId: string): Promise<void> {
   await storage.setCallParticipantStatus(call.id, userId, "joined");
-  await markCallActive(call);
   await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
     callId: call.id,
     conversationId: call.conversationId,
@@ -351,6 +395,7 @@ export async function endCall(
     roomEmptyTimers.delete(call.id);
   }
 
+  pendingMicrophones.delete(call.id);
   const ended = await storage.endCall(call.id, reason);
   if (!ended) return;
 
@@ -455,8 +500,8 @@ export async function sweepExpiredCalls(): Promise<void> {
   for (const call of expired) {
     if (snapshot) {
       const participantCount = participantCountFromSnapshot(call.id, snapshot);
-      if (participantCount > 0) {
-        await markCallActive(call);
+      if (participantCount >= 2) {
+        await markAnsweredAndRecord(call);
         continue;
       }
       await cancelUnansweredCall(call);
@@ -468,7 +513,7 @@ export async function sweepExpiredCalls(): Promise<void> {
       (r) => r.status === "joined" && r.userId !== call.initiatedByUserId
     );
     if (someoneJoinedAfterInitiator) {
-      await markCallActive(call);
+      await markAnsweredAndRecord(call);
       continue;
     }
     await cancelUnansweredCall(call);
@@ -638,8 +683,18 @@ async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
     const trackSid = event.track?.sid;
     const identity = event.participant?.identity;
     if (!trackSid || !identity) return;
+    let answered = call;
+    if (!answered.startedAt) {
+      rememberPendingMicrophone(call.id, {
+        identity,
+        trackSid,
+        metadata: event.participant?.metadata || null,
+      });
+      answered = (await storage.getCallById(call.id)) ?? call;
+      if (!answered.startedAt) return;
+    }
     await startMicrophoneTrackRecording({
-      call,
+      call: answered,
       conv,
       trackSid,
       participantIdentity: identity,
@@ -656,7 +711,9 @@ async function processLiveKitWebhookEvent(event: WebhookEvent): Promise<void> {
     case "participant_joined": {
       if (!userId) return;
       await storage.setCallParticipantStatus(call.id, userId, "joined");
-      await markCallActive(call);
+      if (userId !== call.initiatedByUserId) {
+        await markAnsweredAndRecord(call);
+      }
       await publishConversationCallEvent(call.conversationId, "conversation_call_accepted", {
         callId: call.id,
         conversationId: call.conversationId,

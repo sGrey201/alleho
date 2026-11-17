@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Video, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useLocation } from "wouter";
 import { RemoteVideoTrack, VideoQuality } from "livekit-client";
@@ -374,7 +374,31 @@ export function VoiceCallChrome() {
     videoTiles,
   } = useVoiceCallContext();
 
-  const elapsed = useCallElapsed(roomCall?.startedAt ?? null, Boolean(roomCall) && isInRoom && !isConnecting);
+  const remoteJoined = connectedUserIds.some((id) => id !== user?.id);
+  const elapsed = useCallElapsed(
+    roomCall?.startedAt ?? null,
+    Boolean(roomCall) && remoteJoined && !isConnecting
+  );
+  const hasVideoStage = videoTiles.length > 0;
+  const [controlsRevealed, setControlsRevealed] = useState(false);
+  const hideControlsTimer = useRef<number | null>(null);
+
+  const revealControls = useCallback(() => {
+    setControlsRevealed(true);
+    if (hideControlsTimer.current != null) window.clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = window.setTimeout(() => setControlsRevealed(false), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!hasVideoStage) {
+      if (hideControlsTimer.current != null) window.clearTimeout(hideControlsTimer.current);
+      return;
+    }
+    setControlsRevealed(false);
+    return () => {
+      if (hideControlsTimer.current != null) window.clearTimeout(hideControlsTimer.current);
+    };
+  }, [hasVideoStage]);
 
   if (!roomCall || (!isInRoom && !isConnecting)) return null;
 
@@ -390,7 +414,6 @@ export function VoiceCallChrome() {
   const localTile = myId ? videoByUser.get(myId) : undefined;
   const remoteTiles = videoTiles.filter((tile) => tile.userId !== myId);
   const primaryRemote = remoteTiles[0];
-  const hasVideoStage = Boolean(primaryRemote || localTile);
 
   const openChat = () => {
     if (conversationPath) {
@@ -407,13 +430,15 @@ export function VoiceCallChrome() {
   const heroInitials = featured ? initials(featured.user) : initialsFromTitle(displayTitle);
   const heroImage = featured ? profileAvatarSrc(featured.user.profileImageUrl, "avatar") : undefined;
   const heroSpeaking = featured ? speaking.has(featured.userId) : false;
+  const dialing = isInitiator && !remoteJoined;
+  const callKind = hasVideoStage ? t.voiceCallVideo : t.voiceCallAudio;
   const subtitle = isConnecting
     ? t.voiceCallConnecting
-    : elapsed
-      ? `${hasVideoStage ? t.voiceCallVideo : t.voiceCallAudio} · ${elapsed}`
-      : hasVideoStage
-        ? t.voiceCallVideo
-        : t.voiceCallAudio;
+    : dialing
+      ? t.voiceCallOutgoing
+      : elapsed
+        ? `${callKind} · ${elapsed}`
+        : callKind;
 
   const controls = (
     <CallControls
@@ -443,7 +468,7 @@ export function VoiceCallChrome() {
         >
           <span className="voice-call-strip__label">
             {displayTitle}
-            {canUseCamera ? ` · ${t.voiceCallRecording}` : ""}
+            {canUseCamera && remoteJoined ? ` · ${t.voiceCallRecording}` : ""}
           </span>
         </button>
       )}
@@ -452,8 +477,10 @@ export function VoiceCallChrome() {
         <div
           className={cn("voice-call-fullscreen", hasVideoStage && "voice-call-fullscreen--video")}
           data-testid="voice-call-fullscreen"
+          onPointerDown={hasVideoStage ? revealControls : undefined}
+          onMouseMove={hasVideoStage ? revealControls : undefined}
         >
-          <div className="voice-call-fullscreen__safe relative">
+          <div className="voice-call-fullscreen__safe relative overflow-hidden">
             {hasVideoStage && (
               <div className="absolute inset-0 overflow-hidden bg-black">
                 {primaryRemote ? (
@@ -488,7 +515,7 @@ export function VoiceCallChrome() {
                 <ChevronDown className="h-[22px] w-[22px]" strokeWidth={2} />
                 {t.voiceCallMinimize}
               </button>
-              {canUseCamera ? (
+              {canUseCamera && remoteJoined ? (
                 <div className="mr-2 flex h-8 items-center gap-2 rounded-2xl bg-[rgba(239,68,68,0.2)] px-3 text-sm font-bold text-[#FECACA]">
                   <span className="h-2 w-2 rounded-full bg-[#F87171]" />
                   {t.voiceCallRecording}
@@ -505,6 +532,7 @@ export function VoiceCallChrome() {
                 <div
                   className={cn(
                     "flex h-[136px] w-[136px] items-center justify-center overflow-hidden rounded-full bg-[#6F7042] text-[46px] font-semibold text-white shadow-[0_0_0_12px_rgba(255,255,255,0.06),0_0_0_28px_rgba(255,255,255,0.03)]",
+                    dialing && !isConnecting && "animate-pulse",
                     heroSpeaking && "ring-2 ring-white"
                   )}
                 >
@@ -533,8 +561,9 @@ export function VoiceCallChrome() {
 
             <div
               className={cn(
-                "relative z-20",
-                hasVideoStage && "bg-gradient-to-t from-black/70 to-transparent"
+                "relative z-20 transition-transform duration-300 ease-out",
+                hasVideoStage && "bg-gradient-to-t from-black/70 to-transparent",
+                hasVideoStage && !controlsRevealed && "pointer-events-none translate-y-full"
               )}
             >
               {controls}

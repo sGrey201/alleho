@@ -968,6 +968,37 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   background: #000;
 }
 
+@keyframes voice-call-incoming-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes voice-call-incoming-nudge {
+  0%, 70%, 100% { transform: translateY(0); }
+  78% { transform: translateY(-7px); }
+  86% { transform: translateY(0); }
+  92% { transform: translateY(-3px); }
+}
+
+.voice-call-incoming-ring {
+  animation: voice-call-incoming-ring 2.4s ease-out infinite;
+}
+
+.voice-call-incoming-ring--delay {
+  animation-delay: 1.2s;
+}
+
+.voice-call-incoming-nudge {
+  animation: voice-call-incoming-nudge 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-call-incoming-ring,
+  .voice-call-incoming-nudge {
+    animation: none;
+  }
+}
+
 .voice-call-fullscreen__safe {
   display: flex;
   height: 100%;

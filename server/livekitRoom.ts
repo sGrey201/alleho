@@ -1,4 +1,4 @@
-import { RoomServiceClient } from "livekit-server-sdk";
+import { RoomServiceClient, TrackSource, TrackType } from "livekit-server-sdk";
 
 /** room name (call id) → connected participant count */
 export type LiveKitRoomSnapshot = Map<string, number>;
@@ -53,6 +53,51 @@ export async function fetchLiveKitRoomSnapshot(): Promise<LiveKitRoomSnapshot | 
   } catch (err) {
     console.error("[LiveKit] listRooms error:", err);
     return null;
+  }
+}
+
+export type PublishedMicrophone = {
+  identity: string;
+  trackSid: string;
+  metadata: string | null;
+};
+
+function isMicrophoneTrack(source: unknown, type: unknown): boolean {
+  const isMic =
+    source === TrackSource.MICROPHONE ||
+    source === "MICROPHONE" ||
+    Number(source) === TrackSource.MICROPHONE;
+  const isAudio =
+    type === TrackType.AUDIO || type === "AUDIO" || Number(type) === TrackType.AUDIO;
+  return isMic && isAudio;
+}
+
+/** Microphone tracks already published in the room. Empty when LiveKit is unreachable. */
+export async function listPublishedMicrophones(roomName: string): Promise<PublishedMicrophone[]> {
+  const client = getRoomServiceClient();
+  if (!client) return [];
+
+  try {
+    const participants = await client.listParticipants(roomName);
+    const mics: PublishedMicrophone[] = [];
+    for (const participant of participants) {
+      if (!participant.identity) continue;
+      for (const track of participant.tracks ?? []) {
+        if (!track.sid || !isMicrophoneTrack(track.source, track.type)) continue;
+        mics.push({
+          identity: participant.identity,
+          trackSid: track.sid,
+          metadata: participant.metadata || null,
+        });
+      }
+    }
+    return mics;
+  } catch (err: unknown) {
+    const code = (err as { code?: string; status?: number })?.code;
+    const status = (err as { status?: number })?.status;
+    if (code === "not_found" || status === 404) return [];
+    console.error("[LiveKit] listParticipants tracks error:", err);
+    return [];
   }
 }
 

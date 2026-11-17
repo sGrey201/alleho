@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
+import { startOutgoingRingback, stopOutgoingRingback } from "@/lib/callRingback";
 import type { ConversationCallWsEvent } from "@/hooks/useConversationWs";
 import type { CallStateDto, VoiceCallApi } from "@/hooks/useVoiceCall";
 
@@ -262,6 +263,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   }, [detachAllAudio]);
 
   const teardownRoom = useCallback(async () => {
+    stopOutgoingRingback();
     await disconnectRoomOnly();
     setRoomCall(null);
     setCallUiExpanded(false);
@@ -454,6 +456,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         toast({ title: t.voiceCallAlreadyActive ?? "Конференция уже идёт" });
         return;
       }
+      startOutgoingRingback();
       setIsStarting(true);
       try {
         await resolveMeta(conversationId, meta);
@@ -485,6 +488,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           console.error("[VoiceCall] start error:", err);
           toast({ title: t.voiceCallStartError ?? "Не удалось начать звонок", variant: "destructive" });
         }
+        stopOutgoingRingback();
       } finally {
         setIsStarting(false);
       }
@@ -784,6 +788,17 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       void wakeLock?.release();
     };
   }, [status]);
+
+  // Ringback plays only for the caller, until someone else is in the room.
+  useEffect(() => {
+    const remoteJoined = connectedUserIds.some((id) => id !== currentUserId);
+    const outgoingCall =
+      isStarting ||
+      ((status === "connecting" || status === "in-room") &&
+        roomCall?.initiatedByUserId === currentUserId);
+    const dialing = outgoingCall && !remoteJoined;
+    if (!dialing) stopOutgoingRingback();
+  }, [connectedUserIds, currentUserId, isStarting, roomCall?.initiatedByUserId, status]);
 
   // Toggle document class for layout offset under the green strip.
   useEffect(() => {
