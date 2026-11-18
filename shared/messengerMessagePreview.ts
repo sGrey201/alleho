@@ -112,6 +112,10 @@ export function formatConversationMessagePreview(
     return null;
   }
 
+  if (messageType === "ai_consilium") {
+    return "AI консилиум";
+  }
+
   if (looksLikeQuestionnaireJson(text ?? "")) {
     const name = templateNameFromQuestionnaireJson(text!);
     return truncate(name ?? "Опросник");

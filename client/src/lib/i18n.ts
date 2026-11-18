@@ -2113,6 +2113,11 @@ export const t = {
   archivePatientChatDone: 'Чат перемещён в архив',
   exportChat: 'Экспортировать чат',
   exportChatError: 'Не удалось экспортировать чат',
+  aiConsilium: 'AI консилиум',
+  aiConsiliumBadge: 'AI консилиум',
+  aiConsiliumPreparing: 'Готовится',
+  aiConsiliumBusy: 'AI консилиум для этого чата уже готовится',
+  aiConsiliumError: 'Не удалось запустить AI консилиум',
   exportChatMissingTranscripts: (count: number) =>
     count === 1
       ? '1 голосовое или созвон ещё без транскрипта. В файле на этом месте стоит пометка.'

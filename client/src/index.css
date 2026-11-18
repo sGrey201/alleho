@@ -968,6 +968,15 @@ html.app-immersive.app-shell-chat .app-viewport-content {
   background: #000;
 }
 
+@keyframes ai-consilium-progress {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+
+.ai-consilium-progress {
+  animation: ai-consilium-progress 1.2s ease-in-out infinite;
+}
+
 @keyframes voice-call-incoming-ring {
   0% { transform: scale(1); opacity: 0.6; }
   100% { transform: scale(1.7); opacity: 0; }
@@ -994,8 +1003,13 @@ html.app-immersive.app-shell-chat .app-viewport-content {
 
 @media (prefers-reduced-motion: reduce) {
   .voice-call-incoming-ring,
-  .voice-call-incoming-nudge {
+  .voice-call-incoming-nudge,
+  .ai-consilium-progress {
     animation: none;
+  }
+  .ai-consilium-progress {
+    width: 100%;
+    transform: none;
   }
 }
 

@@ -59,7 +59,7 @@ import {
   type ChannelMembershipStatus,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ne, or, ilike, sql, inArray, and, desc, count, gt, lt, isNull } from "drizzle-orm";
+import { eq, ne, or, ilike, sql, inArray, notInArray, and, desc, count, gt, lt, isNull } from "drizzle-orm";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
@@ -459,6 +459,8 @@ export interface IStorage {
   ): Promise<Map<string, MessageReactionSummary[]>>;
   getConversationMessageCommentCounts(messageIds: string[]): Promise<Map<string, number>>;
   createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage>;
+  /** Replace message text without marking it edited or changing the chat-list preview. */
+  setConversationMessageContent(messageId: string, content: string): Promise<ConversationMessage | undefined>;
   editConversationMessage(
     messageId: string,
     updates: { content?: string | null; imageUrl?: string | null; messageType?: string }
@@ -1910,15 +1912,19 @@ export class DatabaseStorage implements IStorage {
   async getConversationMessagesBefore(
     conversationId: string,
     beforeMessageId: string | null,
-    limit: number
+    limit: number,
+    options?: { excludeMessageTypes?: string[] }
   ): Promise<{ messages: ConversationMessage[]; hasMore: boolean }> {
     const fetchLimit = limit + 1;
+    const excluded = options?.excludeMessageTypes?.filter(Boolean) ?? [];
+    const hidden =
+      excluded.length > 0 ? notInArray(conversationMessages.messageType, excluded) : undefined;
 
     if (!beforeMessageId) {
       const rows = await db
         .select()
         .from(conversationMessages)
-        .where(eq(conversationMessages.conversationId, conversationId))
+        .where(and(eq(conversationMessages.conversationId, conversationId), hidden))
         .orderBy(desc(conversationMessages.createdAt))
         .limit(fetchLimit);
       const hasMore = rows.length > limit;
@@ -1938,7 +1944,8 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(conversationMessages.conversationId, conversationId),
-          lt(conversationMessages.createdAt, anchorCreatedAt)
+          lt(conversationMessages.createdAt, anchorCreatedAt),
+          hidden
         )
       )
       .orderBy(desc(conversationMessages.createdAt))
@@ -1949,16 +1956,30 @@ export class DatabaseStorage implements IStorage {
 
   async createConversationMessage(msg: InsertConversationMessage): Promise<ConversationMessage> {
     const [m] = await db.insert(conversationMessages).values(msg).returning();
-    const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);
-    const at = m.createdAt ?? new Date();
-    await db
-      .update(conversations)
-      .set({
-        lastMessageAt: at,
-        lastMessagePreview: preview,
-        updatedAt: new Date(),
-      })
-      .where(eq(conversations.id, m.conversationId));
+    if (m.messageType !== "ai_consilium") {
+      const preview = previewFromConversationMessageParts(m.content, m.imageUrl, m.messageType);
+      const at = m.createdAt ?? new Date();
+      await db
+        .update(conversations)
+        .set({
+          lastMessageAt: at,
+          lastMessagePreview: preview,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, m.conversationId));
+    }
+    return m;
+  }
+
+  async setConversationMessageContent(
+    messageId: string,
+    content: string
+  ): Promise<ConversationMessage | undefined> {
+    const [m] = await db
+      .update(conversationMessages)
+      .set({ content })
+      .where(eq(conversationMessages.id, messageId))
+      .returning();
     return m;
   }
 

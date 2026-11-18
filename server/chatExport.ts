@@ -51,10 +51,22 @@ const MONTHS_NOMINATIVE = [
   "декабрь",
 ];
 
+export type ConversationExportPhoto = {
+  filename: string;
+  bytes: Buffer;
+  mimeType: string;
+};
+
+export type ConversationExportOptions = {
+  excludeMessageTypes?: readonly string[];
+};
+
 export type ConversationExportResult = {
   zip: Buffer;
   missingTranscripts: number;
   filename: string;
+  markdown: string;
+  photos: ConversationExportPhoto[];
 };
 
 function formatExportDate(date: Date): string {
@@ -170,6 +182,13 @@ function imageExtension(bytes: Uint8Array, contentType: string | null): string {
   return "jpg";
 }
 
+function mimeTypeForExtension(ext: string): string {
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+}
+
 function parseJson(content: string | null): unknown {
   if (!content) return null;
   try {
@@ -274,7 +293,8 @@ function safeFilename(name: string): string {
 }
 
 export async function buildConversationExport(
-  conversation: Conversation
+  conversation: Conversation,
+  options?: ConversationExportOptions
 ): Promise<ConversationExportResult> {
   const messages = await storage.getAllConversationMessages(conversation.id);
   const userIds = new Set<string>();
@@ -351,6 +371,7 @@ export async function buildConversationExport(
       const parsed = filePayloadSchema.safeParse(parseJson(message.content));
       return parsed.success ? `Файл: ${parsed.data.name}` : "Файл";
     }
+    if (message.messageType === "ai_consilium") return "AI консилиум";
     if (message.messageType === "video") return "Видео";
     if (message.messageType === "poll") {
       const parsed = pollPayloadSchema.safeParse(parseJson(message.content));
@@ -363,11 +384,14 @@ export async function buildConversationExport(
 
   const zip = new JSZip();
   const blocks: string[] = [];
+  const photos: ConversationExportPhoto[] = [];
+  const excluded = new Set(options?.excludeMessageTypes ?? []);
   const title = conversation.name?.trim() || "Чат";
   blocks.push(`# ${title}`, "", `Экспорт: ${formatExportDate(new Date())}`, "");
 
   let photoIndex = 0;
   for (const message of messages) {
+    if (excluded.has(message.messageType)) continue;
     const author = users.get(message.authorUserId);
     const header = messageHeader(message, author, conversation);
     const plainText =
@@ -410,7 +434,9 @@ export async function buildConversationExport(
         photoIndex += 1;
         const ext = imageExtension(object.bytes, object.contentType);
         const filename = `photos/${String(photoIndex).padStart(3, "0")}.${ext}`;
-        zip.file(filename, object.bytes);
+        const photoBytes = Buffer.from(object.bytes);
+        zip.file(filename, photoBytes);
+        photos.push({ filename, bytes: photoBytes, mimeType: mimeTypeForExtension(ext) });
         lines.push("", `![Фото](${filename})`);
       } else {
         lines.push("", "Фото недоступно");
@@ -420,12 +446,15 @@ export async function buildConversationExport(
     blocks.push(lines.join("\n").trimEnd());
   }
 
-  zip.file("chat.md", blocks.join("\n\n"));
+  const markdown = blocks.join("\n\n");
+  zip.file("chat.md", markdown);
   const zipBytes = await zip.generateAsync({ type: "nodebuffer" });
   return {
     zip: zipBytes,
     missingTranscripts,
     filename: `${safeFilename(title)}.zip`,
+    markdown,
+    photos,
   };
 
   async function messageBody(message: ConversationMessage): Promise<string> {
@@ -469,6 +498,7 @@ export async function buildConversationExport(
       return `Шаблон анкеты «${name}»\n\nКонец анкеты...`;
     }
     const text = message.content?.trim() ?? "";
+    if (message.messageType === "ai_consilium") return text ? `AI консилиум\n\n${text}` : "AI консилиум";
     if (message.messageType === "prescription") return text ? `Назначение\n\n${text}` : "Назначение";
     if (message.messageType === "followup") return text ? `Follow Up\n\n${text}` : "Follow Up";
     return text;

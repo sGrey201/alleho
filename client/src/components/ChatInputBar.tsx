@@ -7,6 +7,7 @@ import {
   File,
   ClipboardList,
   ListChecks,
+  Sparkles,
   MessageCircle,
   Pill,
   FileText,
@@ -63,6 +64,7 @@ type ChatInputBarProps = {
   onSendQuestionnaire?: () => void;
   showQuestionnaireAttach?: boolean;
   onCreatePoll?: () => void;
+  onStartAiConsilium?: () => void;
   showMessageModeSelector?: boolean;
   messageMode?: ChatMessageMode;
   onMessageModeChange?: (mode: ChatMessageMode) => void;
@@ -104,6 +106,7 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
   onSendQuestionnaire,
   showQuestionnaireAttach = false,
   onCreatePoll,
+  onStartAiConsilium,
   showMessageModeSelector = false,
   messageMode = "message",
   onMessageModeChange,
@@ -136,7 +139,8 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
     (onUploadMedia ||
       onUploadFiles ||
       (showQuestionnaireAttach && onSendQuestionnaire) ||
-      onCreatePoll);
+      onCreatePoll ||
+      onStartAiConsilium);
 
   const isUploadingAttachment = isUploadingMedia || isUploadingFiles;
 
@@ -441,6 +445,16 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                   <DropdownMenuItem className={attachMenuItemClass} onSelect={onCreatePoll}>
                     <ListChecks />
                     {t.pollCreate}
+                  </DropdownMenuItem>
+                )}
+                {onStartAiConsilium && (
+                  <DropdownMenuItem
+                    className={attachMenuItemClass}
+                    onSelect={onStartAiConsilium}
+                    data-testid="button-ai-consilium"
+                  >
+                    <Sparkles />
+                    {t.aiConsilium}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

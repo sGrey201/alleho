@@ -5,7 +5,24 @@ import { parse as parseCookie } from "cookie";
 // @ts-expect-error no types
 import * as cookieSignature from "cookie-signature";
 import { getRedisSubscriber, type ConversationMessageWithAuthor } from "./redis";
+import { storage } from "./storage";
 import { registerConversationBroadcaster, registerDoctorBroadcaster } from "./wsBroadcast";
+
+function isHomeopathOnlyEvent(parsed: unknown): boolean {
+  if (!parsed || typeof parsed !== "object") return false;
+  const record = parsed as {
+    type?: string;
+    messageType?: string;
+    payload?: { messageType?: string };
+  };
+  if (record.payload && typeof record.payload === "object") {
+    return (
+      (record.type === "conversation_message" || record.type === "conversation_message_edited") &&
+      record.payload.messageType === "ai_consilium"
+    );
+  }
+  return record.messageType === "ai_consilium";
+}
 
 const WS_PATH = "/ws";
 const CONVERSATION_CHANNEL_PREFIX = "conversation:channel:";
@@ -48,11 +65,18 @@ export function setupWebSocket(
     socketToConversationChannels.get(ws)?.delete(channel);
   }
 
-  function sendToConversationChannel(conversationId: string, data: string): void {
+  const socketIsAdmin = new WeakMap<WsWebSocket, boolean>();
+
+  function sendToConversationChannel(
+    conversationId: string,
+    data: string,
+    options?: { homeopathOnly?: boolean }
+  ): void {
     const channel = CONVERSATION_CHANNEL_PREFIX + conversationId;
     const sockets = conversationChannelToSockets.get(channel);
     if (!sockets || sockets.size === 0) return;
     Array.from(sockets).forEach((ws) => {
+      if (options?.homeopathOnly && socketIsAdmin.get(ws) !== true) return;
       if (ws.readyState === 1) ws.send(data);
     });
   }
@@ -127,7 +151,9 @@ export function setupWebSocket(
             data = JSON.stringify({ type: "conversation_message", payload: parsed });
           }
           if (!data) return;
-          sendToConversationChannel(conversationId, data);
+          sendToConversationChannel(conversationId, data, {
+            homeopathOnly: isHomeopathOnlyEvent(parsed),
+          });
         } catch {
           // ignore
         }
@@ -192,9 +218,18 @@ export function setupWebSocket(
         return;
       }
 
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit("connection", ws, request, sess.userId);
-      });
+      const userId = sess.userId;
+      void storage
+        .getUser(userId)
+        .then((user) => {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            socketIsAdmin.set(ws, !!user?.isAdmin);
+            wss.emit("connection", ws, request, userId);
+          });
+        })
+        .catch(() => {
+          socket.destroy();
+        });
     });
   });
 

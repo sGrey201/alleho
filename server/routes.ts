@@ -76,6 +76,7 @@ import {
 } from "./voiceCall";
 import { packageVoiceMessage } from "./voiceMessagePackage";
 import { buildConversationExport } from "./chatExport";
+import { startAiConsilium } from "./aiConsilium";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
@@ -3077,7 +3078,12 @@ ${allUrls.map(url => `  <url>
         typeof req.query.before === "string" && req.query.before.length > 0
           ? req.query.before
           : null;
-      const { messages, hasMore } = await storage.getConversationMessagesBefore(id, before, limit);
+      const { messages, hasMore } = await storage.getConversationMessagesBefore(
+        id,
+        before,
+        limit,
+        currentUser.isAdmin ? undefined : { excludeMessageTypes: ["ai_consilium"] }
+      );
       const withAuthors = await enrichConversationMessages(messages, currentUserId, sponsorFilter);
       const nextBefore = withAuthors.length > 0 ? withAuthors[0]!.id : null;
       res.json({
@@ -3127,6 +3133,31 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error exporting conversation:", error);
       res.status(500).json({ message: "Failed to export conversation" });
+    }
+  });
+
+  // Homeopath AI consilium: archive the patient chat and publish the model's answer.
+  app.post("/api/conversations/:id/ai-consilium", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "AI consilium is only available for patient chats" });
+      }
+
+      const outcome = await startAiConsilium({ conversation: conv, author: currentUser });
+      if ("busy" in outcome) return res.status(409).json({ busy: true });
+      res.status(202).json({ started: true, message: outcome.message });
+    } catch (error) {
+      console.error("Error starting AI consilium:", error);
+      res.status(500).json({ message: "Failed to start AI consilium" });
     }
   });
 
@@ -3403,7 +3434,7 @@ ${allUrls.map(url => `  <url>
         content = JSON.stringify(payload);
       }
 
-      if (messageType === "call") {
+      if (messageType === "call" || messageType === "ai_consilium") {
         return res.status(400).json({ message: "Cannot post this message type" });
       }
 
@@ -3690,7 +3721,12 @@ ${allUrls.map(url => `  <url>
       if (existing.messageType === "poll") {
         return res.status(400).json({ message: "Cannot edit poll" });
       }
-      if (existing.messageType === "voice" || existing.messageType === "file" || existing.messageType === "call") {
+      if (
+        existing.messageType === "voice" ||
+        existing.messageType === "file" ||
+        existing.messageType === "call" ||
+        existing.messageType === "ai_consilium"
+      ) {
         return res.status(400).json({ message: "Cannot edit this message type" });
       }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });

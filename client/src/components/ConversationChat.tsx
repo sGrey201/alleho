@@ -48,6 +48,7 @@ import {
   ChevronDown,
   File as FileIcon,
   Download,
+  Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import DynamicQuestionnaireForm from "@/components/DynamicQuestionnaireForm";
@@ -226,6 +227,7 @@ const CLINICAL_MESSAGE_TYPES = new Set([
   "questionnaire_template",
   "followup",
   "prescription",
+  "ai_consilium",
 ]);
 
 function isClinicalChatMessage(messageType: string | null | undefined): boolean {
@@ -371,6 +373,7 @@ function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["reply
       ? t.callMessageLabel
       : `${t.callMessageLabel} · ${formatCallDuration(duration)}`;
   }
+  if (reply.messageType === "ai_consilium") return t.aiConsiliumBadge;
   if (reply.messageType === "video") return t.messageVideoLabel;
   if (reply.messageType === "file") {
     return parseFilePayload(reply.content)?.name ?? t.messageFileLabel;
@@ -1506,7 +1509,7 @@ export default function ConversationChat({
     const audienceVisible =
       !isPatientConv || user?.isAdmin
         ? visible
-        : visible.filter((m) => m.messageType !== "followup");
+        : visible.filter((m) => m.messageType !== "followup" && m.messageType !== "ai_consilium");
     if (!clinicalMessagesOnly) return audienceVisible;
     return audienceVisible.filter((m) => isClinicalChatMessage(m.messageType));
   }, [sortedMessages, isPatientConv, user?.isAdmin, clinicalMessagesOnly]);
@@ -1824,9 +1827,12 @@ export default function ConversationChat({
   const pinnedMessages = useMemo(
     () =>
       sortedMessages.filter(
-        (m) => m.pinnedAt && !m.deletedAt
+        (m) =>
+          m.pinnedAt &&
+          !m.deletedAt &&
+          (user?.isAdmin || !isPatientConv || m.messageType !== "ai_consilium")
       ),
-    [sortedMessages]
+    [sortedMessages, user?.isAdmin, isPatientConv]
   );
   const activePinnedMessage =
     activePinnedIndex >= 0 && activePinnedIndex < pinnedMessages.length
@@ -2100,6 +2106,7 @@ export default function ConversationChat({
       msg.messageType !== "video" &&
       msg.messageType !== "file" &&
       msg.messageType !== "call" &&
+      msg.messageType !== "ai_consilium" &&
       (conv.type === "channel" || withinEditWindow);
     const canEditVideo =
       isOwn &&
@@ -2467,8 +2474,51 @@ export default function ConversationChat({
               </Badge>
             </div>
           )}
-          {msg.content ? (
-            conv?.type === "channel" ? (
+          {msg.messageType === "ai_consilium" && (
+            <div className="mb-0.5 pr-8">
+              <Badge variant="secondary" className="bg-amber-100 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                <Sparkles className="mr-1 h-3 w-3" />
+                {t.aiConsiliumBadge}
+              </Badge>
+            </div>
+          )}
+          {msg.messageType === "ai_consilium" && !msg.content?.trim() ? (
+            <div className="w-44 pr-8">
+              <p className="text-sm text-muted-foreground">{t.aiConsiliumPreparing}</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950">
+                <div className="ai-consilium-progress h-full w-1/3 rounded-full bg-amber-600" />
+              </div>
+            </div>
+          ) : msg.content ? (
+            msg.messageType === "ai_consilium" ? (
+              <CollapsibleMessageText
+                text={msg.content}
+                className={sponsorTextPad}
+                onToggleExpand={blockAutoScrollBriefly}
+              >
+                {(displayText) => (
+                  <SponsorAwareMessageText
+                    text={displayText}
+                    canViewSponsorContent={canViewSponsorContent}
+                    monetizationEnabled={channelMonetizationEnabled}
+                    isContentTruncated={msg.isContentTruncated}
+                    conversationId={conversationId}
+                    activePaymentSegmentIndex={
+                      inlineContentPayment?.messageId === msg.id
+                        ? inlineContentPayment.segmentIndex
+                        : null
+                    }
+                    onPaymentSegmentOpen={(segmentIndex) =>
+                      handlePaymentSegmentOpen(msg.id, segmentIndex)
+                    }
+                    onPaymentFlowClose={() => setInlineContentPayment(null)}
+                    onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
+                    onTagClick={handleTagClick}
+                    highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+                  />
+                )}
+              </CollapsibleMessageText>
+            ) : conv?.type === "channel" ? (
               (() => {
                 const postHasSponsorMarkers =
                   msg.hasSponsorContent || hasSponsorSections(msg.content);
@@ -2542,7 +2592,9 @@ export default function ConversationChat({
         <div className="min-w-0">{renderReactionPills(msg)}</div>
         <span className="flex shrink-0 items-center gap-0.5 select-none text-right tabular-nums text-[10px] leading-none">
           <span className="text-muted-foreground">
-            {msg.editedAt && <span className="mr-1 italic">{t.messageEdited}</span>}
+            {msg.editedAt && msg.messageType !== "ai_consilium" && (
+              <span className="mr-1 italic">{t.messageEdited}</span>
+            )}
             {formatBubbleTime(msg.createdAt)}
           </span>
           {isOwn && showReceiptIcons && (
@@ -2814,6 +2866,8 @@ export default function ConversationChat({
                   ? t.messageVideoLabel
                   : activePinnedMessage.messageType === "file"
                   ? parseFilePayload(activePinnedMessage.content)?.name ?? t.messageFileLabel
+                  : activePinnedMessage.messageType === "ai_consilium"
+                  ? t.aiConsiliumBadge
                   : activePinnedMessage.messageType === "poll"
                   ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
                   : activePinnedMessage.messageType === "questionnaire" ||
@@ -3126,6 +3180,8 @@ export default function ConversationChat({
                         ? t.messageVideoLabel
                         : replyTo.messageType === "file"
                         ? parseFilePayload(replyTo.content)?.name ?? t.messageFileLabel
+                        : replyTo.messageType === "ai_consilium"
+                        ? t.aiConsiliumBadge
                         : replyTo.messageType === "poll"
                         ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
                         : replyTo.content
@@ -3253,6 +3309,39 @@ export default function ConversationChat({
                 onCreatePoll={
                   !editing && canPostToChannel && !isPatientConv
                     ? () => setPollDialogOpen(true)
+                    : undefined
+                }
+                onStartAiConsilium={
+                  isPatientConv && !!user?.isAdmin && !editing && canPostToChannel
+                    ? () => {
+                        void fetch(`/api/conversations/${conversationId}/ai-consilium`, {
+                          method: "POST",
+                          credentials: "include",
+                          cache: "no-store",
+                        })
+                          .then(async (res) => {
+                            const body = (await res.json().catch(() => ({}))) as {
+                              busy?: boolean;
+                              message?: ConversationMessageWithAuthor;
+                            };
+                            if (body.busy) {
+                              toast({ title: t.aiConsiliumBusy });
+                              return;
+                            }
+                            if (!res.ok || !body.message) {
+                              toast({ title: t.aiConsiliumError, variant: "destructive" });
+                              return;
+                            }
+                            requestScrollToBottom();
+                            queryClient.setQueryData<ConversationMessagesInfiniteData>(
+                              conversationMessagesQueryKey(conversationId),
+                              (old) => appendConversationMessage(old, body.message!)
+                            );
+                          })
+                          .catch(() => {
+                            toast({ title: t.aiConsiliumError, variant: "destructive" });
+                          });
+                      }
                     : undefined
                 }
                 showSponsorFormat={conv.type === "channel" && channelMonetizationEnabled && canPostToChannel}
