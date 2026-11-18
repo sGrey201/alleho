@@ -2971,7 +2971,8 @@ export default function ConversationChat({
               const isOwn = msg.authorUserId === user?.id;
               if (msg.messageType === "call" && !msg.deletedAt) {
                 const durationSec = parseCallMessagePayload(msg.content)?.durationSec ?? 0;
-                const filename = t.callRecordingFileName;
+                const recordingSrc = msg.imageUrl?.split("?")[0]?.toLowerCase() ?? "";
+                const hasMix = recordingSrc.endsWith(".m4a");
                 return (
                   <div
                     key={msg.id}
@@ -2983,42 +2984,14 @@ export default function ConversationChat({
                       <p className="text-center text-xs text-muted-foreground">
                         {t.callMessageLabel} · {formatCallDuration(durationSec)}
                       </p>
-                      {msg.imageUrl ? (
-                        <button
-                          type="button"
-                          className="mt-2 flex w-full items-center gap-2.5 rounded-xl bg-background/80 px-2.5 py-2 text-left transition-colors hover:bg-background"
-                          data-testid={`call-recording-${msg.id}`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!msg.imageUrl) return;
-                            if (!shouldUseInAppFileTransfer()) {
-                              openChatFile(msg.imageUrl, filename);
-                              return;
-                            }
-                            void saveOrShareChatFile(msg.imageUrl, filename).catch((error) => {
-                              if ((error as Error)?.name === "AbortError") return;
-                              toast({
-                                title: t.error,
-                                description: t.messageFileOpenError,
-                                variant: "destructive",
-                              });
-                            });
-                          }}
-                        >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                            <FileIcon className="h-5 w-5" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-foreground">
-                              {filename}
-                            </span>
-                            <span className="block text-[11px] text-muted-foreground">
-                              {t.callRecordingDownload}
-                            </span>
-                          </span>
-                          <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        </button>
+                      {hasMix && msg.imageUrl ? (
+                        <div className="mt-1.5" data-testid={`call-recording-${msg.id}`}>
+                          <VoiceMessagePlayer
+                            src={msg.imageUrl}
+                            durationSec={durationSec}
+                            isOwn={false}
+                          />
+                        </div>
                       ) : (
                         <p className="mt-1.5 text-center text-[11px] text-muted-foreground/80">
                           {t.callRecordingPreparing}

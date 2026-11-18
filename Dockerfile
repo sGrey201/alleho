@@ -18,6 +18,10 @@ RUN npm run build
 # Run stage (same base as build to avoid extra pull; use -slim for smaller final image)
 FROM node:20-bookworm-slim AS run
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 ENV NODE_ENV=production

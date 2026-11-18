@@ -10,7 +10,10 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
-import JSZip from "jszip";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { getLiveKitApiHost } from "./livekitRoom";
 import { objectStorageClient } from "./replit_integrations/object_storage/objectStorage";
 import { storage } from "./storage";
@@ -51,18 +54,18 @@ export function callRecordingManifestObjectPath(roomName: string): string {
   return `/objects/${callRecordingManifestObjectKey(roomName)}`;
 }
 
-export function callRecordingZipObjectKey(roomName: string): string {
-  return `call-recordings/${roomName}/recording.zip`;
+export function callRecordingMixObjectKey(roomName: string): string {
+  return `call-recordings/${roomName}/mix.m4a`;
 }
 
-export function callRecordingZipObjectPath(roomName: string): string {
-  return `/objects/${callRecordingZipObjectKey(roomName)}`;
+export function callRecordingMixObjectPath(roomName: string): string {
+  return `/objects/${callRecordingMixObjectKey(roomName)}`;
 }
 
-/** Chat attachment path for a finished call package (zip preferred). */
-export function isCallRecordingDownloadPath(path: string | null | undefined): boolean {
-  if (!path) return false;
-  return path.endsWith(".zip") || path.endsWith(".ogg");
+/** Chat attachment path for the mixed call recording. */
+export function isCallRecordingDownloadPath(objectPath: string | null | undefined): boolean {
+  if (!objectPath) return false;
+  return objectPath.split("?")[0]?.toLowerCase().endsWith(".m4a") ?? false;
 }
 
 export function resolveCallRecordingRole(
@@ -216,37 +219,50 @@ async function getObjectBytes(key: string): Promise<Uint8Array | null> {
   }
 }
 
-async function putRecordingZip(roomName: string, body: Buffer): Promise<void> {
+async function putRecordingMix(roomName: string, body: Buffer): Promise<void> {
   const bucket = process.env.YC_BUCKET?.trim();
   if (!bucket) throw new Error("Object storage is not configured");
   await objectStorageClient.send(
     new PutObjectCommand({
       Bucket: bucket,
-      Key: callRecordingZipObjectKey(roomName),
+      Key: callRecordingMixObjectKey(roomName),
       Body: body,
-      ContentType: "application/zip",
+      ContentType: "audio/mp4",
     })
   );
 }
 
-function zipEntryNameForTrack(track: {
-  role: string;
-  participantIdentity: string;
-  trackSid: string;
-}): string {
-  const identity = track.participantIdentity.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40);
-  const sid = track.trackSid.replace(/[^a-zA-Z0-9_-]+/g, "_").slice(-12);
-  return `tracks/${track.role}_${identity}_${sid}.ogg`;
+function runFfmpeg(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    const stderr: Buffer[] = [];
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr.push(chunk);
+      if (stderr.length > 40) stderr.shift();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const tail = Buffer.concat(stderr).toString("utf8").slice(-500);
+      reject(new Error(`ffmpeg exited ${code}: ${tail}`));
+    });
+  });
 }
 
-async function buildAndUploadRecordingZip(
-  roomName: string,
-  manifest: unknown,
-  tracks: ConversationCallRecordingTrack[]
-): Promise<string> {
-  const zip = new JSZip();
-  zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+function mixDelayMs(startedAt: Date | null, zeroMs: number): number {
+  if (!startedAt) return 0;
+  return Math.max(0, Math.round(startedAt.getTime() - zeroMs));
+}
 
+/** Encode ready tracks into one m4a. A single track is encoded without mixing. */
+async function buildAndUploadRecordingMix(
+  roomName: string,
+  tracks: ConversationCallRecordingTrack[]
+): Promise<string | null> {
+  const ready: { track: ConversationCallRecordingTrack; bytes: Uint8Array }[] = [];
   for (const track of tracks) {
     if (track.status !== "done") continue;
     const key = callRecordingTrackObjectKey(
@@ -256,23 +272,51 @@ async function buildAndUploadRecordingZip(
     );
     const bytes = await getObjectBytes(key);
     if (!bytes || bytes.byteLength === 0) continue;
-    zip.file(
-      zipEntryNameForTrack({
-        role: track.role,
-        participantIdentity: track.participantIdentity,
-        trackSid: track.trackSid,
-      }),
-      bytes
-    );
+    ready.push({ track, bytes });
   }
+  if (ready.length === 0) return null;
 
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-    compressionOptions: { level: 6 },
-  });
-  await putRecordingZip(roomName, buffer);
-  return callRecordingZipObjectPath(roomName);
+  const dir = await mkdtemp(path.join(tmpdir(), "call-mix-"));
+  try {
+    const inputs: string[] = [];
+    for (let i = 0; i < ready.length; i++) {
+      const file = path.join(dir, `track-${i}.ogg`);
+      await writeFile(file, ready[i]!.bytes);
+      inputs.push(file);
+    }
+    const out = path.join(dir, "mix.m4a");
+    const encode = ["-c:a", "aac", "-b:a", "64k", "-ac", "1", "-movflags", "+faststart", out];
+    if (ready.length === 1) {
+      await runFfmpeg(["-y", "-i", inputs[0]!, ...encode]);
+    } else {
+      const starts = ready
+        .map((item) => item.track.startedAt?.getTime())
+        .filter((value): value is number => value != null && Number.isFinite(value));
+      const zero = starts.length > 0 ? Math.min(...starts) : 0;
+      const filters: string[] = [];
+      const labels: string[] = [];
+      ready.forEach((item, index) => {
+        const delay = mixDelayMs(item.track.startedAt, zero);
+        filters.push(
+          `[${index}:a]aresample=48000,aformat=channel_layouts=mono,adelay=${delay}:all=1[a${index}]`
+        );
+        labels.push(`[a${index}]`);
+      });
+      filters.push(
+        `${labels.join("")}amix=inputs=${ready.length}:duration=longest:dropout_transition=0:normalize=0`
+      );
+      const args = ["-y"];
+      for (const input of inputs) args.push("-i", input);
+      args.push("-filter_complex", filters.join(";"), ...encode);
+      await runFfmpeg(args);
+    }
+    const body = await readFile(out);
+    if (body.byteLength === 0) return null;
+    await putRecordingMix(roomName, body);
+    return callRecordingMixObjectPath(roomName);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 export async function startMicrophoneTrackRecording(params: {
@@ -416,6 +460,7 @@ export async function tryBuildCallRecordingPackage(callId: string): Promise<void
   try {
     const conv = await storage.getConversation(call.conversationId);
     const manifestTracks = [];
+    const mixTracks: ConversationCallRecordingTrack[] = [];
     for (const track of tracks) {
       const key = callRecordingTrackObjectKey(
         track.roomName,
@@ -426,6 +471,8 @@ export async function tryBuildCallRecordingPackage(callId: string): Promise<void
       const ok = track.status === "done" && size != null && size > 0;
       if (track.status === "done" && !ok) {
         await storage.updateCallRecordingTrack(track.id, { status: "failed" });
+      } else if (ok) {
+        mixTracks.push(track);
       }
       const durationSec = ok ? Number(durationSecFromTrack(track).toFixed(1)) : 0;
       manifestTracks.push({
@@ -453,16 +500,25 @@ export async function tryBuildCallRecordingPackage(callId: string): Promise<void
       mute_events: [],
     };
     await putManifestJson(call.id, manifest);
-    const zipPath = await buildAndUploadRecordingZip(call.id, manifest, tracks);
+    let mixPath: string | null = null;
+    try {
+      mixPath = await buildAndUploadRecordingMix(call.id, mixTracks);
+    } catch (err) {
+      console.error("[VoiceCall] recording alert: mix_failed", { callId, err });
+    }
     const updated = await storage.setCallRecordingStatus(
       call.id,
       "ready_for_transcription",
-      zipPath
+      mixPath
     );
     const messageId = updated?.recordingMessageId ?? call.recordingMessageId;
-    if (messageId) {
-      const { attachCallRecordingToChatMessage } = await import("./voiceCall");
-      await attachCallRecordingToChatMessage(messageId, call.conversationId, zipPath);
+    if (messageId && mixPath) {
+      try {
+        const { attachCallRecordingToChatMessage } = await import("./voiceCall");
+        await attachCallRecordingToChatMessage(messageId, call.conversationId, mixPath);
+      } catch (err) {
+        console.error("[VoiceCall] recording alert: attach_failed", { callId, err });
+      }
     }
   } catch (err) {
     console.error("[VoiceCall] recording alert: package_failed", { callId, err });

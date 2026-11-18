@@ -585,7 +585,7 @@ async function publishCallChatMessage(
   );
 }
 
-/** Attach (or update) the recording download path on an existing call chat message. */
+/** Attach the mixed call recording to an existing call chat message. */
 export async function attachCallRecordingToChatMessage(
   messageId: string,
   conversationId: string,
