@@ -392,6 +392,7 @@ export async function buildConversationExport(
   let photoIndex = 0;
   for (const message of messages) {
     if (excluded.has(message.messageType)) continue;
+    if (message.messageType === "ai_consilium" && !message.content?.trim()) continue;
     const author = users.get(message.authorUserId);
     const header = messageHeader(message, author, conversation);
     const plainText =
