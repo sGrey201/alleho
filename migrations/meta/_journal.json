@@ -267,6 +267,13 @@
       "when": 1774250000000,
       "tag": "0037_call_recording_tracks",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1774260000000,
+      "tag": "0038_ai_consilium_requests",
+      "breakpoints": true
     }
   ]
 }

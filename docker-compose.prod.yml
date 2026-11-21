@@ -29,6 +29,8 @@ services:
       PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS}
       HELP_SUPPORT_USER_ID: ${HELP_SUPPORT_USER_ID}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
+      REG_CLOUD_API_KEY: ${REG_CLOUD_API_KEY}
+      REG_CLOUD_MODEL: ${REG_CLOUD_MODEL:-claude-opus-5.5}
     depends_on:
       - db
       - redis

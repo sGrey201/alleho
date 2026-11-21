@@ -1,7 +1,8 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { Agent, Cursor, CursorAgentError, type ModelListItem, type ModelSelection } from "@cursor/sdk";
-import type { Conversation, User } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { aiConsiliumRequests, type Conversation, type User } from "@shared/schema";
 import { buildConversationExport, type ConversationExportResult } from "./chatExport";
+import { db } from "./db";
 import { objectStorageClient } from "./replit_integrations/object_storage/objectStorage";
 import {
   publishConversationMessage,
@@ -135,6 +136,8 @@ const PROMPT = `Приглашаем тебя в гомеопатическое 
 - Название препарата можно выделить жирным: **Nat-m.**`;
 
 const FAILURE_TEXT = "Не удалось подготовить AI консилиум.";
+const EMPTY_CASE_TEXT =
+  "В чате нет материалов для разбора: нет сообщений, анкеты и фотографий. AI консилиум не подготовлен.";
 const ARCHIVE_PREFIX = "ai-consilium";
 
 const running = new Set<string>();
@@ -152,7 +155,7 @@ export async function startAiConsilium(input: {
   running.add(conversationId);
   try {
     const pending = await createPendingConsilium(conversationId, input.author);
-    void runAiConsilium(input.conversation, pending.id).finally(() => {
+    void runAiConsilium(input.conversation, pending.id, input.author.id).finally(() => {
       running.delete(conversationId);
     });
     return { started: true, message: pending };
@@ -162,13 +165,40 @@ export async function startAiConsilium(input: {
   }
 }
 
-async function runAiConsilium(conversation: Conversation, messageId: string): Promise<void> {
+async function runAiConsilium(
+  conversation: Conversation,
+  messageId: string,
+  requestedByUserId: string
+): Promise<void> {
   const startedAt = new Date().toISOString();
+  const logId = await openConsiliumLog({
+    conversationId: conversation.id,
+    messageId,
+    requestedByUserId,
+    patientUserId: conversation.patientUserId,
+  });
   let exported: ConversationExportResult | null = null;
   let prompt: string | null = null;
-  let model: ModelSelection | null = null;
+  let model: string | null = null;
   try {
     exported = await buildConversationExport(conversation);
+    if (!caseHasMaterial(exported)) {
+      await saveArchive({
+        messageId,
+        conversationId: conversation.id,
+        startedAt,
+        status: "empty_case",
+        exported,
+        response: EMPTY_CASE_TEXT,
+      });
+      await finishConsiliumLog(logId, {
+        status: "empty_case",
+        exported,
+        response: EMPTY_CASE_TEXT,
+      });
+      await fillConsilium(conversation.id, messageId, EMPTY_CASE_TEXT);
+      return;
+    }
     if (exported.missingTranscripts > 0) {
       const text = missingTranscriptText(exported.missingTranscripts);
       await saveArchive({
@@ -180,13 +210,19 @@ async function runAiConsilium(conversation: Conversation, messageId: string): Pr
         exported,
         response: text,
       });
+      await finishConsiliumLog(logId, {
+        status: "missing_transcripts",
+        exported,
+        response: text,
+        missingTranscripts: exported.missingTranscripts,
+      });
       await fillConsilium(conversation.id, messageId, text);
       return;
     }
     prompt = buildPrompt(exported);
-    const answer = await askCursor(prompt, exported);
+    const answer = await askRegCloud(prompt, exported);
     model = answer.model;
-    const text = answer.text.trim() || FAILURE_TEXT;
+    const text = answer.text.trim() || `${FAILURE_TEXT} Модель вернула пустой ответ.`;
     await saveArchive({
       messageId,
       conversationId: conversation.id,
@@ -199,10 +235,23 @@ async function runAiConsilium(conversation: Conversation, messageId: string): Pr
       exported,
       response: text,
     });
+    await finishConsiliumLog(logId, {
+      status: "finished",
+      exported,
+      prompt,
+      response: text,
+      model,
+      usage: answer.usage,
+      providerRequestId: answer.runId,
+      photosSent: answer.photosSent,
+      attemptCount: answer.attemptCount,
+      finishReason: answer.finishReason,
+    });
     await fillConsilium(conversation.id, messageId, text);
   } catch (error) {
     console.error("[AiConsilium] failed", { conversationId: conversation.id, messageId, error });
     const message = error instanceof Error ? error.message : "Unknown error";
+    const text = consiliumFailureText(message);
     await saveArchive({
       messageId,
       conversationId: conversation.id,
@@ -212,14 +261,42 @@ async function runAiConsilium(conversation: Conversation, messageId: string): Pr
       prompt,
       exported,
       error: message,
-      response: FAILURE_TEXT,
+      response: text,
+    });
+    await finishConsiliumLog(logId, {
+      status: "error",
+      exported,
+      prompt,
+      response: text,
+      model,
+      error: message,
+      httpStatus: error instanceof RegCloudError ? error.status : null,
     });
     try {
-      await fillConsilium(conversation.id, messageId, FAILURE_TEXT);
+      await fillConsilium(conversation.id, messageId, text);
     } catch (postError) {
       console.error("[AiConsilium] failure text was not saved", { conversationId: conversation.id, postError });
     }
   }
+}
+
+function caseHasMaterial(exported: ConversationExportResult): boolean {
+  if (exported.photos.length > 0) return true;
+  return exported.markdown.includes(" — ");
+}
+
+function consiliumFailureText(message: string): string {
+  const detail = message
+    .replace(/crsr_[a-z0-9]+/gi, "ключ")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "ключ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+  if (/REG_CLOUD_API_KEY/i.test(message)) {
+    return `${FAILURE_TEXT} Техническая ошибка: на сервере не задан ключ доступа к модели.`;
+  }
+  if (!detail) return FAILURE_TEXT;
+  return `${FAILURE_TEXT} Техническая ошибка: ${detail}`;
 }
 
 function missingTranscriptText(count: number): string {
@@ -238,52 +315,267 @@ function buildPrompt(exported: ConversationExportResult): string {
   return `${PROMPT}\n\nОтветь готовым текстом по форме выше. Файлы создавать не нужно.\n\n${photoNote}\n\nМатериалы случая:\n\n${exported.markdown}`;
 }
 
-async function askCursor(
+const REG_CLOUD_URL = "https://ai.reg.cloud/v1/chat/completions";
+const REG_CLOUD_MODEL = "claude-opus-5.5";
+
+type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+type ConsiliumCompletion = {
+  text: string;
+  model: string;
+  runId: string;
+  agentId: string;
+  usage: TokenUsage | null;
+  photosSent: boolean;
+  attemptCount: number;
+  finishReason: string | null;
+};
+
+async function askRegCloud(
   prompt: string,
   exported: ConversationExportResult
-): Promise<{ text: string; model: ModelSelection; runId: string; agentId: string }> {
-  const apiKey = process.env.CURSOR_API_KEY?.trim();
-  if (!apiKey) throw new Error("CURSOR_API_KEY is not set");
+): Promise<ConsiliumCompletion> {
+  const apiKey = process.env.REG_CLOUD_API_KEY?.trim();
+  if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
 
-  const model = await selectOpusHigh(apiKey);
-  if (!model) throw new Error("Claude Opus 5.5 High is not available for this key");
-
-  const agent = await Agent.create({
-    apiKey,
-    model,
-    cloud: { repos: [] },
-  });
+  const model = process.env.REG_CLOUD_MODEL?.trim() || REG_CLOUD_MODEL;
+  const content = chatContent(prompt, exported);
   try {
-    const run = await agent.send({
-      text: prompt,
-      images: exported.photos.map((photo) => ({
-        data: photo.bytes.toString("base64"),
-        mimeType: photo.mimeType,
-      })),
-    });
-    console.info("[AiConsilium] run started", { runId: run.id, agentId: run.agentId, model: model.id });
-    const result = await run.wait();
-    if (result.status !== "finished" || !result.result?.trim()) {
-      throw new Error(result.error?.message || `run status ${result.status}`);
-    }
-    return { text: result.result, model, runId: run.id, agentId: run.agentId };
+    const first = await completeRegCloud(apiKey, model, content);
+    return { ...first, photosSent: exported.photos.length > 0, attemptCount: 1 };
   } catch (error) {
-    if (error instanceof CursorAgentError) {
-      throw new Error(`Cursor startup failed: ${error.message}`);
+    if (exported.photos.length === 0 || !(error instanceof RegCloudError) || error.status !== 400) {
+      throw error;
     }
-    throw error;
-  } finally {
-    await agent[Symbol.asyncDispose]();
+    console.error("[AiConsilium] model rejected photos, retrying with text only");
+    const second = await completeRegCloud(
+      apiKey,
+      model,
+      `${prompt}\n\nФотографии модель не приняла. Разбирай случай по тексту материалов.`
+    );
+    return {
+      ...second,
+      usage: addTokenUsage(error.usage, second.usage),
+      photosSent: false,
+      attemptCount: 2,
+    };
   }
+}
+
+class RegCloudError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly usage: TokenUsage | null = null
+  ) {
+    super(message);
+  }
+}
+
+type TokenUsage = {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  reasoningTokens: number | null;
+  cachedPromptTokens: number | null;
+};
+
+function chatContent(prompt: string, exported: ConversationExportResult): string | ChatContentPart[] {
+  if (exported.photos.length === 0) return prompt;
+  return [
+    { type: "text", text: prompt },
+    ...exported.photos.map((photo) => ({
+      type: "image_url" as const,
+      image_url: { url: `data:${photo.mimeType};base64,${photo.bytes.toString("base64")}` },
+    })),
+  ];
+}
+
+async function completeRegCloud(
+  apiKey: string,
+  model: string,
+  content: string | ChatContentPart[]
+): Promise<Omit<ConsiliumCompletion, "photosSent" | "attemptCount">> {
+  const response = await fetch(REG_CLOUD_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8000,
+      temperature: 0.5,
+      presence_penalty: 0,
+      top_p: 0.95,
+      messages: [{ role: "user", content }],
+    }),
+  });
+  const body = (await response.json().catch(() => null)) as RegCloudResponse | null;
+  const usage = readTokenUsage(body?.usage);
+  if (!response.ok) {
+    throw new RegCloudError(
+      body?.error?.message || `Reg.cloud HTTP ${response.status}`,
+      response.status,
+      usage
+    );
+  }
+  const text = body?.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!text) throw new Error("Reg.cloud returned an empty completion");
+  return {
+    text,
+    model,
+    runId: body?.id ?? "",
+    agentId: "",
+    usage,
+    finishReason: body?.choices?.[0]?.finish_reason ?? null,
+  };
+}
+
+type RegCloudResponse = {
+  id?: string;
+  error?: { message?: string };
+  choices?: Array<{ finish_reason?: string | null; message?: { content?: string | null } }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    reasoning_tokens?: number;
+    cached_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+};
+
+function readTokenUsage(usage: RegCloudResponse["usage"]): TokenUsage | null {
+  if (!usage) return null;
+  const promptTokens = finiteToken(usage.prompt_tokens ?? usage.input_tokens);
+  const completionTokens = finiteToken(usage.completion_tokens ?? usage.output_tokens);
+  const totalTokens =
+    finiteToken(usage.total_tokens) ??
+    (promptTokens != null && completionTokens != null ? promptTokens + completionTokens : null);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    reasoningTokens: finiteToken(
+      usage.completion_tokens_details?.reasoning_tokens ?? usage.reasoning_tokens
+    ),
+    cachedPromptTokens: finiteToken(
+      usage.prompt_tokens_details?.cached_tokens ?? usage.cached_tokens
+    ),
+  };
+}
+
+function finiteToken(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
+}
+
+async function openConsiliumLog(input: {
+  conversationId: string;
+  messageId: string;
+  requestedByUserId: string;
+  patientUserId: string | null;
+}): Promise<string | null> {
+  try {
+    const [row] = await db
+      .insert(aiConsiliumRequests)
+      .values({
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        requestedByUserId: input.requestedByUserId,
+        patientUserId: input.patientUserId,
+        status: "started",
+      })
+      .returning({ id: aiConsiliumRequests.id });
+    return row?.id ?? null;
+  } catch (error) {
+    console.error("[AiConsilium] log was not opened", { messageId: input.messageId, error });
+    return null;
+  }
+}
+
+async function finishConsiliumLog(id: string | null, patch: ConsiliumLogFinish): Promise<void> {
+  if (!id) return;
+  try {
+    await db
+      .update(aiConsiliumRequests)
+      .set({
+        status: patch.status,
+        answeredAt: new Date(),
+        model: patch.model ?? null,
+        providerRequestId: patch.providerRequestId ?? null,
+        promptTokens: patch.usage?.promptTokens ?? null,
+        completionTokens: patch.usage?.completionTokens ?? null,
+        totalTokens: patch.usage?.totalTokens ?? null,
+        reasoningTokens: patch.usage?.reasoningTokens ?? null,
+        cachedPromptTokens: patch.usage?.cachedPromptTokens ?? null,
+        photoCount: patch.exported?.photos.length ?? 0,
+        photosSent: patch.photosSent ?? false,
+        ...(patch.attemptCount != null ? { attemptCount: patch.attemptCount } : {}),
+        missingTranscripts: patch.missingTranscripts ?? 0,
+        promptChars: patch.prompt?.length ?? null,
+        responseChars: patch.response?.length ?? null,
+        httpStatus: patch.httpStatus ?? null,
+        finishReason: patch.finishReason ?? null,
+        error: patch.error ? sanitizeConsiliumError(patch.error) : null,
+      })
+      .where(eq(aiConsiliumRequests.id, id));
+  } catch (error) {
+    console.error("[AiConsilium] log was not finished", { id, error });
+  }
+}
+
+type ConsiliumLogFinish = {
+  status: "finished" | "missing_transcripts" | "empty_case" | "error";
+  exported?: ConversationExportResult | null;
+  prompt?: string | null;
+  response?: string;
+  model?: string | null;
+  usage?: TokenUsage | null;
+  providerRequestId?: string | null;
+  photosSent?: boolean;
+  attemptCount?: number;
+  finishReason?: string | null;
+  missingTranscripts?: number;
+  error?: string | null;
+  httpStatus?: number | null;
+};
+
+function sanitizeConsiliumError(message: string): string {
+  return message
+    .replace(/crsr_[a-z0-9]+/gi, "ключ")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "ключ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+}
+
+function addTokenUsage(left: TokenUsage | null, right: TokenUsage | null): TokenUsage | null {
+  if (!left) return right;
+  if (!right) return left;
+  const sum = (a: number | null, b: number | null) =>
+    a == null && b == null ? null : (a ?? 0) + (b ?? 0);
+  return {
+    promptTokens: sum(left.promptTokens, right.promptTokens),
+    completionTokens: sum(left.completionTokens, right.completionTokens),
+    totalTokens: sum(left.totalTokens, right.totalTokens),
+    reasoningTokens: sum(left.reasoningTokens, right.reasoningTokens),
+    cachedPromptTokens: sum(left.cachedPromptTokens, right.cachedPromptTokens),
+  };
 }
 
 type ConsiliumArchive = {
   messageId: string;
   conversationId: string;
   startedAt: string;
-  status: "finished" | "missing_transcripts" | "error";
+  status: "finished" | "missing_transcripts" | "empty_case" | "error";
   missingTranscripts?: number;
-  model?: ModelSelection | null;
+  model?: string | null;
   runId?: string;
   agentId?: string;
   prompt?: string | null;
@@ -350,53 +642,6 @@ async function putArchiveObject(
       ContentType: file.contentType,
     })
   );
-}
-
-async function selectOpusHigh(apiKey: string): Promise<ModelSelection | null> {
-  const models = await Cursor.models.list({ apiKey });
-  const opus = models.filter(isOpus55);
-  for (const model of opus) {
-    const selection = highSelection(model);
-    if (selection) return selection;
-  }
-  console.error(
-    "[AiConsilium] Opus 5.5 High was not in the model list",
-    models.map((model) => model.id)
-  );
-  return null;
-}
-
-function isOpus55(model: ModelListItem): boolean {
-  const haystack = [model.id, model.displayName, ...(model.aliases ?? [])].join(" ").toLowerCase();
-  const opus = haystack.includes("opus");
-  const version = haystack.includes("5.5") || haystack.includes("5-5") || haystack.includes("5_5");
-  return opus && version;
-}
-
-function highSelection(model: ModelListItem): ModelSelection | null {
-  const variant = model.variants?.find((item) => isHighLabel(item.displayName));
-  if (variant) return { id: model.id, params: variant.params };
-
-  for (const parameter of model.parameters ?? []) {
-    if (!/effort|reasoning/i.test(parameter.id)) continue;
-    const value = parameter.values.find(
-      (item) => item.value.toLowerCase() === "high" || isHighLabel(item.displayName ?? "")
-    );
-    if (value) return { id: model.id, params: [{ id: parameter.id, value: value.value }] };
-  }
-
-  if (
-    isHighLabel(model.id) ||
-    isHighLabel(model.displayName) ||
-    (model.aliases ?? []).some((alias) => isHighLabel(alias))
-  ) {
-    return { id: model.id };
-  }
-  return null;
-}
-
-function isHighLabel(label: string): boolean {
-  return /\bhigh\b/i.test(label) && !/xhigh|extra/i.test(label);
 }
 
 async function createPendingConsilium(

@@ -3306,10 +3306,13 @@ export default function ConversationChat({
                               return;
                             }
                             requestScrollToBottom();
-                            queryClient.setQueryData<ConversationMessagesInfiniteData>(
-                              conversationMessagesQueryKey(conversationId),
-                              (old) => appendConversationMessage(old, body.message!)
-                            );
+                            const messagesKey = conversationMessagesQueryKey(conversationId);
+                            void queryClient.cancelQueries({ queryKey: messagesKey }).then(() => {
+                              queryClient.setQueryData<ConversationMessagesInfiniteData>(
+                                messagesKey,
+                                (old) => appendConversationMessage(old, body.message!)
+                              );
+                            });
                           })
                           .catch(() => {
                             toast({ title: t.aiConsiliumError, variant: "destructive" });

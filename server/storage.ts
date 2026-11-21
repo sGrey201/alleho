@@ -19,6 +19,7 @@ import {
   conversationCalls,
   conversationCallParticipants,
   conversationCallRecordingTracks,
+  aiConsiliumRequests,
   channelSponsorSettings,
   channelSponsorPayments,
   type User,
@@ -60,6 +61,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, ne, or, ilike, sql, inArray, notInArray, and, desc, count, gt, lt, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { generateSlugFromTags } from "./utils/slug";
 import { previewFromConversationMessageParts } from "./utils/conversationPreview";
 import { deepCloneQuestionnaireStructure } from "./questionnaireDefaults";
@@ -186,6 +188,36 @@ export type PlatformMetricsDoctorRow = {
   activeSessions28d: number;
 };
 
+export type PlatformMetricsConsiliumDay = {
+  day: string;
+  requests: number;
+  finished: number;
+  errors: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+};
+
+export type PlatformMetricsConsiliumRow = {
+  id: string;
+  conversationId: string;
+  requestedAt: string;
+  answeredAt: string | null;
+  status: string;
+  model: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  photoCount: number;
+  photosSent: boolean;
+  missingTranscripts: number;
+  error: string | null;
+  requesterUserId: string;
+  requesterName: string;
+  chatTitle: string;
+  patientUserId: string | null;
+};
+
 export type PlatformMetrics = {
   windowDays: number;
   activeDoctorPatientPairs: number;
@@ -196,6 +228,8 @@ export type PlatformMetrics = {
   inviteAcceptRate: number | null;
   weeklyActivePairs: PlatformMetricsWeeklyPoint[];
   topDoctors: PlatformMetricsDoctorRow[];
+  consiliumDays: PlatformMetricsConsiliumDay[];
+  recentConsiliums: PlatformMetricsConsiliumRow[];
 };
 
 export type MessageReactionSummary = {
@@ -641,6 +675,133 @@ export interface IStorage {
   deletePushSubscription(userId: string, endpoint: string): Promise<boolean>;
   getPushSubscriptionsByUserIds(userIds: string[]): Promise<PushSubscription[]>;
   deletePushSubscriptionByEndpoint(endpoint: string): Promise<boolean>;
+}
+
+const CONSILIUM_CHART_DAYS = 30;
+
+function moscowCalendarDay(date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function shiftCalendarDay(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, (d || 1) + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+function personName(
+  firstName: string | null,
+  lastName: string | null,
+  email: string | null
+): string {
+  return [firstName, lastName].filter(Boolean).join(" ").trim() || email?.trim() || "—";
+}
+
+async function loadConsiliumMetrics(): Promise<{
+  days: PlatformMetricsConsiliumDay[];
+  recent: PlatformMetricsConsiliumRow[];
+}> {
+  const today = moscowCalendarDay();
+  const lookback = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+  const moscowDay = sql`timezone('Europe/Moscow', ${aiConsiliumRequests.requestedAt}::timestamptz)`;
+
+  const dailyRows = await db
+    .select({
+      day: sql<string>`to_char(date_trunc('day', ${moscowDay}), 'YYYY-MM-DD')`,
+      requests: sql<number>`count(*)::int`,
+      finished: sql<number>`count(*) filter (where ${aiConsiliumRequests.status} = 'finished')::int`,
+      errors: sql<number>`count(*) filter (where ${aiConsiliumRequests.status} = 'error')::int`,
+      totalTokens: sql<number>`coalesce(sum(${aiConsiliumRequests.totalTokens}), 0)::int`,
+      promptTokens: sql<number>`coalesce(sum(${aiConsiliumRequests.promptTokens}), 0)::int`,
+      completionTokens: sql<number>`coalesce(sum(${aiConsiliumRequests.completionTokens}), 0)::int`,
+    })
+    .from(aiConsiliumRequests)
+    .where(gt(aiConsiliumRequests.requestedAt, lookback))
+    .groupBy(sql`date_trunc('day', ${moscowDay})`);
+
+  const byDay = new Map(dailyRows.map((row) => [row.day, row]));
+  const days: PlatformMetricsConsiliumDay[] = [];
+  for (let offset = -(CONSILIUM_CHART_DAYS - 1); offset <= 0; offset++) {
+    const day = shiftCalendarDay(today, offset);
+    const row = byDay.get(day);
+    days.push({
+      day,
+      requests: Number(row?.requests ?? 0),
+      finished: Number(row?.finished ?? 0),
+      errors: Number(row?.errors ?? 0),
+      totalTokens: Number(row?.totalTokens ?? 0),
+      promptTokens: Number(row?.promptTokens ?? 0),
+      completionTokens: Number(row?.completionTokens ?? 0),
+    });
+  }
+
+  const requester = alias(users, "ai_consilium_requester");
+  const patient = alias(users, "ai_consilium_patient");
+  const recentRows = await db
+    .select({
+      id: aiConsiliumRequests.id,
+      conversationId: aiConsiliumRequests.conversationId,
+      requestedAt: aiConsiliumRequests.requestedAt,
+      answeredAt: aiConsiliumRequests.answeredAt,
+      status: aiConsiliumRequests.status,
+      model: aiConsiliumRequests.model,
+      promptTokens: aiConsiliumRequests.promptTokens,
+      completionTokens: aiConsiliumRequests.completionTokens,
+      totalTokens: aiConsiliumRequests.totalTokens,
+      photoCount: aiConsiliumRequests.photoCount,
+      photosSent: aiConsiliumRequests.photosSent,
+      missingTranscripts: aiConsiliumRequests.missingTranscripts,
+      error: aiConsiliumRequests.error,
+      requesterId: requester.id,
+      requesterFirst: requester.firstName,
+      requesterLast: requester.lastName,
+      requesterEmail: requester.email,
+      patientId: patient.id,
+      patientFirst: patient.firstName,
+      patientLast: patient.lastName,
+      patientEmail: patient.email,
+      chatTitle: sql<string | null>`(
+        SELECT ${conversationParticipants.displayName}
+        FROM ${conversationParticipants}
+        WHERE ${conversationParticipants.conversationId} = ${aiConsiliumRequests.conversationId}
+          AND ${conversationParticipants.userId} = ${aiConsiliumRequests.requestedByUserId}
+        LIMIT 1
+      )`,
+    })
+    .from(aiConsiliumRequests)
+    .innerJoin(requester, eq(requester.id, aiConsiliumRequests.requestedByUserId))
+    .leftJoin(patient, eq(patient.id, aiConsiliumRequests.patientUserId))
+    .orderBy(desc(aiConsiliumRequests.requestedAt))
+    .limit(10);
+
+  const recent: PlatformMetricsConsiliumRow[] = recentRows.map((row) => ({
+    id: row.id,
+    conversationId: row.conversationId,
+    requestedAt: row.requestedAt.toISOString(),
+    answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
+    status: row.status,
+    model: row.model,
+    promptTokens: row.promptTokens,
+    completionTokens: row.completionTokens,
+    totalTokens: row.totalTokens,
+    photoCount: row.photoCount,
+    photosSent: row.photosSent,
+    missingTranscripts: row.missingTranscripts,
+    error: row.error,
+    requesterUserId: row.requesterId,
+    requesterName: personName(row.requesterFirst, row.requesterLast, row.requesterEmail),
+    chatTitle:
+      row.chatTitle?.trim() ||
+      personName(row.patientFirst, row.patientLast, row.patientEmail),
+    patientUserId: row.patientId,
+  }));
+
+  return { days, recent };
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3486,6 +3647,8 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
+    const consilium = await loadConsiliumMetrics();
+
     return {
       windowDays: days,
       activeDoctorPatientPairs: Number(pairsRow?.c ?? 0),
@@ -3497,6 +3660,8 @@ export class DatabaseStorage implements IStorage {
         patientInvitesCreated > 0 ? patientInvitesAccepted / patientInvitesCreated : null,
       weeklyActivePairs,
       topDoctors,
+      consiliumDays: consilium.days,
+      recentConsiliums: consilium.recent,
     };
   }
 

@@ -822,3 +822,49 @@ export const channelSponsorPayments = pgTable(
 
 export type ChannelSponsorPayment = typeof channelSponsorPayments.$inferSelect;
 export type InsertChannelSponsorPayment = typeof channelSponsorPayments.$inferInsert;
+
+/** One row per AI consilium run, for usage analytics. */
+export const aiConsiliumRequests = pgTable(
+  "ai_consilium_requests",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    conversationId: varchar("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: varchar("message_id").references(() => conversationMessages.id, { onDelete: "set null" }),
+    requestedByUserId: varchar("requested_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    patientUserId: varchar("patient_user_id").references(() => users.id, { onDelete: "set null" }),
+    status: varchar("status", { length: 32 }).notNull(),
+    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+    answeredAt: timestamp("answered_at"),
+    model: varchar("model", { length: 80 }),
+    providerRequestId: varchar("provider_request_id"),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    totalTokens: integer("total_tokens"),
+    reasoningTokens: integer("reasoning_tokens"),
+    cachedPromptTokens: integer("cached_prompt_tokens"),
+    photoCount: integer("photo_count").notNull().default(0),
+    photosSent: boolean("photos_sent").notNull().default(false),
+    attemptCount: integer("attempt_count").notNull().default(1),
+    missingTranscripts: integer("missing_transcripts").notNull().default(0),
+    promptChars: integer("prompt_chars"),
+    responseChars: integer("response_chars"),
+    httpStatus: integer("http_status"),
+    finishReason: varchar("finish_reason", { length: 40 }),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("ai_consilium_requests_requested_at_idx").on(table.requestedAt),
+    index("ai_consilium_requests_user_idx").on(table.requestedByUserId, table.requestedAt),
+    index("ai_consilium_requests_conversation_idx").on(table.conversationId, table.requestedAt),
+    index("ai_consilium_requests_patient_idx").on(table.patientUserId, table.requestedAt),
+    index("ai_consilium_requests_status_idx").on(table.status),
+  ]
+);
+
+export type AiConsiliumRequest = typeof aiConsiliumRequests.$inferSelect;
+export type InsertAiConsiliumRequest = typeof aiConsiliumRequests.$inferInsert;

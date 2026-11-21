@@ -4,6 +4,7 @@ import { postConversationSeen } from "@/lib/markConversationSeen";
 import {
   appendConversationMessage,
   conversationMessagesQueryKey,
+  flattenConversationMessages,
   updateConversationMessagesList,
   type ConversationMessagesInfiniteData,
 } from "@/lib/conversationMessagesCache";
@@ -249,9 +250,12 @@ export function useConversationWs(
             if (refetchMessagesRef.current) {
               void queryClient.invalidateQueries({ queryKey: messagesKey() });
             } else {
-              queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey(), (old) =>
-                appendConversationMessage(old, payload)
-              );
+              const key = messagesKey();
+              void queryClient.cancelQueries({ queryKey: key }).then(() => {
+                queryClient.setQueryData<ConversationMessagesInfiniteData>(key, (old) =>
+                  appendConversationMessage(old, payload)
+                );
+              });
             }
             if (payload.authorUserId !== currentUserIdRef.current) {
               scheduleMarkSeen();
@@ -281,6 +285,11 @@ export function useConversationWs(
           } else if (data.type === "conversation_message_edited" && data.payload) {
             const payload = data.payload as ConversationMessageEditedPayload;
             if (payload.conversationId !== conversationIdRef.current) return;
+            const current = queryClient.getQueryData<ConversationMessagesInfiniteData>(messagesKey());
+            if (!flattenConversationMessages(current).some((m) => m.id === payload.messageId)) {
+              refetchMessages();
+              return;
+            }
             updateMessages((list) =>
               list.map((m) =>
                 m.id === payload.messageId
