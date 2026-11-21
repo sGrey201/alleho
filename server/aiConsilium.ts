@@ -316,7 +316,7 @@ function buildPrompt(exported: ConversationExportResult): string {
 }
 
 const REG_CLOUD_URL = "https://ai.reg.cloud/v1/chat/completions";
-const REG_CLOUD_MODEL = "claude-opus-5.5";
+const REG_CLOUD_MODEL = "qwen-3.8-flash-next";
 
 type ChatContentPart =
   | { type: "text"; text: string }

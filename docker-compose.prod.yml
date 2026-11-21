@@ -30,7 +30,7 @@ services:
       HELP_SUPPORT_USER_ID: ${HELP_SUPPORT_USER_ID}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
       REG_CLOUD_API_KEY: ${REG_CLOUD_API_KEY}
-      REG_CLOUD_MODEL: ${REG_CLOUD_MODEL:-claude-opus-5.5}
+      REG_CLOUD_MODEL: ${REG_CLOUD_MODEL:-qwen-3.8-flash-next}
     depends_on:
       - db
       - redis
