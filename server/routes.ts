@@ -433,6 +433,24 @@ ${allUrls.map(url => `  <url>
         return res.status(400).json({ message: "patient_name_required" });
       }
 
+      const sendGreeting = req.body?.sendGreeting !== false;
+      const greetingText = String(req.body?.greeting ?? "").trim();
+      if (greetingText.length > 8000) {
+        return res.status(400).json({ message: "greeting_too_long" });
+      }
+      const questionnaireTemplateId = String(req.body?.questionnaireTemplateId ?? "").trim();
+      let questionnaireTemplate = null;
+      if (questionnaireTemplateId) {
+        questionnaireTemplate = await storage.getQuestionnaireTemplate(questionnaireTemplateId);
+        if (!questionnaireTemplate || questionnaireTemplate.ownerUserId !== userId) {
+          return res.status(400).json({ message: "template_not_found" });
+        }
+      }
+
+      const doctor = await storage.getUser(userId);
+      const resolvedGreeting =
+        greetingText || doctor?.patientInviteGreeting?.trim() || PATIENT_INVITE_WELCOME_MESSAGE;
+
       const conv = await storage.createConversation({
         type: "patient",
         name: null,
@@ -455,7 +473,15 @@ ${allUrls.map(url => `  <url>
       });
 
       await postPatientChatStatusMessage(conv.id, userId, PATIENT_INVITE_SENT_MESSAGE);
-      await postPatientChatStatusMessage(conv.id, userId, PATIENT_INVITE_WELCOME_MESSAGE);
+      if (sendGreeting && resolvedGreeting) {
+        await postPatientChatStatusMessage(conv.id, userId, resolvedGreeting);
+      }
+      if (questionnaireTemplate) {
+        await postPatientQuestionnaire(conv.id, userId, questionnaireTemplate);
+        await storage.updateUserProfile(userId, {
+          lastPatientQuestionnaireTemplateId: questionnaireTemplate.id,
+        });
+      }
       await publishDoctorChatsUpdated(userId);
 
       const baseUrl = process.env.APP_URL || BASE_URL;
@@ -471,6 +497,38 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error creating patient invite:", error);
       res.status(500).json({ message: "Failed to create patient invite" });
+    }
+  });
+
+  app.get("/api/me/patient-invite-prefs", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+      const user = await storage.getUser(userId);
+      const custom = user?.patientInviteGreeting?.trim() || "";
+      res.json({
+        greeting: custom || PATIENT_INVITE_WELCOME_MESSAGE,
+        lastQuestionnaireTemplateId: user?.lastPatientQuestionnaireTemplateId ?? null,
+      });
+    } catch (error) {
+      console.error("Error loading patient invite prefs:", error);
+      res.status(500).json({ message: "Failed to load patient invite prefs" });
+    }
+  });
+
+  app.put("/api/me/patient-invite-greeting", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const userId = await getCurrentUserId(req);
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+      const greeting = String(req.body?.greeting ?? "").trim();
+      if (!greeting) return res.status(400).json({ message: "greeting_required" });
+      if (greeting.length > 8000) return res.status(400).json({ message: "greeting_too_long" });
+      const stored = greeting === PATIENT_INVITE_WELCOME_MESSAGE ? null : greeting;
+      await storage.updateUserProfile(userId, { patientInviteGreeting: stored });
+      res.json({ greeting });
+    } catch (error) {
+      console.error("Error saving patient invite greeting:", error);
+      res.status(500).json({ message: "Failed to save greeting" });
     }
   });
 
@@ -2998,6 +3056,57 @@ ${allUrls.map(url => `  <url>
       console.error("[DoctorChats] messenger conversation notify error:", err)
     );
     void enriched;
+  }
+
+  async function postPatientQuestionnaire(
+    conversationId: string,
+    doctorUserId: string,
+    template: NonNullable<Awaited<ReturnType<typeof storage.getQuestionnaireTemplate>>>
+  ): Promise<void> {
+    const message = await storage.createConversationMessage({
+      conversationId,
+      authorUserId: doctorUserId,
+      messageType: "questionnaire",
+      content: null,
+    });
+    const instance = await storage.createQuestionnaireInstance({
+      templateId: template.id,
+      conversationId,
+      messageId: message.id,
+      patientUserId: null,
+      doctorUserId,
+      structureSnapshot: deepCloneQuestionnaireStructure(
+        template.structure as QuestionnaireTemplateStructure
+      ),
+      hintsModeSnapshot: parseQuestionnaireHintsMode(template.hintsMode),
+    });
+    const updatedContent = JSON.stringify(
+      questionnaireMessageContentSchema.parse({
+        instanceId: instance.id,
+        templateName: template.name,
+      })
+    );
+    const edited =
+      (await storage.editConversationMessage(message.id, { content: updatedContent })) ?? message;
+    edited.content = updatedContent;
+    await storage.incrementTemplatePatientSendCount(template.id);
+    const pinned = await storage.pinConversationMessage(message.id, doctorUserId);
+    const finalMessage = pinned ?? edited;
+    if (pinned) {
+      await publishConversationMessagePinned(conversationId, {
+        conversationId,
+        messageId: message.id,
+        pinnedAt: (pinned.pinnedAt instanceof Date ? pinned.pinnedAt : new Date()).toISOString(),
+        pinnedByUserId: doctorUserId,
+      });
+    }
+    const sponsorFilter = await getChannelSponsorFilterContext(conversationId, doctorUserId, "patient");
+    const [wsPayload] = await enrichConversationMessages([finalMessage], doctorUserId, {
+      monetizationEnabled: sponsorFilter.monetizationEnabled,
+      filterContent: sponsorFilter.monetizationEnabled,
+    });
+    await pushConversationRecentMessage(conversationId, wsPayload);
+    await publishConversationMessage(conversationId, wsPayload);
   }
 
   async function getChannelSponsorFilterContext(

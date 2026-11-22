@@ -2443,7 +2443,7 @@ export default function ConversationChat({
           src={getThumbUrl(msg.imageUrl)}
           alt=""
           loading="lazy"
-          className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+          className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
           data-testid={`image-${msg.id}`}
           onError={(e) => {
             const el = e.currentTarget;

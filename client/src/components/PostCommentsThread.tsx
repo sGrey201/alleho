@@ -623,7 +623,16 @@ export default function PostCommentsThread({
         <div className="space-y-3">
           {anchorPost && (
             <div className="flex w-full justify-start">
-              <div className="relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border bg-background px-2 pt-1 pb-1.5">
+              <div
+                className={`relative min-h-[2.75rem] min-w-28 rounded-2xl border bg-background px-2 pt-1 pb-1.5 ${
+                  anchorPost.imageUrl &&
+                  anchorPost.messageType !== "voice" &&
+                  anchorPost.messageType !== "video" &&
+                  anchorPost.messageType !== "file"
+                    ? "w-full max-w-[85%]"
+                    : "max-w-[85%]"
+                }`}
+              >
                 <p className="mb-0.5 text-[10px] text-muted-foreground">Публикация</p>
                 {anchorPost.imageUrl && anchorPost.messageType === "video" && (
                   <ChatVideoPlayer
@@ -688,7 +697,7 @@ export default function PostCommentsThread({
                     src={getThumbUrl(anchorPost.imageUrl)}
                     alt=""
                     loading="lazy"
-                    className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                    className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
                     onError={(e) => {
                       const el = e.currentTarget;
                       if (el.dataset.fallback === "1") return;
@@ -744,7 +753,9 @@ export default function PostCommentsThread({
                     onTouchMove={handleBubbleTouchMove}
                     onTouchEnd={clearLongPress}
                     onTouchCancel={clearLongPress}
-                    className={`message relative min-h-[2.75rem] min-w-28 max-w-[85%] rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
+                    className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
+                      comment.imageUrl ? "w-full max-w-[85%] " : "max-w-[85%] "
+                    }${
                       isOwn
                         ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
                         : "border-border/50 bg-stone-50 text-foreground shadow-sm dark:bg-stone-900/80"
@@ -783,7 +794,7 @@ export default function PostCommentsThread({
                             src={getThumbUrl(comment.imageUrl)}
                             alt=""
                             loading="lazy"
-                            className="mb-0.5 max-h-48 max-w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                            className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
                             onError={(e) => {
                               const el = e.currentTarget;
                               if (el.dataset.fallback === "1") return;

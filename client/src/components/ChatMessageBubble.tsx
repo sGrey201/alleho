@@ -82,6 +82,12 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
     return null;
   }
   const isDeleted = shouldShowDeletedMessagePlaque(msg.deletedAt);
+  const isPhoto =
+    !!msg.imageUrl &&
+    msg.messageType !== "voice" &&
+    msg.messageType !== "video" &&
+    msg.messageType !== "file" &&
+    msg.messageType !== "call";
 
   return (
     <div
@@ -91,7 +97,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
       }`}
     >
       {!isDeleted ? (
-        <div className="max-w-[85%]">
+        <div className={isPhoto ? "w-full max-w-[85%]" : "max-w-[85%]"}>
           <div
             onContextMenu={(e) => onContextMenu(e, msg)}
             onPointerDown={(e) => onPointerDown(e, msg)}
@@ -104,6 +110,8 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
             onTouchEnd={onTouchEnd}
             onTouchCancel={onTouchCancel}
             className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
+              isPhoto ? "w-full " : ""
+            }${
               isOwn
                 ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
                 : "border-border/50 bg-stone-50 text-foreground shadow-sm dark:bg-stone-900/80"

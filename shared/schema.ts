@@ -53,6 +53,8 @@ export const users = pgTable("users", {
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   questionnaireHintsMode: varchar("questionnaire_hints_mode", { length: 20 }).default("icon").notNull(),
   requiresRoleSelection: boolean("requires_role_selection").default(false).notNull(),
+  patientInviteGreeting: text("patient_invite_greeting"),
+  lastPatientQuestionnaireTemplateId: varchar("last_patient_questionnaire_template_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

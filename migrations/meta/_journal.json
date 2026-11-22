@@ -274,6 +274,13 @@
       "when": 1774260000000,
       "tag": "0038_ai_consilium_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1774270000000,
+      "tag": "0039_patient_invite_prefs",
+      "breakpoints": true
     }
   ]
 }

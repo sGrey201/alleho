@@ -9,7 +9,7 @@ import { t } from "@/lib/i18n";
 import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfileReturnPath } from "@/lib/messengerPaths";
 import { requestChatSearch } from "@/lib/chatOpenSearch";
-import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, Phone } from "lucide-react";
+import { Loader2, User, Users, Radio, Copy, Share2, Menu, X, Phone, Eye } from "lucide-react";
 import ConversationChat from "@/components/ConversationChat";
 import GroupOrChannelSettings from "@/components/GroupOrChannelSettings";
 import PatientChatSettings from "@/components/PatientChatSettings";
@@ -40,6 +40,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -455,6 +465,11 @@ export default function Messenger() {
   const [createConversationName, setCreateConversationName] = useState("");
   const [patientInviteOpen, setPatientInviteOpen] = useState(false);
   const [patientInviteName, setPatientInviteName] = useState("");
+  const [sendPatientGreeting, setSendPatientGreeting] = useState(true);
+  const [patientGreetingEditorOpen, setPatientGreetingEditorOpen] = useState(false);
+  const [patientGreeting, setPatientGreeting] = useState("");
+  const [savedPatientGreeting, setSavedPatientGreeting] = useState("");
+  const [patientQuestionnaireId, setPatientQuestionnaireId] = useState("none");
   const [inviteRolePickerOpen, setInviteRolePickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [channelSubscriptionsOpen, setChannelSubscriptionsOpen] = useState(false);
@@ -870,15 +885,106 @@ export default function Messenger() {
     },
   });
 
+  const { data: patientInvitePrefs } = useQuery<{
+    greeting: string;
+    lastQuestionnaireTemplateId: string | null;
+  }>({
+    queryKey: ["/api/me/patient-invite-prefs"],
+    enabled: isAdmin && patientInviteOpen,
+  });
+
+  const { data: patientQuestionnaireTemplates } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/questionnaire-templates", "summary"],
+    enabled: isAdmin && patientInviteOpen,
+  });
+
+  const appliedInvitePrefs = useRef(false);
+  const questionnaireChoiceTouched = useRef(false);
+
+  useEffect(() => {
+    if (!patientInviteOpen) {
+      appliedInvitePrefs.current = false;
+      questionnaireChoiceTouched.current = false;
+      return;
+    }
+    if (!patientInvitePrefs || appliedInvitePrefs.current) return;
+    appliedInvitePrefs.current = true;
+    setSendPatientGreeting(true);
+    setPatientGreeting(patientInvitePrefs.greeting);
+    setSavedPatientGreeting(patientInvitePrefs.greeting);
+  }, [patientInviteOpen, patientInvitePrefs]);
+
+  useEffect(() => {
+    if (
+      !patientInviteOpen ||
+      !patientInvitePrefs ||
+      !patientQuestionnaireTemplates ||
+      questionnaireChoiceTouched.current
+    ) {
+      return;
+    }
+    const lastId = patientInvitePrefs.lastQuestionnaireTemplateId;
+    setPatientQuestionnaireId(
+      lastId && patientQuestionnaireTemplates.some((tpl) => tpl.id === lastId) ? lastId : "none"
+    );
+  }, [patientInviteOpen, patientInvitePrefs, patientQuestionnaireTemplates]);
+
   const openPatientInviteDialog = useCallback(() => {
     setInviteRolePickerOpen(false);
     setPatientInviteName("");
+    setSendPatientGreeting(true);
+    setPatientGreetingEditorOpen(false);
     setPatientInviteOpen(true);
   }, []);
 
+  const savePatientGreetingMutation = useMutation({
+    mutationFn: async (greeting: string) => {
+      const res = await apiRequest("PUT", "/api/me/patient-invite-greeting", {
+        greeting: greeting.trim(),
+      });
+      return res.json() as Promise<{ greeting: string }>;
+    },
+    onSuccess: (data) => {
+      setPatientGreeting(data.greeting);
+      setSavedPatientGreeting(data.greeting);
+      qc.setQueryData(
+        ["/api/me/patient-invite-prefs"],
+        (prev: { greeting: string; lastQuestionnaireTemplateId: string | null } | undefined) => ({
+          greeting: data.greeting,
+          lastQuestionnaireTemplateId: prev?.lastQuestionnaireTemplateId ?? null,
+        })
+      );
+      toast({ title: t.patientInviteGreetingSaved });
+    },
+    onError: () => {
+      toast({ title: t.inviteError, variant: "destructive" });
+    },
+  });
+
+  const submitPatientInvite = () => {
+    const patientName = patientInviteName.trim();
+    if (!patientName || createPatientInviteMutation.isPending) return;
+    createPatientInviteMutation.mutate({
+      patientName,
+      sendGreeting: sendPatientGreeting,
+      greeting: patientGreeting,
+      questionnaireTemplateId: patientQuestionnaireId === "none" ? null : patientQuestionnaireId,
+    });
+  };
+
   const createPatientInviteMutation = useMutation({
-    mutationFn: async (patientName: string) => {
-      const res = await apiRequest("POST", "/api/patient-invites", { patientName: patientName.trim() });
+    mutationFn: async (payload: {
+      patientName: string;
+      sendGreeting: boolean;
+      greeting: string;
+      questionnaireTemplateId: string | null;
+    }) => {
+      const res = await apiRequest("POST", "/api/patient-invites", {
+        patientName: payload.patientName.trim(),
+        sendGreeting: payload.sendGreeting,
+        greeting: payload.sendGreeting ? payload.greeting.trim() : undefined,
+        questionnaireTemplateId: payload.questionnaireTemplateId,
+      });
       return res.json() as Promise<{
         inviteUrl: string;
         expiresAt: string | null;
@@ -886,7 +992,7 @@ export default function Messenger() {
         inviteType: "patient";
       }>;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       sessionStorage.setItem(
         PENDING_PATIENT_INVITE_KEY,
         JSON.stringify({
@@ -897,6 +1003,15 @@ export default function Messenger() {
       );
       setPatientInviteOpen(false);
       setPatientInviteName("");
+      if (variables.questionnaireTemplateId) {
+        qc.setQueryData(
+          ["/api/me/patient-invite-prefs"],
+          (prev: { greeting: string; lastQuestionnaireTemplateId: string | null } | undefined) =>
+            prev
+              ? { ...prev, lastQuestionnaireTemplateId: variables.questionnaireTemplateId }
+              : prev
+        );
+      }
       setFolder("patients");
       qc.invalidateQueries({ queryKey: ["/api/me/chats"] });
       setInviteLinkData({
@@ -1632,10 +1747,11 @@ export default function Messenger() {
           if (!open) {
             setPatientInviteOpen(false);
             setPatientInviteName("");
+            setPatientGreetingEditorOpen(false);
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[min(90vh,44rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t.messengerPatientInviteNameTitle}</DialogTitle>
           </DialogHeader>
@@ -1646,16 +1762,88 @@ export default function Messenger() {
             placeholder={t.messengerPatientInviteNamePlaceholder}
             autoFocus
             onKeyDown={(e) => {
-              if (
-                e.key === "Enter" &&
-                patientInviteName.trim() &&
-                !createPatientInviteMutation.isPending
-              ) {
+              if (e.key === "Enter" && patientInviteName.trim() && !createPatientInviteMutation.isPending) {
                 e.preventDefault();
-                createPatientInviteMutation.mutate(patientInviteName);
+                submitPatientInvite();
               }
             }}
           />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={sendPatientGreeting}
+                  onCheckedChange={(checked) => setSendPatientGreeting(checked === true)}
+                  data-testid="checkbox-patient-invite-greeting"
+                />
+                {t.patientInviteGreeting}
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-muted-foreground"
+                onClick={() => setPatientGreetingEditorOpen((open) => !open)}
+                aria-expanded={patientGreetingEditorOpen}
+                data-testid="button-preview-patient-invite-greeting"
+              >
+                <Eye className="mr-1 h-4 w-4" />
+                {t.patientInviteGreetingPreview}
+              </Button>
+            </div>
+            {patientGreetingEditorOpen ? (
+              <>
+                <Textarea
+                  value={patientGreeting}
+                  onChange={(e) => setPatientGreeting(e.target.value)}
+                  rows={8}
+                  className="min-h-36 text-sm"
+                  data-testid="textarea-patient-invite-greeting"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      !patientGreeting.trim() ||
+                      patientGreeting.trim() === savedPatientGreeting ||
+                      savePatientGreetingMutation.isPending
+                    }
+                    onClick={() => savePatientGreetingMutation.mutate(patientGreeting)}
+                    data-testid="button-save-patient-invite-greeting"
+                  >
+                    {savePatientGreetingMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    {t.patientInviteGreetingSave}
+                  </Button>
+                </div>
+              </>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="patient-invite-questionnaire">{t.patientInviteQuestionnaire}</Label>
+            <Select
+              value={patientQuestionnaireId}
+              onValueChange={(value) => {
+                questionnaireChoiceTouched.current = true;
+                setPatientQuestionnaireId(value);
+              }}
+            >
+              <SelectTrigger id="patient-invite-questionnaire" data-testid="select-patient-invite-questionnaire">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t.patientInviteQuestionnaireNone}</SelectItem>
+                {(patientQuestionnaireTemplates ?? []).map((tpl) => (
+                  <SelectItem key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
@@ -1663,17 +1851,19 @@ export default function Messenger() {
               onClick={() => {
                 setPatientInviteOpen(false);
                 setPatientInviteName("");
+                setPatientGreetingEditorOpen(false);
               }}
             >
               {t.cancel}
             </Button>
             <Button
               type="button"
-              disabled={!patientInviteName.trim() || createPatientInviteMutation.isPending}
-              onClick={() => {
-                if (!patientInviteName.trim()) return;
-                createPatientInviteMutation.mutate(patientInviteName);
-              }}
+              disabled={
+                !patientInviteName.trim() ||
+                createPatientInviteMutation.isPending ||
+                (sendPatientGreeting && !patientGreeting.trim())
+              }
+              onClick={submitPatientInvite}
             >
               {createPatientInviteMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
