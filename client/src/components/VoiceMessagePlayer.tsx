@@ -266,7 +266,7 @@ export function VoiceMessagePlayer({ src, durationSec, isOwn }: VoiceMessagePlay
               <span
                 key={i}
                 className={cn(
-                  "w-[3px] shrink-0 rounded-full transition-colors",
+                  "min-w-[2px] flex-1 rounded-full transition-colors",
                   filled
                     ? isOwn
                       ? "bg-emerald-700"

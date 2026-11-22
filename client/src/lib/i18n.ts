@@ -2147,6 +2147,7 @@ export const t = {
   aiConsiliumPreparing: 'Готовится',
   aiConsiliumBusy: 'AI консилиум для этого чата уже готовится',
   aiConsiliumError: 'Не удалось запустить AI консилиум',
+  aiConsiliumRetry: 'Повторить',
   exportChatMissingTranscripts: (count: number) =>
     count === 1
       ? '1 голосовое или созвон ещё без транскрипта. В файле на этом месте стоит пометка.'

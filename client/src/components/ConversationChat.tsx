@@ -1089,6 +1089,48 @@ export default function ConversationChat({
     },
   });
 
+  const retryMissingConsilium = async (msg: ConversationMessageWithAuthor) => {
+    const previous = msg.content;
+    const messagesKey = conversationMessagesQueryKey(conversationId);
+    const showPreparing = () => {
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey, (old) =>
+        updateConversationMessagesList(old, (list) =>
+          list.map((m) => (m.id === msg.id ? { ...m, content: "" } : m))
+        )
+      );
+    };
+    const restore = () => {
+      queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey, (old) =>
+        updateConversationMessagesList(old, (list) =>
+          list.map((m) => (m.id === msg.id ? { ...m, content: previous } : m))
+        )
+      );
+    };
+    showPreparing();
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/ai-consilium/retry`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: msg.id }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { busy?: boolean };
+      if (body.busy) {
+        restore();
+        toast({ title: t.aiConsiliumBusy });
+        return;
+      }
+      if (!res.ok) {
+        restore();
+        toast({ title: t.aiConsiliumError, variant: "destructive" });
+      }
+    } catch {
+      restore();
+      toast({ title: t.aiConsiliumError, variant: "destructive" });
+    }
+  };
+
   const pinMutation = useMutation({
     mutationFn: async ({ messageId, pin }: { messageId: string; pin: boolean }) => {
       await apiRequest(
@@ -2491,33 +2533,59 @@ export default function ConversationChat({
             </div>
           ) : msg.content ? (
             msg.messageType === "ai_consilium" ? (
-              <CollapsibleMessageText
-                text={msg.content}
-                className={sponsorTextPad}
-                onToggleExpand={blockAutoScrollBriefly}
-              >
-                {(displayText) => (
-                  <SponsorAwareMessageText
-                    text={displayText}
-                    canViewSponsorContent={canViewSponsorContent}
-                    monetizationEnabled={channelMonetizationEnabled}
-                    isContentTruncated={msg.isContentTruncated}
-                    conversationId={conversationId}
-                    activePaymentSegmentIndex={
-                      inlineContentPayment?.messageId === msg.id
-                        ? inlineContentPayment.segmentIndex
-                        : null
-                    }
-                    onPaymentSegmentOpen={(segmentIndex) =>
-                      handlePaymentSegmentOpen(msg.id, segmentIndex)
-                    }
-                    onPaymentFlowClose={() => setInlineContentPayment(null)}
-                    onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
-                    onTagClick={handleTagClick}
-                    highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
-                  />
-                )}
-              </CollapsibleMessageText>
+              <>
+                <CollapsibleMessageText
+                  text={msg.content}
+                  className={sponsorTextPad}
+                  onToggleExpand={blockAutoScrollBriefly}
+                >
+                  {(displayText) => (
+                    <SponsorAwareMessageText
+                      text={displayText}
+                      canViewSponsorContent={canViewSponsorContent}
+                      monetizationEnabled={channelMonetizationEnabled}
+                      isContentTruncated={msg.isContentTruncated}
+                      conversationId={conversationId}
+                      activePaymentSegmentIndex={
+                        inlineContentPayment?.messageId === msg.id
+                          ? inlineContentPayment.segmentIndex
+                          : null
+                      }
+                      onPaymentSegmentOpen={(segmentIndex) =>
+                        handlePaymentSegmentOpen(msg.id, segmentIndex)
+                      }
+                      onPaymentFlowClose={() => setInlineContentPayment(null)}
+                      onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
+                      onTagClick={handleTagClick}
+                      highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+                    />
+                  )}
+                </CollapsibleMessageText>
+                {msg.content?.includes("ещё без транскрипта") ? (
+                  <div
+                    className="mt-2 flex gap-2"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => deleteMutation.mutate(msg.id)}
+                    >
+                      {t.messageActionDelete}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void retryMissingConsilium(msg)}
+                    >
+                      {t.aiConsiliumRetry}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
             ) : conv?.type === "channel" ? (
               (() => {
                 const postHasSponsorMarkers =

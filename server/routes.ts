@@ -76,7 +76,7 @@ import {
 } from "./voiceCall";
 import { packageVoiceMessage } from "./voiceMessagePackage";
 import { buildConversationExport } from "./chatExport";
-import { startAiConsilium } from "./aiConsilium";
+import { retryAiConsilium, startAiConsilium } from "./aiConsilium";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
@@ -3158,6 +3158,37 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error starting AI consilium:", error);
       res.status(500).json({ message: "Failed to start AI consilium" });
+    }
+  });
+
+  app.post("/api/conversations/:id/ai-consilium/retry", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const messageId = typeof req.body?.messageId === "string" ? req.body.messageId : "";
+      if (!messageId) return res.status(400).json({ message: "messageId required" });
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "AI consilium is only available for patient chats" });
+      }
+
+      const outcome = await retryAiConsilium({
+        conversation: conv,
+        author: currentUser,
+        messageId,
+      });
+      if ("missing" in outcome) return res.status(404).json({ message: "Consilium message not found" });
+      if ("busy" in outcome) return res.status(409).json({ busy: true });
+      res.status(202).json({ started: true, message: outcome.message });
+    } catch (error) {
+      console.error("Error retrying AI consilium:", error);
+      res.status(500).json({ message: "Failed to retry AI consilium" });
     }
   });
 

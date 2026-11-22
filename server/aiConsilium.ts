@@ -146,6 +146,52 @@ export type AiConsiliumStart =
   | { started: true; message: ConversationMessageWithAuthor }
   | { busy: true };
 
+const MISSING_TRANSCRIPT_MARK = "ещё без транскрипта";
+
+export function isMissingTranscriptConsilium(content: string | null | undefined): boolean {
+  return !!content?.includes(MISSING_TRANSCRIPT_MARK);
+}
+
+export async function retryAiConsilium(input: {
+  conversation: Conversation;
+  author: User;
+  messageId: string;
+}): Promise<AiConsiliumStart | { missing: true }> {
+  const conversationId = input.conversation.id;
+  if (running.has(conversationId)) return { busy: true };
+  const existing = await storage.getConversationMessageById(input.messageId);
+  if (
+    !existing ||
+    existing.conversationId !== conversationId ||
+    existing.deletedAt ||
+    existing.messageType !== "ai_consilium" ||
+    !isMissingTranscriptConsilium(existing.content)
+  ) {
+    return { missing: true };
+  }
+  running.add(conversationId);
+  try {
+    await storage.setConversationMessageContent(input.messageId, "");
+    await publishConversationMessageEdited(conversationId, {
+      conversationId,
+      messageId: input.messageId,
+      content: "",
+      messageType: "ai_consilium",
+      editedAt: "",
+    });
+    void runAiConsilium(input.conversation, input.messageId, input.author.id).finally(() => {
+      running.delete(conversationId);
+    });
+    return {
+      started: true,
+      message: consiliumPayload({ ...existing, content: null }, input.author),
+    };
+  } catch (error) {
+    running.delete(conversationId);
+    throw error;
+  }
+}
+
 export async function startAiConsilium(input: {
   conversation: Conversation;
   author: User;
@@ -300,9 +346,11 @@ function consiliumFailureText(message: string): string {
 }
 
 function missingTranscriptText(count: number): string {
-  return count === 1
-    ? "1 голосовое или созвон ещё без транскрипта. AI консилиум не подготовлен."
-    : `${count} голосовых или созвонов ещё без транскрипта. AI консилиум не подготовлен.`;
+  const subject =
+    count === 1
+      ? "1 голосовое или созвон ещё без транскрипта"
+      : `${count} голосовых или созвонов ещё без транскрипта`;
+  return `${subject}. AI консилиум не подготовлен.`;
 }
 
 function buildPrompt(exported: ConversationExportResult): string {
