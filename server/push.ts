@@ -144,10 +144,15 @@ export async function notifyConversationNewMessage(
   if (!conv) return;
 
   const participants = await storage.getConversationParticipants(conversationId);
-  const targets = participants.map((p) => p.userId).filter((id) => id !== authorUserId);
+  const hideFromPatient = conv.type === "patient" && message.messageType === "followup";
+  const targets = participants.filter((participant) => {
+    if (participant.userId === authorUserId) return false;
+    if (hideFromPatient && !participant.user.isAdmin) return false;
+    return true;
+  });
   if (targets.length === 0) return;
 
-  for (const recipientUserId of targets) {
-    scheduleConversationMessagePush(conversationId, recipientUserId, message, conv);
+  for (const participant of targets) {
+    scheduleConversationMessagePush(conversationId, participant.userId, message, conv);
   }
 }

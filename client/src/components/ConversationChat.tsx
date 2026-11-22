@@ -47,7 +47,6 @@ import {
   ChevronUp,
   ChevronDown,
   File as FileIcon,
-  Download,
   Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -2416,21 +2415,26 @@ export default function ConversationChat({
                 });
             }}
           >
-            <span
-              className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                isOwn ? "bg-primary-foreground/20" : "bg-background"
-              )}
-            >
-              <FileIcon className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground">{name}</span>
+            <span className="flex min-w-10 shrink-0 flex-col items-center gap-0.5">
+              <span
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-lg",
+                  isOwn ? "bg-primary-foreground/20" : "bg-background"
+                )}
+              >
+                <FileIcon className="h-5 w-5" />
+              </span>
               {sizeLabel ? (
-                <span className="block text-[11px] text-muted-foreground">{sizeLabel}</span>
+                <span className="whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground">
+                  {sizeLabel}
+                </span>
               ) : null}
             </span>
-            <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 self-center">
+              <span className="line-clamp-2 break-words text-sm font-medium leading-snug text-foreground">
+                {name}
+              </span>
+            </span>
           </a>
         );
       })()}

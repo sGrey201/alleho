@@ -3387,6 +3387,11 @@ export class DatabaseStorage implements IStorage {
         ne(conversationMessages.authorUserId, userId),
         sql`${conversationMessages.deletedAt} IS NULL`,
       ];
+      if (!isDoctor) {
+        unreadConditions.push(
+          notInArray(conversationMessages.messageType, ["ai_consilium", "followup"])
+        );
+      }
       if (lastSeenAt) {
         unreadConditions.push(gt(conversationMessages.createdAt, lastSeenAt));
       }
