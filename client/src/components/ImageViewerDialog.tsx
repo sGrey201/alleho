@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,16 @@ interface ImageViewerDialogProps {
 const CONTROL_BUTTON_CLASS =
   "rounded-full border border-white/50 bg-black/55 text-white shadow-lg backdrop-blur-md hover:bg-black/70";
 
+const SWIPE_THRESHOLD_PX = 48;
+
+type SwipeStart = {
+  id: number;
+  x: number;
+  y: number;
+  scrollTop: number;
+  onImage: boolean;
+};
+
 export function ImageViewerDialog({
   open,
   imageUrl,
@@ -32,6 +42,9 @@ export function ImageViewerDialog({
   const [controlsVisible, setControlsVisible] = useState(false);
   const controlsVisibleRef = useRef(false);
   const hideTimer = useRef<number | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const swipeRef = useRef<SwipeStart | null>(null);
+  const suppressClickRef = useRef(false);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimer.current != null) {
@@ -61,6 +74,49 @@ export function ImageViewerDialog({
     revealControls();
   }, [clearHideTimer, hideControls, revealControls]);
 
+  const onSwipePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" || nativeSize) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    swipeRef.current = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      scrollTop: scrollerRef.current?.scrollTop ?? 0,
+      onImage: (e.target as HTMLElement).tagName === "IMG",
+    };
+  };
+
+  const onSwipePointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse") return;
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start || start.id !== e.pointerId) return;
+
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    if (absX < SWIPE_THRESHOLD_PX && absY < SWIPE_THRESHOLD_PX) {
+      if (start.onImage) toggleControls();
+      return;
+    }
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+    const scroller = scrollerRef.current;
+    const scrolled = scroller != null && scroller.scrollTop - start.scrollTop > 8;
+    if (absX > absY && hasMultiple) {
+      if (dx < 0) onNext();
+      else onPrevious();
+      revealControls();
+      return;
+    }
+    const dismissUp = absY > absX && dy < 0 && start.scrollTop <= 8 && (!scrolled || dy < -100);
+    if (dismissUp) onClose();
+  };
+
   useEffect(() => {
     if (!open) {
       setNativeSize(false);
@@ -88,11 +144,25 @@ export function ImageViewerDialog({
           <DialogTitle className="sr-only">Просмотр фото</DialogTitle>
 
           <div
+            ref={scrollerRef}
             className="pointer-events-auto relative min-h-0 flex-1 overflow-auto"
+            style={{ touchAction: nativeSize ? "pan-x pan-y" : "pan-y" }}
             onPointerMove={(e) => {
               if (e.pointerType === "mouse") revealControls();
             }}
-            onClick={onClose}
+            onPointerDown={onSwipePointerDown}
+            onPointerUp={onSwipePointerUp}
+            onPointerCancel={() => {
+              swipeRef.current = null;
+            }}
+            onClick={(e) => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                e.stopPropagation();
+                return;
+              }
+              onClose();
+            }}
           >
             <div className="flex min-h-full w-full flex-col">
               {imageUrl ? (
@@ -106,10 +176,6 @@ export function ImageViewerDialog({
                       : "mx-auto my-auto block h-auto w-full select-none"
                   }
                   onClick={(e) => e.stopPropagation()}
-                  onPointerUp={(e) => {
-                    if (e.pointerType === "mouse") return;
-                    toggleControls();
-                  }}
                 />
               ) : null}
             </div>
@@ -179,46 +245,54 @@ export function ImageViewerDialog({
 
               {hasMultiple ? (
                 <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className={cn(
-                      "absolute top-1/2 h-12 w-12 -translate-y-1/2",
-                      CONTROL_BUTTON_CLASS,
-                      controlsVisible ? "pointer-events-auto" : "pointer-events-none"
-                    )}
+                  <div
+                    className="absolute top-1/2 z-20 -translate-y-1/2"
                     style={{ left: "max(0.75rem, env(safe-area-inset-left, 0px))" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPrevious();
-                      revealControls();
-                    }}
-                    aria-label="Предыдущее фото"
-                    data-testid="button-image-gallery-prev"
                   >
-                    <ChevronLeft className="h-7 w-7" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className={cn(
-                      "absolute top-1/2 h-12 w-12 -translate-y-1/2",
-                      CONTROL_BUTTON_CLASS,
-                      controlsVisible ? "pointer-events-auto" : "pointer-events-none"
-                    )}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12",
+                        CONTROL_BUTTON_CLASS,
+                        controlsVisible ? "pointer-events-auto" : "pointer-events-none"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPrevious();
+                        revealControls();
+                      }}
+                      aria-label="Предыдущее фото"
+                      data-testid="button-image-gallery-prev"
+                    >
+                      <ChevronLeft className="h-7 w-7" />
+                    </Button>
+                  </div>
+                  <div
+                    className="absolute top-1/2 z-20 -translate-y-1/2"
                     style={{ right: "max(0.75rem, env(safe-area-inset-right, 0px))" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNext();
-                      revealControls();
-                    }}
-                    aria-label="Следующее фото"
-                    data-testid="button-image-gallery-next"
                   >
-                    <ChevronRight className="h-7 w-7" />
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12",
+                        CONTROL_BUTTON_CLASS,
+                        controlsVisible ? "pointer-events-auto" : "pointer-events-none"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNext();
+                        revealControls();
+                      }}
+                      aria-label="Следующее фото"
+                      data-testid="button-image-gallery-next"
+                    >
+                      <ChevronRight className="h-7 w-7" />
+                    </Button>
+                  </div>
                 </>
               ) : null}
             </div>
