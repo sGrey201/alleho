@@ -13,7 +13,7 @@ import { storage } from "./storage";
 
 const PROMPT = `Ты — опытный гомеопат классической школы (Ганеман, Кент, Бённингхаузен, Геринг), глубоко знающий материи медики, репертории и клиническую практику. Гомеопатическое сообщество просит твоё второе мнение по случаю. Назначение делает ведущий гомеопат; от тебя — какие препараты рассматривать и почему, и какие вопросы помогут выйти на симиллимум.
 
-В материалах: анкета, переписка, фото, транскрипции голосовых сообщений и созвонов; могут быть назначения, фолоу-апы, твои прошлые мнения и ответы на твои вопросы. Сначала изучи всё, включая фото (видимое на них — объективные данные случая), и только потом анализируй. Твоё прошлое мнение учитывай, но не держись за него: если вывод изменился, прямо скажи, что изменилось и почему.
+В материалах: анкета, переписка, анализы фото, транскрипции голосовых сообщений и созвонов; могут быть назначения, фолоу-апы, твои прошлые мнения и ответы на твои вопросы. Сначала изучи всё. Снимки сами не приложены: их описание бери из сообщений «Анализ фото». И только потом анализируй. Твоё прошлое мнение учитывай, но не держись за него: если вывод изменился, прямо скажи, что изменилось и почему.
 
 АЛГОРИТМ
 
@@ -157,7 +157,7 @@ async function runAiConsilium(
   let prompt: string | null = null;
   let model: string | null = null;
   try {
-    exported = await buildConversationExport(conversation);
+    exported = await buildConversationExport(conversation, { includePhotos: false });
     if (!caseHasMaterial(exported)) {
       await saveArchive({
         messageId,
@@ -228,12 +228,13 @@ async function runAiConsilium(
     console.error("[AiConsilium] failed", { conversationId: conversation.id, messageId, error });
     const message = error instanceof Error ? error.message : "Unknown error";
     const text = consiliumFailureText(message);
+    const failed = consiliumFailureMeta(error);
     await saveArchive({
       messageId,
       conversationId: conversation.id,
       startedAt,
       status: "error",
-      model,
+      model: model ?? failed.model,
       prompt,
       exported,
       error: message,
@@ -244,8 +245,9 @@ async function runAiConsilium(
       exported,
       prompt,
       response: text,
-      model,
+      model: model ?? failed.model,
       error: message,
+      attemptCount: failed.attemptCount,
       httpStatus: error instanceof RegCloudError ? error.status : null,
     });
     try {
@@ -285,16 +287,13 @@ function missingTranscriptText(count: number): string {
 
 function buildPrompt(exported: ConversationExportResult): string {
   const photoNote =
-    exported.photos.length > 0
-      ? `Фотографии приложены к запросу отдельными изображениями в таком порядке: ${exported.photos
-          .map((photo) => photo.filename)
-          .join(", ")}. Смотри каждое вместе с тем местом материалов, где оно указано.`
-      : "Фотографий в материалах нет.";
+    "Фотографии к запросу не приложены. Описание снимков бери только из сообщений «Анализ фото». Если такого сообщения нет, снимок тебе не виден.";
   return `${PROMPT}\n\nОтветь готовым текстом по форме выше. Файлы создавать не нужно.\n\n${photoNote}\n\nМатериалы случая:\n\n${exported.markdown}`;
 }
 
 const REG_CLOUD_URL = "https://ai.reg.cloud/v1/chat/completions";
 const REG_CLOUD_MODEL = "qwen-3.8-flash-next";
+const REG_CLOUD_FALLBACK_MODEL = "deepseek-v4.1-flash";
 
 type ChatContentPart =
   | { type: "text"; text: string }
@@ -319,27 +318,100 @@ async function askRegCloud(
   if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
 
   const model = process.env.REG_CLOUD_MODEL?.trim() || REG_CLOUD_MODEL;
+  const fallback = process.env.REG_CLOUD_FALLBACK_MODEL?.trim() || REG_CLOUD_FALLBACK_MODEL;
   const content = chatContent(prompt, exported);
+  const state: AttemptState = { attemptCount: 0, usage: null };
+
+  const runModel = (targetModel: string) => completeModel(apiKey, targetModel, prompt, exported, content, state);
+
   try {
-    const first = await completeRegCloud(apiKey, model, content);
-    return { ...first, photosSent: exported.photos.length > 0, attemptCount: 1 };
+    return await runModel(model);
+  } catch (error) {
+    if (!isUnreachableModelError(error)) noteAttemptFailure(error, state, model);
+    console.error("[AiConsilium] model was unreachable, retrying once", { model });
+    try {
+      return await runModel(model);
+    } catch (retryError) {
+      if (!isUnreachableModelError(retryError) || !fallback || fallback === model) {
+        noteAttemptFailure(retryError, state, model);
+      }
+      console.error("[AiConsilium] retry failed, trying fallback model", { model, fallback });
+      try {
+        return await runModel(fallback);
+      } catch (fallbackError) {
+        noteAttemptFailure(fallbackError, state, fallback);
+      }
+    }
+  }
+}
+
+type AttemptState = { attemptCount: number; usage: TokenUsage | null };
+
+async function completeModel(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  exported: ConversationExportResult,
+  content: string | ChatContentPart[],
+  state: AttemptState
+): Promise<ConsiliumCompletion> {
+  try {
+    const first = await trackedCompletion(apiKey, model, content, state);
+    return { ...first, usage: state.usage, photosSent: exported.photos.length > 0, attemptCount: state.attemptCount };
   } catch (error) {
     if (exported.photos.length === 0 || !(error instanceof RegCloudError) || error.status !== 400) {
       throw error;
     }
-    console.error("[AiConsilium] model rejected photos, retrying with text only");
-    const second = await completeRegCloud(
+    console.error("[AiConsilium] model rejected photos, retrying with text only", { model });
+    const second = await trackedCompletion(
       apiKey,
       model,
-      `${prompt}\n\nФотографии модель не приняла. Разбирай случай по тексту материалов.`
+      `${prompt}\n\nФотографии модель не приняла. Разбирай случай по тексту материалов.`,
+      state
     );
-    return {
-      ...second,
-      usage: addTokenUsage(error.usage, second.usage),
-      photosSent: false,
-      attemptCount: 2,
-    };
+    return { ...second, usage: state.usage, photosSent: false, attemptCount: state.attemptCount };
   }
+}
+
+async function trackedCompletion(
+  apiKey: string,
+  model: string,
+  content: string | ChatContentPart[],
+  state: AttemptState
+): Promise<Omit<ConsiliumCompletion, "photosSent" | "attemptCount">> {
+  state.attemptCount += 1;
+  try {
+    const result = await completeRegCloud(apiKey, model, content);
+    state.usage = addTokenUsage(state.usage, result.usage);
+    return result;
+  } catch (error) {
+    if (error instanceof RegCloudError) state.usage = addTokenUsage(state.usage, error.usage);
+    throw error;
+  }
+}
+
+function isUnreachableModelError(error: unknown): boolean {
+  if (error instanceof RegCloudError) {
+    if (/empty completion/i.test(error.message)) return true;
+    return error.status === 408 || error.status === 429 || error.status >= 500;
+  }
+  return true;
+}
+
+function noteAttemptFailure(error: unknown, state: AttemptState, model: string): never {
+  if (error && typeof error === "object") {
+    Object.assign(error, { consiliumAttempts: state.attemptCount, consiliumModel: model });
+  }
+  throw error;
+}
+
+function consiliumFailureMeta(error: unknown): { attemptCount?: number; model?: string } {
+  if (!error || typeof error !== "object") return {};
+  const meta = error as { consiliumAttempts?: unknown; consiliumModel?: unknown };
+  return {
+    attemptCount: typeof meta.consiliumAttempts === "number" ? meta.consiliumAttempts : undefined,
+    model: typeof meta.consiliumModel === "string" ? meta.consiliumModel : undefined,
+  };
 }
 
 class RegCloudError extends Error {
@@ -401,7 +473,7 @@ async function completeRegCloud(
     );
   }
   const text = body?.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!text) throw new Error("Reg.cloud returned an empty completion");
+  if (!text) throw new RegCloudError("Reg.cloud returned an empty completion", response.status, usage);
   return {
     text,
     model,
@@ -410,6 +482,51 @@ async function completeRegCloud(
     usage,
     finishReason: body?.choices?.[0]?.finish_reason ?? null,
   };
+}
+
+export async function completeRegCloudWithFallback(input: {
+  model: string;
+  fallbackModel: string;
+  content: string | ChatContentPart[];
+  skipSameRetryOn400?: boolean;
+}): Promise<{ text: string; model: string }> {
+  const apiKey = process.env.REG_CLOUD_API_KEY?.trim();
+  if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
+  const model = input.model.trim() || REG_CLOUD_MODEL;
+  const fallback = input.fallbackModel.trim() || REG_CLOUD_FALLBACK_MODEL;
+
+  const once = (target: string) => completeRegCloud(apiKey, target, input.content);
+  const rejectedImage = (error: unknown) =>
+    input.skipSameRetryOn400 === true && error instanceof RegCloudError && error.status === 400;
+
+  try {
+    const first = await once(model);
+    return { text: first.text, model: first.model };
+  } catch (error) {
+    if (rejectedImage(error)) {
+      if (!fallback || fallback === model) throw error;
+      console.error("[RegCloud] model rejected the image, trying fallback", { model, fallback });
+      const alternate = await once(fallback);
+      return { text: alternate.text, model: alternate.model };
+    }
+    if (!isUnreachableModelError(error)) throw error;
+    console.error("[RegCloud] model was unreachable, retrying once", { model });
+    try {
+      const second = await once(model);
+      return { text: second.text, model: second.model };
+    } catch (retryError) {
+      if (rejectedImage(retryError)) {
+        if (!fallback || fallback === model) throw retryError;
+        console.error("[RegCloud] retry rejected the image, trying fallback", { model, fallback });
+        const alternate = await once(fallback);
+        return { text: alternate.text, model: alternate.model };
+      }
+      if (!isUnreachableModelError(retryError) || !fallback || fallback === model) throw retryError;
+      console.error("[RegCloud] retry failed, trying fallback model", { model, fallback });
+      const third = await once(fallback);
+      return { text: third.text, model: third.model };
+    }
+  }
 }
 
 type RegCloudResponse = {

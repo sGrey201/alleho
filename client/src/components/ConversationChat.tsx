@@ -227,6 +227,7 @@ const CLINICAL_MESSAGE_TYPES = new Set([
   "followup",
   "prescription",
   "ai_consilium",
+  "photo_analysis",
 ]);
 
 function isClinicalChatMessage(messageType: string | null | undefined): boolean {
@@ -234,7 +235,12 @@ function isClinicalChatMessage(messageType: string | null | undefined): boolean 
 }
 
 function isComposerMessageMode(messageType: string | null | undefined): messageType is ChatMessageMode {
-  return messageType === "message" || messageType === "prescription" || messageType === "followup";
+  return (
+    messageType === "message" ||
+    messageType === "prescription" ||
+    messageType === "followup" ||
+    messageType === "photo_analysis"
+  );
 }
 
 function formatFileSize(bytes: number): string {
@@ -373,6 +379,7 @@ function getReplySnippet(reply: NonNullable<ConversationMessageWithAuthor["reply
       : `${t.callMessageLabel} · ${formatCallDuration(duration)}`;
   }
   if (reply.messageType === "ai_consilium") return t.aiConsiliumBadge;
+  if (reply.messageType === "photo_analysis") return t.photoAnalysisBadge;
   if (reply.messageType === "video") return t.messageVideoLabel;
   if (reply.messageType === "file") {
     return parseFilePayload(reply.content)?.name ?? t.messageFileLabel;
@@ -569,7 +576,7 @@ export default function ConversationChat({
   const [pollCorrectOptionIndex, setPollCorrectOptionIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileOpenInFlightRef = useRef(false);
-  const [messageMode, setMessageMode] = useState<"message" | "prescription" | "followup">("message");
+  const [messageMode, setMessageMode] = useState<ChatMessageMode>("message");
   const [openQuestionnaireInstanceId, setOpenQuestionnaireInstanceId] = useState<string | null>(null);
   const [openQuestionnaireTemplateName, setOpenQuestionnaireTemplateName] = useState<string | null>(null);
   const [questionnaireFilledOnly, setQuestionnaireFilledOnly] = useState(false);
@@ -1562,7 +1569,13 @@ export default function ConversationChat({
     return `${t.wasOnlineAt} ${format(date, "dd.MM.yyyy", { locale: ru })} в ${time}`;
   };
 
-  const sortedMessages = useMemo(() => messages, [messages]);
+  const sortedMessages = useMemo(
+    () =>
+      [...messages].sort(
+        (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      ),
+    [messages]
+  );
 
   const isPatientConv = conv?.type === "patient";
   const displayMessages = useMemo(() => {
@@ -1572,7 +1585,12 @@ export default function ConversationChat({
     const audienceVisible =
       !isPatientConv || user?.isAdmin
         ? visible
-        : visible.filter((m) => m.messageType !== "followup" && m.messageType !== "ai_consilium");
+        : visible.filter(
+            (m) =>
+              m.messageType !== "followup" &&
+              m.messageType !== "ai_consilium" &&
+              m.messageType !== "photo_analysis"
+          );
     if (!clinicalMessagesOnly) return audienceVisible;
     return audienceVisible.filter((m) => isClinicalChatMessage(m.messageType));
   }, [sortedMessages, isPatientConv, user?.isAdmin, clinicalMessagesOnly]);
@@ -1893,7 +1911,9 @@ export default function ConversationChat({
         (m) =>
           m.pinnedAt &&
           !m.deletedAt &&
-          (user?.isAdmin || !isPatientConv || m.messageType !== "ai_consilium")
+          (user?.isAdmin ||
+            !isPatientConv ||
+            (m.messageType !== "ai_consilium" && m.messageType !== "photo_analysis"))
       ),
     [sortedMessages, user?.isAdmin, isPatientConv]
   );
@@ -1901,6 +1921,50 @@ export default function ConversationChat({
     activePinnedIndex >= 0 && activePinnedIndex < pinnedMessages.length
       ? pinnedMessages[activePinnedIndex]
       : null;
+  const photoAnalysisPendingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const message of messages) {
+      if (
+        message.messageType === "photo_analysis" &&
+        message.replyToMessageId &&
+        !message.deletedAt &&
+        !message.content?.trim()
+      ) {
+        ids.add(message.replyToMessageId);
+      }
+    }
+    return ids;
+  }, [messages]);
+  const startPhotoAnalysis = (messageId: string) => {
+    void fetch(`/api/conversations/${conversationId}/messages/${messageId}/photo-analysis`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const body = (await res.json().catch(() => ({}))) as {
+          busy?: boolean;
+          message?: ConversationMessageWithAuthor;
+        };
+        if (body.busy) {
+          toast({ title: t.photoAnalysisBusy });
+          return;
+        }
+        if (!res.ok || !body.message) {
+          toast({ title: t.photoAnalysisError, variant: "destructive" });
+          return;
+        }
+        const messagesKey = conversationMessagesQueryKey(conversationId);
+        void queryClient.cancelQueries({ queryKey: messagesKey }).then(() => {
+          queryClient.setQueryData<ConversationMessagesInfiniteData>(messagesKey, (old) =>
+            appendConversationMessage(old, body.message!)
+          );
+        });
+      })
+      .catch(() => {
+        toast({ title: t.photoAnalysisError, variant: "destructive" });
+      });
+  };
 
   useEffect(() => {
     if (pinnedMessages.length === 0) {
@@ -2170,7 +2234,7 @@ export default function ConversationChat({
       msg.messageType !== "file" &&
       msg.messageType !== "call" &&
       msg.messageType !== "ai_consilium" &&
-      (conv.type === "channel" || withinEditWindow);
+      (conv.type === "channel" || msg.messageType === "photo_analysis" || withinEditWindow);
     const canEditVideo =
       isOwn &&
       msg.messageType === "video" &&
@@ -2461,23 +2525,45 @@ export default function ConversationChat({
         );
       })()}
       {msg.imageUrl && !isNonImageAttachment(msg.messageType) && (
-        <img
-          src={getThumbUrl(msg.imageUrl)}
-          alt=""
-          loading="lazy"
-          className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
-          data-testid={`image-${msg.id}`}
-          onError={(e) => {
-            const el = e.currentTarget;
-            if (el.dataset.fallback === "1") return;
-            el.dataset.fallback = "1";
-            el.src = msg.imageUrl!;
-          }}
-          onClick={() => {
-            setMessageLayer(null);
-            setSelectedImage(msg.imageUrl!);
-          }}
-        />
+        <div className="relative mb-0.5 w-full md:w-fit">
+          <img
+            src={getThumbUrl(msg.imageUrl)}
+            alt=""
+            loading="lazy"
+            className="h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
+            data-testid={`image-${msg.id}`}
+            onError={(e) => {
+              const el = e.currentTarget;
+              if (el.dataset.fallback === "1") return;
+              el.dataset.fallback = "1";
+              el.src = msg.imageUrl!;
+            }}
+            onClick={() => {
+              setMessageLayer(null);
+              setSelectedImage(msg.imageUrl!);
+            }}
+          />
+          {isPatientConv && user?.isAdmin && !msg.deletedAt && (
+            <div className="absolute bottom-2 right-2 z-10">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={photoAnalysisPendingIds.has(msg.id)}
+                className="h-8 w-8 rounded-full border border-white/50 bg-black/55 text-white shadow-sm backdrop-blur-md hover:bg-black/70 hover:text-white"
+                aria-label={t.photoAnalysis}
+                data-testid={`button-photo-analysis-${msg.id}`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startPhotoAnalysis(msg.id);
+                }}
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       )}
       {msg.messageType === "voice" ? (
         <VoiceMessagePlayer
@@ -2550,7 +2636,15 @@ export default function ConversationChat({
               </Badge>
             </div>
           )}
-          {msg.messageType === "ai_consilium" && !msg.content?.trim() ? (
+          {msg.messageType === "photo_analysis" && (
+            <div className="mb-0.5 pr-8">
+              <Badge variant="secondary" className="bg-amber-100 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                <Sparkles className="mr-1 h-3 w-3" />
+                {t.photoAnalysisBadge}
+              </Badge>
+            </div>
+          )}
+          {(msg.messageType === "ai_consilium" || msg.messageType === "photo_analysis") && !msg.content?.trim() ? (
             <div className="w-44 pr-8">
               <p className="text-sm text-muted-foreground">{t.aiConsiliumPreparing}</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950">
@@ -2965,6 +3059,8 @@ export default function ConversationChat({
                   ? parseFilePayload(activePinnedMessage.content)?.name ?? t.messageFileLabel
                   : activePinnedMessage.messageType === "ai_consilium"
                   ? t.aiConsiliumBadge
+                  : activePinnedMessage.messageType === "photo_analysis"
+                  ? t.photoAnalysisBadge
                   : activePinnedMessage.messageType === "poll"
                   ? parsePollPayload(activePinnedMessage.content)?.question ?? t.pollLabel
                   : activePinnedMessage.messageType === "questionnaire" ||
@@ -3252,6 +3348,8 @@ export default function ConversationChat({
                         ? parseFilePayload(replyTo.content)?.name ?? t.messageFileLabel
                         : replyTo.messageType === "ai_consilium"
                         ? t.aiConsiliumBadge
+                        : replyTo.messageType === "photo_analysis"
+                        ? t.photoAnalysisBadge
                         : replyTo.messageType === "poll"
                         ? parsePollPayload(replyTo.content)?.question ?? t.pollLabel
                         : replyTo.content

@@ -60,6 +60,7 @@ export type ConversationExportPhoto = {
 
 export type ConversationExportOptions = {
   excludeMessageTypes?: readonly string[];
+  includePhotos?: boolean;
 };
 
 export type ConversationExportResult = {
@@ -373,6 +374,7 @@ export async function buildConversationExport(
       return parsed.success ? `Файл: ${parsed.data.name}` : "Файл";
     }
     if (message.messageType === "ai_consilium") return "AI консилиум";
+    if (message.messageType === "photo_analysis") return "Анализ фото";
     if (message.messageType === "video") return "Видео";
     if (message.messageType === "poll") {
       const parsed = pollPayloadSchema.safeParse(parseJson(message.content));
@@ -394,6 +396,7 @@ export async function buildConversationExport(
   for (const message of messages) {
     if (excluded.has(message.messageType)) continue;
     if (message.messageType === "ai_consilium" && !message.content?.trim()) continue;
+    if (message.messageType === "photo_analysis" && !message.content?.trim()) continue;
     const author = users.get(message.authorUserId);
     const header = messageHeader(message, author, conversation);
     const plainText =
@@ -430,18 +433,22 @@ export async function buildConversationExport(
 
     if (!plainText) lines.push(await messageBody(message));
     if (message.messageType === "message" && message.imageUrl && !message.deletedAt) {
-      const key = objectKeyFromAppPath(message.imageUrl);
-      const object = key ? await readObjectBytes(key) : null;
-      if (object) {
-        photoIndex += 1;
-        const ext = imageExtension(object.bytes, object.contentType);
-        const filename = `photos/${String(photoIndex).padStart(3, "0")}.${ext}`;
-        const photoBytes = Buffer.from(object.bytes);
-        zip.file(filename, photoBytes);
-        photos.push({ filename, bytes: photoBytes, mimeType: mimeTypeForExtension(ext) });
-        lines.push("", `![Фото](${filename})`);
+      if (options?.includePhotos === false) {
+        lines.push("", "Фото");
       } else {
-        lines.push("", "Фото недоступно");
+        const key = objectKeyFromAppPath(message.imageUrl);
+        const object = key ? await readObjectBytes(key) : null;
+        if (object) {
+          photoIndex += 1;
+          const ext = imageExtension(object.bytes, object.contentType);
+          const filename = `photos/${String(photoIndex).padStart(3, "0")}.${ext}`;
+          const photoBytes = Buffer.from(object.bytes);
+          zip.file(filename, photoBytes);
+          photos.push({ filename, bytes: photoBytes, mimeType: mimeTypeForExtension(ext) });
+          lines.push("", `![Фото](${filename})`);
+        } else {
+          lines.push("", "Фото недоступно");
+        }
       }
     }
 
@@ -503,6 +510,9 @@ export async function buildConversationExport(
     if (message.messageType === "ai_consilium") {
       const body = text ? stripConsiliumQuestionMarkers(text) : "";
       return body ? `AI консилиум\n\n${body}` : "AI консилиум";
+    }
+    if (message.messageType === "photo_analysis") {
+      return text ? `Анализ фото\n\n${text}` : "Анализ фото";
     }
     if (message.messageType === "prescription") return text ? `Назначение\n\n${text}` : "Назначение";
     if (message.messageType === "followup") return text ? `Follow Up\n\n${text}` : "Follow Up";

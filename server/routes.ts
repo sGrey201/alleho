@@ -77,6 +77,7 @@ import {
 import { packageVoiceMessage } from "./voiceMessagePackage";
 import { buildConversationExport } from "./chatExport";
 import { retryAiConsilium, startAiConsilium } from "./aiConsilium";
+import { startPhotoAnalysis } from "./photoAnalysis";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
 import {
@@ -3191,7 +3192,7 @@ ${allUrls.map(url => `  <url>
         id,
         before,
         limit,
-        currentUser.isAdmin ? undefined : { excludeMessageTypes: ["ai_consilium"] }
+        currentUser.isAdmin ? undefined : { excludeMessageTypes: ["ai_consilium", "photo_analysis"] }
       );
       const withAuthors = await enrichConversationMessages(messages, currentUserId, sponsorFilter);
       const nextBefore = withAuthors.length > 0 ? withAuthors[0]!.id : null;
@@ -3298,6 +3299,34 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error retrying AI consilium:", error);
       res.status(500).json({ message: "Failed to retry AI consilium" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages/:messageId/photo-analysis", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id, messageId } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "Photo analysis is only available for patient chats" });
+      }
+      const outcome = await startPhotoAnalysis({
+        conversation: conv,
+        author: currentUser,
+        photoMessageId: messageId,
+      });
+      if ("invalid" in outcome) return res.status(404).json({ message: "Photo not found" });
+      if ("busy" in outcome) return res.status(409).json({ busy: true });
+      res.status(202).json({ started: true, message: outcome.message });
+    } catch (error) {
+      console.error("Error starting photo analysis:", error);
+      res.status(500).json({ message: "Failed to start photo analysis" });
     }
   });
 
@@ -3532,10 +3561,17 @@ ${allUrls.map(url => `  <url>
       }
 
       if (
-        (messageType === "prescription" || messageType === "followup") &&
+        (messageType === "prescription" || messageType === "followup" || messageType === "photo_analysis") &&
         !currentUser?.isAdmin
       ) {
         return res.status(403).json({ message: "Only doctors can post prescriptions" });
+      }
+      if (messageType === "photo_analysis") {
+        if (conv.type !== "patient") {
+          return res.status(400).json({ message: "Photo analysis is only available for patient chats" });
+        }
+        if (!content?.trim()) return res.status(400).json({ message: "Content required" });
+        imageUrl = null;
       }
       if (conv.type === "patient" && messageType === "poll") {
         return res.status(400).json({ message: "Polls are not allowed in patient chats" });
@@ -3665,9 +3701,11 @@ ${allUrls.map(url => `  <url>
       });
       await pushConversationRecentMessage(id, wsPayload);
       await publishConversationMessage(id, wsPayload);
-      void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
-        console.error("[Push] conversation notify error:", err)
-      );
+      if (messageType !== "photo_analysis") {
+        void notifyConversationNewMessage(id, currentUserId, enriched).catch((err) =>
+          console.error("[Push] conversation notify error:", err)
+        );
+      }
       void notifyMessengerConversationActivity(id, currentUserId).catch((err) =>
         console.error("[DoctorChats] messenger conversation notify error:", err)
       );
@@ -3871,7 +3909,11 @@ ${allUrls.map(url => `  <url>
       }
       if (existing.deletedAt) return res.status(400).json({ message: "Message deleted" });
       const createdAt = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(String(existing.createdAt)).getTime();
-      if (conv?.type !== "channel" && Date.now() - createdAt > EDIT_WINDOW_MS) {
+      if (
+        conv?.type !== "channel" &&
+        existing.messageType !== "photo_analysis" &&
+        Date.now() - createdAt > EDIT_WINDOW_MS
+      ) {
         return res.status(400).json({ message: "Edit window expired" });
       }
 
@@ -3921,11 +3963,13 @@ ${allUrls.map(url => `  <url>
 
       const content = (body.content ?? "").toString().trim();
       if (!content) return res.status(400).json({ message: "Content required" });
-      const switchableTypes = new Set(["message", "prescription", "followup"]);
+      const switchableTypes = new Set(["message", "prescription", "followup", "photo_analysis"]);
       let messageType: string | undefined;
       if (body.messageType && switchableTypes.has(existing.messageType) && switchableTypes.has(body.messageType)) {
         if (
-          (body.messageType === "prescription" || body.messageType === "followup") &&
+          (body.messageType === "prescription" ||
+            body.messageType === "followup" ||
+            body.messageType === "photo_analysis") &&
           (conv?.type !== "patient" || !(await storage.getUser(currentUserId))?.isAdmin)
         ) {
           return res.status(403).json({ message: "Only doctors can set this message type in a patient chat" });

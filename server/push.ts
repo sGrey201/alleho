@@ -144,7 +144,11 @@ export async function notifyConversationNewMessage(
   if (!conv) return;
 
   const participants = await storage.getConversationParticipants(conversationId);
-  const hideFromPatient = conv.type === "patient" && message.messageType === "followup";
+  const hideFromPatient =
+    conv.type === "patient" &&
+    (message.messageType === "followup" ||
+      message.messageType === "ai_consilium" ||
+      message.messageType === "photo_analysis");
   const targets = participants.filter((participant) => {
     if (participant.userId === authorUserId) return false;
     if (hideFromPatient && !participant.user.isAdmin) return false;

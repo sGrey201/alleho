@@ -271,6 +271,7 @@ export const conversationMessageTypeEnum = z.enum([
   'file',
   'call',
   'ai_consilium',
+  'photo_analysis',
 ]);
 export type ConversationMessageType = z.infer<typeof conversationMessageTypeEnum>;
 

@@ -31,6 +31,9 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY}
       REG_CLOUD_API_KEY: ${REG_CLOUD_API_KEY}
       REG_CLOUD_MODEL: ${REG_CLOUD_MODEL:-qwen-3.8-flash-next}
+      REG_CLOUD_FALLBACK_MODEL: ${REG_CLOUD_FALLBACK_MODEL:-deepseek-v4.1-flash}
+      REG_CLOUD_PHOTO_MODEL: ${REG_CLOUD_PHOTO_MODEL:-qwen-3.8-flash-next}
+      REG_CLOUD_PHOTO_FALLBACK_MODEL: ${REG_CLOUD_PHOTO_FALLBACK_MODEL:-deepseek-v4.1-flash}
     depends_on:
       - db
       - redis

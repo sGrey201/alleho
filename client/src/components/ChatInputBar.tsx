@@ -43,7 +43,7 @@ import {
 } from "@/hooks/useVoiceRecorder";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export type ChatMessageMode = "message" | "prescription" | "followup";
+export type ChatMessageMode = "message" | "prescription" | "followup" | "photo_analysis";
 
 type ChatInputBarProps = {
   value: string;
@@ -498,6 +498,8 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                       <Pill className="h-4 w-4" />
                     ) : messageMode === "followup" ? (
                       <FileText className="h-4 w-4" />
+                    ) : messageMode === "photo_analysis" ? (
+                      <Sparkles className="h-4 w-4" />
                     ) : (
                       <MessageCircle className="h-4 w-4" />
                     )}
@@ -512,6 +514,9 @@ const ChatInputBar = forwardRef<ChatInputBarHandle, ChatInputBarProps>(function 
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onMessageModeChange("followup")}>
                     {t.followup}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onMessageModeChange("photo_analysis")}>
+                    {t.photoAnalysis}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

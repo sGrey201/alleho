@@ -8,6 +8,8 @@ import { getRedisSubscriber, type ConversationMessageWithAuthor } from "./redis"
 import { storage } from "./storage";
 import { registerConversationBroadcaster, registerDoctorBroadcaster } from "./wsBroadcast";
 
+const HOMEOPATH_ONLY_MESSAGE_TYPES = new Set(["ai_consilium", "photo_analysis"]);
+
 function isHomeopathOnlyEvent(parsed: unknown): boolean {
   if (!parsed || typeof parsed !== "object") return false;
   const record = parsed as {
@@ -18,10 +20,11 @@ function isHomeopathOnlyEvent(parsed: unknown): boolean {
   if (record.payload && typeof record.payload === "object") {
     return (
       (record.type === "conversation_message" || record.type === "conversation_message_edited") &&
-      record.payload.messageType === "ai_consilium"
+      !!record.payload.messageType &&
+      HOMEOPATH_ONLY_MESSAGE_TYPES.has(record.payload.messageType)
     );
   }
-  return record.messageType === "ai_consilium";
+  return !!record.messageType && HOMEOPATH_ONLY_MESSAGE_TYPES.has(record.messageType);
 }
 
 const WS_PATH = "/ws";
