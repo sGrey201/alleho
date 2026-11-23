@@ -134,10 +134,20 @@ export type MessengerSearchChannel = {
   lastMessagePreview?: string | null;
   lastMessageAt?: string | null;
 };
+export type MessengerSearchPatient = {
+  conversationId: string;
+  name: string | null;
+  avatarUrl?: string | null;
+  patientUserId?: string | null;
+  lastMessagePreview?: string | null;
+  lastMessageAt?: string | null;
+  unreadCount?: number;
+};
 export type MessengerSearchResults = {
   doctors: MessengerSearchDoctor[];
   groups: MessengerSearchGroup[];
   channels: MessengerSearchChannel[];
+  patients?: MessengerSearchPatient[];
 };
 
 function chatInitial(label: string): string {
@@ -460,7 +470,6 @@ export default function Messenger() {
   const [folder, setFolder] = useState<MessengerFolder>(
     () => readMessengerUiState()?.folder ?? "patients"
   );
-  const [searchScope, setSearchScope] = useState<"all" | "doctors" | "patients" | "groups" | "channels">("all");
   const [createConversationType, setCreateConversationType] = useState<"group" | "channel" | null>(null);
   const [createConversationName, setCreateConversationName] = useState("");
   const [patientInviteOpen, setPatientInviteOpen] = useState(false);
@@ -557,9 +566,9 @@ export default function Messenger() {
   }, [chats, unreadSummary]);
 
   const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch: refetchSearch } = useQuery<MessengerSearchResults>({
-    queryKey: ["/api/messenger/search", debouncedSearchQuery],
+    queryKey: ["/api/messenger/search", debouncedSearchQuery, activeFolder],
     queryFn: async () => {
-      const url = `/api/messenger/search?q=${encodeURIComponent(debouncedSearchQuery)}`;
+      const url = `/api/messenger/search?q=${encodeURIComponent(debouncedSearchQuery)}&folder=${encodeURIComponent(activeFolder)}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -624,6 +633,22 @@ export default function Messenger() {
     });
   }
 
+  function mapPatientSearchToChatItem(patient: MessengerSearchPatient): ChatItem {
+    return {
+      source: "conversation",
+      folder: "personal",
+      type: "patient",
+      conversationId: patient.conversationId,
+      name: patient.name ?? undefined,
+      patientName: patient.name ?? undefined,
+      patientUserId: patient.patientUserId ?? undefined,
+      avatarUrl: patient.avatarUrl ?? null,
+      lastMessageAt: patient.lastMessageAt ?? null,
+      lastMessagePreview: patient.lastMessagePreview ?? null,
+      unreadCount: patient.unreadCount ?? 0,
+    };
+  }
+
   function mapChannelSearchToChatItem(channel: MessengerSearchChannel): ChatItem {
     return {
       source: "conversation",
@@ -662,43 +687,44 @@ export default function Messenger() {
     return chats;
   }, [chats, activeFolder, isAdmin]);
 
-  useEffect(() => {
-    if (!isSearching || !isAdmin) {
-      if (!isSearching) setSearchScope("all");
-    }
-  }, [isSearching, isAdmin]);
-
-  const activeSearchScope = isSearching ? (isAdmin ? searchScope : activeFolder) : activeFolder;
-  const searchChatsSource = activeSearchScope === "all" ? chats.filter((chat) => chat.type !== "patient") : chatsByFolder;
   const searchFiltered =
     isSearching && searchQuery.trim()
-      ? filterChatsBySearch(searchChatsSource, searchQuery, !!isAdmin)
+      ? filterChatsBySearch(chatsByFolder, searchQuery, !!isAdmin)
       : [];
-  const doctorSearchResults =
-    activeSearchScope === "all" || activeSearchScope === "doctors" ? (searchResults?.doctors ?? []) : [];
-  const groupSearchResults =
-    activeSearchScope === "all" || activeSearchScope === "groups" ? (searchResults?.groups ?? []) : [];
-  const channelSearchResults =
-    activeSearchScope === "all" || activeSearchScope === "channels" ? (searchResults?.channels ?? []) : [];
-  const showChannelDiscoverSection =
-    activeSearchScope === "all" || activeSearchScope === "channels";
+  const serverPatientChats =
+    activeFolder === "patients" ? (searchResults?.patients ?? []).map(mapPatientSearchToChatItem) : [];
+  const doctorSearchResults = activeFolder === "doctors" ? (searchResults?.doctors ?? []) : [];
+  const groupSearchResults = activeFolder === "groups" ? (searchResults?.groups ?? []) : [];
+  const channelSearchResults = activeFolder === "channels" ? (searchResults?.channels ?? []) : [];
+  const showChannelDiscoverSection = activeFolder === "channels";
   // Channels are listed in the dedicated «Каналы» section — keep them out of «Чаты».
-  const searchChatResults = showChannelDiscoverSection
+  const localSearchChats = showChannelDiscoverSection
     ? searchFiltered.filter((chat) => chat.type !== "channel")
     : searchFiltered;
+  const seenSearchChatIds = new Set(
+    localSearchChats.map((chat) => chat.conversationId).filter((id): id is string => !!id)
+  );
+  const searchChatResults = [
+    ...localSearchChats,
+    ...serverPatientChats.filter(
+      (chat) => chat.conversationId && !seenSearchChatIds.has(chat.conversationId)
+    ),
+  ];
   const hasSearchResults =
     searchChatResults.length > 0 ||
     doctorSearchResults.length > 0 ||
     groupSearchResults.length > 0 ||
     channelSearchResults.length > 0;
   const noResultsByFolder =
-    activeSearchScope === "all"
-      ? t.noResults
-      : activeSearchScope === "doctors"
-        ? "Врачи не найдены"
-        : activeSearchScope === "groups"
+    activeFolder === "doctors"
+      ? "Врачи не найдены"
+      : activeFolder === "patients"
+        ? "Пациенты не найдены"
+        : activeFolder === "groups"
           ? "Группы не найдены"
-          : "Каналы не найдены";
+          : activeFolder === "channels"
+            ? "Каналы не найдены"
+            : t.noResults;
   const patientChannelLocalSearch = useMemo(() => {
     if (isAdmin || activeFolder !== "channels" || !searchQuery.trim()) return [];
     return filterChatsBySearch(
@@ -1085,13 +1111,9 @@ export default function Messenger() {
       {!isMobileConversationOpen && (
       <div className="messenger-sidebar border-b md:border-b-0 bg-background">
         <Tabs
-          value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
+          value={activeFolder}
           onValueChange={(v) => {
-            const nextFolder = v as typeof folder;
-            setFolder(nextFolder);
-            if (isAdmin && isSearching) {
-              setSearchScope(nextFolder);
-            }
+            setFolder(v as typeof folder);
           }}
           className="messenger-sidebar-tabs bg-gray-50"
         >
@@ -1201,7 +1223,7 @@ export default function Messenger() {
           </div>
           )}
           <TabsContent
-            value={isAdmin && isSearching && searchScope === "all" ? "" : activeFolder}
+            value={activeFolder}
             className="messenger-sidebar-panel bg-background"
           >
             <div className="messenger-sidebar-panel-inner">

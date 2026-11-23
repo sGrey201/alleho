@@ -1803,8 +1803,15 @@ ${allUrls.map(url => `  <url>
       const currentUserId = await getCurrentUserId(req);
       if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const folder = typeof req.query.folder === "string" ? req.query.folder : "all";
+      const includeDoctors = folder === "all" || folder === "doctors";
+      const includeGroups = folder === "all" || folder === "groups";
+      const includeChannels = folder === "all" || folder === "channels";
+      const includePatients = folder === "all" || folder === "patients";
 
-      const adminUsers = await storage.getAdminUsers(currentUserId, q || undefined);
+      const adminUsers = includeDoctors
+        ? await storage.getAdminUsers(currentUserId, q || undefined)
+        : [];
       const doctors = await Promise.all(
         adminUsers.map(async (u) => {
           const conversationId = await storage.getDirectConversationBetween(currentUserId, u.id);
@@ -1818,17 +1825,41 @@ ${allUrls.map(url => `  <url>
         })
       );
 
-      const groups = await storage.getDiscoverableConversations(currentUserId, {
-        type: "group",
-        nameFilter: q || undefined,
-        excludeClosed: true,
-      });
-      const channels = await storage.getDiscoverableConversations(currentUserId, {
-        type: "channel",
-        nameFilter: q || undefined,
-        excludeClosed: true,
-        excludeHidden: true,
-      });
+      const groups = includeGroups
+        ? await storage.getDiscoverableConversations(currentUserId, {
+            type: "group",
+            nameFilter: q || undefined,
+            excludeClosed: true,
+          })
+        : [];
+      const channels = includeChannels
+        ? await storage.getDiscoverableConversations(currentUserId, {
+            type: "channel",
+            nameFilter: q || undefined,
+            excludeClosed: true,
+            excludeHidden: true,
+          })
+        : [];
+
+      const patientWords = q.toLowerCase().split(/\s+/).filter(Boolean);
+      const patientChats =
+        includePatients && patientWords.length > 0
+          ? await storage.getPatientConversationsForUser(currentUserId)
+          : [];
+      const patients = patientChats
+        .filter((chat) => {
+          const label = `${chat.name ?? ""} ${chat.otherParticipantName ?? ""}`.toLowerCase();
+          return patientWords.every((word) => label.includes(word));
+        })
+        .map((chat) => ({
+          conversationId: chat.conversationId,
+          name: chat.name ?? chat.otherParticipantName ?? null,
+          avatarUrl: chat.avatarUrl ?? null,
+          patientUserId: chat.patientUserId ?? null,
+          lastMessagePreview: chat.lastMessagePreview ?? null,
+          lastMessageAt: chat.lastMessageAt?.toISOString() ?? null,
+          unreadCount: chat.unreadCount,
+        }));
 
       res.json({
         doctors,
@@ -1849,6 +1880,7 @@ ${allUrls.map(url => `  <url>
           lastMessagePreview: c.lastMessagePreview ?? null,
           lastMessageAt: c.lastMessageAt?.toISOString() ?? null,
         })),
+        patients,
       });
     } catch (error) {
       console.error("Error fetching /api/messenger/search:", error);
