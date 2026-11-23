@@ -117,6 +117,40 @@ export function stripMessageFormatting(text: string): string {
   return text.replace(BOLD_REGEX, "$1");
 }
 
+const QUESTION_REGEX = /\[\[([^\]\n]*\S[^\]\n]*)\]\]/g;
+
+export type MessageQuestionSegment = {
+  type: "text" | "question";
+  text: string;
+};
+
+/** Split consilium text into plain parts and patient questions wrapped in [[...]]. */
+export function parseMessageQuestionSegments(text: string): MessageQuestionSegment[] {
+  const segments: MessageQuestionSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(QUESTION_REGEX.source, "g");
+
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: "question", text: match[1].trim() });
+    lastIndex = re.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", text }];
+}
+
+/** Drop [[...]] markers from a consilium export, keeping the question text. */
+export function stripConsiliumQuestionMarkers(text: string): string {
+  return text.replace(new RegExp(QUESTION_REGEX.source, "g"), (_match, inner: string) => inner.trim());
+}
+
 /** Remove paired $$...$$ sponsor sections entirely. */
 export function stripSponsorSections(text: string): string {
   return text.replace(SPONSOR_REGEX, "");

@@ -144,12 +144,15 @@ export function ImageViewerDialog({
           <DialogTitle className="sr-only">Просмотр фото</DialogTitle>
 
           <div
-            ref={scrollerRef}
-            className="pointer-events-auto relative min-h-0 flex-1 overflow-auto"
-            style={{ touchAction: nativeSize ? "pan-x pan-y" : "pan-y" }}
+            className="pointer-events-none relative min-h-0 flex-1"
             onPointerMove={(e) => {
               if (e.pointerType === "mouse") revealControls();
             }}
+          >
+          <div
+            ref={scrollerRef}
+            className="pointer-events-auto absolute inset-0 overflow-auto"
+            style={{ touchAction: nativeSize ? "pan-x pan-y" : "pan-y" }}
             onPointerDown={onSwipePointerDown}
             onPointerUp={onSwipePointerUp}
             onPointerCancel={() => {
@@ -179,6 +182,7 @@ export function ImageViewerDialog({
                 />
               ) : null}
             </div>
+          </div>
 
             <div
               className={cn(

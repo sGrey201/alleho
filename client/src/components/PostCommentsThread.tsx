@@ -629,7 +629,7 @@ export default function PostCommentsThread({
                   anchorPost.messageType !== "voice" &&
                   anchorPost.messageType !== "video" &&
                   anchorPost.messageType !== "file"
-                    ? "w-full max-w-[85%]"
+                    ? "w-full max-w-[85%] md:w-fit md:max-w-[min(85%,34rem)]"
                     : "max-w-[85%]"
                 }`}
               >
@@ -697,7 +697,7 @@ export default function PostCommentsThread({
                     src={getThumbUrl(anchorPost.imageUrl)}
                     alt=""
                     loading="lazy"
-                    className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                    className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
                     onError={(e) => {
                       const el = e.currentTarget;
                       if (el.dataset.fallback === "1") return;
@@ -754,7 +754,7 @@ export default function PostCommentsThread({
                     onTouchEnd={clearLongPress}
                     onTouchCancel={clearLongPress}
                     className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
-                      comment.imageUrl ? "w-full max-w-[85%] " : "max-w-[85%] "
+                      comment.imageUrl ? "w-full max-w-[85%] md:w-fit md:max-w-[min(85%,34rem)] " : "max-w-[85%] "
                     }${
                       isOwn
                         ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"
@@ -794,7 +794,7 @@ export default function PostCommentsThread({
                             src={getThumbUrl(comment.imageUrl)}
                             alt=""
                             loading="lazy"
-                            className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+                            className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
                             onError={(e) => {
                               const el = e.currentTarget;
                               if (el.dataset.fallback === "1") return;

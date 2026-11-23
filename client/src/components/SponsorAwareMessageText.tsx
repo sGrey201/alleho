@@ -25,6 +25,9 @@ type SponsorAwareMessageTextProps = {
   onPaymentSegmentRef?: (segmentIndex: number, el: HTMLDivElement | null) => void;
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
+  enableQuestionActions?: boolean;
+  onQuestionClick?: (question: string) => void;
+  questionSendPending?: boolean;
 };
 
 const segmentTextClass = "m-0 whitespace-pre-wrap break-words";
@@ -87,6 +90,9 @@ export function SponsorAwareMessageText({
   onPaymentSegmentRef,
   onTagClick,
   highlightQuery,
+  enableQuestionActions = false,
+  onQuestionClick,
+  questionSendPending = false,
 }: SponsorAwareMessageTextProps) {
   const segments = useMemo(() => {
     if (!monetizationEnabled) return null;
@@ -105,6 +111,9 @@ export function SponsorAwareMessageText({
         className={className}
         onTagClick={onTagClick}
         highlightQuery={highlightQuery}
+        enableQuestionActions={enableQuestionActions}
+        onQuestionClick={onQuestionClick}
+        questionSendPending={questionSendPending}
       />
     );
   }

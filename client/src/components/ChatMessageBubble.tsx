@@ -97,7 +97,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
       }`}
     >
       {!isDeleted ? (
-        <div className={isPhoto ? "w-full max-w-[85%]" : "max-w-[85%]"}>
+        <div className={isPhoto ? "w-full max-w-[85%] md:w-fit md:max-w-[min(85%,34rem)]" : "max-w-[85%]"}>
           <div
             onContextMenu={(e) => onContextMenu(e, msg)}
             onPointerDown={(e) => onPointerDown(e, msg)}
@@ -110,7 +110,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
             onTouchEnd={onTouchEnd}
             onTouchCancel={onTouchCancel}
             className={`message relative min-h-[2.75rem] min-w-28 rounded-2xl border px-2 pt-1 pb-1.5 select-none ${
-              isPhoto ? "w-full " : ""
+              isPhoto ? "w-full md:w-fit " : ""
             }${
               isOwn
                 ? "bg-emerald-100 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800 text-foreground"

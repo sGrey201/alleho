@@ -10,6 +10,7 @@ import {
   type ConversationMessage,
   type User,
 } from "@shared/schema";
+import { stripConsiliumQuestionMarkers } from "@shared/messageFormatting";
 import {
   questionnaireInstanceDataSchema,
   questionnaireMessageContentSchema,
@@ -499,7 +500,10 @@ export async function buildConversationExport(
       return `Шаблон анкеты «${name}»\n\nКонец анкеты...`;
     }
     const text = message.content?.trim() ?? "";
-    if (message.messageType === "ai_consilium") return text ? `AI консилиум\n\n${text}` : "AI консилиум";
+    if (message.messageType === "ai_consilium") {
+      const body = text ? stripConsiliumQuestionMarkers(text) : "";
+      return body ? `AI консилиум\n\n${body}` : "AI консилиум";
+    }
     if (message.messageType === "prescription") return text ? `Назначение\n\n${text}` : "Назначение";
     if (message.messageType === "followup") return text ? `Follow Up\n\n${text}` : "Follow Up";
     return text;

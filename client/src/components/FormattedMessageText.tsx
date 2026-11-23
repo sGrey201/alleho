@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { Send } from "lucide-react";
 import {
   parseMessageBoldSegments,
+  parseMessageQuestionSegments,
   parseMessageTagSegments,
   splitByHighlight,
 } from "@shared/messageFormatting";
@@ -12,6 +14,9 @@ type FormattedMessageTextProps = {
   onTagClick?: (tag: string) => void;
   highlightQuery?: string;
   as?: "p" | "span";
+  enableQuestionActions?: boolean;
+  onQuestionClick?: (question: string) => void;
+  questionSendPending?: boolean;
 };
 
 const tagClassName = "font-normal text-blue-600 hover:underline dark:text-blue-400";
@@ -150,30 +155,78 @@ function renderPlainWithTags(
   });
 }
 
+function renderBoldText(
+  text: string,
+  keyPrefix: string,
+  onTagClick?: (tag: string) => void,
+  highlightQuery?: string
+) {
+  return parseMessageBoldSegments(text).map((seg, i) =>
+    seg.bold ? (
+      <strong key={`${keyPrefix}-b${i}`}>
+        {renderPlainWithTags(seg.text, `${keyPrefix}-b${i}`, onTagClick, highlightQuery)}
+      </strong>
+    ) : (
+      <span key={`${keyPrefix}-p${i}`}>
+        {renderPlainWithTags(seg.text, `${keyPrefix}-p${i}`, onTagClick, highlightQuery)}
+      </span>
+    )
+  );
+}
+
 export function FormattedMessageText({
   text,
   className,
   onTagClick,
   highlightQuery,
   as = "p",
+  enableQuestionActions = false,
+  onQuestionClick,
+  questionSendPending = false,
 }: FormattedMessageTextProps) {
-  const segments = useMemo(() => parseMessageBoldSegments(text), [text]);
-  const content = useMemo(
-    () =>
-      segments.map((seg, i) =>
-        seg.bold ? (
-          <strong key={i}>{renderPlainWithTags(seg.text, `b${i}`, onTagClick, highlightQuery)}</strong>
-        ) : (
-          <span key={i}>{renderPlainWithTags(seg.text, `p${i}`, onTagClick, highlightQuery)}</span>
-        )
-      ),
-    [segments, onTagClick, highlightQuery]
+  const questionSegments = useMemo(
+    () => (enableQuestionActions ? parseMessageQuestionSegments(text) : null),
+    [enableQuestionActions, text]
   );
-  const Tag = as;
+  const plainContent = useMemo(
+    () => (questionSegments ? null : renderBoldText(text, "t", onTagClick, highlightQuery)),
+    [questionSegments, text, onTagClick, highlightQuery]
+  );
 
+  if (questionSegments && onQuestionClick) {
+    return (
+      <div className={cn("pb-0.5 text-sm leading-snug", className)}>
+        {questionSegments.map((seg, i) =>
+          seg.type === "question" ? (
+            <button
+              key={`q${i}`}
+              type="button"
+              disabled={questionSendPending}
+              className="my-1 flex w-full items-start gap-2 rounded-lg border border-border bg-background/70 px-2.5 py-2 text-left text-sm text-foreground disabled:opacity-60"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuestionClick(seg.text);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              <Send className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{seg.text}</span>
+            </button>
+          ) : seg.text ? (
+            <span key={`t${i}`} className="whitespace-pre-wrap break-words">
+              {renderBoldText(seg.text, `t${i}`, onTagClick, highlightQuery)}
+            </span>
+          ) : null
+        )}
+      </div>
+    );
+  }
+
+  const Tag = as;
   return (
     <Tag className={cn("whitespace-pre-wrap break-words pb-0.5 text-sm leading-snug", className)}>
-      {content}
+      {plainContent}
     </Tag>
   );
 }

@@ -889,6 +889,7 @@ export default function ConversationChat({
       fileSize?: number;
       fileMimeType?: string;
       poll?: PollPayload;
+      preserveComposer?: boolean;
     }) => {
       const body =
         data.poll != null
@@ -912,12 +913,19 @@ export default function ConversationChat({
       const res = await apiRequest("POST", `/api/conversations/${conversationId}/messages`, body);
       return res.json();
     },
-    onSuccess: (newMessage: ConversationMessageWithAuthor) => {
+    onSuccess: (
+      newMessage: ConversationMessageWithAuthor,
+      variables: { preserveComposer?: boolean }
+    ) => {
       if (!conversationId) return;
       queryClient.setQueryData<ConversationMessagesInfiniteData>(
         conversationMessagesQueryKey(conversationId),
         (old) => appendConversationMessage(old, newMessage)
       );
+      if (variables.preserveComposer) {
+        requestScrollToBottom();
+        return;
+      }
       setMessage("");
       if (conversationId) clearChatComposerDraft(conversationId);
       setReplyTo(null);
@@ -931,6 +939,20 @@ export default function ConversationChat({
       requestAnimationFrame(() => chatInputRef.current?.focusInput());
     },
   });
+
+  const [questionSendPending, setQuestionSendPending] = useState(false);
+  const sendConsiliumQuestion = useCallback(
+    (question: string) => {
+      const text = question.trim();
+      if (!text || !user?.isAdmin || questionSendPending) return;
+      setQuestionSendPending(true);
+      sendMutation.mutate(
+        { content: text, messageType: "message", preserveComposer: true },
+        { onSettled: () => setQuestionSendPending(false) }
+      );
+    },
+    [questionSendPending, sendMutation, user?.isAdmin]
+  );
 
   const pollVoteMutation = useMutation({
     mutationFn: async ({
@@ -2443,7 +2465,7 @@ export default function ConversationChat({
           src={getThumbUrl(msg.imageUrl)}
           alt=""
           loading="lazy"
-          className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90"
+          className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
           data-testid={`image-${msg.id}`}
           onError={(e) => {
             const el = e.currentTarget;
@@ -2562,6 +2584,9 @@ export default function ConversationChat({
                       onPaymentSegmentRef={setPaymentSegmentRef(msg.id)}
                       onTagClick={handleTagClick}
                       highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
+                      enableQuestionActions={!!user?.isAdmin}
+                      onQuestionClick={user?.isAdmin ? sendConsiliumQuestion : undefined}
+                      questionSendPending={questionSendPending}
                     />
                   )}
                 </CollapsibleMessageText>

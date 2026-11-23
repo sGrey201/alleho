@@ -6,6 +6,9 @@
  * The message keeps its original time, so it shows up in the destination
  * chat at that moment in the history, not as a new last message.
  *
+ * Local database only. Production runs in Docker and does not include tsx;
+ * on the server use scripts/move-conversation-message-docker.sh instead.
+ *
  * Prints the database host and changes nothing unless --apply is passed.
  *
  *   npx tsx scripts/move-conversation-message.ts \
