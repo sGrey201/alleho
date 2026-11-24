@@ -5,6 +5,15 @@ import { type Server } from "http";
 
 export { log } from "./logger";
 
+function hasFileExtension(urlPath: string): boolean {
+  const base = path.posix.basename(urlPath);
+  return base.includes(".");
+}
+
+function isAssetPath(urlPath: string): boolean {
+  return urlPath === "/assets" || urlPath.startsWith("/assets/");
+}
+
 function isPwaDevAssetPath(urlPath: string): boolean {
   return (
     urlPath === "/sw.js" ||
@@ -46,6 +55,10 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     if (isPwaDevAssetPath(req.path)) {
       return next();
+    }
+    if (isAssetPath(req.path) || hasFileExtension(req.path)) {
+      res.status(404).end();
+      return;
     }
 
     const url = req.originalUrl;
@@ -101,8 +114,12 @@ export function serveStatic(app: Express) {
     }),
   );
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  // Missing hashed bundles and other files must not be rewritten to the SPA shell.
+  app.use("*", (req, res) => {
+    if (isAssetPath(req.path) || hasFileExtension(req.path)) {
+      res.status(404).end();
+      return;
+    }
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");

@@ -6,6 +6,7 @@ import { log } from "./logger";
 import { storage } from "./storage";
 
 const app = express();
+app.disable("x-powered-by");
 
 declare module 'http' {
   interface IncomingMessage {
