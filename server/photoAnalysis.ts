@@ -1,7 +1,13 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import type { Conversation, ConversationMessage, User } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { aiPhotoAnalysisRequests, type Conversation, type ConversationMessage, type User } from "@shared/schema";
 import { questionnaireInstanceDataSchema, type PatientProfileBlock } from "@shared/questionnaireTypes";
-import { completeRegCloudWithFallback } from "./aiConsilium";
+import {
+  completeRegCloudWithFallback,
+  readRegCloudCallMeta,
+  type RegCloudTokenUsage,
+} from "./aiConsilium";
+import { db } from "./db";
 import { objectStorageClient } from "./replit_integrations/object_storage/objectStorage";
 import {
   publishConversationMessage,
@@ -109,7 +115,8 @@ export async function startPhotoAnalysis(input: {
     const payload = analysisPayload(message, input.author, photo);
     await publishConversationMessage(input.conversation.id, payload);
     void runPhotoAnalysis({
-      conversationId: input.conversation.id,
+      conversation: input.conversation,
+      author: input.author,
       messageId: message.id,
       photo,
     }).finally(() => {
@@ -140,17 +147,27 @@ function analysisCreatedAt(photoAt: Date, later: ConversationMessage[], photoId:
 }
 
 async function runPhotoAnalysis(input: {
-  conversationId: string;
+  conversation: Conversation;
+  author: User;
   messageId: string;
   photo: ConversationMessage;
 }): Promise<void> {
+  const logId = await openPhotoAnalysisLog({
+    conversationId: input.conversation.id,
+    messageId: input.messageId,
+    photoMessageId: input.photo.id,
+    requestedByUserId: input.author.id,
+    patientUserId: input.conversation.patientUserId,
+  });
   try {
     const image = await readChatImage(input.photo.imageUrl);
     if (!image) {
-      await fillPhotoAnalysis(input.conversationId, input.messageId, `${FAILURE_TEXT} Фото недоступно.`);
+      const text = `${FAILURE_TEXT} Фото недоступно.`;
+      await fillPhotoAnalysis(input.conversation.id, input.messageId, text);
+      await finishPhotoAnalysisLog(logId, { status: "error", error: text, response: text });
       return;
     }
-    const context = await patientContext(input.conversationId);
+    const context = await patientContext(input.conversation.id);
     const prompt = PROMPT.replace("{age}", context.age).replace("{gender}", context.gender);
     const model = process.env.REG_CLOUD_PHOTO_MODEL?.trim() || PHOTO_MODEL;
     const fallback = process.env.REG_CLOUD_PHOTO_FALLBACK_MODEL?.trim() || PHOTO_FALLBACK_MODEL;
@@ -164,12 +181,117 @@ async function runPhotoAnalysis(input: {
       ],
     });
     const text = answer.text.trim() || `${FAILURE_TEXT} Модель вернула пустой ответ.`;
-    await fillPhotoAnalysis(input.conversationId, input.messageId, text);
+    await fillPhotoAnalysis(input.conversation.id, input.messageId, text);
+    await finishPhotoAnalysisLog(logId, {
+      status: text.startsWith(FAILURE_TEXT) ? "error" : "finished",
+      model: answer.model,
+      usage: answer.usage,
+      attemptCount: answer.attemptCount,
+      finishReason: answer.finishReason,
+      runId: answer.runId,
+      httpStatus: answer.httpStatus,
+      prompt: prompt,
+      response: text,
+      error: text.startsWith(FAILURE_TEXT) ? text : null,
+    });
   } catch (error) {
-    console.error("[PhotoAnalysis] failed", { conversationId: input.conversationId, messageId: input.messageId, error });
+    console.error("[PhotoAnalysis] failed", { conversationId: input.conversation.id, messageId: input.messageId, error });
     const message = error instanceof Error ? error.message : "Unknown error";
-    await fillPhotoAnalysis(input.conversationId, input.messageId, failureText(message));
+    const text = failureText(message);
+    try {
+      await fillPhotoAnalysis(input.conversation.id, input.messageId, text);
+    } catch (fillError) {
+      console.error("[PhotoAnalysis] failure text was not saved", { messageId: input.messageId, fillError });
+    }
+    const meta = readRegCloudCallMeta(error);
+    await finishPhotoAnalysisLog(logId, {
+      status: "error",
+      model: meta?.model,
+      usage: meta?.usage,
+      attemptCount: meta?.attemptCount,
+      finishReason: meta?.finishReason,
+      runId: meta?.runId,
+      httpStatus: meta?.httpStatus,
+      response: text,
+      error: text,
+    });
   }
+}
+
+async function openPhotoAnalysisLog(input: {
+  conversationId: string;
+  messageId: string;
+  photoMessageId: string;
+  requestedByUserId: string;
+  patientUserId: string | null;
+}): Promise<string | null> {
+  try {
+    const [row] = await db
+      .insert(aiPhotoAnalysisRequests)
+      .values({
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        photoMessageId: input.photoMessageId,
+        requestedByUserId: input.requestedByUserId,
+        patientUserId: input.patientUserId,
+        status: "started",
+      })
+      .returning({ id: aiPhotoAnalysisRequests.id });
+    return row?.id ?? null;
+  } catch (error) {
+    console.error("[PhotoAnalysis] log was not opened", { messageId: input.messageId, error });
+    return null;
+  }
+}
+
+type PhotoAnalysisLogFinish = {
+  status: "finished" | "error";
+  model?: string | null;
+  usage?: RegCloudTokenUsage | null;
+  attemptCount?: number;
+  finishReason?: string | null;
+  runId?: string | null;
+  httpStatus?: number | null;
+  prompt?: string | null;
+  response?: string | null;
+  error?: string | null;
+};
+
+async function finishPhotoAnalysisLog(id: string | null, patch: PhotoAnalysisLogFinish): Promise<void> {
+  if (!id) return;
+  try {
+    await db
+      .update(aiPhotoAnalysisRequests)
+      .set({
+        status: patch.status,
+        answeredAt: new Date(),
+        model: patch.model ?? null,
+        providerRequestId: patch.runId ?? null,
+        promptTokens: patch.usage?.promptTokens ?? null,
+        completionTokens: patch.usage?.completionTokens ?? null,
+        totalTokens: patch.usage?.totalTokens ?? null,
+        reasoningTokens: patch.usage?.reasoningTokens ?? null,
+        cachedPromptTokens: patch.usage?.cachedPromptTokens ?? null,
+        ...(patch.attemptCount != null ? { attemptCount: patch.attemptCount } : {}),
+        promptChars: patch.prompt?.length ?? null,
+        responseChars: patch.response?.length ?? null,
+        httpStatus: patch.httpStatus ?? null,
+        finishReason: patch.finishReason ?? null,
+        error: patch.error ? sanitizePhotoError(patch.error) : null,
+      })
+      .where(eq(aiPhotoAnalysisRequests.id, id));
+  } catch (error) {
+    console.error("[PhotoAnalysis] log was not finished", { id, error });
+  }
+}
+
+function sanitizePhotoError(message: string): string {
+  return message
+    .replace(/crsr_[a-z0-9]+/gi, "ключ")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "ключ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
 }
 
 async function fillPhotoAnalysis(conversationId: string, messageId: string, content: string): Promise<void> {

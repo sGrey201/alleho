@@ -484,48 +484,126 @@ async function completeRegCloud(
   };
 }
 
+export type RegCloudTokenUsage = {
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  reasoningTokens: number | null;
+  cachedPromptTokens: number | null;
+};
+
+export type RegCloudFallbackResult = {
+  text: string;
+  model: string;
+  usage: RegCloudTokenUsage | null;
+  attemptCount: number;
+  finishReason: string | null;
+  runId: string | null;
+  httpStatus: number | null;
+};
+
+export type RegCloudCallMeta = Omit<RegCloudFallbackResult, "text">;
+
+type FallbackTrack = {
+  attemptCount: number;
+  usage: TokenUsage | null;
+  lastModel: string | null;
+  finishReason: string | null;
+  runId: string | null;
+  httpStatus: number | null;
+};
+
+function fallbackMeta(track: FallbackTrack, model: string): RegCloudCallMeta {
+  return {
+    model: track.lastModel ?? model,
+    usage: track.usage,
+    attemptCount: track.attemptCount,
+    finishReason: track.finishReason,
+    runId: track.runId,
+    httpStatus: track.httpStatus,
+  };
+}
+
+export function readRegCloudCallMeta(error: unknown): RegCloudCallMeta | null {
+  if (!error || typeof error !== "object" || !("regCloudMeta" in error)) return null;
+  const meta = (error as { regCloudMeta?: RegCloudCallMeta }).regCloudMeta;
+  return meta ?? null;
+}
+
 export async function completeRegCloudWithFallback(input: {
   model: string;
   fallbackModel: string;
   content: string | ChatContentPart[];
   skipSameRetryOn400?: boolean;
-}): Promise<{ text: string; model: string }> {
+}): Promise<RegCloudFallbackResult> {
   const apiKey = process.env.REG_CLOUD_API_KEY?.trim();
   if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
   const model = input.model.trim() || REG_CLOUD_MODEL;
   const fallback = input.fallbackModel.trim() || REG_CLOUD_FALLBACK_MODEL;
+  const track: FallbackTrack = {
+    attemptCount: 0,
+    usage: null,
+    lastModel: null,
+    finishReason: null,
+    runId: null,
+    httpStatus: null,
+  };
 
-  const once = (target: string) => completeRegCloud(apiKey, target, input.content);
+  const once = async (target: string) => {
+    track.attemptCount += 1;
+    track.lastModel = target;
+    try {
+      const result = await completeRegCloud(apiKey, target, input.content);
+      track.usage = addTokenUsage(track.usage, result.usage);
+      track.finishReason = result.finishReason;
+      track.runId = result.runId || null;
+      track.httpStatus = 200;
+      return result;
+    } catch (error) {
+      if (error instanceof RegCloudError) {
+        track.usage = addTokenUsage(track.usage, error.usage);
+        track.httpStatus = error.status;
+      }
+      throw error;
+    }
+  };
   const rejectedImage = (error: unknown) =>
     input.skipSameRetryOn400 === true && error instanceof RegCloudError && error.status === 400;
+  const succeed = (result: { text: string; model: string }): RegCloudFallbackResult => ({
+    text: result.text,
+    ...fallbackMeta(track, result.model),
+    model: result.model,
+  });
 
   try {
-    const first = await once(model);
-    return { text: first.text, model: first.model };
-  } catch (error) {
-    if (rejectedImage(error)) {
-      if (!fallback || fallback === model) throw error;
-      console.error("[RegCloud] model rejected the image, trying fallback", { model, fallback });
-      const alternate = await once(fallback);
-      return { text: alternate.text, model: alternate.model };
-    }
-    if (!isUnreachableModelError(error)) throw error;
-    console.error("[RegCloud] model was unreachable, retrying once", { model });
     try {
-      const second = await once(model);
-      return { text: second.text, model: second.model };
-    } catch (retryError) {
-      if (rejectedImage(retryError)) {
-        if (!fallback || fallback === model) throw retryError;
-        console.error("[RegCloud] retry rejected the image, trying fallback", { model, fallback });
-        const alternate = await once(fallback);
-        return { text: alternate.text, model: alternate.model };
+      return succeed(await once(model));
+    } catch (error) {
+      if (rejectedImage(error)) {
+        if (!fallback || fallback === model) throw error;
+        console.error("[RegCloud] model rejected the image, trying fallback", { model, fallback });
+        return succeed(await once(fallback));
       }
-      if (!isUnreachableModelError(retryError) || !fallback || fallback === model) throw retryError;
-      console.error("[RegCloud] retry failed, trying fallback model", { model, fallback });
-      const third = await once(fallback);
-      return { text: third.text, model: third.model };
+      if (!isUnreachableModelError(error)) throw error;
+      console.error("[RegCloud] model was unreachable, retrying once", { model });
+      try {
+        return succeed(await once(model));
+      } catch (retryError) {
+        if (rejectedImage(retryError)) {
+          if (!fallback || fallback === model) throw retryError;
+          console.error("[RegCloud] retry rejected the image, trying fallback", { model, fallback });
+          return succeed(await once(fallback));
+        }
+        if (!isUnreachableModelError(retryError) || !fallback || fallback === model) throw retryError;
+        console.error("[RegCloud] retry failed, trying fallback model", { model, fallback });
+        return succeed(await once(fallback));
+      }
     }
+  } catch (error) {
+    if (error && typeof error === "object") {
+      Object.assign(error, { regCloudMeta: fallbackMeta(track, model) });
+    }
+    throw error;
   }
 }
 

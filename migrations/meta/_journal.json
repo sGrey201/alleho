@@ -281,6 +281,13 @@
       "when": 1774270000000,
       "tag": "0039_patient_invite_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1774280000000,
+      "tag": "0040_ai_photo_analysis_requests",
+      "breakpoints": true
     }
   ]
 }

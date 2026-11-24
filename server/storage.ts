@@ -20,6 +20,7 @@ import {
   conversationCallParticipants,
   conversationCallRecordingTracks,
   aiConsiliumRequests,
+  aiPhotoAnalysisRequests,
   channelSponsorSettings,
   channelSponsorPayments,
   type User,
@@ -218,6 +219,24 @@ export type PlatformMetricsConsiliumRow = {
   patientUserId: string | null;
 };
 
+export type PlatformMetricsPhotoAnalysisRow = {
+  id: string;
+  conversationId: string;
+  requestedAt: string;
+  answeredAt: string | null;
+  status: string;
+  model: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  attemptCount: number;
+  error: string | null;
+  requesterUserId: string;
+  requesterName: string;
+  chatTitle: string;
+  patientUserId: string | null;
+};
+
 export type PlatformMetrics = {
   windowDays: number;
   activeDoctorPatientPairs: number;
@@ -230,6 +249,8 @@ export type PlatformMetrics = {
   topDoctors: PlatformMetricsDoctorRow[];
   consiliumDays: PlatformMetricsConsiliumDay[];
   recentConsiliums: PlatformMetricsConsiliumRow[];
+  photoAnalysisDays: PlatformMetricsConsiliumDay[];
+  recentPhotoAnalyses: PlatformMetricsPhotoAnalysisRow[];
 };
 
 export type MessageReactionSummary = {
@@ -680,6 +701,7 @@ export interface IStorage {
 }
 
 const CONSILIUM_CHART_DAYS = 30;
+const METRICS_TABLE_LIMIT = 500;
 
 function moscowCalendarDay(date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -779,7 +801,7 @@ async function loadConsiliumMetrics(): Promise<{
     .innerJoin(requester, eq(requester.id, aiConsiliumRequests.requestedByUserId))
     .leftJoin(patient, eq(patient.id, aiConsiliumRequests.patientUserId))
     .orderBy(desc(aiConsiliumRequests.requestedAt))
-    .limit(10);
+    .limit(METRICS_TABLE_LIMIT);
 
   const recent: PlatformMetricsConsiliumRow[] = recentRows.map((row) => ({
     id: row.id,
@@ -794,6 +816,104 @@ async function loadConsiliumMetrics(): Promise<{
     photoCount: row.photoCount,
     photosSent: row.photosSent,
     missingTranscripts: row.missingTranscripts,
+    error: row.error,
+    requesterUserId: row.requesterId,
+    requesterName: personName(row.requesterFirst, row.requesterLast, row.requesterEmail),
+    chatTitle:
+      row.chatTitle?.trim() ||
+      personName(row.patientFirst, row.patientLast, row.patientEmail),
+    patientUserId: row.patientId,
+  }));
+
+  return { days, recent };
+}
+
+async function loadPhotoAnalysisMetrics(): Promise<{
+  days: PlatformMetricsConsiliumDay[];
+  recent: PlatformMetricsPhotoAnalysisRow[];
+}> {
+  const today = moscowCalendarDay();
+  const lookback = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+  const moscowDay = sql`timezone('Europe/Moscow', ${aiPhotoAnalysisRequests.requestedAt}::timestamptz)`;
+
+  const dailyRows = await db
+    .select({
+      day: sql<string>`to_char(date_trunc('day', ${moscowDay}), 'YYYY-MM-DD')`,
+      requests: sql<number>`count(*)::int`,
+      finished: sql<number>`count(*) filter (where ${aiPhotoAnalysisRequests.status} = 'finished')::int`,
+      errors: sql<number>`count(*) filter (where ${aiPhotoAnalysisRequests.status} = 'error')::int`,
+      totalTokens: sql<number>`coalesce(sum(${aiPhotoAnalysisRequests.totalTokens}), 0)::int`,
+      promptTokens: sql<number>`coalesce(sum(${aiPhotoAnalysisRequests.promptTokens}), 0)::int`,
+      completionTokens: sql<number>`coalesce(sum(${aiPhotoAnalysisRequests.completionTokens}), 0)::int`,
+    })
+    .from(aiPhotoAnalysisRequests)
+    .where(gt(aiPhotoAnalysisRequests.requestedAt, lookback))
+    .groupBy(sql`date_trunc('day', ${moscowDay})`);
+
+  const byDay = new Map(dailyRows.map((row) => [row.day, row]));
+  const days: PlatformMetricsConsiliumDay[] = [];
+  for (let offset = -(CONSILIUM_CHART_DAYS - 1); offset <= 0; offset++) {
+    const day = shiftCalendarDay(today, offset);
+    const row = byDay.get(day);
+    days.push({
+      day,
+      requests: Number(row?.requests ?? 0),
+      finished: Number(row?.finished ?? 0),
+      errors: Number(row?.errors ?? 0),
+      totalTokens: Number(row?.totalTokens ?? 0),
+      promptTokens: Number(row?.promptTokens ?? 0),
+      completionTokens: Number(row?.completionTokens ?? 0),
+    });
+  }
+
+  const requester = alias(users, "ai_photo_requester");
+  const patient = alias(users, "ai_photo_patient");
+  const recentRows = await db
+    .select({
+      id: aiPhotoAnalysisRequests.id,
+      conversationId: aiPhotoAnalysisRequests.conversationId,
+      requestedAt: aiPhotoAnalysisRequests.requestedAt,
+      answeredAt: aiPhotoAnalysisRequests.answeredAt,
+      status: aiPhotoAnalysisRequests.status,
+      model: aiPhotoAnalysisRequests.model,
+      promptTokens: aiPhotoAnalysisRequests.promptTokens,
+      completionTokens: aiPhotoAnalysisRequests.completionTokens,
+      totalTokens: aiPhotoAnalysisRequests.totalTokens,
+      attemptCount: aiPhotoAnalysisRequests.attemptCount,
+      error: aiPhotoAnalysisRequests.error,
+      requesterId: requester.id,
+      requesterFirst: requester.firstName,
+      requesterLast: requester.lastName,
+      requesterEmail: requester.email,
+      patientId: patient.id,
+      patientFirst: patient.firstName,
+      patientLast: patient.lastName,
+      patientEmail: patient.email,
+      chatTitle: sql<string | null>`(
+        SELECT ${conversationParticipants.displayName}
+        FROM ${conversationParticipants}
+        WHERE ${conversationParticipants.conversationId} = ${aiPhotoAnalysisRequests.conversationId}
+          AND ${conversationParticipants.userId} = ${aiPhotoAnalysisRequests.requestedByUserId}
+        LIMIT 1
+      )`,
+    })
+    .from(aiPhotoAnalysisRequests)
+    .innerJoin(requester, eq(requester.id, aiPhotoAnalysisRequests.requestedByUserId))
+    .leftJoin(patient, eq(patient.id, aiPhotoAnalysisRequests.patientUserId))
+    .orderBy(desc(aiPhotoAnalysisRequests.requestedAt))
+    .limit(METRICS_TABLE_LIMIT);
+
+  const recent: PlatformMetricsPhotoAnalysisRow[] = recentRows.map((row) => ({
+    id: row.id,
+    conversationId: row.conversationId,
+    requestedAt: row.requestedAt.toISOString(),
+    answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
+    status: row.status,
+    model: row.model,
+    promptTokens: row.promptTokens,
+    completionTokens: row.completionTokens,
+    totalTokens: row.totalTokens,
+    attemptCount: row.attemptCount,
     error: row.error,
     requesterUserId: row.requesterId,
     requesterName: personName(row.requesterFirst, row.requesterLast, row.requesterEmail),
@@ -3679,6 +3799,7 @@ export class DatabaseStorage implements IStorage {
     });
 
     const consilium = await loadConsiliumMetrics();
+    const photoAnalysis = await loadPhotoAnalysisMetrics();
 
     return {
       windowDays: days,
@@ -3693,6 +3814,8 @@ export class DatabaseStorage implements IStorage {
       topDoctors,
       consiliumDays: consilium.days,
       recentConsiliums: consilium.recent,
+      photoAnalysisDays: photoAnalysis.days,
+      recentPhotoAnalyses: photoAnalysis.recent,
     };
   }
 
