@@ -28,6 +28,7 @@ import { isInstalledPwaSession } from "@/lib/isInstalledPwa";
 import { pageMeta } from "@/lib/pageMeta";
 import { apiRequest, fetchJson } from "@/lib/queryClient";
 import { offlineMessengerQueryOptions } from "@/lib/offlineQueryOptions";
+import { prefetchConversationOpen } from "@/lib/prefetchConversation";
 import { useToast } from "@/hooks/use-toast";
 import { useDoctorChatsWs } from "@/hooks/useDoctorChatsWs";
 import { useAppShellTheme } from "@/hooks/useAppShellTheme";
@@ -1108,8 +1109,12 @@ export default function Messenger() {
   return (
     <div className={cn("messenger-shell", !isMobileConversationOpen && "messenger-shell--list")}>
       <RouteSeo {...pageMeta.messenger} />
-      {!isMobileConversationOpen && (
-      <div className="messenger-sidebar border-b md:border-b-0 bg-background">
+      <div
+        className={cn(
+          "messenger-sidebar border-b md:border-b-0 bg-background",
+          isMobileConversationOpen && "messenger-sidebar--hidden",
+        )}
+      >
         <Tabs
           value={activeFolder}
           onValueChange={(v) => {
@@ -1271,6 +1276,9 @@ export default function Messenger() {
                             <button
                               key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                               type="button"
+                              onPointerDown={() => {
+                                if (chat.conversationId) prefetchConversationOpen(chat.conversationId);
+                              }}
                               onClick={() => {
                                 if (chat.type === "channel" && chat.conversationId) {
                                   handleSelectChannel({
@@ -1314,6 +1322,9 @@ export default function Messenger() {
                             <button
                               key={doctor.userId}
                               type="button"
+                              onPointerDown={() => {
+                                if (doctor.conversationId) prefetchConversationOpen(doctor.conversationId);
+                              }}
                               onClick={() => handleSelectDoctor(doctor)}
                               className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                             >
@@ -1340,6 +1351,7 @@ export default function Messenger() {
                           <button
                             key={group.id}
                             type="button"
+                            onPointerDown={() => prefetchConversationOpen(group.id)}
                             onClick={() => handleSelectGroup(group)}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
@@ -1364,6 +1376,7 @@ export default function Messenger() {
                           <button
                             key={channel.id}
                             type="button"
+                            onPointerDown={() => prefetchConversationOpen(channel.id)}
                             onClick={() => handleSelectChannel(channel)}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left border-b border-border/50 hover:bg-muted/40 active:bg-muted/60 bg-background"
                           >
@@ -1508,6 +1521,9 @@ export default function Messenger() {
                       <button
                         key={chat.conversationId ?? `${chat.type}-${chat.otherParticipantId ?? ""}`}
                         type="button"
+                        onPointerDown={() => {
+                          if (chat.conversationId) prefetchConversationOpen(chat.conversationId);
+                        }}
                         onClick={() => {
                           if (chat.type === "channel" && chat.conversationId) {
                             handleSelectChannel({
@@ -1602,7 +1618,6 @@ export default function Messenger() {
           </div>
         </Tabs>
       </div>
-      )}
 
       <div className="messenger-main flex flex-1 flex-col min-h-0 bg-muted/20">
         {isProfileOpen ? (

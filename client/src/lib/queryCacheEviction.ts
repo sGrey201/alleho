@@ -12,7 +12,16 @@ export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
   if (root === "/api/me/chats") return true;
   if (root === "/api/me/chats/unread-summary") return true;
   if (root === "/api/conversations" && queryKey[2] === "messages") return true;
+  if (root === "/api/conversations" && queryKey.length === 2) return true;
   return false;
+}
+
+function isMessageQuery(queryKey: readonly unknown[]): boolean {
+  return String(queryKey[0]) === "/api/conversations" && queryKey[2] === "messages";
+}
+
+function isConversationQuery(queryKey: readonly unknown[]): boolean {
+  return String(queryKey[0]) === "/api/conversations" && queryKey.length === 2;
 }
 
 function trimMessagePages(data: ConversationMessagesInfiniteData): ConversationMessagesInfiniteData {
@@ -28,10 +37,16 @@ function trimMessagePages(data: ConversationMessagesInfiniteData): ConversationM
 
 export function trimDehydratedStateForPersistence(state: DehydratedState): DehydratedState {
   const persistable = state.queries.filter((entry) => shouldPersistQueryKey(entry.queryKey));
-  const nonMessages = persistable.filter((entry) => String(entry.queryKey[0]) !== "/api/conversations");
+  const nonMessages = persistable.filter(
+    (entry) => !isMessageQuery(entry.queryKey) && !isConversationQuery(entry.queryKey),
+  );
+  const conversationEntries = persistable
+    .filter((entry) => isConversationQuery(entry.queryKey))
+    .sort((a, b) => (b.state.dataUpdatedAt ?? 0) - (a.state.dataUpdatedAt ?? 0))
+    .slice(0, MAX_PERSISTED_CONVERSATIONS);
   const messageEntries = persistable
-    .filter((entry) => String(entry.queryKey[0]) === "/api/conversations")
-  .sort((a, b) => (b.state.dataUpdatedAt ?? 0) - (a.state.dataUpdatedAt ?? 0))
+    .filter((entry) => isMessageQuery(entry.queryKey))
+    .sort((a, b) => (b.state.dataUpdatedAt ?? 0) - (a.state.dataUpdatedAt ?? 0))
     .slice(0, MAX_PERSISTED_CONVERSATIONS)
     .map((entry) => {
       const data = entry.state.data as ConversationMessagesInfiniteData | undefined;
@@ -47,7 +62,7 @@ export function trimDehydratedStateForPersistence(state: DehydratedState): Dehyd
 
   return {
     ...state,
-    queries: [...nonMessages, ...messageEntries],
+    queries: [...nonMessages, ...conversationEntries, ...messageEntries],
     mutations: [],
   };
 }

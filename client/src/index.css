@@ -499,6 +499,13 @@ html.app-immersive .messenger-main {
   height: 100%;
 }
 
+@media (max-width: 767px) {
+  .messenger-sidebar.messenger-sidebar--hidden,
+  html.app-immersive .messenger-sidebar.messenger-sidebar--hidden {
+    display: none;
+  }
+}
+
 .messenger-sidebar-main {
   position: relative;
 }

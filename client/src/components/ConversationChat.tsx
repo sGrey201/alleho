@@ -161,6 +161,53 @@ interface ConversationInfo {
   }>;
 }
 
+function conversationPreviewFromChatList(conversationId: string | undefined): ConversationInfo | undefined {
+  if (!conversationId) return undefined;
+  const snapshots = queryClient.getQueriesData<{
+    pages?: Array<{
+      items?: Array<{
+        conversationId?: string;
+        type?: string;
+        name?: string | null;
+        avatarUrl?: string | null;
+        patientUserId?: string;
+        otherParticipantId?: string;
+        otherParticipantName?: string;
+        patientName?: string;
+        participantCount?: number;
+      }>;
+    }>;
+  }>({ queryKey: ["/api/me/chats"] });
+  for (const [, data] of snapshots) {
+    const chat = data?.pages
+      ?.flatMap((page) => page.items ?? [])
+      .find((item) => item.conversationId === conversationId);
+    if (!chat) continue;
+    return {
+      id: conversationId,
+      type: chat.type ?? "direct",
+      name: chat.name ?? chat.otherParticipantName ?? chat.patientName ?? null,
+      avatarUrl: chat.avatarUrl ?? null,
+      patientUserId: chat.patientUserId ?? null,
+      participantCount: chat.participantCount,
+      participants:
+        chat.otherParticipantId || chat.otherParticipantName || chat.patientName
+          ? [
+              {
+                userId: chat.otherParticipantId ?? "",
+                role: "member",
+                displayName: chat.otherParticipantName ?? chat.patientName ?? null,
+                user: {
+                  firstName: chat.otherParticipantName ?? chat.patientName ?? null,
+                },
+              },
+            ]
+          : [],
+    };
+  }
+  return undefined;
+}
+
 type SearchDoctor = {
   userId: string;
   firstName?: string;
@@ -721,7 +768,7 @@ export default function ConversationChat({
     suppressAutoScrollUntilRef.current = Date.now() + 800;
   }, []);
 
-  const { data: conv, isLoading: convLoading } = useQuery<ConversationInfo>({
+  const { data: fetchedConv } = useQuery<ConversationInfo>({
     queryKey: ["/api/conversations", conversationId],
     queryFn: async () => {
       const res = await fetch(`/api/conversations/${conversationId}`, { credentials: "include" });
@@ -731,6 +778,11 @@ export default function ConversationChat({
     enabled: !!conversationId,
     ...liveConversationQueryOptions,
   });
+  const listPreview = useMemo(
+    () => (fetchedConv ? undefined : conversationPreviewFromChatList(conversationId)),
+    [fetchedConv, conversationId],
+  );
+  const conv = fetchedConv ?? listPreview;
 
   const {
     messages,
@@ -1649,7 +1701,7 @@ export default function ConversationChat({
   }, [conversationId]);
 
   useEffect(() => {
-    if (convLoading || !conv) return;
+    if (!conv) return;
     const root = messagesScrollRef.current;
     const sentinel = loadOlderRef.current;
     if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return;
@@ -1672,7 +1724,7 @@ export default function ConversationChat({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [convLoading, conv, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length, isDeepLinkPending]);
+  }, [conv, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length, isDeepLinkPending]);
 
   useLayoutEffect(() => {
     if (isDeepLinkPending()) return;
@@ -1706,14 +1758,14 @@ export default function ConversationChat({
   }, [displayMessages.length, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
   useLayoutEffect(() => {
-    if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
+    if (!conv || messagesLoading || displayMessages.length === 0) return;
     if (!needsInitialPinRef.current) return;
     needsInitialPinRef.current = false;
     pinToBottomIfNeeded();
-  }, [convLoading, conv, messagesLoading, displayMessages.length, conversationId, pinToBottomIfNeeded]);
+  }, [conv, messagesLoading, displayMessages.length, conversationId, pinToBottomIfNeeded]);
 
   useEffect(() => {
-    if (convLoading || !conv || messagesLoading || displayMessages.length === 0) return;
+    if (!conv || messagesLoading || displayMessages.length === 0) return;
 
     const root = messagesScrollRef.current;
     const contentEl = messagesContentRef.current;
@@ -1736,7 +1788,6 @@ export default function ConversationChat({
       window.removeEventListener(CHAT_COMPOSER_INSET_EVENT, onComposerInset);
     };
   }, [
-    convLoading,
     conv,
     conversationId,
     messagesLoading,
@@ -1745,7 +1796,7 @@ export default function ConversationChat({
   ]);
 
   useEffect(() => {
-    if (convLoading || !conv) return;
+    if (!conv) return;
     const root = messagesScrollRef.current;
     if (!root) return;
 
@@ -1762,7 +1813,7 @@ export default function ConversationChat({
 
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
-  }, [conversationId, convLoading, conv]);
+  }, [conversationId, conv]);
 
   useLayoutEffect(() => {
     if (scrollToBottomTick === 0) return;
@@ -1999,7 +2050,7 @@ export default function ConversationChat({
     });
   };
 
-  if (convLoading || !conv) {
+  if (!conv) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

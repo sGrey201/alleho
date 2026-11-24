@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import { log } from "./logger";
 import { storage } from "./storage";
@@ -16,6 +17,8 @@ app.use((req, _res, next) => {
   console.log(`[http] ${req.method} ${req.url}`);
   next();
 });
+
+app.use(compression({ threshold: 1024 }));
 
 // LiveKit webhooks must use the raw body for signature verification.
 app.post(
@@ -39,6 +42,13 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
 
 // Prevent caching of error responses (4xx/5xx) so a one-time 403 doesn't stick in the browser
 app.use((req, res, next) => {

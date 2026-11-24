@@ -24,7 +24,6 @@ export function useAuth() {
     retryDelay: transientQueryRetryDelay,
     // Auth response can gain fields (e.g. isPlatformAdmin); do not keep a forever-fresh cache.
     staleTime: 60_000,
-    refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     networkMode: "offlineFirst",
