@@ -1,4 +1,4 @@
-import { callPayloadSchema, type CallPayload } from "./schema";
+import { callPayloadSchema, type CallPayload } from "./validation";
 
 export function parseCallMessagePayload(content: string | null | undefined): CallPayload | null {
   if (!content?.trim()) return null;

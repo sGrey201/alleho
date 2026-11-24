@@ -1,5 +1,7 @@
 import { memo, type ReactNode } from "react";
+import { Sparkles } from "lucide-react";
 import type { ConversationMessageWithAuthor } from "@/hooks/useConversationWs";
+import { Button } from "@/components/ui/button";
 import { MessageReceiptIcons } from "@/components/MessageReceiptIcons";
 import { getMessageReceiptStatus } from "@/lib/messageReceipt";
 import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
@@ -27,6 +29,9 @@ type ChatMessageBubbleProps = {
   formatBubbleTime: (createdAt: string) => string;
   highlightQuery?: string;
   inlinePaymentSegmentIndex?: number | null;
+  showPatientPhotoAnalysis?: boolean;
+  photoAnalysisPending?: boolean;
+  onPhotoAnalysis?: (messageId: string) => void;
   children: ReactNode;
 };
 
@@ -52,7 +57,9 @@ function bubblePropsEqual(prev: ChatMessageBubbleProps, next: ChatMessageBubbleP
     prev.showReceiptIcons === next.showReceiptIcons &&
     prev.peerLastReadAt === next.peerLastReadAt &&
     prev.highlightQuery === next.highlightQuery &&
-    prev.inlinePaymentSegmentIndex === next.inlinePaymentSegmentIndex
+    prev.inlinePaymentSegmentIndex === next.inlinePaymentSegmentIndex &&
+    prev.showPatientPhotoAnalysis === next.showPatientPhotoAnalysis &&
+    prev.photoAnalysisPending === next.photoAnalysisPending
   );
 }
 
@@ -76,6 +83,9 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
   onTouchEnd,
   onTouchCancel,
   formatBubbleTime,
+  showPatientPhotoAnalysis = false,
+  photoAnalysisPending = false,
+  onPhotoAnalysis,
   children,
 }: ChatMessageBubbleProps) {
   if (msg.deletedAt && !shouldShowDeletedMessagePlaque(msg.deletedAt)) {
@@ -97,7 +107,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
       }`}
     >
       {!isDeleted ? (
-        <div className={isPhoto ? "w-full max-w-[85%] md:w-fit md:max-w-[min(85%,34rem)]" : "max-w-[85%]"}>
+        <div className={isPhoto ? "min-w-0 w-full max-w-[85%] md:w-fit md:max-w-[min(85%,34rem)]" : "max-w-[85%]"}>
           <div
             onContextMenu={(e) => onContextMenu(e, msg)}
             onPointerDown={(e) => onPointerDown(e, msg)}
@@ -169,6 +179,24 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
             )}
           </span>
         </div>
+      )}
+      {showPatientPhotoAnalysis && !isDeleted && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          disabled={photoAnalysisPending}
+          className="mb-1 ml-1.5 h-8 w-8 shrink-0 self-end rounded-full border border-border bg-background text-foreground shadow-sm hover:bg-muted"
+          aria-label={t.photoAnalysis}
+          data-testid={`button-photo-analysis-${msg.id}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPhotoAnalysis?.(msg.id);
+          }}
+        >
+          <Sparkles className="h-4 w-4" />
+        </Button>
       )}
     </div>
   );

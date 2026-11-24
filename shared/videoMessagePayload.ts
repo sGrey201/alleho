@@ -1,4 +1,4 @@
-import { videoPayloadSchema, type VideoPayload } from "./schema";
+import { videoPayloadSchema, type VideoPayload } from "./validation";
 
 export function parseVideoMessagePayload(
   content: string | null | undefined,

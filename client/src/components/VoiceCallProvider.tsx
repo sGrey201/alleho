@@ -8,18 +8,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
+import type {
+  LocalTrack,
+  Participant,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
   Room,
-  RoomEvent,
-  Track,
-  VideoPresets,
-  type LocalTrack,
-  type RemoteTrack,
-  type RemoteTrackPublication,
-  type RemoteParticipant,
-  type Participant,
 } from "livekit-client";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { loadLiveKit, type LiveKitModule } from "@/lib/livekitClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { t } from "@/lib/i18n";
@@ -44,18 +42,20 @@ export type CallVideoTile = {
   remotePublication?: RemoteTrackPublication;
 };
 
-const CAMERA_CAPTURE = {
-  resolution: VideoPresets.h720.resolution,
-  facingMode: "user" as const,
-};
-
 function isPrivateCallType(type: string | undefined): boolean {
   return type === "direct" || type === "patient";
 }
 
-function collectVideoTiles(room: Room): CallVideoTile[] {
+function cameraCapture(lk: LiveKitModule) {
+  return {
+    resolution: lk.VideoPresets.h720.resolution,
+    facingMode: "user" as const,
+  };
+}
+
+function collectVideoTiles(room: Room, lk: LiveKitModule): CallVideoTile[] {
   const tiles: CallVideoTile[] = [];
-  const localPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+  const localPub = room.localParticipant.getTrackPublication(lk.Track.Source.Camera);
   if (localPub?.track && !localPub.isMuted) {
     tiles.push({
       userId: room.localParticipant.identity,
@@ -64,7 +64,7 @@ function collectVideoTiles(room: Room): CallVideoTile[] {
     });
   }
   room.remoteParticipants.forEach((participant) => {
-    const pub = participant.getTrackPublication(Track.Source.Camera);
+    const pub = participant.getTrackPublication(lk.Track.Source.Camera);
     if (pub?.track && pub.isSubscribed && !pub.isMuted) {
       tiles.push({
         userId: participant.identity,
@@ -221,6 +221,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [conversationMeta, setConversationMeta] = useState<ConversationMeta | null>(null);
 
   const roomRef = useRef<Room | null>(null);
+  const livekitRef = useRef<LiveKitModule | null>(null);
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const statusRef = useRef<ConnectionStatus>(status);
   const roomCallRef = useRef<CallStateDto | null>(null);
@@ -298,6 +299,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   const connectToRoom = useCallback(
     async (livekitUrl: string, token: string) => {
+      const lk = await loadLiveKit();
+      livekitRef.current = lk;
+      const { Room, RoomEvent, Track } = lk;
       await disconnectRoomOnly();
       setStatus("connecting");
       const room = new Room({
@@ -310,7 +314,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
       const refreshVideoTiles = () => {
         if (roomRef.current !== room) return;
-        setVideoTiles(collectVideoTiles(room));
+        setVideoTiles(collectVideoTiles(room, lk));
         setCameraEnabled(room.localParticipant.isCameraEnabled);
       };
 
@@ -456,6 +460,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         toast({ title: t.voiceCallAlreadyActive ?? "Конференция уже идёт" });
         return;
       }
+      void loadLiveKit();
       startOutgoingRingback();
       setIsStarting(true);
       try {
@@ -511,6 +516,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         toast({ title: t.voiceCallAlreadyActive ?? "Конференция уже идёт" });
         return;
       }
+      void loadLiveKit();
       try {
         await resolveMeta(conversationId, meta);
         const res = await apiRequest(
@@ -616,12 +622,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current;
-    if (!room) return;
+    const lk = livekitRef.current;
+    if (!room || !lk) return;
     const next = !room.localParticipant.isCameraEnabled;
     try {
-      await room.localParticipant.setCameraEnabled(next, next ? CAMERA_CAPTURE : undefined);
+      await room.localParticipant.setCameraEnabled(next, next ? cameraCapture(lk) : undefined);
       setCameraEnabled(room.localParticipant.isCameraEnabled);
-      setVideoTiles(collectVideoTiles(room));
+      setVideoTiles(collectVideoTiles(room, lk));
     } catch (err) {
       console.error("[VoiceCall] toggle camera error:", err);
       toast({

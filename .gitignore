@@ -1,5 +1,7 @@
 node_modules
 dist
+stats.txt
+stats.html
 .DS_Store
 server/public
 vite.config.ts.*

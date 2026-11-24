@@ -5,6 +5,8 @@ import "./index.css";
 import { bootstrapPwaShellFromUrl } from "@/lib/pwaShellBootstrap";
 import { APP_HOME_PATH } from "@shared/brand";
 
+window.addEventListener("vite:preloadError", () => location.reload());
+
 if (window.location.pathname === "/" || window.location.pathname === "") {
   window.history.replaceState(null, "", APP_HOME_PATH);
 }

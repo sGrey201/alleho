@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, MessageSquare, Mic, MicOff, PhoneOff, Video, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useLocation } from "wouter";
-import { RemoteVideoTrack, VideoQuality } from "livekit-client";
+import type { VideoQuality } from "livekit-client";
+import { loadLiveKit } from "@/lib/livekitClient";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { profileAvatarSrc } from "@/lib/utils";
@@ -61,10 +62,13 @@ function CallVideoSurface({
   );
 }
 
-function qualityLabel(q: VideoQuality | undefined): string {
-  if (q === VideoQuality.HIGH) return "HIGH";
-  if (q === VideoQuality.MEDIUM) return "MED";
-  if (q === VideoQuality.LOW) return "LOW";
+function qualityLabel(
+  q: VideoQuality | undefined,
+  levels: { HIGH: VideoQuality; MEDIUM: VideoQuality; LOW: VideoQuality },
+): string {
+  if (q === levels.HIGH) return "HIGH";
+  if (q === levels.MEDIUM) return "MED";
+  if (q === levels.LOW) return "LOW";
   return "?";
 }
 
@@ -103,6 +107,7 @@ function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
   }, [tile.track]);
 
   useEffect(() => {
+    if (!showRemoteVideoStats) return;
     let cancelled = false;
 
     const tick = async () => {
@@ -111,7 +116,8 @@ function RemoteVideoStage({ tile }: { tile: CallVideoTile }) {
       const displayH = el?.videoHeight || 0;
       const display = displayW && displayH ? `${displayW}×${displayH}` : "—";
 
-      const quality = qualityLabel(tile.remotePublication?.videoQuality);
+      const { RemoteVideoTrack, VideoQuality } = await loadLiveKit();
+      const quality = qualityLabel(tile.remotePublication?.videoQuality, VideoQuality);
       const stream = tile.track.streamState ?? "—";
 
       let recv = "—";

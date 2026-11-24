@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { User } from "@shared/schema";
+import type { User } from "@shared/schema";
 import { getQueryFn, isTransientQueryError, queryClient, transientQueryRetryDelay } from "@/lib/queryClient";
 
 export type AuthUser = User & {

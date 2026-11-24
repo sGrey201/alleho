@@ -119,7 +119,7 @@ import { openChatFile, saveOrShareChatFile, shouldUseInAppFileTransfer } from "@
 import { VoiceMessagePlayer } from "@/components/VoiceMessagePlayer";
 import { ChatVideoPlayer } from "@/components/ChatVideoPlayer";
 import type { RecordedVoice } from "@/hooks/useVoiceRecorder";
-import { pollPayloadSchema, voicePayloadSchema, type PollPayload } from "@shared/schema";
+import { pollPayloadSchema, voicePayloadSchema, type PollPayload } from "@shared/validation";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -2525,45 +2525,23 @@ export default function ConversationChat({
         );
       })()}
       {msg.imageUrl && !isNonImageAttachment(msg.messageType) && (
-        <div className="relative mb-0.5 w-full md:w-fit">
-          <img
-            src={getThumbUrl(msg.imageUrl)}
-            alt=""
-            loading="lazy"
-            className="h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
-            data-testid={`image-${msg.id}`}
-            onError={(e) => {
-              const el = e.currentTarget;
-              if (el.dataset.fallback === "1") return;
-              el.dataset.fallback = "1";
-              el.src = msg.imageUrl!;
-            }}
-            onClick={() => {
-              setMessageLayer(null);
-              setSelectedImage(msg.imageUrl!);
-            }}
-          />
-          {isPatientConv && user?.isAdmin && !msg.deletedAt && (
-            <div className="absolute bottom-2 right-2 z-10">
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                disabled={photoAnalysisPendingIds.has(msg.id)}
-                className="h-8 w-8 rounded-full border border-white/50 bg-black/55 text-white shadow-sm backdrop-blur-md hover:bg-black/70 hover:text-white"
-                aria-label={t.photoAnalysis}
-                data-testid={`button-photo-analysis-${msg.id}`}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  startPhotoAnalysis(msg.id);
-                }}
-              >
-                <Sparkles className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
+        <img
+          src={getThumbUrl(msg.imageUrl)}
+          alt=""
+          loading="lazy"
+          className="mb-0.5 h-auto w-full cursor-pointer rounded object-contain transition-opacity hover:opacity-90 md:h-auto md:w-auto md:max-h-[32rem] md:max-w-[32rem]"
+          data-testid={`image-${msg.id}`}
+          onError={(e) => {
+            const el = e.currentTarget;
+            if (el.dataset.fallback === "1") return;
+            el.dataset.fallback = "1";
+            el.src = msg.imageUrl!;
+          }}
+          onClick={() => {
+            setMessageLayer(null);
+            setSelectedImage(msg.imageUrl!);
+          }}
+        />
       )}
       {msg.messageType === "voice" ? (
         <VoiceMessagePlayer
@@ -3218,6 +3196,17 @@ export default function ConversationChat({
                   onTouchEnd={clearLongPress}
                   onTouchCancel={clearLongPress}
                   formatBubbleTime={formatBubbleTime}
+                  showPatientPhotoAnalysis={
+                    isPatientConv &&
+                    !!user?.isAdmin &&
+                    !msg.deletedAt &&
+                    !!conv.patientUserId &&
+                    msg.authorUserId === conv.patientUserId &&
+                    !!msg.imageUrl &&
+                    !isNonImageAttachment(msg.messageType)
+                  }
+                  photoAnalysisPending={photoAnalysisPendingIds.has(msg.id)}
+                  onPhotoAnalysis={startPhotoAnalysis}
                   highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
                   inlinePaymentSegmentIndex={
                     inlineContentPayment?.messageId === msg.id

@@ -1,8 +1,9 @@
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
+import { visualizer } from "rollup-plugin-visualizer";
 import fs from "fs";
 import { execSync } from "child_process";
 
@@ -75,6 +76,7 @@ export default defineConfig({
       },
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webmanifest}"],
+        globIgnores: ["**/node_modules/**/*", "**/AdminMetrics-*.js"],
         // Main bundle can exceed Workbox default 2 MiB; raise so PWA build does not fail.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
@@ -90,7 +92,16 @@ export default defineConfig({
           ),
         ]
       : []),
-  ],
+    process.env.ANALYZE
+      ? visualizer({
+          filename: "stats.txt",
+          template: "list",
+          gzipSize: true,
+          brotliSize: true,
+          open: true,
+        })
+      : undefined,
+  ].filter(Boolean) as PluginOption[],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

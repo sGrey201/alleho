@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation, Redirect } from "wouter";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { HelmetProvider } from "react-helmet-async";
 import { queryClient } from "./lib/queryClient";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -26,7 +26,6 @@ import ResetPassword from "@/pages/ResetPassword";
 import About from "@/pages/About";
 import Messenger from "@/pages/Messenger";
 import QuestionnaireTemplates from "@/pages/QuestionnaireTemplates";
-import AdminMetrics from "@/pages/AdminMetrics";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import { AppUpdatePrompt } from "@/components/AppUpdatePrompt";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
@@ -36,6 +35,22 @@ import { resetAppShellThemeForClassicLayout } from "@/hooks/useAppShellTheme";
 import { useVisualViewportSize } from "@/hooks/useVisualViewportSize";
 import { peekAuthReturnTo, readAuthReturnFromQuery, saveAuthReturnTo, buildAuthRedirectPath, getRequestedReturnPath } from "@/lib/authReturnTo";
 import { APP_HOME_PATH } from "@shared/brand";
+
+const AdminMetrics = lazy(() => import("@/pages/AdminMetrics"));
+
+function AdminMetricsRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      }
+    >
+      <AdminMetrics />
+    </Suspense>
+  );
+}
 
 function Router() {
   const { isLoading, isAdmin, isPlatformAdmin } = useAuth();
@@ -87,7 +102,7 @@ function Router() {
           <Route path="/questionnaires" component={QuestionnaireTemplates} />
         </>
       )}
-      {isPlatformAdmin && <Route path="/admin/metrics" component={AdminMetrics} />}
+      {isPlatformAdmin && <Route path="/admin/metrics" component={AdminMetricsRoute} />}
       <Route component={NotFound} />
     </Switch>
   );
