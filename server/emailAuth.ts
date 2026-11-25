@@ -4,11 +4,14 @@ import crypto from 'crypto';
 import { storage } from './storage';
 import { sendPasswordResetEmail, sendRegistrationAccessEmail } from './email';
 import { generateAuthPassword } from './authPassword';
+import { rejectUnlessCaptcha } from './smartCaptcha';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const register: RequestHandler = async (req, res) => {
   try {
+    if (!(await rejectUnlessCaptcha(req, res))) return;
+
     const email = String(req.body?.email || '').trim().toLowerCase();
     const displayName = String(req.body?.displayName || '').trim();
     const isHomeopathRaw = req.body?.isHomeopath;

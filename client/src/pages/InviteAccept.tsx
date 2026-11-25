@@ -20,6 +20,8 @@ import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 import { APP_HOME_PATH } from "@shared/brand";
 import { t } from "@/lib/i18n";
+import { YandexSmartCaptcha } from "@/components/YandexSmartCaptcha";
+import { captchaErrorText } from "@/lib/yandexSmartCaptcha";
 
 const acceptInviteSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -78,7 +80,14 @@ export default function InviteAccept() {
   const [isHomeopath, setIsHomeopath] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [passwordSentViaInvite, setPasswordSentViaInvite] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   const continueAfterLoginRef = useRef<() => void>(() => {});
+
+  const resetCaptcha = () => {
+    setCaptchaToken("");
+    setCaptchaReset((value) => value + 1);
+  };
 
   const token = useMemo(() => new URLSearchParams(window.location.search).get("token") || "", []);
   const initialEmail = useMemo(() => new URLSearchParams(window.location.search).get("email") || "", []);
@@ -126,15 +135,12 @@ export default function InviteAccept() {
   }, [user?.email, form]);
 
   const checkInviteEmailMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const params = new URLSearchParams({
+    mutationFn: async ({ email, captchaToken: tokenValue }: { email: string; captchaToken: string }) => {
+      const res = await apiRequest("POST", "/api/invites/check-email", {
         token,
         email: email.trim().toLowerCase(),
+        captchaToken: tokenValue,
       });
-      const res = await fetch(`/api/invites/check-email?${params.toString()}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(await res.text());
       return res.json() as Promise<{ exists: boolean }>;
     },
   });
@@ -318,11 +324,19 @@ export default function InviteAccept() {
   const handleEmailNext = async () => {
     const valid = await form.trigger("email");
     if (!valid) return;
+    if (!captchaToken) {
+      toast({ title: t.error, description: t.captchaRequired, variant: "destructive" });
+      return;
+    }
     const email = form.getValues("email").trim().toLowerCase();
     form.setValue("email", email);
     try {
-      const { exists } = await checkInviteEmailMutation.mutateAsync(email);
+      const { exists } = await checkInviteEmailMutation.mutateAsync({
+        email,
+        captchaToken,
+      });
       if (isGroupInvite && !exists) {
+        resetCaptcha();
         toast({
           title: t.groupInvitePatientsNotAllowed,
           description: "Войдите с email зарегистрированного гомеопата.",
@@ -341,7 +355,13 @@ export default function InviteAccept() {
       setPassword("");
       setStep("password");
     } catch (error) {
+      resetCaptcha();
       const msg = error instanceof Error ? error.message : "";
+      const captchaMessage = captchaErrorText(msg);
+      if (captchaMessage) {
+        toast({ title: t.error, description: captchaMessage, variant: "destructive" });
+        return;
+      }
       if (msg.includes("user_exists")) {
         setPasswordSentViaInvite(false);
         setPassword("");
@@ -516,12 +536,14 @@ export default function InviteAccept() {
                         <FormMessage />
                       </FormItem>
                     )}
-                  />
+                    />
+                  <YandexSmartCaptcha resetSignal={captchaReset} onToken={setCaptchaToken} />
                   <Button
                     type="button"
                     className="w-full"
                     onClick={() => void handleEmailNext()}
                     disabled={
+                      !captchaToken ||
                       checkInviteEmailMutation.isPending ||
                       prepareRegistrationMutation.isPending ||
                       acceptInviteMutation.isPending
@@ -599,6 +621,7 @@ export default function InviteAccept() {
                       variant="ghost"
                       className="w-full"
                       onClick={() => {
+                        resetCaptcha();
                         setPasswordSentViaInvite(false);
                         setStep("email");
                       }}

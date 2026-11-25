@@ -14,6 +14,85 @@ export function isChatScrolledToBottom(scrollRoot: HTMLElement, threshold = 8): 
   return scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight <= threshold;
 }
 
+export type ChatScrollAnchor = {
+  messageId: string;
+  /** Distance from the pane's top edge to the message's top edge. */
+  offset: number;
+};
+
+export type ChatScrollSnapshot = {
+  atBottom: boolean;
+  anchor: ChatScrollAnchor | null;
+};
+
+const chatScrollSnapshots = new Map<string, ChatScrollSnapshot>();
+
+export function readChatScrollSnapshot(conversationId: string): ChatScrollSnapshot | undefined {
+  return chatScrollSnapshots.get(conversationId);
+}
+
+export function writeChatScrollSnapshot(conversationId: string, snapshot: ChatScrollSnapshot): void {
+  chatScrollSnapshots.set(conversationId, snapshot);
+}
+
+function messageNodes(scrollRoot: HTMLElement): HTMLElement[] {
+  const content = scrollRoot.firstElementChild;
+  if (!content) return [];
+  const nodes: HTMLElement[] = [];
+  const children = content.children;
+  for (let i = 0; i < children.length; i += 1) {
+    const node = children[i];
+    if (node instanceof HTMLElement && node.dataset.messageId) nodes.push(node);
+  }
+  return nodes;
+}
+
+/** First message that is still on screen (or the first one below the top edge). */
+export function captureChatScrollAnchor(scrollRoot: HTMLElement): ChatScrollAnchor | null {
+  const nodes = messageNodes(scrollRoot);
+  if (nodes.length === 0) return null;
+  const rootTop = scrollRoot.getBoundingClientRect().top;
+  let lo = 0;
+  let hi = nodes.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const rect = nodes[mid].getBoundingClientRect();
+    if (rect.bottom > rootTop + 1) {
+      found = mid;
+      hi = mid - 1;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  if (found < 0) return null;
+  const el = nodes[found];
+  const messageId = el.dataset.messageId;
+  if (!messageId) return null;
+  return { messageId, offset: el.getBoundingClientRect().top - rootTop };
+}
+
+export function captureChatScrollSnapshot(scrollRoot: HTMLElement): ChatScrollSnapshot {
+  return {
+    atBottom: isChatScrolledToBottom(scrollRoot),
+    anchor: captureChatScrollAnchor(scrollRoot),
+  };
+}
+
+/** Keep the same message at the same place in the pane. Returns false if it is not mounted. */
+export function restoreChatScrollAnchor(scrollRoot: HTMLElement, anchor: ChatScrollAnchor): boolean {
+  const el = scrollRoot.querySelector<HTMLElement>(
+    `[data-message-id="${CSS.escape(anchor.messageId)}"]`
+  );
+  if (!el) return false;
+  const rootTop = scrollRoot.getBoundingClientRect().top;
+  const delta = el.getBoundingClientRect().top - rootTop - anchor.offset;
+  if (Math.abs(delta) < 0.5) return true;
+  const maxTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+  scrollRoot.scrollTop = Math.min(maxTop, Math.max(0, scrollRoot.scrollTop + delta));
+  return true;
+}
+
 /** Pin the chat viewport to the latest messages. */
 export function anchorChatToBottom(scrollRoot: HTMLElement | null): void {
   scrollChatPaneToBottom(scrollRoot);

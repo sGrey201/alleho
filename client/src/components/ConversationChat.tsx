@@ -94,6 +94,12 @@ import {
   scrollChatElementIntoView,
   focusChatBubble,
   blinkChatBubble,
+  captureChatScrollAnchor,
+  captureChatScrollSnapshot,
+  readChatScrollSnapshot,
+  restoreChatScrollAnchor,
+  writeChatScrollSnapshot,
+  type ChatScrollAnchor,
 } from "@/lib/chatScroll";
 import { profileAvatarSrc } from "@/lib/utils";
 import { normalizeChatImageFile } from "@/lib/normalizeImageFile";
@@ -697,6 +703,11 @@ export default function ConversationChat({
   const userHasScrolledRef = useRef(false);
   const needsInitialPinRef = useRef(true);
   const ignoreScrollRef = useRef(false);
+  /** Message to put back on screen after an edit changes its height. */
+  const pendingAnchorRestoreRef = useRef<ChatScrollAnchor | null>(null);
+  /** Scroll place to restore when this chat is opened again. */
+  const pendingReturnAnchorRef = useRef<ChatScrollAnchor | null>(null);
+  const renderedConversationIdRef = useRef(conversationId);
   const chatInputRef = useRef<ChatInputBarHandle | null>(null);
   const videoReplaceInputRef = useRef<HTMLInputElement>(null);
   const replacingVideoMessageRef = useRef<ConversationMessageWithAuthor | null>(null);
@@ -759,6 +770,23 @@ export default function ConversationChat({
   }, []);
 
   const [scrollToBottomTick, setScrollToBottomTick] = useState(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [anchorRestoreTick, setAnchorRestoreTick] = useState(0);
+  const showJumpToLatestRef = useRef(false);
+  const setJumpToLatestVisible = useCallback((show: boolean) => {
+    if (showJumpToLatestRef.current === show) return;
+    showJumpToLatestRef.current = show;
+    setShowJumpToLatest(show);
+  }, []);
+
+  if (renderedConversationIdRef.current !== conversationId) {
+    const previousId = renderedConversationIdRef.current;
+    const root = messagesScrollRef.current;
+    if (previousId && root && !needsInitialPinRef.current && !pendingReturnAnchorRef.current) {
+      writeChatScrollSnapshot(previousId, captureChatScrollSnapshot(root));
+    }
+    renderedConversationIdRef.current = conversationId;
+  }
 
   const requestScrollToBottom = useCallback(() => {
     setScrollToBottomTick((tick) => tick + 1);
@@ -1068,6 +1096,29 @@ export default function ConversationChat({
       }>;
     },
     onSuccess: (resp, variables) => {
+      const root = messagesScrollRef.current;
+      if (root) {
+        const rootRect = root.getBoundingClientRect();
+        const edited = root.querySelector<HTMLElement>(
+          `[data-message-id="${CSS.escape(variables.messageId)}"]`
+        );
+        const editedRect = edited?.getBoundingClientRect();
+        const editedVisible =
+          !!editedRect &&
+          editedRect.bottom > rootRect.top + 8 &&
+          editedRect.top < rootRect.bottom - 8;
+        const anchor = editedVisible
+          ? { messageId: variables.messageId, offset: editedRect.top - rootRect.top }
+          : !isChatScrolledToBottom(root)
+            ? captureChatScrollAnchor(root)
+            : null;
+        if (anchor) {
+          pendingAnchorRestoreRef.current = anchor;
+          stickToBottomRef.current = false;
+          suppressAutoScrollUntilRef.current = Date.now() + 500;
+          setAnchorRestoreTick((tick) => tick + 1);
+        }
+      }
       queryClient.setQueryData<ConversationMessagesInfiniteData>(
         conversationMessagesQueryKey(conversationId),
         (old) =>
@@ -1552,17 +1603,21 @@ export default function ConversationChat({
   });
 
   // Keep the latest messages visible while the iOS keyboard and composer resize.
+  // Only when the user is already at the bottom — focusing the composer to edit
+  // a message higher up must not jump the thread to the end.
   useEffect(() => {
-    const shouldStickToBottom = () =>
-      !!document.activeElement?.closest(".chat-composer-panel");
+    const shouldFollowBottom = () =>
+      stickToBottomRef.current &&
+      !pendingAnchorRestoreRef.current &&
+      Date.now() >= suppressAutoScrollUntilRef.current;
 
     const onViewportResize = () => {
-      if (!shouldStickToBottom()) return;
+      if (!shouldFollowBottom()) return;
       scrollMessagesForKeyboard();
     };
 
     const onComposerInset = () => {
-      if (!shouldStickToBottom()) return;
+      if (!shouldFollowBottom()) return;
       scrollMessagesForKeyboard();
     };
 
@@ -1660,17 +1715,40 @@ export default function ConversationChat({
     void fetchNextPage();
   }, [clinicalMessagesOnly, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     deepLinkFetchAttemptsRef.current = 0;
     deepLinkHandledRef.current = null;
-    stickToBottomRef.current = true;
-    userHasScrolledRef.current = false;
-    needsInitialPinRef.current = true;
     setCanLoadOlderMessages(false);
-  }, [conversationId]);
+    pendingAnchorRestoreRef.current = null;
+    const messageId = new URLSearchParams(window.location.search).get("messageId");
+    const saved = messageId ? undefined : readChatScrollSnapshot(conversationId);
+    if (saved && !saved.atBottom && saved.anchor) {
+      stickToBottomRef.current = false;
+      userHasScrolledRef.current = true;
+      needsInitialPinRef.current = false;
+      pendingReturnAnchorRef.current = saved.anchor;
+    } else {
+      stickToBottomRef.current = true;
+      userHasScrolledRef.current = false;
+      needsInitialPinRef.current = true;
+      pendingReturnAnchorRef.current = null;
+      setJumpToLatestVisible(false);
+    }
+  }, [conversationId, setJumpToLatestVisible]);
+
+  useLayoutEffect(() => {
+    return () => {
+      const id = renderedConversationIdRef.current;
+      const root = messagesScrollRef.current;
+      if (!id || !root || !root.isConnected) return;
+      if (needsInitialPinRef.current || pendingReturnAnchorRef.current) return;
+      writeChatScrollSnapshot(id, captureChatScrollSnapshot(root));
+    };
+  }, []);
 
   const pinToBottomIfNeeded = useCallback(() => {
     if (new URLSearchParams(window.location.search).get("messageId")) return;
+    if (pendingAnchorRestoreRef.current || pendingReturnAnchorRef.current) return;
 
     if (!stickToBottomRef.current) return;
     if (Date.now() < suppressAutoScrollUntilRef.current) return;
@@ -1758,11 +1836,80 @@ export default function ConversationChat({
   }, [displayMessages.length, hasNextPage, isFetchingNextPage, fetchNextPage, conversationId]);
 
   useLayoutEffect(() => {
+    const anchor = pendingReturnAnchorRef.current;
+    if (!anchor || messagesLoading || displayMessages.length === 0) return;
+    if (isDeepLinkPending()) return;
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const mounted = root.querySelector(
+      `[data-message-id="${CSS.escape(anchor.messageId)}"]`
+    );
+    if (!mounted) {
+      pendingReturnAnchorRef.current = null;
+      stickToBottomRef.current = true;
+      needsInitialPinRef.current = true;
+      pinToBottomIfNeeded();
+      return;
+    }
+    ignoreScrollRef.current = true;
+    restoreChatScrollAnchor(root, anchor);
+    pendingReturnAnchorRef.current = null;
+    const sync = () => {
+      stickToBottomRef.current = isChatScrolledToBottom(root);
+      const canScroll = root.scrollHeight - root.clientHeight > 8;
+      setJumpToLatestVisible(canScroll && !stickToBottomRef.current);
+    };
+    sync();
+    requestAnimationFrame(() => {
+      restoreChatScrollAnchor(root, anchor);
+      sync();
+      ignoreScrollRef.current = false;
+    });
+  }, [
+    conversationId,
+    messagesLoading,
+    displayMessages.length,
+    isDeepLinkPending,
+    pinToBottomIfNeeded,
+    setJumpToLatestVisible,
+  ]);
+
+  useLayoutEffect(() => {
+    if (pendingReturnAnchorRef.current) return;
     if (!conv || messagesLoading || displayMessages.length === 0) return;
     if (!needsInitialPinRef.current) return;
     needsInitialPinRef.current = false;
     pinToBottomIfNeeded();
-  }, [conv, messagesLoading, displayMessages.length, conversationId, pinToBottomIfNeeded]);
+    setJumpToLatestVisible(false);
+  }, [conv, messagesLoading, displayMessages.length, conversationId, pinToBottomIfNeeded, setJumpToLatestVisible]);
+
+  useLayoutEffect(() => {
+    const anchor = pendingAnchorRestoreRef.current;
+    if (!anchor || anchorRestoreTick === 0) return;
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    ignoreScrollRef.current = true;
+    restoreChatScrollAnchor(root, anchor);
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false;
+    });
+    const timer = window.setTimeout(() => {
+      const pane = messagesScrollRef.current;
+      pendingAnchorRestoreRef.current = null;
+      if (!pane) return;
+      ignoreScrollRef.current = true;
+      restoreChatScrollAnchor(pane, anchor);
+      ignoreScrollRef.current = false;
+      stickToBottomRef.current = isChatScrolledToBottom(pane);
+      const canScroll = pane.scrollHeight - pane.clientHeight > 8;
+      setJumpToLatestVisible(canScroll && !stickToBottomRef.current);
+      writeChatScrollSnapshot(conversationId, captureChatScrollSnapshot(pane));
+    }, 80);
+    return () => {
+      window.clearTimeout(timer);
+      ignoreScrollRef.current = false;
+    };
+  }, [anchorRestoreTick, conversationId, setJumpToLatestVisible]);
 
   useEffect(() => {
     if (!conv || messagesLoading || displayMessages.length === 0) return;
@@ -1806,6 +1953,9 @@ export default function ConversationChat({
       const atBottom = isChatScrolledToBottom(root);
       stickToBottomRef.current = atBottom;
       if (pendingScrollRestoreRef.current) return;
+      const canScroll = root.scrollHeight - root.clientHeight > 8;
+      setJumpToLatestVisible(canScroll && !atBottom);
+      writeChatScrollSnapshot(conversationId, captureChatScrollSnapshot(root));
       if (root.scrollTop <= LOAD_OLDER_NEAR_TOP_PX) {
         setCanLoadOlderMessages(true);
       }
@@ -1813,16 +1963,27 @@ export default function ConversationChat({
 
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
-  }, [conversationId, conv]);
+  }, [conversationId, conv, setJumpToLatestVisible]);
 
   useLayoutEffect(() => {
     if (scrollToBottomTick === 0) return;
     stickToBottomRef.current = true;
+    pendingAnchorRestoreRef.current = null;
+    pendingReturnAnchorRef.current = null;
     const root = messagesScrollRef.current;
     if (!root) return;
+    ignoreScrollRef.current = true;
     anchorChatToBottom(root);
     scrollChatPaneToBottomForKeyboard(root);
-  }, [scrollToBottomTick]);
+    setJumpToLatestVisible(false);
+    writeChatScrollSnapshot(conversationId, {
+      atBottom: true,
+      anchor: captureChatScrollAnchor(root),
+    });
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false;
+    });
+  }, [scrollToBottomTick, conversationId, setJumpToLatestVisible]);
 
   const chatSearchMatches = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
@@ -1913,9 +2074,14 @@ export default function ConversationChat({
     scrollToMessage(messageId, {
       onScrolled: () => {
         deepLinkHandledRef.current = key;
+        const root = messagesScrollRef.current;
+        if (!root) return;
+        stickToBottomRef.current = isChatScrolledToBottom(root);
+        const canScroll = root.scrollHeight - root.clientHeight > 8;
+        setJumpToLatestVisible(canScroll && !stickToBottomRef.current);
       },
     });
-  }, [conversationId, displayMessages.length, scrollToMessage]);
+  }, [conversationId, displayMessages.length, scrollToMessage, setJumpToLatestVisible]);
 
   const galleryImages = useMemo(
     () =>
@@ -1972,14 +2138,13 @@ export default function ConversationChat({
     activePinnedIndex >= 0 && activePinnedIndex < pinnedMessages.length
       ? pinnedMessages[activePinnedIndex]
       : null;
-  const photoAnalysisPendingIds = useMemo(() => {
+  const photosWithAnalysis = useMemo(() => {
     const ids = new Set<string>();
     for (const message of messages) {
       if (
         message.messageType === "photo_analysis" &&
         message.replyToMessageId &&
-        !message.deletedAt &&
-        !message.content?.trim()
+        !message.deletedAt
       ) {
         ids.add(message.replyToMessageId);
       }
@@ -2145,6 +2310,11 @@ export default function ConversationChat({
     setEditing(msg);
     setEditText(msg.content ?? "");
     if (isComposerMessageMode(msg.messageType)) setMessageMode(msg.messageType);
+    const root = messagesScrollRef.current;
+    if (root && !isChatScrolledToBottom(root)) {
+      stickToBottomRef.current = false;
+      suppressAutoScrollUntilRef.current = Date.now() + 800;
+    }
     onDone?.();
   };
 
@@ -3199,6 +3369,7 @@ export default function ConversationChat({
                   <div
                     key={msg.id}
                     ref={setMessageRef(msg.id)}
+                    data-message-id={msg.id}
                     className="flex justify-center px-6 py-2"
                     data-testid={`call-log-${msg.id}`}
                   >
@@ -3254,9 +3425,9 @@ export default function ConversationChat({
                     !!conv.patientUserId &&
                     msg.authorUserId === conv.patientUserId &&
                     !!msg.imageUrl &&
-                    !isNonImageAttachment(msg.messageType)
+                    !isNonImageAttachment(msg.messageType) &&
+                    !photosWithAnalysis.has(msg.id)
                   }
-                  photoAnalysisPending={photoAnalysisPendingIds.has(msg.id)}
                   onPhotoAnalysis={startPhotoAnalysis}
                   highlightQuery={isChatSearchOpen ? chatSearchQuery.trim() : undefined}
                   inlinePaymentSegmentIndex={
@@ -3281,6 +3452,24 @@ export default function ConversationChat({
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {showJumpToLatest && !questionnairePanelVisible && (
+        <button
+          type="button"
+          className="absolute right-3 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-800 shadow-[0_2px_8px_rgba(0,0,0,0.18)] dark:border-white/10 dark:bg-neutral-800 dark:text-neutral-100"
+          style={{ bottom: "calc(var(--chat-composer-inset, 5rem) + 0.75rem)" }}
+          aria-label={t.chatScrollToBottom}
+          onClick={() => {
+            stickToBottomRef.current = true;
+            pendingAnchorRestoreRef.current = null;
+            pendingReturnAnchorRef.current = null;
+            setJumpToLatestVisible(false);
+            requestScrollToBottom();
+          }}
+        >
+          <ChevronDown className="h-6 w-6" strokeWidth={2.25} />
+        </button>
+      )}
 
       <Dialog open={!!messageLayer} onOpenChange={(open) => !open && setMessageLayer(null)}>
         <DialogContent

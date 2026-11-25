@@ -12,6 +12,12 @@ import { eq, desc } from "drizzle-orm";
 import { isAuthenticated, isAdmin, isPlatformAdmin, isPlatformAdminEmail, getPlatformAdminEmails } from "./emailAuth";
 import { register, login, requestPasswordReset, resetPassword, changePassword, getEmailUser, logoutEmail } from "./emailAuth";
 import { generateAuthPassword } from "./authPassword";
+import {
+  consumeInviteCaptchaGrant,
+  grantInviteCaptcha,
+  rejectUnlessCaptcha,
+  saveSession,
+} from "./smartCaptcha";
 import { sendInviteEmail, sendInviteAccessEmail } from "./email";
 import { getClientAppVersion } from "./appVersion";
 import { BASE_URL, APP_HOME_PATH } from "@shared/brand";
@@ -533,13 +539,14 @@ ${allUrls.map(url => `  <url>
     }
   });
 
-  app.get('/api/invites/check-email', async (req: any, res) => {
+  app.post('/api/invites/check-email', async (req: any, res) => {
     try {
-      const token = String(req.query?.token || "").trim();
-      const email = String(req.query?.email || "").trim().toLowerCase();
+      const token = String(req.body?.token || "").trim();
+      const email = String(req.body?.email || "").trim().toLowerCase();
       if (!token || !email) {
         return res.status(400).json({ message: "token_and_email_required" });
       }
+      if (!(await rejectUnlessCaptcha(req, res))) return;
 
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
       const invite = await storage.getInviteByTokenHash(tokenHash);
@@ -553,6 +560,9 @@ ${allUrls.map(url => `  <url>
       if (isInviteExpired(invite)) {
         return res.status(400).json({ message: "invite_expired" });
       }
+
+      grantInviteCaptcha(req, email);
+      await saveSession(req);
 
       const user = await storage.getUserByEmail(email);
       res.json({ exists: !!user });
@@ -630,6 +640,9 @@ ${allUrls.map(url => `  <url>
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(409).json({ message: "user_exists" });
+      }
+      if (!consumeInviteCaptchaGrant(req, email)) {
+        return res.status(400).json({ message: "captcha_required" });
       }
 
       const password = generateAuthPassword();

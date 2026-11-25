@@ -30,7 +30,6 @@ type ChatMessageBubbleProps = {
   highlightQuery?: string;
   inlinePaymentSegmentIndex?: number | null;
   showPatientPhotoAnalysis?: boolean;
-  photoAnalysisPending?: boolean;
   onPhotoAnalysis?: (messageId: string) => void;
   children: ReactNode;
 };
@@ -58,8 +57,7 @@ function bubblePropsEqual(prev: ChatMessageBubbleProps, next: ChatMessageBubbleP
     prev.peerLastReadAt === next.peerLastReadAt &&
     prev.highlightQuery === next.highlightQuery &&
     prev.inlinePaymentSegmentIndex === next.inlinePaymentSegmentIndex &&
-    prev.showPatientPhotoAnalysis === next.showPatientPhotoAnalysis &&
-    prev.photoAnalysisPending === next.photoAnalysisPending
+    prev.showPatientPhotoAnalysis === next.showPatientPhotoAnalysis
   );
 }
 
@@ -84,7 +82,6 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
   onTouchCancel,
   formatBubbleTime,
   showPatientPhotoAnalysis = false,
-  photoAnalysisPending = false,
   onPhotoAnalysis,
   children,
 }: ChatMessageBubbleProps) {
@@ -102,6 +99,7 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
   return (
     <div
       ref={setMessageRef(msg.id)}
+      data-message-id={msg.id}
       className={`group flex w-full transition-shadow duration-300 ${
         isOwn ? "justify-end" : "justify-start"
       }`}
@@ -185,7 +183,6 @@ export const ChatMessageBubble = memo(function ChatMessageBubble({
           type="button"
           size="icon"
           variant="ghost"
-          disabled={photoAnalysisPending}
           className="mb-1 ml-1.5 h-8 w-8 shrink-0 self-end rounded-full border border-border bg-background text-foreground shadow-sm hover:bg-muted"
           aria-label={t.photoAnalysis}
           data-testid={`button-photo-analysis-${msg.id}`}

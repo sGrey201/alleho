@@ -16,6 +16,8 @@ import { AuthLogoLink } from "@/components/AuthLogoLink";
 import { pageMeta } from "@/lib/pageMeta";
 import { t } from "@/lib/i18n";
 import { navigateToAuth, resolveAuthReturnTo } from "@/lib/authReturnTo";
+import { YandexSmartCaptcha } from "@/components/YandexSmartCaptcha";
+import { captchaErrorText } from "@/lib/yandexSmartCaptcha";
 
 const registerSchema = z.object({
   email: z.string().email("Некорректный email"),
@@ -30,6 +32,13 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<boolean | null>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
+
+  const resetCaptcha = () => {
+    setCaptchaToken("");
+    setCaptchaReset((value) => value + 1);
+  };
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -37,7 +46,7 @@ export default function RegisterPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: RegisterFormData) => {
+    mutationFn: async (data: RegisterFormData & { captchaToken: string }) => {
       const res = await apiRequest("POST", "/api/auth/register", data);
       return res.json() as Promise<{ email: string }>;
     },
@@ -45,8 +54,10 @@ export default function RegisterPage() {
       setRegisteredEmail(data.email);
     },
     onError: (error: Error) => {
-      let description = error.message || t.somethingWrong;
-      if (error.message.includes("user_exists")) {
+      resetCaptcha();
+      const captchaMessage = captchaErrorText(error.message);
+      let description = captchaMessage || error.message || t.somethingWrong;
+      if (!captchaMessage && error.message.includes("user_exists")) {
         description = "Пользователь с таким email уже зарегистрирован";
       }
       toast({ title: t.error, description, variant: "destructive" });
@@ -62,7 +73,11 @@ export default function RegisterPage() {
       });
       return;
     }
-    registerMutation.mutate({ ...data, isHomeopath: selectedRole });
+    if (!captchaToken) {
+      toast({ title: t.error, description: t.captchaRequired, variant: "destructive" });
+      return;
+    }
+    registerMutation.mutate({ ...data, isHomeopath: selectedRole, captchaToken });
   };
 
   const returnTo = resolveAuthReturnTo();
@@ -163,7 +178,12 @@ export default function RegisterPage() {
                     </Button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
+                <YandexSmartCaptcha resetSignal={captchaReset} onToken={setCaptchaToken} />
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={registerMutation.isPending || !captchaToken}
+                >
                   {registerMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -34,6 +34,7 @@ services:
       REG_CLOUD_FALLBACK_MODEL: ${REG_CLOUD_FALLBACK_MODEL:-deepseek-v4.1-flash}
       REG_CLOUD_PHOTO_MODEL: ${REG_CLOUD_PHOTO_MODEL:-qwen-3.8-flash-next}
       REG_CLOUD_PHOTO_FALLBACK_MODEL: ${REG_CLOUD_PHOTO_FALLBACK_MODEL:-deepseek-v4.1-flash}
+      YANDEX_SMARTCAPTCHA_SECRET: ${YANDEX_SMARTCAPTCHA_SECRET}
     depends_on:
       - db
       - redis
