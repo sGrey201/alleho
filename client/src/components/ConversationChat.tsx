@@ -167,7 +167,10 @@ interface ConversationInfo {
   }>;
 }
 
-function conversationPreviewFromChatList(conversationId: string | undefined): ConversationInfo | undefined {
+function conversationPreviewFromChatList(
+  conversationId: string | undefined,
+  currentUserId: string | undefined,
+): ConversationInfo | undefined {
   if (!conversationId) return undefined;
   const snapshots = queryClient.getQueriesData<{
     pages?: Array<{
@@ -181,6 +184,8 @@ function conversationPreviewFromChatList(conversationId: string | undefined): Co
         otherParticipantName?: string;
         patientName?: string;
         participantCount?: number;
+        myRole?: string;
+        isMember?: boolean;
       }>;
     }>;
   }>({ queryKey: ["/api/me/chats"] });
@@ -189,6 +194,21 @@ function conversationPreviewFromChatList(conversationId: string | undefined): Co
       ?.flatMap((page) => page.items ?? [])
       .find((item) => item.conversationId === conversationId);
     if (!chat) continue;
+    const participants: NonNullable<ConversationInfo["participants"]> = [];
+    if (chat.otherParticipantId || chat.otherParticipantName || chat.patientName) {
+      participants.push({
+        userId: chat.otherParticipantId ?? "",
+        role: "member",
+        displayName: chat.otherParticipantName ?? chat.patientName ?? null,
+        user: {
+          firstName: chat.otherParticipantName ?? chat.patientName ?? null,
+        },
+      });
+    }
+    const isChannelOrGroup = chat.type === "channel" || chat.type === "group";
+    if (isChannelOrGroup && chat.isMember && chat.myRole && currentUserId) {
+      participants.push({ userId: currentUserId, role: chat.myRole });
+    }
     return {
       id: conversationId,
       type: chat.type ?? "direct",
@@ -196,19 +216,7 @@ function conversationPreviewFromChatList(conversationId: string | undefined): Co
       avatarUrl: chat.avatarUrl ?? null,
       patientUserId: chat.patientUserId ?? null,
       participantCount: chat.participantCount,
-      participants:
-        chat.otherParticipantId || chat.otherParticipantName || chat.patientName
-          ? [
-              {
-                userId: chat.otherParticipantId ?? "",
-                role: "member",
-                displayName: chat.otherParticipantName ?? chat.patientName ?? null,
-                user: {
-                  firstName: chat.otherParticipantName ?? chat.patientName ?? null,
-                },
-              },
-            ]
-          : [],
+      participants,
     };
   }
   return undefined;
@@ -807,8 +815,8 @@ export default function ConversationChat({
     ...liveConversationQueryOptions,
   });
   const listPreview = useMemo(
-    () => (fetchedConv ? undefined : conversationPreviewFromChatList(conversationId)),
-    [fetchedConv, conversationId],
+    () => (fetchedConv ? undefined : conversationPreviewFromChatList(conversationId, user?.id)),
+    [fetchedConv, conversationId, user?.id],
   );
   const conv = fetchedConv ?? listPreview;
 
