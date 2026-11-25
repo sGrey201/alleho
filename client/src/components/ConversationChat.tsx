@@ -352,7 +352,7 @@ type MyChatsPage = {
 
 const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
 const QUICK_REACTIONS = ["👍", "❤️", "🔥", "😂", "🙏", "😢"] as const;
-/** User must scroll near the top before older pages load via the sentinel. */
+/** User must scroll this close to the top before the previous page is requested. */
 const LOAD_OLDER_NEAR_TOP_PX = 80;
 
 interface ConversationChatProps {
@@ -689,7 +689,6 @@ export default function ConversationChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesContentRef = useRef<HTMLDivElement>(null);
-  const loadOlderRef = useRef<HTMLDivElement>(null);
   const pendingScrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
   const deepLinkFetchAttemptsRef = useRef(0);
   const suppressAutoScrollUntilRef = useRef(0);
@@ -1786,31 +1785,20 @@ export default function ConversationChat({
     return deepLinkHandledRef.current !== key;
   }, [conversationId]);
 
-  useEffect(() => {
-    if (!conv) return;
-    const root = messagesScrollRef.current;
-    const sentinel = loadOlderRef.current;
-    if (!root || !sentinel || !hasNextPage || isFetchingNextPage) return;
+  const requestOlderMessages = useCallback(() => {
     if (isDeepLinkPending()) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        if (isDeepLinkPending()) return;
-        if (!userHasScrolledRef.current) return;
-        if (root.scrollTop > LOAD_OLDER_NEAR_TOP_PX) return;
-        pendingScrollRestoreRef.current = {
-          height: root.scrollHeight,
-          top: root.scrollTop,
-        };
-        stickToBottomRef.current = false;
-        void fetchNextPage();
-      },
-      { root, threshold: 0.1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [conv, hasNextPage, isFetchingNextPage, fetchNextPage, sortedMessages.length, isDeepLinkPending]);
+    if (!userHasScrolledRef.current) return;
+    if (!hasNextPage || isFetchingNextPage) return;
+    const root = messagesScrollRef.current;
+    if (!root || root.scrollTop > LOAD_OLDER_NEAR_TOP_PX) return;
+    pendingScrollRestoreRef.current = {
+      height: root.scrollHeight,
+      top: root.scrollTop,
+    };
+    stickToBottomRef.current = false;
+    setCanLoadOlderMessages(true);
+    void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, isDeepLinkPending]);
 
   useLayoutEffect(() => {
     if (isDeepLinkPending()) return;
@@ -1829,9 +1817,12 @@ export default function ConversationChat({
     applyRestore();
     requestAnimationFrame(() => {
       applyRestore();
-      requestAnimationFrame(applyRestore);
+      requestAnimationFrame(() => {
+        applyRestore();
+        requestOlderMessages();
+      });
     });
-  }, [sortedMessages.length, isFetchingNextPage, isDeepLinkPending]);
+  }, [sortedMessages.length, isFetchingNextPage, isDeepLinkPending, requestOlderMessages]);
 
   useEffect(() => {
     const messageId = new URLSearchParams(window.location.search).get("messageId");
@@ -1965,13 +1956,13 @@ export default function ConversationChat({
       setJumpToLatestVisible(canScroll && !atBottom);
       writeChatScrollSnapshot(conversationId, captureChatScrollSnapshot(root));
       if (root.scrollTop <= LOAD_OLDER_NEAR_TOP_PX) {
-        setCanLoadOlderMessages(true);
+        requestOlderMessages();
       }
     };
 
     root.addEventListener("scroll", onScroll, { passive: true });
     return () => root.removeEventListener("scroll", onScroll);
-  }, [conversationId, conv, setJumpToLatestVisible]);
+  }, [conversationId, conv, setJumpToLatestVisible, requestOlderMessages]);
 
   useLayoutEffect(() => {
     if (scrollToBottomTick === 0) return;
@@ -3346,7 +3337,6 @@ export default function ConversationChat({
         <div ref={messagesContentRef} className="space-y-3">
           {(hasNextPage || isFetchingNextPage) && (
             <div
-              ref={loadOlderRef}
               className={cn(
                 "flex justify-center",
                 canLoadOlderMessages || isFetchingNextPage ? "py-2" : "h-px",
