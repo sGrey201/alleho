@@ -16,7 +16,6 @@ import {
 import { storage } from "./storage";
 
 const PHOTO_MODEL = "qwen-3.8-flash-next";
-const PHOTO_FALLBACK_MODEL = "deepseek-v4.1-flash";
 const FAILURE_TEXT = "Не удалось подготовить анализ фото.";
 
 const PROMPT = `Ты помогаешь гомеопату: описываешь фотографии, присланные пациентом. Твоя задача — точное и нейтральное наблюдение. Ты не ставишь диагнозов и не предлагаешь препаратов: выводы делает врач.
@@ -152,11 +151,8 @@ async function runPhotoAnalysis(input: {
     }
     const prompt = PROMPT;
     const model = process.env.REG_CLOUD_PHOTO_MODEL?.trim() || PHOTO_MODEL;
-    const fallback = process.env.REG_CLOUD_PHOTO_FALLBACK_MODEL?.trim() || PHOTO_FALLBACK_MODEL;
     const answer = await completeRegCloudWithFallback({
       model,
-      fallbackModel: fallback,
-      skipSameRetryOn400: true,
       content: [
         { type: "text", text: prompt },
         { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.bytes.toString("base64")}` } },

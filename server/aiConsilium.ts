@@ -288,7 +288,6 @@ function buildPrompt(exported: ConversationExportResult): string {
 
 const REG_CLOUD_URL = "https://ai.reg.cloud/v1/chat/completions";
 const REG_CLOUD_MODEL = "qwen-3.8-flash-next";
-const REG_CLOUD_FALLBACK_MODEL = "deepseek-v4.1-flash";
 
 type ChatContentPart =
   | { type: "text"; text: string }
@@ -313,60 +312,23 @@ async function askRegCloud(
   if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
 
   const model = process.env.REG_CLOUD_MODEL?.trim() || REG_CLOUD_MODEL;
-  const fallback = process.env.REG_CLOUD_FALLBACK_MODEL?.trim() || REG_CLOUD_FALLBACK_MODEL;
   const content = chatContent(prompt, exported);
   const state: AttemptState = { attemptCount: 0, usage: null };
 
-  const runModel = (targetModel: string) => completeModel(apiKey, targetModel, prompt, exported, content, state);
-
   try {
-    return await runModel(model);
+    const result = await trackedCompletion(apiKey, model, content, state);
+    return {
+      ...result,
+      usage: state.usage,
+      photosSent: exported.photos.length > 0,
+      attemptCount: state.attemptCount,
+    };
   } catch (error) {
-    if (!isUnreachableModelError(error)) noteAttemptFailure(error, state, model);
-    console.error("[AiConsilium] model was unreachable, retrying once", { model });
-    try {
-      return await runModel(model);
-    } catch (retryError) {
-      if (!isUnreachableModelError(retryError) || !fallback || fallback === model) {
-        noteAttemptFailure(retryError, state, model);
-      }
-      console.error("[AiConsilium] retry failed, trying fallback model", { model, fallback });
-      try {
-        return await runModel(fallback);
-      } catch (fallbackError) {
-        noteAttemptFailure(fallbackError, state, fallback);
-      }
-    }
+    noteAttemptFailure(error, state, model);
   }
 }
 
 type AttemptState = { attemptCount: number; usage: TokenUsage | null };
-
-async function completeModel(
-  apiKey: string,
-  model: string,
-  prompt: string,
-  exported: ConversationExportResult,
-  content: string | ChatContentPart[],
-  state: AttemptState
-): Promise<ConsiliumCompletion> {
-  try {
-    const first = await trackedCompletion(apiKey, model, content, state);
-    return { ...first, usage: state.usage, photosSent: exported.photos.length > 0, attemptCount: state.attemptCount };
-  } catch (error) {
-    if (exported.photos.length === 0 || !(error instanceof RegCloudError) || error.status !== 400) {
-      throw error;
-    }
-    console.error("[AiConsilium] model rejected photos, retrying with text only", { model });
-    const second = await trackedCompletion(
-      apiKey,
-      model,
-      `${prompt}\n\nФотографии модель не приняла. Разбирай случай по тексту материалов.`,
-      state
-    );
-    return { ...second, usage: state.usage, photosSent: false, attemptCount: state.attemptCount };
-  }
-}
 
 async function trackedCompletion(
   apiKey: string,
@@ -383,14 +345,6 @@ async function trackedCompletion(
     if (error instanceof RegCloudError) state.usage = addTokenUsage(state.usage, error.usage);
     throw error;
   }
-}
-
-function isUnreachableModelError(error: unknown): boolean {
-  if (error instanceof RegCloudError) {
-    if (/empty completion/i.test(error.message)) return true;
-    return error.status === 408 || error.status === 429 || error.status >= 500;
-  }
-  return true;
 }
 
 function noteAttemptFailure(error: unknown, state: AttemptState, model: string): never {
@@ -527,74 +481,36 @@ export function readRegCloudCallMeta(error: unknown): RegCloudCallMeta | null {
 
 export async function completeRegCloudWithFallback(input: {
   model: string;
-  fallbackModel: string;
   content: string | ChatContentPart[];
-  skipSameRetryOn400?: boolean;
 }): Promise<RegCloudFallbackResult> {
   const apiKey = process.env.REG_CLOUD_API_KEY?.trim();
   if (!apiKey) throw new Error("REG_CLOUD_API_KEY is not set");
   const model = input.model.trim() || REG_CLOUD_MODEL;
-  const fallback = input.fallbackModel.trim() || REG_CLOUD_FALLBACK_MODEL;
   const track: FallbackTrack = {
-    attemptCount: 0,
+    attemptCount: 1,
     usage: null,
-    lastModel: null,
+    lastModel: model,
     finishReason: null,
     runId: null,
     httpStatus: null,
   };
 
-  const once = async (target: string) => {
-    track.attemptCount += 1;
-    track.lastModel = target;
-    try {
-      const result = await completeRegCloud(apiKey, target, input.content);
-      track.usage = addTokenUsage(track.usage, result.usage);
-      track.finishReason = result.finishReason;
-      track.runId = result.runId || null;
-      track.httpStatus = 200;
-      return result;
-    } catch (error) {
-      if (error instanceof RegCloudError) {
-        track.usage = addTokenUsage(track.usage, error.usage);
-        track.httpStatus = error.status;
-      }
-      throw error;
-    }
-  };
-  const rejectedImage = (error: unknown) =>
-    input.skipSameRetryOn400 === true && error instanceof RegCloudError && error.status === 400;
-  const succeed = (result: { text: string; model: string }): RegCloudFallbackResult => ({
-    text: result.text,
-    ...fallbackMeta(track, result.model),
-    model: result.model,
-  });
-
   try {
-    try {
-      return succeed(await once(model));
-    } catch (error) {
-      if (rejectedImage(error)) {
-        if (!fallback || fallback === model) throw error;
-        console.error("[RegCloud] model rejected the image, trying fallback", { model, fallback });
-        return succeed(await once(fallback));
-      }
-      if (!isUnreachableModelError(error)) throw error;
-      console.error("[RegCloud] model was unreachable, retrying once", { model });
-      try {
-        return succeed(await once(model));
-      } catch (retryError) {
-        if (rejectedImage(retryError)) {
-          if (!fallback || fallback === model) throw retryError;
-          console.error("[RegCloud] retry rejected the image, trying fallback", { model, fallback });
-          return succeed(await once(fallback));
-        }
-        if (!isUnreachableModelError(retryError) || !fallback || fallback === model) throw retryError;
-        console.error("[RegCloud] retry failed, trying fallback model", { model, fallback });
-        return succeed(await once(fallback));
-      }
-    }
+    const result = await completeRegCloud(apiKey, model, input.content);
+    track.usage = result.usage;
+    track.finishReason = result.finishReason;
+    track.runId = result.runId || null;
+    track.httpStatus = 200;
+    return {
+      text: result.text,
+      ...fallbackMeta(track, result.model),
+      model: result.model,
+    };
   } catch (error) {
+    if (error instanceof RegCloudError) {
+      track.usage = error.usage;
+      track.httpStatus = error.status;
+    }
     if (error && typeof error === "object") {
       Object.assign(error, { regCloudMeta: fallbackMeta(track, model) });
     }
