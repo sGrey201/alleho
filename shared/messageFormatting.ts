@@ -151,6 +151,18 @@ export function stripConsiliumQuestionMarkers(text: string): string {
   return text.replace(new RegExp(QUESTION_REGEX.source, "g"), (_match, inner: string) => inner.trim());
 }
 
+export const CONSILIUM_FAILURE_PREFIX = "Не удалось подготовить AI консилиум.";
+const CONSILIUM_MISSING_TRANSCRIPT_MARK = "ещё без транскрипта";
+
+/** A consilium bubble that holds a failure instead of a finished reading. */
+export function isRetryableConsiliumMessage(content: string | null | undefined): boolean {
+  if (!content) return false;
+  return (
+    content.includes(CONSILIUM_MISSING_TRANSCRIPT_MARK) ||
+    content.startsWith(CONSILIUM_FAILURE_PREFIX)
+  );
+}
+
 /** Remove paired $$...$$ sponsor sections entirely. */
 export function stripSponsorSections(text: string): string {
   return text.replace(SPONSOR_REGEX, "");

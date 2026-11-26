@@ -1,5 +1,6 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { eq } from "drizzle-orm";
+import { CONSILIUM_FAILURE_PREFIX, isRetryableConsiliumMessage } from "@shared/messageFormatting";
 import { aiConsiliumRequests, type Conversation, type User } from "@shared/schema";
 import { buildConversationExport, type ConversationExportResult } from "./chatExport";
 import { db } from "./db";
@@ -65,7 +66,7 @@ const PROMPT = `Ты — опытный гомеопат классическо�
 - Первые две строки — вывод, целиком жирным. Форма 1: чего не хватает и сколько вопросов ниже. Форма 2: остаться на препарате или какие 3–5 препаратов рассматривать, в порядке вероятности.
 - Затем пустая строка и форма. Заголовок раздела — жирным отдельной строкой: **0. Тип консультации**. Пункты — с новой строки через «- », вложенные — с отступом в два пробела. Между разделами — одна пустая строка.`;
 
-const FAILURE_TEXT = "Не удалось подготовить AI консилиум.";
+const FAILURE_TEXT = CONSILIUM_FAILURE_PREFIX;
 const EMPTY_CASE_TEXT =
   "В чате нет материалов для разбора: нет сообщений, анкеты и фотографий. AI консилиум не подготовлен.";
 const ARCHIVE_PREFIX = "ai-consilium";
@@ -75,12 +76,6 @@ const running = new Set<string>();
 export type AiConsiliumStart =
   | { started: true; message: ConversationMessageWithAuthor }
   | { busy: true };
-
-const MISSING_TRANSCRIPT_MARK = "ещё без транскрипта";
-
-export function isMissingTranscriptConsilium(content: string | null | undefined): boolean {
-  return !!content?.includes(MISSING_TRANSCRIPT_MARK);
-}
 
 export async function retryAiConsilium(input: {
   conversation: Conversation;
@@ -95,7 +90,7 @@ export async function retryAiConsilium(input: {
     existing.conversationId !== conversationId ||
     existing.deletedAt ||
     existing.messageType !== "ai_consilium" ||
-    !isMissingTranscriptConsilium(existing.content)
+    !isRetryableConsiliumMessage(existing.content)
   ) {
     return { missing: true };
   }

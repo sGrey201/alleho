@@ -81,7 +81,12 @@ import { SponsorAwareMessageText } from "@/components/SponsorAwareMessageText";
 import { CollapsibleMessageText } from "@/components/CollapsibleMessageText";
 import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { shouldShowDeletedMessagePlaque } from "@/lib/deletedMessageVisibility";
-import { flattenSponsorMarkersForDisplay, hasSponsorSections, stripMessageFormatting } from "@shared/messageFormatting";
+import {
+  flattenSponsorMarkersForDisplay,
+  hasSponsorSections,
+  isRetryableConsiliumMessage,
+  stripMessageFormatting,
+} from "@shared/messageFormatting";
 import { PinnedMessageBanner } from "@/components/PinnedMessageBanner";
 import { useVoiceCallContext } from "@/components/VoiceCallProvider";
 import { IncomingCallNotice } from "@/components/VoiceCallBanner";
@@ -2882,7 +2887,7 @@ export default function ConversationChat({
                     />
                   )}
                 </CollapsibleMessageText>
-                {msg.content?.includes("ещё без транскрипта") ? (
+                {isRetryableConsiliumMessage(msg.content) ? (
                   <div
                     className="mt-2 flex gap-2"
                     onPointerDown={(e) => e.stopPropagation()}
