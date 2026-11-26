@@ -451,7 +451,7 @@ async function completeRegCloud(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 50000,
+      max_tokens: 100000,
       temperature: 0.5,
       presence_penalty: 0,
       top_p: 0.95,
