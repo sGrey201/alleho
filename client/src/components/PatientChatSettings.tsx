@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { postConversationSeen } from "@/lib/markConversationSeen";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { Archive, ArrowLeft, Camera, Copy, Loader2, Share2 } from "lucide-react";
+import { Archive, ArrowLeft, Camera, Copy, Download, Loader2, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,7 @@ import { profileAvatarSrc } from "@/lib/utils";
 import { messengerProfilePath } from "@/lib/messengerPaths";
 import { normalizeImageFile } from "@/lib/normalizeImageFile";
 import { t } from "@/lib/i18n";
+import { downloadConsiliumInput } from "@/lib/downloadChatExport";
 import { useAuth } from "@/hooks/useAuth";
 import { ChatProfileActionRow } from "@/components/ChatProfileActionRow";
 import { useVoiceCallContext } from "@/components/VoiceCallProvider";
@@ -84,6 +85,7 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [archiveConfirmationCode, setArchiveConfirmationCode] = useState<number | null>(null);
   const [archiveCodeInput, setArchiveCodeInput] = useState("");
+  const [exportingConsilium, setExportingConsilium] = useState(false);
   const [inviteLinkDialog, setInviteLinkDialog] = useState<{
     open: boolean;
     inviteUrl: string;
@@ -339,6 +341,29 @@ export default function PatientChatSettings({ conversationId, onBack, onOpenSear
               {contactFullName}
             </Link>
           </div>
+        )}
+
+        {!!user?.isAdmin && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={exportingConsilium}
+            onClick={() => {
+              setExportingConsilium(true);
+              void downloadConsiliumInput(conversationId)
+                .catch(() => toast({ title: t.exportChatError, variant: "destructive" }))
+                .finally(() => setExportingConsilium(false));
+            }}
+            data-testid="button-export-consilium-input"
+          >
+            {exportingConsilium ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            {t.exportChat}
+          </Button>
         )}
 
         {!!user?.isAdmin && (

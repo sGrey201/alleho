@@ -1,5 +1,6 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { eq } from "drizzle-orm";
+import JSZip from "jszip";
 import { CONSILIUM_FAILURE_PREFIX, isRetryableConsiliumMessage } from "@shared/messageFormatting";
 import { aiConsiliumRequests, type Conversation, type User } from "@shared/schema";
 import { buildConversationExport, type ConversationExportResult } from "./chatExport";
@@ -281,10 +282,34 @@ function missingTranscriptText(count: number): string {
   return `${subject}. AI консилиум не подготовлен.`;
 }
 
-function buildPrompt(exported: ConversationExportResult): string {
+function consiliumInstruction(): string {
   const photoNote =
     "Фотографии к запросу не приложены. Описание снимков бери только из сообщений «Анализ фото». Если такого сообщения нет, снимок тебе не виден.";
-  return `${PROMPT}\n\nОтветь готовым текстом по форме выше. Файлы создавать не нужно.\n\n${photoNote}\n\nМатериалы случая:\n\n${exported.markdown}`;
+  return `${PROMPT}\n\nОтветь готовым текстом по форме выше. Файлы создавать не нужно.\n\n${photoNote}`;
+}
+
+/** The prompt and the exact user message sent to the consilium model. */
+export function buildConsiliumModelRequest(markdown: string): { prompt: string; content: string } {
+  const prompt = consiliumInstruction();
+  return { prompt, content: `${prompt}\n\nМатериалы случая:\n\n${markdown}` };
+}
+
+function buildPrompt(exported: ConversationExportResult): string {
+  return buildConsiliumModelRequest(exported.markdown).content;
+}
+
+export async function buildConsiliumInputArchive(
+  conversation: Conversation
+): Promise<{ zip: Buffer; filename: string }> {
+  const exported = await buildConversationExport(conversation, { includePhotos: false });
+  const request = buildConsiliumModelRequest(exported.markdown);
+  const zip = new JSZip();
+  zip.file("prompt.txt", request.prompt);
+  zip.file("model-request.txt", request.content);
+  const bytes = await zip.generateAsync({ type: "nodebuffer" });
+  const title = conversation.name?.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+  const filename = `${(title || "chat").slice(0, 80)}-consilium.zip`;
+  return { zip: bytes, filename };
 }
 
 const REG_CLOUD_URL = "https://ai.reg.cloud/v1/chat/completions";

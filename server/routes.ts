@@ -82,7 +82,7 @@ import {
 } from "./voiceCall";
 import { packageVoiceMessage } from "./voiceMessagePackage";
 import { buildConversationExport } from "./chatExport";
-import { retryAiConsilium, startAiConsilium } from "./aiConsilium";
+import { buildConsiliumInputArchive, retryAiConsilium, startAiConsilium } from "./aiConsilium";
 import { startPhotoAnalysis } from "./photoAnalysis";
 import { notifyConversationSeen } from "./seenNotify";
 import { notifyMessengerConversationActivity } from "./doctorChatsNotify";
@@ -3288,6 +3288,33 @@ ${allUrls.map(url => `  <url>
     } catch (error) {
       console.error("Error exporting conversation:", error);
       res.status(500).json({ message: "Failed to export conversation" });
+    }
+  });
+
+  // Prompt plus the exact text the AI consilium model receives.
+  app.get("/api/conversations/:id/ai-consilium/export", isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUserId = await getCurrentUserId(req);
+      if (!currentUserId) return res.status(401).json({ message: "Unauthorized" });
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+      const inConv = await storage.isUserInConversation(currentUserId, id);
+      if (!inConv) return res.status(403).json({ message: "Access denied" });
+      const conv = await storage.getConversation(id);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      if (conv.type !== "patient") {
+        return res.status(400).json({ message: "Export is only available for patient chats" });
+      }
+
+      const archive = await buildConsiliumInputArchive(conv);
+      const encoded = encodeURIComponent(archive.filename);
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="consilium-input.zip"; filename*=UTF-8''${encoded}`);
+      res.send(archive.zip);
+    } catch (error) {
+      console.error("Error exporting consilium input:", error);
+      res.status(500).json({ message: "Failed to export consilium input" });
     }
   });
 
