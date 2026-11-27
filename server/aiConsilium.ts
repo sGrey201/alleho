@@ -304,7 +304,6 @@ export async function buildConsiliumInputArchive(
   const exported = await buildConversationExport(conversation, { includePhotos: false });
   const request = buildConsiliumModelRequest(exported.markdown);
   const zip = new JSZip();
-  zip.file("prompt.txt", request.prompt);
   zip.file("model-request.txt", request.content);
   const bytes = await zip.generateAsync({ type: "nodebuffer" });
   const title = conversation.name?.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
